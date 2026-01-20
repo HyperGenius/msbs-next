@@ -1,4 +1,5 @@
 # backend/app/engine/simulation.py
+import random
 
 import numpy as np
 
@@ -20,83 +21,122 @@ class BattleSimulator:
         """1ターン分の処理を実行."""
         self.turn += 1
 
-        # 素早さ判定（今回は単純に交互に行動とせず、同時行動として処理）
-        self._action_phase(self.ms1, self.ms2)
+        # 簡易的な素早さ判定（機動性が高い方が先に行動）
+        # 同値ならランダム
+        first, second = self.ms1, self.ms2
+        if self.ms1.mobility < self.ms2.mobility:
+            first, second = self.ms2, self.ms1
+        elif self.ms1.mobility == self.ms2.mobility and random.random() > 0.5:
+            first, second = self.ms2, self.ms1
+
+        self._action_phase(first, second)
         if not self.is_finished:
-            self._action_phase(self.ms2, self.ms1)
+            self._action_phase(second, first)
 
     def _action_phase(self, actor: MobileSuit, target: MobileSuit) -> None:
         """片方のユニットの行動処理."""
-        # 1. 距離計算 (NumPy)
+        # 既に撃墜されていたら何もしない
+        if actor.current_hp <= 0:
+            return
+
         pos_actor = actor.position.to_numpy()
         pos_target = target.position.to_numpy()
-
-        # ベクトル: 自分 -> 相手
         diff_vector = pos_target - pos_actor
-        distance = np.linalg.norm(diff_vector)  # ユークリッド距離
-
-        # ログ用スナップショット
+        distance = np.linalg.norm(diff_vector)
         snapshot = Vector3.from_numpy(pos_actor)
 
-        # 2. 行動判定
-        # 武器の射程内か？ (とりあえず最初の武器を使う)
         weapon = actor.get_active_weapon()
+
+        # --- 攻撃判定ロジック ---
         if weapon and distance <= weapon.range:
-            # --- 攻撃処理 (Phase 0なので命中確定ログのみ) ---
-            log = BattleLog(
-                turn=self.turn,
-                actor_id=actor.id,
-                action_type="ATTACK",
-                target_id=target.id,
-                message=f"{actor.name}が{weapon.name}を発射！ (距離: {distance:.1f})",
-                position_snapshot=snapshot,
-            )
-            self.logs.append(log)
+            # 1. 命中率計算
+            # 距離減衰: 100m離れるごとに命中-2%
+            dist_penalty = (distance / 100) * 2
+            # 回避補正: 相手の機動性 * 10%
+            evasion_bonus = target.mobility * 10
 
-            # ダメージ計算（仮）
-            damage = weapon.power
-            target.current_hp -= damage
-            self.logs.append(
-                BattleLog(
-                    turn=self.turn,
-                    actor_id=target.id,  # ダメージを受けた側
-                    action_type="DAMAGE",
-                    damage=damage,
-                    message=f"{target.name}に{damage}のダメージ！ (残りHP: {target.current_hp})",
-                    position_snapshot=target.position,  # その場の位置
-                )
-            )
+            hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
+            hit_chance = max(0, min(100, hit_chance))  # 0~100に収める
 
-            if target.current_hp <= 0:
-                self.is_finished = True
+            # ダイスロール (0.0 ~ 100.0)
+            dice = random.uniform(0, 100)
+            is_hit = dice <= hit_chance
+
+            # ログ用メッセージ作成
+            log_base = f"{actor.name}の攻撃！ (命中: {int(hit_chance)}%)"
+
+            if is_hit:
+                # 2. ダメージ計算
+                # クリティカル判定 (5%の確率)
+                is_crit = random.random() < 0.05
+
+                base_damage = weapon.power
+                if not is_crit:
+                    # 通常ヒット: 装甲で減算
+                    base_damage = max(1, weapon.power - target.armor)
+                    log_msg = f"{log_base} -> 命中！"
+                else:
+                    # クリティカル: 防御無視 & 威力1.2倍
+                    base_damage = int(weapon.power * 1.2)
+                    log_msg = f"{log_base} -> クリティカルヒット！！"
+
+                # 乱数幅 (±10%)
+                variance = random.uniform(0.9, 1.1)
+                final_damage = int(base_damage * variance)
+
+                target.current_hp -= final_damage
+
                 self.logs.append(
                     BattleLog(
                         turn=self.turn,
-                        actor_id=target.id,
-                        action_type="DESTROYED",
-                        message=f"{target.name} は撃墜された...",
-                        position_snapshot=target.position,
+                        actor_id=actor.id,
+                        action_type="ATTACK",
+                        target_id=target.id,
+                        damage=final_damage,
+                        message=f"{log_msg} {target.name}に{final_damage}ダメージ！",
+                        position_snapshot=snapshot,
+                    )
+                )
+
+                if target.current_hp <= 0:
+                    target.current_hp = 0
+                    self.is_finished = True
+                    self.logs.append(
+                        BattleLog(
+                            turn=self.turn,
+                            actor_id=target.id,
+                            action_type="DESTROYED",
+                            message=f"{target.name} は爆散した...",
+                            position_snapshot=target.position,
+                        )
+                    )
+            else:
+                # ミス
+                self.logs.append(
+                    BattleLog(
+                        turn=self.turn,
+                        actor_id=actor.id,
+                        action_type="MISS",  # 新しいタイプ
+                        target_id=target.id,
+                        message=f"{log_base} -> 回避された！",
+                        position_snapshot=snapshot,
                     )
                 )
 
         else:
-            # --- 移動処理 ---
-            # 射程外なら相手に向かって近づく
-            # 正規化ベクトル（向き） * 移動速度
+            # --- 移動ロジック (前回と同じだが少し調整) ---
             if distance > 0:
                 direction = diff_vector / distance
-                move_vector = direction * (
-                    actor.mobility * 100
-                )  # 仮: mobility 1.0 = 100m/turn
+                # 機動性が高いほど速く動く
+                speed = actor.mobility * 150
+                move_vector = direction * speed
 
-                # 新しい座標
                 new_pos = pos_actor + move_vector
 
-                # 行き過ぎ防止（相手を通り越さないようにする）
+                # 行き過ぎ防止
                 if np.linalg.norm(new_pos - pos_actor) > distance:
-                    new_pos = pos_target - (direction * 10)  # 相手の手前10mで止まる
+                    new_pos = pos_target - (direction * 50)  # 50m手前まで
 
-                # 座標更新
                 actor.position = Vector3.from_numpy(new_pos)
 
                 self.logs.append(
@@ -104,7 +144,7 @@ class BattleSimulator:
                         turn=self.turn,
                         actor_id=actor.id,
                         action_type="MOVE",
-                        message=f"{actor.name}が接近中... (座標: {int(new_pos[0])}, {int(new_pos[1])}, {int(new_pos[2])})",
+                        message=f"{actor.name}が接近中 (残距離: {int(distance)}m)",
                         position_snapshot=actor.position,
                     )
                 )
