@@ -1,0 +1,26 @@
+# .pre-commit-config.yaml
+repos:
+  # --- Ruff (Linter & Formatter) ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.10
+    hooks:
+      # Linter
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      # Formatter
+      - id: ruff-format
+        files: ^backend/
+
+  # --- Mypy (Type Checker) ---
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: backend/.venv/bin/python -m mypy
+        args: [--config-file, backend/pyproject.toml]
+        language: system
+        types: [python]
+        require_serial: true
+        files: ^backend/
+        # additional_dependencies:

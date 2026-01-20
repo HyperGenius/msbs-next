@@ -1,0 +1,74 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+# 有効にするルールセット
+# D: pydocstyle (ドキュメンテーションチェック)
+# E: Pycodestyle (標準的なスタイル)
+# W: Pycodestyle (標準的なスタイル)
+# F: Pyflakes (エラー検出)
+# I: Isort (import順序の自動整理)
+# B: Flake8-bugbear (バグの温床になりやすいコードの検出)
+# UP: Pyupgrade (古い構文のアップデート)
+# N: PEP8-naming (命名規則)
+# C901: 循環的複雑度（Cyclomatic Complexity）
+select = ["D", "E", "W", "F", "I", "B", "UP", "N", "C901"]
+
+# 無視するルール
+# D100: モジュール自体のdocstringは必須にしない
+# D104: __init__.pyのdocstringは必須にしない
+# E501: 行長制限 (Ruffのformatterに任せるためlintでは無視)
+ignore = ["D100", "D104", "E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"  # Googleスタイルを採用
+
+[tool.ruff.lint.mccabe]
+# 10〜15程度に設定して長すぎる関数を持つファイルを検出
+max-complexity = 10
+
+[tool.ruff.lint.flake8-bugbear]
+# B008のチェック対象から外す関数を指定
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Security",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+]
+
+[tool.mypy]
+# 型チェックの設定
+python_version = "3.11"
+warn_unused_configs = true
+warn_return_any = false
+disallow_untyped_defs = true      # すべての関数に型ヒントを必須にする
+disallow_incomplete_defs = true   # 不完全な型ヒントを禁止する
+check_untyped_defs = true         # 型ヒントのない関数もチェックする
+ignore_missing_imports = true     # 外部ライブラリの型定義がない場合の警告を抑制
+no_implicit_optional = true       # 関数の引数が省略可能かどうかを明示する
+
+exclude = [
+    "scripts/.*",
+]
+
+[[tool.mypy.overrides]]
+module = ["supabase", "supabase.*", "gotrue.*", "postgrest.*", "scripts.*", "numpy", "numpy.*"]
+ignore_errors = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]
+filterwarnings = [
+    # pyiceberg ライブラリ内部の非推奨警告を無視する
+    "ignore::DeprecationWarning:pyiceberg.*",
+    "ignore:.*PydanticDeprecatedSince212.*:DeprecationWarning:pyiceberg.*",
+    # storage3の古いPydantic記法への警告を無視する
+    "ignore:`pydantic.config.Extra` is deprecated:DeprecationWarning",
+]
