@@ -9,9 +9,13 @@ from app.db import supabase
 from app.engine.simulation import BattleSimulator
 from app.models.models import BattleLog, MobileSuit, Vector3
 
-# 自作モジュールのインポート
+# Router
+from app.routers import mobile_suits
 
 app = FastAPI(title="MSBS-Next API")
+
+# Routerの登録
+app.include_router(mobile_suits.router)
 
 # --- CORS設定 (Frontendからのアクセスを許可) ---
 origins = [

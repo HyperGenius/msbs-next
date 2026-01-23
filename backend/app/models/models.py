@@ -69,3 +69,12 @@ class BattleLog(BaseModel):
     damage: int | None = None
     message: str
     position_snapshot: Vector3  # その瞬間の座標（3D再生用）
+
+
+class MobileSuitUpdate(BaseModel):
+    """機体更新用のモデル（ガレージ機能で使用）."""
+
+    name: str | None = None
+    max_hp: int | None = None
+    armor: int | None = None
+    mobility: float | None = None
