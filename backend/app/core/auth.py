@@ -14,22 +14,27 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 load_dotenv()
 
 # Clerk設定
-CLERK_JWKS_URL = os.getenv(
-    "CLERK_JWKS_URL",
-    "https://your-clerk-domain.clerk.accounts.dev/.well-known/jwks.json"
-)
+CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL")
+
+if not CLERK_JWKS_URL or CLERK_JWKS_URL == "https://your-clerk-domain.clerk.accounts.dev/.well-known/jwks.json":
+    raise ValueError(
+        "CLERK_JWKS_URL environment variable must be set to your Clerk JWKS endpoint. "
+        "Example: https://your-domain.clerk.accounts.dev/.well-known/jwks.json"
+    )
 
 # HTTPBearerスキーム設定
 security = HTTPBearer(auto_error=False)
 
-# JWKSキャッシュ（本番環境では適切なキャッシュ機構を使用）
+# JWKSキャッシュ（シンプルな実装、本番環境ではRedisなどを推奨）
+# Note: FastAPIのasync処理では通常問題ないが、高負荷時にはRedisなどの使用を推奨
 _jwks_cache: Optional[dict] = None
 
 
 async def get_jwks() -> dict:
     """
     ClerkのJWKS（JSON Web Key Set）を取得する。
-    本番環境ではキャッシュ機構を導入すべき。
+    
+    Note: 本番環境では適切なキャッシュ機構（Redis、memcached等）の使用を推奨。
     """
     global _jwks_cache
     
@@ -83,11 +88,14 @@ async def verify_clerk_token(token: str) -> dict:
             )
         
         # JWTを検証してデコード
+        # Note: Clerkのトークンは通常 "aud" クレームを使用しないため verify_aud=False
+        # より厳密な検証が必要な場合は、Clerk Dashboardで audience を設定し、
+        # ここで audience パラメータを指定してください
         payload = jwt.decode(
             token,
             rsa_key,
             algorithms=["RS256"],
-            options={"verify_aud": False}  # Clerkはaudクレームを使用しない場合がある
+            options={"verify_aud": False}
         )
         
         return payload

@@ -7,10 +7,15 @@ const API_BASE_URL = "http://127.0.0.1:8000";
 
 /**
  * Get auth token from Clerk (client-side only)
+ * 
+ * Note: This uses window.Clerk which is available after ClerkProvider loads.
+ * For better type safety, consider using useAuth() hook in components
+ * and passing the token explicitly to API functions.
  */
 async function getAuthToken(): Promise<string | null> {
   if (typeof window !== 'undefined') {
     // Client-side: get token from window.Clerk
+    // TypeScript note: Clerk types are not directly exposed on window
     const clerk = (window as any).Clerk;
     if (clerk && clerk.session) {
       return await clerk.session.getToken();
