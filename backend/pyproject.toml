@@ -55,11 +55,6 @@ exclude = [
     "alembic/versions/*",
 ]
 
-[[tool.mypy.overrides]]
-module = ["supabase", "supabase.*", "gotrue.*", "postgrest.*", "scripts.*", "numpy", "numpy.*"]
-ignore_errors = true
-ignore_missing_imports = true
-
 [tool.pytest.ini_options]
 pythonpath = ["."]
 addopts = "-ra -q"
