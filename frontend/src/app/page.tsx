@@ -2,11 +2,13 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
-import Link from "next/link";
+import Header from "@/components/Header";
 
 export default function Home() {
+  const { getToken } = useAuth();
   const [logs, setLogs] = useState<BattleLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
@@ -24,12 +26,19 @@ export default function Home() {
     setCurrentTurn(0);
 
     try {
+      const token = await getToken();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       // バックエンドからデータを取得
       const res = await fetch("http://127.0.0.1:8000/api/battle/simulate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: ""
       });
 
@@ -61,20 +70,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
       <div className="max-w-4xl mx-auto">
-        <header className="mb-8 border-b border-green-700 pb-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold">MSBS-Next Simulator</h1>
-              <p className="text-sm opacity-70">Phase 1: Prototype Environment</p>
-            </div>
-            <Link
-              href="/garage"
-              className="px-6 py-3 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors shadow-lg hover:shadow-green-500/50"
-            >
-              Open Hangar
-            </Link>
-          </div>
-        </header>
+        <Header />
 
         {/* 3D Viewer Area: ログがある時だけ表示 */}
         {logs.length > 0 && ms1Data && ms2Data && (
