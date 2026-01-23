@@ -1,13 +1,12 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
 import { MobileSuit, MobileSuitUpdate } from "@/types/battle";
-import { auth } from "@clerk/nextjs/server";
 
 // Backend API Base URL
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 /**
- * Get auth token from Clerk
+ * Get auth token from Clerk (client-side only)
  */
 async function getAuthToken(): Promise<string | null> {
   if (typeof window !== 'undefined') {
@@ -16,10 +15,6 @@ async function getAuthToken(): Promise<string | null> {
     if (clerk && clerk.session) {
       return await clerk.session.getToken();
     }
-  } else {
-    // Server-side: use auth() from @clerk/nextjs/server
-    const { getToken } = await auth();
-    return await getToken();
   }
   return null;
 }
