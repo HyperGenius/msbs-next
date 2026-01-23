@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useMobileSuits, updateMobileSuit } from "@/services/api";
 import { MobileSuit } from "@/types/battle";
 import Link from "next/link";
+import Header from "@/components/Header";
 
 export default function GaragePage() {
   const { mobileSuits, isLoading, isError, mutate } = useMobileSuits();
@@ -72,10 +73,11 @@ export default function GaragePage() {
     <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <header className="mb-8 border-b border-green-700 pb-4">
+        <Header />
+        <div className="mb-8 border-b border-green-700 pb-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold">GARAGE - Mobile Suit Hangar</h1>
+              <h2 className="text-2xl font-bold">GARAGE - Mobile Suit Hangar</h2>
               <p className="text-sm opacity-70">機体管理システム</p>
             </div>
             <Link
@@ -85,7 +87,7 @@ export default function GaragePage() {
               &lt; Back to Simulator
             </Link>
           </div>
-        </header>
+        </div>
 
         {isLoading ? (
           <div className="flex justify-center items-center h-64">

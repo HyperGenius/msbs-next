@@ -6,10 +6,36 @@ import { MobileSuit, MobileSuitUpdate } from "@/types/battle";
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 /**
+ * Get auth token from Clerk (client-side only)
+ * 
+ * Note: This uses window.Clerk which is available after ClerkProvider loads.
+ * For better type safety, consider using useAuth() hook in components
+ * and passing the token explicitly to API functions.
+ */
+async function getAuthToken(): Promise<string | null> {
+  if (typeof window !== 'undefined') {
+    // Client-side: get token from window.Clerk
+    // TypeScript note: Clerk types are not directly exposed on window
+    const clerk = (window as any).Clerk;
+    if (clerk && clerk.session) {
+      return await clerk.session.getToken();
+    }
+  }
+  return null;
+}
+
+/**
  * SWR用のfetcher関数
  */
 const fetcher = async (url: string) => {
-  const res = await fetch(url);
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(url, { headers });
   if (!res.ok) {
     throw new Error(`Failed to fetch data from ${url}: ${res.status} ${res.statusText}`);
   }
@@ -40,11 +66,18 @@ export async function updateMobileSuit(
   id: string,
   updateData: MobileSuitUpdate
 ): Promise<MobileSuit> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
   const res = await fetch(`${API_BASE_URL}/api/mobile_suits/${id}`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(updateData),
   });
 
