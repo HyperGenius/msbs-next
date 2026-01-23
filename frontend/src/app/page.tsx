@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { BattleLog, MobileSuit, BattleResponse } from "@/types/battle";
+import { BattleLog, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 
 export default function Home() {
@@ -11,35 +11,10 @@ export default function Home() {
   const [winner, setWinner] = useState<string | null>(null);
   const [currentTurn, setCurrentTurn] = useState(0);
   const [maxTurn, setMaxTurn] = useState(0);
+  // 表示用にstateを追加
+  const [ms1Data, setMs1Data] = useState<MobileSuit | null>(null);
+  const [ms2Data, setMs2Data] = useState<MobileSuit | null>(null);
 
-  // テスト用の機体データ（Backendに送るもの）
-  // 3D表示で見栄えがするように、少し初期位置を離しています
-  const testData = {
-    ms1: {
-      id: "gundam",
-      name: "ガンダム",
-      max_hp: 1000,
-      current_hp: 1000,
-      armor: 100,
-      mobility: 1.5,
-      position: { x: -500, y: -500, z: 0 },
-      weapons: [
-        { id: "br", name: "ビームライフル", power: 300, range: 600, accuracy: 80 },
-      ],
-    } as MobileSuit,
-    ms2: {
-      id: "zaku",
-      name: "ザクII",
-      max_hp: 800,
-      current_hp: 800,
-      armor: 50,
-      mobility: 1.0,
-      position: { x: 500, y: 500, z: 0 },
-      weapons: [
-        { id: "mg", name: "ザクマシンガン", power: 100, range: 400, accuracy: 60 },
-      ],
-    } as MobileSuit,
-  };
 
   const startBattle = async () => {
     setIsLoading(true);
@@ -48,21 +23,27 @@ export default function Home() {
     setCurrentTurn(0);
 
     try {
+      // バックエンドからデータを取得
       const res = await fetch("http://127.0.0.1:8000/api/battle/simulate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(testData),
+        body: ""
       });
 
       if (!res.ok) {
         throw new Error("Network response was not ok");
       }
 
-      const data: BattleResponse = await res.json();
+      const data = await res.json(); // 型定義を interface BattleResponseWithInfo に更新するとベター
+
       setLogs(data.logs);
       setWinner(data.winner_id);
+
+      // DBから取得した機体情報をセット
+      setMs1Data(data.ms1_info);
+      setMs2Data(data.ms2_info);
 
       // 最大ターン数を計算して設定
       const lastTurn = data.logs.length > 0 ? data.logs[data.logs.length - 1].turn : 0;
@@ -85,15 +66,15 @@ export default function Home() {
         </header>
 
         {/* 3D Viewer Area: ログがある時だけ表示 */}
-        {logs.length > 0 && (
+        {logs.length > 0 && ms1Data && ms2Data && (
           <div className="mb-8">
             <h2 className="text-xl font-bold mb-2 border-l-4 border-green-500 pl-2">Tactical Monitor</h2>
 
             {/* 3D Canvas Component */}
             <BattleViewer
               logs={logs}
-              ms1={testData.ms1}
-              ms2={testData.ms2}
+              ms1={ms1Data}
+              ms2={ms2Data}
               currentTurn={currentTurn}
             />
 
@@ -138,15 +119,15 @@ export default function Home() {
         <div className="mb-8 bg-gray-800 p-6 rounded-lg border border-green-800">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <p className="font-bold text-blue-400">UNIT 1: {testData.ms1.name}</p>
-              <p className="font-bold text-red-400">UNIT 2: {testData.ms2.name}</p>
+              <p className="font-bold text-blue-400">UNIT 1: {ms1Data ? ms1Data.name : "Waiting for Data..."}</p>
+              <p className="font-bold text-red-400">UNIT 2: {ms2Data ? ms2Data.name : "Waiting for Data..."}</p>
             </div>
             <button
               onClick={startBattle}
               disabled={isLoading}
               className={`px-8 py-3 rounded font-bold text-black transition-colors shadow-lg ${isLoading
-                  ? "bg-gray-500 cursor-not-allowed"
-                  : "bg-green-500 hover:bg-green-400 hover:shadow-green-500/50"
+                ? "bg-gray-500 cursor-not-allowed"
+                : "bg-green-500 hover:bg-green-400 hover:shadow-green-500/50"
                 }`}
             >
               {isLoading ? "CALCULATING..." : "START SIMULATION"}
@@ -166,17 +147,24 @@ export default function Home() {
               {logs.map((log, index) => {
                 // 現在のターンに対応するログをハイライト
                 const isCurrentTurn = log.turn === currentTurn;
+
+                // ログ表示用: ms1Dataなどがnullの場合はIDをそのまま表示
+                const actorName = log.actor_id === ms1Data?.id ? ms1Data.name
+                  : log.actor_id === ms2Data?.id ? ms2Data.name
+                    : log.actor_id;
+                const isMs1 = log.actor_id === ms1Data?.id;
+
                 return (
                   <li
                     key={index}
                     className={`border-l-2 pl-2 py-1 transition-colors ${isCurrentTurn
-                        ? "border-green-400 bg-green-900/30 text-white"
-                        : "border-green-900 text-green-600"
+                      ? "border-green-400 bg-green-900/30 text-white"
+                      : "border-green-900 text-green-600"
                       }`}
                   >
                     <span className="opacity-50 mr-4 w-16 inline-block">[Turn {log.turn}]</span>
-                    <span className={`font-bold mr-2 ${log.actor_id === testData.ms1.id ? 'text-blue-400' : 'text-red-400'}`}>
-                      {log.actor_id}:
+                    <span className={`font-bold mr-2 ${isMs1 ? 'text-blue-400' : 'text-red-400'}`}>
+                      {actorName}:
                     </span>
                     <span>{log.message}</span>
                   </li>
@@ -184,9 +172,9 @@ export default function Home() {
               })}
 
               {/* Winner Announcement */}
-              {winner && (
+              {winner && ms1Data && ms2Data && (
                 <li className="mt-8 text-center text-xl border-t border-green-500 pt-4 text-yellow-400 animate-pulse font-bold">
-                  *** WINNER: {winner === testData.ms1.id ? testData.ms1.name : testData.ms2.name} ***
+                  *** WINNER: {winner === ms1Data.id ? ms1Data.name : ms2Data.name} ***
                 </li>
               )}
             </ul>
