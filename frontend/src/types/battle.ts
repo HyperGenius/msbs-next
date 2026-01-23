@@ -54,3 +54,13 @@ export interface BattleResponse {
     winner_id: string | null;
     logs: BattleLog[];
 }
+
+/**
+ * 機体更新用の型定義（ガレージ機能で使用）
+ */
+export interface MobileSuitUpdate {
+    name?: string;
+    max_hp?: number;
+    armor?: number;
+    mobility?: number;
+}
