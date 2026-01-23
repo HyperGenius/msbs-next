@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
+import Link from "next/link";
 
 export default function Home() {
   const [logs, setLogs] = useState<BattleLog[]>([]);
@@ -61,8 +62,18 @@ export default function Home() {
     <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
       <div className="max-w-4xl mx-auto">
         <header className="mb-8 border-b border-green-700 pb-4">
-          <h1 className="text-3xl font-bold">MSBS-Next Simulator</h1>
-          <p className="text-sm opacity-70">Phase 1: Prototype Environment</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold">MSBS-Next Simulator</h1>
+              <p className="text-sm opacity-70">Phase 1: Prototype Environment</p>
+            </div>
+            <Link
+              href="/garage"
+              className="px-6 py-3 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors shadow-lg hover:shadow-green-500/50"
+            >
+              Open Hangar
+            </Link>
+          </div>
         </header>
 
         {/* 3D Viewer Area: ログがある時だけ表示 */}
