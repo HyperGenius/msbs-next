@@ -1,25 +1,19 @@
-# backend/main.py
-
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlmodel import Session, select
 
 # DB関連
-from app.db import supabase
+from app.db import get_session
 from app.engine.simulation import BattleSimulator
 from app.models.models import BattleLog, MobileSuit, Vector3
-
-# Router
 from app.routers import mobile_suits
 
 app = FastAPI(title="MSBS-Next API")
 
-# Routerの登録
-app.include_router(mobile_suits.router)
-
-# --- CORS設定 (Frontendからのアクセスを許可) ---
+# --- CORS設定 ---
 origins = [
-    "http://localhost:3000",  # Next.js local
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 
@@ -31,17 +25,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Routerの登録
+app.include_router(mobile_suits.router)
 
-# --- Request/Response Schemas ---
-class BattleRequest(BaseModel):
-    """リクエストボディの定義: 戦わせる2機を受け取る."""
-
-    ms1: MobileSuit
-    ms2: MobileSuit
+# --- Response Schemas ---
+# models.py にあるクラスを使用する形でも良いですが、
+# レスポンス構造用に定義が必要であればここに書くか models.py に Pydantic モデルとして定義します。
+# ここでは簡易的にPydanticのBaseModelを使って定義しなおすか、SQLModelをそのまま使います。
 
 
 class BattleResponse(BaseModel):
-    """レスポンスの定義: ログと勝者IDを返す."""
+    """戦闘結果レスポンス."""
 
     winner_id: str | None
     logs: list[BattleLog]
@@ -54,41 +48,39 @@ class BattleResponse(BaseModel):
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    """ヘルスチェック用のエンドポイント."""
+    """ヘルスチェック."""
     return {"status": "ok", "message": "MSBS-Next API is running"}
 
 
 @app.post("/api/battle/simulate", response_model=BattleResponse)
-def simulate_battle() -> BattleResponse:
+def simulate_battle(session: Session = Depends(get_session)) -> BattleResponse:
     """DBから機体データを取得してシミュレーションを実行する."""
-    # 1. DBから全機体データを取得 (本来はID指定などで絞り込む)
-    response = supabase.table("mobile_suits").select("*").execute()
-    data = response.data
+    # 1. DBから全機体データを取得 (SQLModel)
+    statement = select(MobileSuit).limit(2)
+    results = session.exec(statement).all()
+    data = list(results)
 
     if len(data) < 2:
-        raise HTTPException(status_code=400, detail="Not enough Mobile Suits in DB")
+        raise HTTPException(
+            status_code=400,
+            detail="Not enough Mobile Suits in DB. Please run seed script or add data.",
+        )
 
-    # Seedデータでは [0]=ガンダム, [1]=ザク と仮定
-    # ※ 本来はランダムマッチングやID指定ロジックが入ります
-    ms1_data = data[0]
-    ms2_data = data[1]
+    # 2. シミュレーション用にデータを準備
+    # DBから取得した直後の ms_data.weapons は list[dict] になっています。
+    # シミュレーションロジックは list[Weapon] (オブジェクト) を期待しているため、
+    # model_validate を通して強制的にオブジェクトへ変換します。
 
-    # 2. Pydanticモデルに変換 & 戦闘用パラメータの注入
-    # DBには「位置」や「現在HP」がないので、ここで設定します
+    # model_dump() で一度辞書化し、model_validate() で再パースしてネストされたモデルも復元
+    ms1 = MobileSuit.model_validate(data[0].model_dump())
+    ms2 = MobileSuit.model_validate(data[1].model_dump())
 
-    # MS1 (ガンダム) の初期化
-    ms1 = MobileSuit(
-        **ms1_data,  # name, max_hp, armor, mobility, weaponsなどを展開
-        current_hp=ms1_data["max_hp"],  # type: ignore
-        position=Vector3(x=-500, y=-500, z=0),  # 初期位置
-    )  # type: ignore
+    # 戦闘開始位置のリセット (DBには保存しない一時的な状態)
+    ms1.current_hp = ms1.max_hp
+    ms1.position = Vector3(x=-500, y=-500, z=0)
 
-    # MS2 (ザク) の初期化
-    ms2 = MobileSuit(
-        **ms2_data,
-        current_hp=ms2_data["max_hp"],  # type: ignore
-        position=Vector3(x=500, y=500, z=0),
-    )  # type: ignore
+    ms2.current_hp = ms2.max_hp
+    ms2.position = Vector3(x=500, y=500, z=0)
 
     # 3. シミュレーション実行
     sim = BattleSimulator(ms1, ms2)
@@ -96,12 +88,12 @@ def simulate_battle() -> BattleResponse:
     while not sim.is_finished and sim.turn < max_turns:
         sim.process_turn()
 
-    # 勝者判定
+    # 勝者判定 (UUIDをstrに変換して比較)
     winner_id = None
-    if sim.ms1.current_hp > 0 and sim.ms2.current_hp <= 0:
-        winner_id = sim.ms1.id
-    elif sim.ms2.current_hp > 0 and sim.ms1.current_hp <= 0:
-        winner_id = sim.ms2.id
+    if ms1.current_hp > 0 and ms2.current_hp <= 0:
+        winner_id = str(ms1.id)
+    elif ms2.current_hp > 0 and ms1.current_hp <= 0:
+        winner_id = str(ms2.id)
 
     return BattleResponse(
         winner_id=winner_id, logs=sim.logs, ms1_info=ms1, ms2_info=ms2

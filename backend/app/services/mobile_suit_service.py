@@ -1,78 +1,38 @@
-"""モビルスーツ関連のビジネスロジックを担当するServiceクラス."""
+# backend/app/services/mobile_suit_service.py
+from sqlmodel import Session, select
 
-from typing import Any
-
-from fastapi import HTTPException
-from supabase import Client
-
-from app.models.models import MobileSuitUpdate
+from app.models.models import MobileSuit, MobileSuitUpdate
 
 
-def get_all_mobile_suits(supabase: Client) -> list[dict[str, Any]]:
-    """DBから全機体データを取得する.
+class MobileSuitService:
+    """機体データを操作するサービス."""
 
-    Args:
-        supabase: Supabaseクライアント
+    @staticmethod
+    def get_all_mobile_suits(session: Session) -> list[MobileSuit]:
+        """全機体データを取得する."""
+        statement = select(MobileSuit).order_by(MobileSuit.name)
+        results = session.exec(statement).all()
+        return list(results)
 
-    Returns:
-        全機体データのリスト
+    @staticmethod
+    def update_mobile_suit(
+        session: Session, ms_id: str, update_data: MobileSuitUpdate
+    ) -> MobileSuit | None:
+        """機体データを更新する."""
+        # IDで検索
+        statement = select(MobileSuit).where(MobileSuit.id == ms_id)
+        ms = session.exec(statement).first()
 
-    Raises:
-        HTTPException: DBからのデータ取得に失敗した場合
-    """
-    try:
-        response = supabase.table("mobile_suits").select("*").execute()
-        return response.data  # type: ignore[return-value]
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to fetch mobile suits: {str(e)}"
-        ) from e
+        if not ms:
+            return None
 
+        # データの更新 (Pydantic v2 style)
+        update_dict = update_data.model_dump(exclude_unset=True)
+        for key, value in update_dict.items():
+            setattr(ms, key, value)
 
-def update_mobile_suit(
-    supabase: Client, ms_id: str, data: MobileSuitUpdate
-) -> dict[str, Any]:
-    """指定された機体のデータを更新する.
+        session.add(ms)
+        session.commit()
+        session.refresh(ms)
 
-    Args:
-        supabase: Supabaseクライアント
-        ms_id: 更新対象の機体UUID
-        data: 更新内容（MobileSuitUpdateモデル）
-
-    Returns:
-        更新後の機体データ
-
-    Raises:
-        HTTPException: 機体が存在しない、または更新に失敗した場合
-    """
-    # 更新データをdict化（Noneは除外）
-    update_dict = data.model_dump(exclude_none=True)
-
-    if not update_dict:
-        raise HTTPException(status_code=400, detail="No fields to update")
-
-    try:
-        # データの存在確認
-        existing = supabase.table("mobile_suits").select("id").eq("id", ms_id).execute()
-        if not existing.data:
-            raise HTTPException(status_code=404, detail="Mobile Suit not found")
-
-        # 更新実行
-        response = (
-            supabase.table("mobile_suits")
-            .update(update_dict)
-            .eq("id", ms_id)
-            .execute()
-        )
-
-        if not response.data:
-            raise HTTPException(status_code=404, detail="Mobile Suit not found")
-
-        return response.data[0]  # type: ignore[return-value]
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to update mobile suit: {str(e)}"
-        ) from e
+        return ms

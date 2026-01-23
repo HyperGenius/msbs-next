@@ -1,7 +1,7 @@
 import os
 import sys
 
-# パスを通す（backendディレクトリ内で実行するため）
+# パスを通す
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.engine.simulation import BattleSimulator
