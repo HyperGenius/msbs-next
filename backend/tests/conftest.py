@@ -12,7 +12,7 @@ os.environ["CLERK_JWKS_URL"] = (
 )
 os.environ["CLERK_PUBLISHABLE_KEY"] = "pk_test_mock"
 os.environ["CLERK_SECRET_KEY"] = "sk_test_mock"
-os.environ["DATABASE_URL"] = "sqlite://"
+os.environ["NEON_DATABASE_URL"] = "sqlite://"
 
 # 環境変数をセットした後に app をインポート
 from app.db import get_session
