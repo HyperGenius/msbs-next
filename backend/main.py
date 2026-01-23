@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 # DB関連
+from app.core.auth import get_current_user_optional
 from app.db import get_session
 from app.engine.simulation import BattleSimulator
 from app.models.models import BattleLog, MobileSuit, Vector3
@@ -53,7 +54,10 @@ def health() -> dict[str, str]:
 
 
 @app.post("/api/battle/simulate", response_model=BattleResponse)
-def simulate_battle(session: Session = Depends(get_session)) -> BattleResponse:
+async def simulate_battle(
+    session: Session = Depends(get_session),
+    user_id: str | None = Depends(get_current_user_optional)
+) -> BattleResponse:
     """DBから機体データを取得してシミュレーションを実行する."""
     # 1. DBから全機体データを取得 (SQLModel)
     statement = select(MobileSuit).limit(2)

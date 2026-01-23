@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
+from app.core.auth import get_current_user
 from app.db import get_session
 from app.models.models import MobileSuit, MobileSuitUpdate
 from app.services.mobile_suit_service import MobileSuitService
@@ -16,8 +17,11 @@ def get_mobile_suits(session: Session = Depends(get_session)) -> list[MobileSuit
 
 
 @router.put("/{ms_id}", response_model=MobileSuit)
-def update_mobile_suit(
-    ms_id: str, ms_data: MobileSuitUpdate, session: Session = Depends(get_session)
+async def update_mobile_suit(
+    ms_id: str,
+    ms_data: MobileSuitUpdate,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user)
 ) -> MobileSuit:
     """機体更新."""
     updated_ms = MobileSuitService.update_mobile_suit(session, ms_id, ms_data)
