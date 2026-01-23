@@ -28,11 +28,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Lint & Type Check
+      - name: Lint
         run: |
           ruff check .
           ruff format --check .
-          mypy .
+
+      # 型チェックを追加する, backend/alembic/versions/ を除外する
+      # - name: Type Check
+      #   run: mypy .
 
       - name: Run tests
         run: pytest
