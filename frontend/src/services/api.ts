@@ -11,7 +11,7 @@ const API_BASE_URL = "http://127.0.0.1:8000";
 const fetcher = async (url: string) => {
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error("Failed to fetch data");
+    throw new Error(`Failed to fetch data from ${url}: ${res.status} ${res.statusText}`);
   }
   return res.json();
 };
@@ -49,7 +49,7 @@ export async function updateMobileSuit(
   });
 
   if (!res.ok) {
-    throw new Error("Failed to update mobile suit");
+    throw new Error(`Failed to update mobile suit ${id}: ${res.status} ${res.statusText}`);
   }
 
   return res.json();

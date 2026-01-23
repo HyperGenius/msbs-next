@@ -41,15 +41,14 @@ export default function GaragePage() {
     setSuccessMessage(null);
 
     try {
-      await updateMobileSuit(selectedMs.id, formData);
+      const updatedData = await updateMobileSuit(selectedMs.id, formData);
       setSuccessMessage("機体データを更新しました");
       
       // SWRのキャッシュを更新
       mutate();
       
-      // 選択中の機体情報も更新
-      const updatedMs = { ...selectedMs, ...formData };
-      setSelectedMs(updatedMs);
+      // 選択中の機体情報も更新（API responseを使用）
+      setSelectedMs(updatedData);
     } catch (error) {
       console.error("Update error:", error);
       alert("更新に失敗しました。");
