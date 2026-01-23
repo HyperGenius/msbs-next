@@ -1,9 +1,7 @@
 # backend/app/core/auth.py
-"""
-Clerk JWT認証モジュール
-"""
+"""Clerk JWT認証モジュール."""
+
 import os
-from typing import Optional
 
 import httpx
 import jwt
@@ -14,9 +12,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 load_dotenv()
 
 # Clerk設定
-CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL")
+CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 
-if not CLERK_JWKS_URL or CLERK_JWKS_URL == "https://your-clerk-domain.clerk.accounts.dev/.well-known/jwks.json":
+if not CLERK_JWKS_URL:
     raise ValueError(
         "CLERK_JWKS_URL environment variable must be set to your Clerk JWKS endpoint. "
         "Example: https://your-domain.clerk.accounts.dev/.well-known/jwks.json"
@@ -27,110 +25,96 @@ security = HTTPBearer(auto_error=False)
 
 # JWKSキャッシュ（シンプルな実装、本番環境ではRedisなどを推奨）
 # Note: FastAPIのasync処理では通常問題ないが、高負荷時にはRedisなどの使用を推奨
-_jwks_cache: Optional[dict] = None
+_jwks_cache: dict | None = None
 
 
 async def get_jwks() -> dict:
-    """
-    ClerkのJWKS（JSON Web Key Set）を取得する。
-    
+    """ClerkのJWKS（JSON Web Key Set）を取得する.
+
     Note: 本番環境では適切なキャッシュ機構（Redis、memcached等）の使用を推奨。
     """
     global _jwks_cache
-    
+
     if _jwks_cache is not None:
         return _jwks_cache
-    
+
     async with httpx.AsyncClient() as client:
-        response = await client.get(CLERK_JWKS_URL)
+        response = await client.get(CLERK_JWKS_URL)  # type: ignore
         response.raise_for_status()
         _jwks_cache = response.json()
         return _jwks_cache
 
 
 async def verify_clerk_token(token: str) -> dict:
-    """
-    ClerkのJWTトークンを検証し、ペイロードを返す。
-    
+    """ClerkのJWTトークンを検証し、ペイロードを返す.
+
     Args:
         token: JWTトークン文字列
-        
+
     Returns:
         dict: デコードされたトークンペイロード
-        
+
     Raises:
         HTTPException: トークンが無効な場合
     """
     try:
         # JWTヘッダーを取得
         unverified_header = jwt.get_unverified_header(token)
-        
+
         # JWKSを取得
         jwks = await get_jwks()
-        
+
         # 対応する公開鍵を検索
-        rsa_key = {}
+        public_key = None
         for key in jwks.get("keys", []):
             if key["kid"] == unverified_header["kid"]:
-                rsa_key = {
-                    "kty": key["kty"],
-                    "kid": key["kid"],
-                    "use": key["use"],
-                    "n": key["n"],
-                    "e": key["e"]
-                }
+                public_key = jwt.PyJWK(key)
                 break
-        
-        if not rsa_key:
+
+        if not public_key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unable to find appropriate key"
+                detail="Unable to find appropriate key",
             )
-        
+
         # JWTを検証してデコード
         # Note: Clerkのトークンは通常 "aud" クレームを使用しないため verify_aud=False
         # より厳密な検証が必要な場合は、Clerk Dashboardで audience を設定し、
         # ここで audience パラメータを指定してください
         payload = jwt.decode(
-            token,
-            rsa_key,
-            algorithms=["RS256"],
-            options={"verify_aud": False}
+            token, public_key, algorithms=["RS256"], options={"verify_aud": False}
         )
-        
+
         return payload
-        
-    except jwt.ExpiredSignatureError:
+
+    except jwt.ExpiredSignatureError as e:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except jwt.JWTError as e:
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired"
+        ) from e
+    except jwt.InvalidTokenError as e:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {str(e)}"
-        )
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {str(e)}"
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Could not validate credentials: {str(e)}"
-        )
+            detail=f"Could not validate credentials: {str(e)}",
+        ) from e
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> str:
-    """
-    リクエストヘッダーからJWTトークンを取得し、検証してユーザーIDを返す。
-    
+    """リクエストヘッダーからJWTトークンを取得し、検証してユーザーIDを返す.
+
     FastAPI依存関数として使用される。
-    
+
     Args:
         credentials: HTTPベアラートークン
-        
+
     Returns:
         str: Clerk User ID
-        
+
     Raises:
         HTTPException: 認証に失敗した場合
     """
@@ -140,37 +124,36 @@ async def get_current_user(
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     token = credentials.credentials
     payload = await verify_clerk_token(token)
-    
+
     # ClerkのUser IDを取得（"sub"クレームに含まれる）
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
         )
-    
+
     return user_id
 
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
-) -> Optional[str]:
-    """
-    オプショナルな認証用の依存関数。
-    認証されていなくてもエラーを投げず、Noneを返す。
-    
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> str | None:
+    """オプショナルな認証用の依存関数.
+
+    認証されていなくてもエラーを投げず、Noneを返す.
+
     Args:
         credentials: HTTPベアラートークン
-        
+
     Returns:
         Optional[str]: Clerk User ID または None
     """
     if credentials is None:
         return None
-    
+
     try:
         token = credentials.credentials
         payload = await verify_clerk_token(token)
