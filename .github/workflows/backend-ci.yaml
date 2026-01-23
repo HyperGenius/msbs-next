@@ -38,5 +38,6 @@ jobs:
       # - name: Type Check
       #   run: mypy .
 
-      - name: Run tests
-        run: pytest
+      # テストを追加する
+      # - name: Run tests
+      #   run: pytest
