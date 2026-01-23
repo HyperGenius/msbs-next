@@ -116,7 +116,9 @@ def test_update_mobile_suit_not_found(
     mock_supabase = MagicMock()
     mock_get_supabase.return_value = mock_supabase
 
-    mock_update.side_effect = HTTPException(status_code=404, detail="Mobile Suit not found")
+    mock_update.side_effect = HTTPException(
+        status_code=404, detail="Mobile Suit not found"
+    )
 
     # Execute
     update_data = {"name": "Updated Gundam"}

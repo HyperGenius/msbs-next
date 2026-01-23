@@ -21,7 +21,7 @@ async def update_mobile_suit(
     ms_id: str,
     ms_data: MobileSuitUpdate,
     session: Session = Depends(get_session),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user),
 ) -> MobileSuit:
     """機体更新."""
     updated_ms = MobileSuitService.update_mobile_suit(session, ms_id, ms_data)
