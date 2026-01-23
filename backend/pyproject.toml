@@ -51,7 +51,8 @@ ignore_missing_imports = true     # 外部ライブラリの型定義がない�
 no_implicit_optional = true       # 関数の引数が省略可能かどうかを明示する
 
 exclude = [
-    "scripts/.*",
+    "scripts/*",
+    "alembic/versions/*",
 ]
 
 [[tool.mypy.overrides]]

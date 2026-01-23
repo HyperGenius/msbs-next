@@ -23,4 +23,5 @@ repos:
         types: [python]
         require_serial: true
         files: ^backend/
+        exclude: ^backend/alembic/versions/
         # additional_dependencies:
