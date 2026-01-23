@@ -21,7 +21,7 @@ Neon のプロジェクト、ロール、データベースは Terraform で管�
 
 ### Dependencies
 `backend/requirements.txt` を更新:
-* **Removed**: `supabase` (移行完了後に削除予定)
+* **Removed**: `supabase` (削除完了)
 * **Added**:
     * `sqlmodel`: Pydantic と SQLAlchemy を統合した ORM
     * `psycopg2-binary`: PostgreSQL アダプタ
