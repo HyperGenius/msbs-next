@@ -54,7 +54,9 @@
 │   │   ├── types/      # TypeScript型定義
 │   │   └── utils/      # 汎用ユーティリティ
 │   └── e2e/            # Playwrightテスト
-
+│
+└── infra/              # Terraform HCL
+    └── neon/           # Neon DB作成
 ```
 
 ---
