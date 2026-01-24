@@ -25,8 +25,8 @@
 
 ### Database & Infra
 
-* **DB**: Supabase (PostgreSQL)
-* **Auth**: Supabase Auth
+* **DB**: Neon (PostgreSQL)
+* **Auth**: Clerk
 * **Deploy**: Vercel (Frontend), Render/Cloud Run (Backend)
 
 ---
@@ -55,9 +55,8 @@
 │   │   └── utils/      # 汎用ユーティリティ
 │   └── e2e/            # Playwrightテスト
 │
-└── supabase/
-    └── migrations/     # DBマイグレーションファイル (.sql)
-
+└── infra/              # Terraform HCL
+    └── neon/           # Neon DB作成
 ```
 
 ---
@@ -90,10 +89,10 @@
 2. **SWR Usage**: データ取得は `useSWR` を使用し、`src/utils/fetcher.ts` を経由する。
 3. **Type Safety**: `any` 型の使用は原則禁止。`src/types` に定義された型を使用する。
 
-### Database (Supabase)
+### Database (Neon/PostgreSQL)
 
-1. **RLS (Row Level Security)**: すべてのテーブルでRLSを有効化する。`user_id` による分離を徹底する。
-2. **Migrations**: スキーマ変更は必ず `supabase/migrations` にSQLファイルを追加して行う。
+1. **Alembic Migrations**: スキーマ変更は必ず `alembic` を使用してマイグレーションファイルを生成・適用する。
+2. **SQLModel ORM**: データアクセスには SQLModel を使用し、型安全性を確保する。
 
 ---
 
@@ -106,7 +105,7 @@
 * **Tool**: `pytest`
 * **Location**: `backend/tests/unit/`
 * **Rules**:
-* DB接続や外部API（Supabase）は **必ずMock化 (`unittest.mock`)** する。
+* DB接続や外部APIは **必ずMock化 (`unittest.mock`)** する。
 * 正常系だけでなく、異常系（APIエラー等）のテストケースも網羅する。
 
 

@@ -56,7 +56,7 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["supabase", "supabase.*", "gotrue.*", "postgrest.*", "scripts.*", "numpy", "numpy.*"]
+module = ["gotrue.*", "postgrest.*", "scripts.*", "numpy", "numpy.*"]
 ignore_errors = true
 ignore_missing_imports = true
 

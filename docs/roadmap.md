@@ -14,7 +14,8 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 * **Frontend:** Next.js (App Router), Vercel
 * **Backend:** Python (FastAPI), Pydantic, Render
 * **Simulation:** NumPy (ベクトル計算), Pure Python Logic
-* **Database:** Supabase (PostgreSQL)
+* **Database:** Neon (PostgreSQL)
+* **Auth:** Clerk
 * **Visuals:** React Three Fiber (Phase 2以降)
 
 ## 3. 開発フェーズ
@@ -35,7 +36,7 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 **ゴール:** Webブラウザ上で「機体設定→戦闘開始→結果ログ閲覧」のコアサイクルが回る。
 
 * **Frontend (Next.js):**
-    * [ ] ユーザー登録・ログイン (Supabase Auth)。
+    * [ ] ユーザー登録・ログイン (Clerk)。
     * [ ] ガレージ画面 (ステータス確認、簡易装備変更)。
     * [ ] バトルエントリー画面 (対戦相手はランダム or ID指定)。
     * [ ] 結果表示画面 (テキスト形式のバトルログ表示)。
