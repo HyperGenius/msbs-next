@@ -51,12 +51,12 @@ function MobileSuitMesh({
 
 interface BattleViewerProps {
     logs: BattleLog[];
-    ms1: MobileSuit;
-    ms2: MobileSuit;
+    player: MobileSuit;
+    enemies: MobileSuit[];
     currentTurn: number;
 }
 
-export default function BattleViewer({ logs, ms1, ms2, currentTurn }: BattleViewerProps) {
+export default function BattleViewer({ logs, player, enemies, currentTurn }: BattleViewerProps) {
 
     // 現在のターン時点での情報を計算する関数
     const getSnapshot = (targetId: string, initialMs: MobileSuit) => {
@@ -88,8 +88,11 @@ export default function BattleViewer({ logs, ms1, ms2, currentTurn }: BattleView
         return { pos, hp: Math.max(0, hp) };
     };
 
-    const state1 = getSnapshot(ms1.id, ms1);
-    const state2 = getSnapshot(ms2.id, ms2);
+    const playerState = getSnapshot(player.id, player);
+    const enemyStates = enemies.map(enemy => ({
+        enemy,
+        state: getSnapshot(enemy.id, enemy)
+    }));
 
     return (
         <div className="w-full h-[400px] bg-black rounded border border-green-800 mb-4 overflow-hidden relative">
@@ -104,41 +107,46 @@ export default function BattleViewer({ logs, ms1, ms2, currentTurn }: BattleView
                 <Grid infiniteGrid sectionSize={10} cellSize={1} fadeDistance={100} sectionColor={"#00ff00"} cellColor={"#003300"} />
                 <OrbitControls />
 
-                {/* MS 1 */}
+                {/* Player */}
                 <MobileSuitMesh
-                    position={state1.pos}
-                    maxHp={ms1.max_hp}
-                    currentHp={state1.hp}
-                    name={ms1.name}
+                    position={playerState.pos}
+                    maxHp={player.max_hp}
+                    currentHp={playerState.hp}
+                    name={player.name}
                 />
 
-                {/* MS 2 */}
-                <MobileSuitMesh
-                    position={state2.pos}
-                    maxHp={ms2.max_hp}
-                    currentHp={state2.hp}
-                    name={ms2.name}
-                />
+                {/* Enemies */}
+                {enemyStates.map(({ enemy, state }, index) => (
+                    <MobileSuitMesh
+                        key={enemy.id}
+                        position={state.pos}
+                        maxHp={enemy.max_hp}
+                        currentHp={state.hp}
+                        name={enemy.name}
+                    />
+                ))}
             </Canvas>
 
             {/* UIオーバーレイ */}
             <div className="absolute top-2 left-2 text-white bg-black/60 p-2 text-xs font-mono pointer-events-none rounded border border-green-900/50">
                 <div className="mb-2">
-                    <span className="font-bold text-blue-400">{ms1.name}</span>
+                    <span className="font-bold text-blue-400">{player.name}</span>
                     <br />
-                    HP: {state1.hp} / {ms1.max_hp}
+                    HP: {playerState.hp} / {player.max_hp}
                     <div className="w-24 h-1 bg-gray-700 mt-1">
-                        <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${(state1.hp / ms1.max_hp) * 100}%` }}></div>
+                        <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${(playerState.hp / player.max_hp) * 100}%` }}></div>
                     </div>
                 </div>
-                <div>
-                    <span className="font-bold text-red-400">{ms2.name}</span>
-                    <br />
-                    HP: {state2.hp} / {ms2.max_hp}
-                    <div className="w-24 h-1 bg-gray-700 mt-1">
-                        <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(state2.hp / ms2.max_hp) * 100}%` }}></div>
+                {enemyStates.map(({ enemy, state }, index) => (
+                    <div key={enemy.id} className="mt-2">
+                        <span className="font-bold text-red-400">{enemy.name}</span>
+                        <br />
+                        HP: {state.hp} / {enemy.max_hp}
+                        <div className="w-24 h-1 bg-gray-700 mt-1">
+                            <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(state.hp / enemy.max_hp) * 100}%` }}></div>
+                        </div>
                     </div>
-                </div>
+                ))}
             </div>
         </div>
     );

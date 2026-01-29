@@ -40,8 +40,8 @@ class BattleResponse(BaseModel):
 
     winner_id: str | None
     logs: list[BattleLog]
-    ms1_info: MobileSuit
-    ms2_info: MobileSuit
+    player_info: MobileSuit
+    enemies_info: list[MobileSuit]
 
 
 # --- API Endpoints ---
@@ -59,46 +59,68 @@ async def simulate_battle(
     user_id: str | None = Depends(get_current_user_optional),
 ) -> BattleResponse:
     """DBから機体データを取得してシミュレーションを実行する."""
-    # 1. DBから全機体データを取得 (SQLModel)
-    statement = select(MobileSuit).limit(2)
-    results = session.exec(statement).all()
-    data = list(results)
-
-    if len(data) < 2:
+    # 1. プレイヤー機体を取得（最初の1機）
+    player_statement = select(MobileSuit).limit(1)
+    player_results = session.exec(player_statement).all()
+    
+    if len(player_results) < 1:
         raise HTTPException(
             status_code=400,
             detail="Not enough Mobile Suits in DB. Please run seed script or add data.",
         )
 
-    # 2. シミュレーション用にデータを準備
-    # DBから取得した直後の ms_data.weapons は list[dict] になっています。
-    # シミュレーションロジックは list[Weapon] (オブジェクト) を期待しているため、
-    # model_validate を通して強制的にオブジェクトへ変換します。
+    # 2. プレイヤー機体を準備
+    player = MobileSuit.model_validate(player_results[0].model_dump())
+    player.current_hp = player.max_hp
+    player.position = Vector3(x=0, y=0, z=0)
+    player.side = "PLAYER"
 
-    # model_dump() で一度辞書化し、model_validate() で再パースしてネストされたモデルも復元
-    ms1 = MobileSuit.model_validate(data[0].model_dump())
-    ms2 = MobileSuit.model_validate(data[1].model_dump())
+    # 3. 敵機を動的に生成（ザクII × 3機）
+    enemies = []
+    enemy_positions = [
+        Vector3(x=500, y=-200, z=0),
+        Vector3(x=500, y=0, z=0),
+        Vector3(x=500, y=200, z=0),
+    ]
+    
+    for i, pos in enumerate(enemy_positions):
+        enemy = MobileSuit(
+            name=f"ザクII #{i+1}",
+            max_hp=80,
+            current_hp=80,
+            armor=5,
+            mobility=1.2,
+            position=pos,
+            weapons=[
+                Weapon(
+                    id=f"zaku_mg_{i}",
+                    name="ザクマシンガン",
+                    power=15,
+                    range=400,
+                    accuracy=70,
+                )
+            ],
+            side="ENEMY",
+        )
+        enemies.append(enemy)
 
-    # 戦闘開始位置のリセット (DBには保存しない一時的な状態)
-    ms1.current_hp = ms1.max_hp
-    ms1.position = Vector3(x=-500, y=-500, z=0)
-
-    ms2.current_hp = ms2.max_hp
-    ms2.position = Vector3(x=500, y=500, z=0)
-
-    # 3. シミュレーション実行
-    sim = BattleSimulator(ms1, ms2)
+    # 4. シミュレーション実行
+    sim = BattleSimulator(player, enemies)
     max_turns = 50
     while not sim.is_finished and sim.turn < max_turns:
         sim.process_turn()
 
-    # 勝者判定 (UUIDをstrに変換して比較)
+    # 勝者判定
     winner_id = None
-    if ms1.current_hp > 0 and ms2.current_hp <= 0:
-        winner_id = str(ms1.id)
-    elif ms2.current_hp > 0 and ms1.current_hp <= 0:
-        winner_id = str(ms2.id)
+    if player.current_hp > 0 and all(e.current_hp <= 0 for e in enemies):
+        winner_id = str(player.id)
+    elif player.current_hp <= 0:
+        # 敵の誰かが生き残っていれば敵の勝利
+        winner_id = "ENEMY"
 
     return BattleResponse(
-        winner_id=winner_id, logs=sim.logs, ms1_info=ms1, ms2_info=ms2
+        winner_id=winner_id,
+        logs=sim.logs,
+        player_info=player,
+        enemies_info=enemies,
     )

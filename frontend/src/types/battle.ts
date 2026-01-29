@@ -32,6 +32,7 @@ export interface MobileSuit {
     mobility: number;
     position: Vector3;
     weapons: Weapon[];
+    side: "PLAYER" | "ENEMY";
 }
 
 /**
@@ -53,6 +54,8 @@ export interface BattleLog {
 export interface BattleResponse {
     winner_id: string | null;
     logs: BattleLog[];
+    player_info: MobileSuit;
+    enemies_info: MobileSuit[];
 }
 
 /**

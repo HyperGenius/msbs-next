@@ -9,10 +9,11 @@ from app.models.models import BattleLog, MobileSuit, Vector3
 class BattleSimulator:
     """戦闘シミュレータ."""
 
-    def __init__(self, ms1: MobileSuit, ms2: MobileSuit):
+    def __init__(self, player: MobileSuit, enemies: list[MobileSuit]):
         """初期化."""
-        self.ms1 = ms1
-        self.ms2 = ms2
+        self.player = player
+        self.enemies = enemies
+        self.units: list[MobileSuit] = [player] + enemies
         self.logs: list[BattleLog] = []
         self.turn = 0
         self.is_finished = False
@@ -21,25 +22,40 @@ class BattleSimulator:
         """1ターン分の処理を実行."""
         self.turn += 1
 
-        # 簡易的な素早さ判定（機動性が高い方が先に行動）
-        # 同値ならランダム
-        first, second = self.ms1, self.ms2
-        if self.ms1.mobility < self.ms2.mobility:
-            first, second = self.ms2, self.ms1
-        elif self.ms1.mobility == self.ms2.mobility and random.random() > 0.5:
-            first, second = self.ms2, self.ms1
+        # 生存している全ユニットを機動性の降順でソート
+        alive_units = [u for u in self.units if u.current_hp > 0]
+        # 機動性が同じ場合はランダムに並び替え
+        alive_units.sort(key=lambda u: (u.mobility, random.random()), reverse=True)
 
-        self._action_phase(first, second)
-        if not self.is_finished:
-            self._action_phase(second, first)
+        # 各ユニットの行動を順次実行
+        for actor in alive_units:
+            if self.is_finished:
+                break
+            self._action_phase(actor)
 
-    def _action_phase(self, actor: MobileSuit, target: MobileSuit) -> None:
+    def _action_phase(self, actor: MobileSuit) -> None:
         """片方のユニットの行動処理."""
         # 既に撃墜されていたら何もしない
         if actor.current_hp <= 0:
             return
 
+        # ターゲット選択: 敵対勢力のユニットをリストアップ
+        if actor.side == "PLAYER":
+            potential_targets = [e for e in self.enemies if e.current_hp > 0]
+        else:  # actor.side == "ENEMY"
+            potential_targets = [self.player] if self.player.current_hp > 0 else []
+
+        # ターゲットが存在しない場合は何もしない
+        if not potential_targets:
+            return
+
+        # 最も近い敵を選択
         pos_actor = actor.position.to_numpy()
+        target = min(
+            potential_targets,
+            key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
+        )
+
         pos_target = target.position.to_numpy()
         diff_vector = pos_target - pos_actor
         distance = np.linalg.norm(diff_vector)
@@ -100,7 +116,6 @@ class BattleSimulator:
 
                 if target.current_hp <= 0:
                     target.current_hp = 0
-                    self.is_finished = True
                     self.logs.append(
                         BattleLog(
                             turn=self.turn,
@@ -110,6 +125,11 @@ class BattleSimulator:
                             position_snapshot=target.position,
                         )
                     )
+                    # 勝利判定: プレイヤーが倒された、または敵が全滅
+                    if target.side == "PLAYER":
+                        self.is_finished = True
+                    elif all(e.current_hp <= 0 for e in self.enemies):
+                        self.is_finished = True
             else:
                 # ミス
                 self.logs.append(
