@@ -1,7 +1,5 @@
 """Tests for the battle simulation engine."""
 
-import pytest
-
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 
