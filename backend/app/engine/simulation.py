@@ -24,14 +24,16 @@ class BattleSimulator:
 
         # 生存している全ユニットを機動性の降順でソート
         alive_units = [u for u in self.units if u.current_hp > 0]
-        # 機動性が同じ場合はランダムに並び替え
-        alive_units.sort(key=lambda u: (u.mobility, random.random()), reverse=True)
+        # 機動性が同じ場合のためにランダム値を事前に付与
+        units_with_random = [(u, random.random()) for u in alive_units]
+        # 機動性とランダム値でソート（機動性が高い方が先、同値ならランダム）
+        units_with_random.sort(key=lambda x: (x[0].mobility, x[1]), reverse=True)
 
         # 各ユニットの行動を順次実行
-        for actor in alive_units:
+        for unit, _ in units_with_random:
             if self.is_finished:
                 break
-            self._action_phase(actor)
+            self._action_phase(unit)
 
     def _action_phase(self, actor: MobileSuit) -> None:
         """片方のユニットの行動処理."""

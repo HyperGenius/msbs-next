@@ -113,9 +113,10 @@ async def simulate_battle(
     # 勝者判定
     winner_id = None
     if player.current_hp > 0 and all(e.current_hp <= 0 for e in enemies):
+        # プレイヤー勝利
         winner_id = str(player.id)
-    elif player.current_hp <= 0:
-        # 敵の誰かが生き残っていれば敵の勝利
+    elif player.current_hp <= 0 and any(e.current_hp > 0 for e in enemies):
+        # 敵勝利（少なくとも1体の敵が生き残っている）
         winner_id = "ENEMY"
 
     return BattleResponse(
