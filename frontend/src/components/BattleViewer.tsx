@@ -1,8 +1,7 @@
 /* frontend/src/components/BattleViewer.tsx */
 "use client";
 
-import { useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stars, Grid } from "@react-three/drei";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import * as THREE from "three";
@@ -20,7 +19,6 @@ function MobileSuitMesh({
     position,
     maxHp,
     currentHp,
-    name
 }: {
     position: { x: number; y: number; z: number };
     maxHp: number;
@@ -116,7 +114,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn }: Bat
                 />
 
                 {/* Enemies */}
-                {enemyStates.map(({ enemy, state }, index) => (
+                {enemyStates.map(({ enemy, state }) => (
                     <MobileSuitMesh
                         key={enemy.id}
                         position={state.pos}
@@ -137,7 +135,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn }: Bat
                         <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${(playerState.hp / player.max_hp) * 100}%` }}></div>
                     </div>
                 </div>
-                {enemyStates.map(({ enemy, state }, index) => (
+                {enemyStates.map(({ enemy, state }) => (
                     <div key={enemy.id} className="mt-2">
                         <span className="font-bold text-red-400">{enemy.name}</span>
                         <br />

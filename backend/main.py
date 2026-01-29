@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from app.core.auth import get_current_user_optional
 from app.db import get_session
 from app.engine.simulation import BattleSimulator
-from app.models.models import BattleLog, MobileSuit, Vector3
+from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 from app.routers import mobile_suits
 
 app = FastAPI(title="MSBS-Next API")
@@ -62,7 +62,7 @@ async def simulate_battle(
     # 1. プレイヤー機体を取得（最初の1機）
     player_statement = select(MobileSuit).limit(1)
     player_results = session.exec(player_statement).all()
-    
+
     if len(player_results) < 1:
         raise HTTPException(
             status_code=400,
@@ -82,7 +82,7 @@ async def simulate_battle(
         Vector3(x=500, y=0, z=0),
         Vector3(x=500, y=200, z=0),
     ]
-    
+
     for i, pos in enumerate(enemy_positions):
         enemy = MobileSuit(
             name=f"ザクII #{i+1}",
