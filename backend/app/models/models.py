@@ -54,6 +54,7 @@ class MobileSuit(SQLModel, table=True):
     armor: int = Field(default=0, description="装甲値(ダメージ軽減)")
     mobility: float = Field(default=1.0, description="機動性(回避・移動速度係数)")
     sensor_range: float = Field(default=500.0, description="索敵範囲")
+    side: str = Field(default="PLAYER", description="陣営 (PLAYER/ENEMY)")
 
     # Complex Types (Stored as JSON in Postgres)
     # SQLModel + SQLAlchemy JSON Column mapping

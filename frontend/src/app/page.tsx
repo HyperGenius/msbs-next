@@ -15,8 +15,8 @@ export default function Home() {
   const [currentTurn, setCurrentTurn] = useState(0);
   const [maxTurn, setMaxTurn] = useState(0);
   // 表示用にstateを追加
-  const [ms1Data, setMs1Data] = useState<MobileSuit | null>(null);
-  const [ms2Data, setMs2Data] = useState<MobileSuit | null>(null);
+  const [playerData, setPlayerData] = useState<MobileSuit | null>(null);
+  const [enemiesData, setEnemiesData] = useState<MobileSuit[]>([]);
 
 
   const startBattle = async () => {
@@ -52,8 +52,8 @@ export default function Home() {
       setWinner(data.winner_id);
 
       // DBから取得した機体情報をセット
-      setMs1Data(data.ms1_info);
-      setMs2Data(data.ms2_info);
+      setPlayerData(data.player_info);
+      setEnemiesData(data.enemies_info);
 
       // 最大ターン数を計算して設定
       const lastTurn = data.logs.length > 0 ? data.logs[data.logs.length - 1].turn : 0;
@@ -73,15 +73,15 @@ export default function Home() {
         <Header />
 
         {/* 3D Viewer Area: ログがある時だけ表示 */}
-        {logs.length > 0 && ms1Data && ms2Data && (
+        {logs.length > 0 && playerData && enemiesData.length > 0 && (
           <div className="mb-8">
             <h2 className="text-xl font-bold mb-2 border-l-4 border-green-500 pl-2">Tactical Monitor</h2>
 
             {/* 3D Canvas Component */}
             <BattleViewer
               logs={logs}
-              ms1={ms1Data}
-              ms2={ms2Data}
+              player={playerData}
+              enemies={enemiesData}
               currentTurn={currentTurn}
             />
 
@@ -126,8 +126,8 @@ export default function Home() {
         <div className="mb-8 bg-gray-800 p-6 rounded-lg border border-green-800">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <p className="font-bold text-blue-400">UNIT 1: {ms1Data ? ms1Data.name : "Waiting for Data..."}</p>
-              <p className="font-bold text-red-400">UNIT 2: {ms2Data ? ms2Data.name : "Waiting for Data..."}</p>
+              <p className="font-bold text-blue-400">PLAYER: {playerData ? playerData.name : "Waiting for Data..."}</p>
+              <p className="font-bold text-red-400">ENEMIES: {enemiesData.length > 0 ? `${enemiesData.length} units` : "Waiting for Data..."}</p>
             </div>
             <button
               onClick={startBattle}
@@ -155,11 +155,11 @@ export default function Home() {
                 // 現在のターンに対応するログをハイライト
                 const isCurrentTurn = log.turn === currentTurn;
 
-                // ログ表示用: ms1Dataなどがnullの場合はIDをそのまま表示
-                const actorName = log.actor_id === ms1Data?.id ? ms1Data.name
-                  : log.actor_id === ms2Data?.id ? ms2Data.name
-                    : log.actor_id;
-                const isMs1 = log.actor_id === ms1Data?.id;
+                // ログ表示用: playerDataなどがnullの場合はIDをそのまま表示
+                const actorName = log.actor_id === playerData?.id ? playerData.name
+                  : enemiesData.find(e => e.id === log.actor_id)?.name
+                    || log.actor_id;
+                const isPlayer = log.actor_id === playerData?.id;
 
                 return (
                   <li
@@ -170,7 +170,7 @@ export default function Home() {
                       }`}
                   >
                     <span className="opacity-50 mr-4 w-16 inline-block">[Turn {log.turn}]</span>
-                    <span className={`font-bold mr-2 ${isMs1 ? 'text-blue-400' : 'text-red-400'}`}>
+                    <span className={`font-bold mr-2 ${isPlayer ? 'text-blue-400' : 'text-red-400'}`}>
                       {actorName}:
                     </span>
                     <span>{log.message}</span>
@@ -179,9 +179,9 @@ export default function Home() {
               })}
 
               {/* Winner Announcement */}
-              {winner && ms1Data && ms2Data && (
+              {winner && playerData && (
                 <li className="mt-8 text-center text-xl border-t border-green-500 pt-4 text-yellow-400 animate-pulse font-bold">
-                  *** WINNER: {winner === ms1Data.id ? ms1Data.name : ms2Data.name} ***
+                  *** WINNER: {winner === playerData.id ? playerData.name : "ENEMY FORCES"} ***
                 </li>
               )}
             </ul>
