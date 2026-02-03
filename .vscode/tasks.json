@@ -1,0 +1,68 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "pip install (functions)",
+			"type": "shell",
+			"osx": {
+				"command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+			},
+			"windows": {
+				"command": "${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
+			},
+			"linux": {
+				"command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+			},
+			"problemMatcher": [],
+			"options": {
+				"cwd": "${workspaceFolder}/backend"
+			}
+		},
+		{
+            "label": "Backend (Uvicorn)",
+            "type": "shell",
+            // 仮想環境を起動してから uvicorn を実行
+            "command": "source .venv/bin/activate && uvicorn main:app --reload",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "group": "dev-servers",
+                "panel": "dedicated"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/backend"
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        },
+        {
+            "label": "Frontend (npm)",
+            "type": "shell",
+            "command": "npm run dev",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": {
+                "group": "dev-servers"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/frontend"
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        },
+        {
+            "label": "Supabase migration up",
+            "type": "shell",
+            "command": "supabase migration up",
+            "problemMatcher": [],
+            "presentation": {
+                "group": "dev-servers",
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/supabase"
+            }
+        }
+	]
+}
