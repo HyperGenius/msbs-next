@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 from pydantic import field_validator
@@ -129,4 +129,4 @@ class BattleResult(SQLModel, table=True):
     mission_id: int | None = Field(default=None, foreign_key="missions.id", index=True, description="ミッションID")
     win_loss: str = Field(description="勝敗 (WIN/LOSE/DRAW)")
     logs: list[BattleLog] = Field(default_factory=list, sa_column=Column(JSON), description="バトルログ")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="作成日時")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="作成日時")

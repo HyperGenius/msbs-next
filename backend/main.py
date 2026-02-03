@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -138,7 +138,7 @@ async def simulate_battle(
         mission_id=mission_id,
         win_loss=win_loss,
         logs=sim.logs,
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
     session.add(battle_result)
     session.commit()

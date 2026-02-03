@@ -182,4 +182,4 @@ with Session(engine) as session:
     session.commit()
     print("Mission seed complete!")
 
-exit()
+sys.exit(0)
