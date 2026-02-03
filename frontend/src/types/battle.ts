@@ -67,3 +67,35 @@ export interface MobileSuitUpdate {
     armor?: number;
     mobility?: number;
 }
+
+/**
+ * ミッション定義
+ */
+export interface Mission {
+    id: number;
+    name: string;
+    difficulty: number;
+    description: string;
+    enemy_config: {
+        enemies: Array<{
+            name: string;
+            max_hp: number;
+            armor: number;
+            mobility: number;
+            position: Vector3;
+            weapon: Weapon;
+        }>;
+    };
+}
+
+/**
+ * バトル結果（履歴）
+ */
+export interface BattleResult {
+    id: string;
+    user_id: string | null;
+    mission_id: number | null;
+    win_loss: "WIN" | "LOSE" | "DRAW";
+    logs: BattleLog[];
+    created_at: string;
+}
