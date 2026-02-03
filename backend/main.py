@@ -85,7 +85,7 @@ async def simulate_battle(
 
     for i, pos in enumerate(enemy_positions):
         enemy = MobileSuit(
-            name=f"ザクII #{i+1}",
+            name=f"ザクII #{i + 1}",
             max_hp=80,
             current_hp=80,
             armor=5,

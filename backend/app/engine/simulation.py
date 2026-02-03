@@ -80,7 +80,11 @@ class BattleSimulator:
         return target
 
     def _process_attack(
-        self, actor: MobileSuit, target: MobileSuit, distance: float, pos_actor: np.ndarray
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        distance: float,
+        pos_actor: np.ndarray,
     ) -> None:
         """攻撃処理を実行する."""
         weapon = actor.get_active_weapon()
