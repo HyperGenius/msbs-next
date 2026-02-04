@@ -53,15 +53,15 @@
             }
         },
         {
-            "label": "Supabase migration up",
+            "label": "Alembic upgrade head",
             "type": "shell",
-            "command": "supabase migration up",
+            "command": "source .venv/bin/activate && alembic upgrade head",
             "problemMatcher": [],
             "presentation": {
                 "group": "dev-servers",
             },
             "options": {
-                "cwd": "${workspaceFolder}/supabase"
+                "cwd": "${workspaceFolder}/backend"
             }
         }
 	]
