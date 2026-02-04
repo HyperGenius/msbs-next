@@ -3,6 +3,7 @@ import json
 import os
 from collections.abc import Generator
 from typing import Any
+from uuid import UUID
 
 from dotenv import load_dotenv
 from sqlmodel import Session, create_engine
@@ -21,6 +22,9 @@ def json_serializer(obj: Any) -> str:
     """PydanticモデルをJSON互換のdictに変換してシリアライズする関数."""
 
     def default(o: Any) -> Any:
+        # UUID型を文字列に変換
+        if isinstance(o, UUID):
+            return str(o)
         # model_dump (Pydantic v2) があれば使う
         if hasattr(o, "model_dump"):
             return o.model_dump()
