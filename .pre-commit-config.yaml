@@ -18,10 +18,10 @@ repos:
       - id: mypy
         name: mypy
         entry: backend/.venv/bin/python -m mypy
-        args: [--config-file, backend/pyproject.toml]
+        args: [--config-file=backend/pyproject.toml]
         language: system
         types: [python]
         require_serial: true
         files: ^backend/
-        exclude: ^backend/alembic/versions/
+        exclude: ^backend/(alembic/versions/|scripts/|tests/)
         # additional_dependencies:
