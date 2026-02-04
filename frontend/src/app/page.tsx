@@ -4,25 +4,30 @@
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { BattleLog, MobileSuit } from "@/types/battle";
+import { useMissions } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
 import Header from "@/components/Header";
 
 export default function Home() {
   const { getToken } = useAuth();
+  const { missions, isLoading: missionsLoading } = useMissions();
   const [logs, setLogs] = useState<BattleLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
+  const [winLoss, setWinLoss] = useState<"WIN" | "LOSE" | "DRAW" | null>(null);
   const [currentTurn, setCurrentTurn] = useState(0);
   const [maxTurn, setMaxTurn] = useState(0);
+  const [selectedMissionId, setSelectedMissionId] = useState<number>(1);
   // 表示用にstateを追加
   const [playerData, setPlayerData] = useState<MobileSuit | null>(null);
   const [enemiesData, setEnemiesData] = useState<MobileSuit[]>([]);
 
 
-  const startBattle = async () => {
+  const startBattle = async (missionId: number) => {
     setIsLoading(true);
     setLogs([]);
     setWinner(null);
+    setWinLoss(null);
     setCurrentTurn(0);
 
     try {
@@ -36,7 +41,7 @@ export default function Home() {
       }
       
       // バックエンドからデータを取得
-      const res = await fetch("http://127.0.0.1:8000/api/battle/simulate", {
+      const res = await fetch(`http://127.0.0.1:8000/api/battle/simulate?mission_id=${missionId}`, {
         method: "POST",
         headers,
         body: ""
@@ -50,6 +55,15 @@ export default function Home() {
 
       setLogs(data.logs);
       setWinner(data.winner_id);
+
+      // 勝敗を判定
+      if (data.winner_id && data.player_info && data.winner_id === data.player_info.id) {
+        setWinLoss("WIN");
+      } else if (data.winner_id === "ENEMY") {
+        setWinLoss("LOSE");
+      } else {
+        setWinLoss("DRAW");
+      }
 
       // DBから取得した機体情報をセット
       setPlayerData(data.player_info);
@@ -71,6 +85,25 @@ export default function Home() {
     <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
       <div className="max-w-4xl mx-auto">
         <Header />
+
+        {/* Battle Result Display */}
+        {winLoss && (
+          <div className="mb-8 text-center">
+            <div
+              className={`inline-block px-12 py-6 rounded-lg text-4xl font-bold animate-pulse ${
+                winLoss === "WIN"
+                  ? "bg-green-900 text-green-300 border-4 border-green-500"
+                  : winLoss === "LOSE"
+                  ? "bg-red-900 text-red-300 border-4 border-red-500"
+                  : "bg-yellow-900 text-yellow-300 border-4 border-yellow-500"
+              }`}
+            >
+              {winLoss === "WIN" && "★ MISSION COMPLETE ★"}
+              {winLoss === "LOSE" && "✕ MISSION FAILED ✕"}
+              {winLoss === "DRAW" && "- DRAW -"}
+            </div>
+          </div>
+        )}
 
         {/* 3D Viewer Area: ログがある時だけ表示 */}
         {logs.length > 0 && playerData && enemiesData.length > 0 && (
@@ -122,22 +155,57 @@ export default function Home() {
           </div>
         )}
 
-        {/* Control Panel */}
+        {/* Mission Selection Panel */}
         <div className="mb-8 bg-gray-800 p-6 rounded-lg border border-green-800">
-          <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold mb-4 border-l-4 border-green-500 pl-2">Mission Selection</h2>
+          
+          {missionsLoading ? (
+            <p className="text-gray-400">Loading missions...</p>
+          ) : missions && missions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {missions.map((mission) => (
+                <button
+                  key={mission.id}
+                  onClick={() => setSelectedMissionId(mission.id)}
+                  className={`p-4 rounded-lg border-2 transition-all text-left ${
+                    selectedMissionId === mission.id
+                      ? "border-green-500 bg-green-900/30"
+                      : "border-gray-700 bg-gray-900 hover:border-green-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-lg">{mission.name}</span>
+                    <span className="text-xs px-2 py-1 rounded bg-yellow-900 text-yellow-300">
+                      難易度: {mission.difficulty}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-400">{mission.description}</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    敵機: {mission.enemy_config?.enemies?.length || 0} 機
+                  </p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-red-400 mb-4">ミッションが見つかりません。Backendでシードスクリプトを実行してください。</p>
+          )}
+
+          {/* Control Panel */}
+          <div className="flex justify-between items-center">
             <div>
               <p className="font-bold text-blue-400">PLAYER: {playerData ? playerData.name : "Waiting for Data..."}</p>
               <p className="font-bold text-red-400">ENEMIES: {enemiesData.length > 0 ? `${enemiesData.length} units` : "Waiting for Data..."}</p>
             </div>
             <button
-              onClick={startBattle}
-              disabled={isLoading}
-              className={`px-8 py-3 rounded font-bold text-black transition-colors shadow-lg ${isLoading
-                ? "bg-gray-500 cursor-not-allowed"
-                : "bg-green-500 hover:bg-green-400 hover:shadow-green-500/50"
-                }`}
+              onClick={() => startBattle(selectedMissionId)}
+              disabled={isLoading || !missions || missions.length === 0}
+              className={`px-8 py-3 rounded font-bold text-black transition-colors shadow-lg ${
+                isLoading || !missions || missions.length === 0
+                  ? "bg-gray-500 cursor-not-allowed"
+                  : "bg-green-500 hover:bg-green-400 hover:shadow-green-500/50"
+              }`}
             >
-              {isLoading ? "CALCULATING..." : "START SIMULATION"}
+              {isLoading ? "CALCULATING..." : "START MISSION"}
             </button>
           </div>
         </div>

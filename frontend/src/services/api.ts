@@ -1,6 +1,6 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
-import { MobileSuit, MobileSuitUpdate } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate } from "@/types/battle";
 
 // Backend API Base URL
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -87,4 +87,54 @@ export async function updateMobileSuit(
   }
 
   return res.json();
+}
+
+/**
+ * ミッション一覧を取得するSWRフック
+ */
+export function useMissions() {
+  const { data, error, isLoading, mutate } = useSWR<Mission[]>(
+    `${API_BASE_URL}/api/missions`,
+    fetcher
+  );
+
+  return {
+    missions: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * バトル履歴を取得するSWRフック
+ */
+export function useBattleHistory(limit: number = 50) {
+  const { data, error, isLoading, mutate } = useSWR<BattleResult[]>(
+    `${API_BASE_URL}/api/battles?limit=${limit}`,
+    fetcher
+  );
+
+  return {
+    battles: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * 特定のバトル詳細を取得するSWRフック
+ */
+export function useBattleDetail(battleId: string | null) {
+  const { data, error, isLoading } = useSWR<BattleResult>(
+    battleId ? `${API_BASE_URL}/api/battles/${battleId}` : null,
+    fetcher
+  );
+
+  return {
+    battle: data,
+    isLoading,
+    isError: error,
+  };
 }

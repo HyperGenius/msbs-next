@@ -13,6 +13,12 @@ export default function Header() {
         </div>
         <div className="flex items-center gap-4">
           <Link
+            href="/history"
+            className="px-6 py-3 bg-yellow-900 hover:bg-yellow-800 rounded font-bold transition-colors shadow-lg hover:shadow-yellow-500/50"
+          >
+            History
+          </Link>
+          <Link
             href="/garage"
             className="px-6 py-3 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors shadow-lg hover:shadow-green-500/50"
           >

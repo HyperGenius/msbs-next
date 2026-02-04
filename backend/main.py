@@ -1,13 +1,22 @@
+from datetime import UTC, datetime
+
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, desc, select
 
 # DB関連
 from app.core.auth import get_current_user_optional
 from app.db import get_session
 from app.engine.simulation import BattleSimulator
-from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
+from app.models.models import (
+    BattleLog,
+    BattleResult,
+    Mission,
+    MobileSuit,
+    Vector3,
+    Weapon,
+)
 from app.routers import mobile_suits
 
 app = FastAPI(title="MSBS-Next API")
@@ -55,11 +64,20 @@ def health() -> dict[str, str]:
 
 @app.post("/api/battle/simulate", response_model=BattleResponse)
 async def simulate_battle(
+    mission_id: int = 1,
     session: Session = Depends(get_session),
     user_id: str | None = Depends(get_current_user_optional),
 ) -> BattleResponse:
     """DBから機体データを取得してシミュレーションを実行する."""
-    # 1. プレイヤー機体を取得（最初の1機）
+    # 1. ミッション情報を取得
+    mission = session.get(Mission, mission_id)
+    if not mission:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Mission {mission_id} not found.",
+        )
+
+    # 2. プレイヤー機体を取得（最初の1機）
     player_statement = select(MobileSuit).limit(1)
     player_results = session.exec(player_statement).all()
 
@@ -69,55 +87,68 @@ async def simulate_battle(
             detail="Not enough Mobile Suits in DB. Please run seed script or add data.",
         )
 
-    # 2. プレイヤー機体を準備
+    # 3. プレイヤー機体を準備
     player = MobileSuit.model_validate(player_results[0].model_dump())
     player.current_hp = player.max_hp
     player.position = Vector3(x=0, y=0, z=0)
     player.side = "PLAYER"
 
-    # 3. 敵機を動的に生成（ザクII × 3機）
+    # 4. ミッション設定から敵機を生成
     enemies = []
-    enemy_positions = [
-        Vector3(x=500, y=-200, z=0),
-        Vector3(x=500, y=0, z=0),
-        Vector3(x=500, y=200, z=0),
-    ]
+    enemy_configs = mission.enemy_config.get("enemies", [])
 
-    for i, pos in enumerate(enemy_positions):
+    for enemy_config in enemy_configs:
+        pos_dict = enemy_config.get("position", {"x": 500, "y": 0, "z": 0})
+        weapon_dict = enemy_config.get("weapon", {})
+
         enemy = MobileSuit(
-            name=f"ザクII #{i + 1}",
-            max_hp=80,
-            current_hp=80,
-            armor=5,
-            mobility=1.2,
-            position=pos,
+            name=enemy_config.get("name", "ザクII"),
+            max_hp=enemy_config.get("max_hp", 80),
+            current_hp=enemy_config.get("max_hp", 80),
+            armor=enemy_config.get("armor", 5),
+            mobility=enemy_config.get("mobility", 1.2),
+            position=Vector3(**pos_dict),
             weapons=[
                 Weapon(
-                    id=f"zaku_mg_{i}",
-                    name="ザクマシンガン",
-                    power=15,
-                    range=400,
-                    accuracy=70,
+                    id=weapon_dict.get("id", "weapon"),
+                    name=weapon_dict.get("name", "Weapon"),
+                    power=weapon_dict.get("power", 15),
+                    range=weapon_dict.get("range", 400),
+                    accuracy=weapon_dict.get("accuracy", 70),
                 )
             ],
             side="ENEMY",
         )
         enemies.append(enemy)
 
-    # 4. シミュレーション実行
+    # 5. シミュレーション実行
     sim = BattleSimulator(player, enemies)
     max_turns = 50
     while not sim.is_finished and sim.turn < max_turns:
         sim.process_turn()
 
-    # 勝者判定
+    # 6. 勝者判定
     winner_id = None
+    win_loss = "DRAW"
     if player.current_hp > 0 and all(e.current_hp <= 0 for e in enemies):
         # プレイヤー勝利
         winner_id = str(player.id)
+        win_loss = "WIN"
     elif player.current_hp <= 0 and any(e.current_hp > 0 for e in enemies):
         # 敵勝利（少なくとも1体の敵が生き残っている）
         winner_id = "ENEMY"
+        win_loss = "LOSE"
+
+    # 7. バトル結果をDBに保存
+    battle_result = BattleResult(
+        user_id=user_id,
+        mission_id=mission_id,
+        win_loss=win_loss,
+        logs=sim.logs,
+        created_at=datetime.now(UTC),
+    )
+    session.add(battle_result)
+    session.commit()
 
     return BattleResponse(
         winner_id=winner_id,
@@ -125,3 +156,52 @@ async def simulate_battle(
         player_info=player,
         enemies_info=enemies,
     )
+
+
+@app.get("/api/missions", response_model=list[Mission])
+async def get_missions(
+    session: Session = Depends(get_session),
+) -> list[Mission]:
+    """ミッション一覧を取得する."""
+    statement = select(Mission)
+    missions = session.exec(statement).all()
+    return list(missions)
+
+
+@app.get("/api/battles", response_model=list[BattleResult])
+async def get_battle_history(
+    session: Session = Depends(get_session),
+    user_id: str | None = Depends(get_current_user_optional),
+    limit: int = 50,
+) -> list[BattleResult]:
+    """バトル履歴を取得する（最新順）."""
+    statement = (
+        select(BattleResult).order_by(desc(BattleResult.created_at)).limit(limit)
+    )
+
+    # ユーザーIDでフィルタ（認証されている場合）
+    if user_id:
+        statement = statement.where(BattleResult.user_id == user_id)
+
+    battles = session.exec(statement).all()
+    return list(battles)
+
+
+@app.get("/api/battles/{battle_id}", response_model=BattleResult)
+async def get_battle_detail(
+    battle_id: str,
+    session: Session = Depends(get_session),
+) -> BattleResult:
+    """特定のバトル結果の詳細を取得する."""
+    import uuid
+
+    try:
+        battle_uuid = uuid.UUID(battle_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid battle ID format") from e
+
+    battle = session.get(BattleResult, battle_uuid)
+    if not battle:
+        raise HTTPException(status_code=404, detail="Battle not found")
+
+    return battle
