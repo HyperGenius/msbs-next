@@ -1,15 +1,22 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, desc, select
 
 # DB関連
 from app.core.auth import get_current_user_optional
 from app.db import get_session
 from app.engine.simulation import BattleSimulator
-from app.models.models import BattleLog, BattleResult, Mission, MobileSuit, Vector3, Weapon
+from app.models.models import (
+    BattleLog,
+    BattleResult,
+    Mission,
+    MobileSuit,
+    Vector3,
+    Weapon,
+)
 from app.routers import mobile_suits
 
 app = FastAPI(title="MSBS-Next API")
@@ -89,11 +96,11 @@ async def simulate_battle(
     # 4. ミッション設定から敵機を生成
     enemies = []
     enemy_configs = mission.enemy_config.get("enemies", [])
-    
+
     for enemy_config in enemy_configs:
         pos_dict = enemy_config.get("position", {"x": 500, "y": 0, "z": 0})
         weapon_dict = enemy_config.get("weapon", {})
-        
+
         enemy = MobileSuit(
             name=enemy_config.get("name", "ザクII"),
             max_hp=enemy_config.get("max_hp", 80),
@@ -138,7 +145,7 @@ async def simulate_battle(
         mission_id=mission_id,
         win_loss=win_loss,
         logs=sim.logs,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     session.add(battle_result)
     session.commit()
@@ -168,12 +175,14 @@ async def get_battle_history(
     limit: int = 50,
 ) -> list[BattleResult]:
     """バトル履歴を取得する（最新順）."""
-    statement = select(BattleResult).order_by(BattleResult.created_at.desc()).limit(limit)
-    
+    statement = (
+        select(BattleResult).order_by(desc(BattleResult.created_at)).limit(limit)
+    )
+
     # ユーザーIDでフィルタ（認証されている場合）
     if user_id:
         statement = statement.where(BattleResult.user_id == user_id)
-    
+
     battles = session.exec(statement).all()
     return list(battles)
 
@@ -185,14 +194,14 @@ async def get_battle_detail(
 ) -> BattleResult:
     """特定のバトル結果の詳細を取得する."""
     import uuid
-    
+
     try:
         battle_uuid = uuid.UUID(battle_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid battle ID format")
-    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid battle ID format") from e
+
     battle = session.get(BattleResult, battle_uuid)
     if not battle:
         raise HTTPException(status_code=404, detail="Battle not found")
-    
+
     return battle
