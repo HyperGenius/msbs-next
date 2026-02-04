@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
 from pydantic import field_validator
@@ -116,7 +116,9 @@ class Mission(SQLModel, table=True):
     name: str = Field(index=True, description="ミッション名")
     difficulty: int = Field(default=1, description="難易度 (1-5)")
     description: str = Field(default="", description="ミッション説明")
-    enemy_config: dict = Field(default_factory=dict, sa_column=Column(JSON), description="敵機の構成情報")
+    enemy_config: dict = Field(
+        default_factory=dict, sa_column=Column(JSON), description="敵機の構成情報"
+    )
 
 
 class BattleResult(SQLModel, table=True):
@@ -126,7 +128,13 @@ class BattleResult(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: str | None = Field(default=None, index=True, description="Clerk User ID")
-    mission_id: int | None = Field(default=None, foreign_key="missions.id", index=True, description="ミッションID")
+    mission_id: int | None = Field(
+        default=None, foreign_key="missions.id", index=True, description="ミッションID"
+    )
     win_loss: str = Field(description="勝敗 (WIN/LOSE/DRAW)")
-    logs: list[BattleLog] = Field(default_factory=list, sa_column=Column(JSON), description="バトルログ")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="作成日時")
+    logs: list[BattleLog] = Field(
+        default_factory=list, sa_column=Column(JSON), description="バトルログ"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
