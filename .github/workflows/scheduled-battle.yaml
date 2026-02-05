@@ -1,0 +1,45 @@
+name: Scheduled Battle Batch
+
+on:
+  # 手動トリガー（テスト用）
+  workflow_dispatch:
+  
+  # スケジュール実行（毎日 JST 21:00 = UTC 12:00）
+  # schedule:
+  #   - cron: '0 12 * * *'
+
+jobs:
+  run-batch:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+      
+      - name: Run batch script
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          CLERK_JWKS_URL: ${{ secrets.CLERK_JWKS_URL }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+        run: |
+          cd backend
+          python scripts/run_batch.py
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Batch job failed. Please check the logs."
+          # ここに通知処理を追加可能（Slack, Discord, Email等）

@@ -140,6 +140,9 @@ class BattleResult(SQLModel, table=True):
     mission_id: int | None = Field(
         default=None, foreign_key="missions.id", index=True, description="ミッションID"
     )
+    room_id: uuid.UUID | None = Field(
+        default=None, foreign_key="battle_rooms.id", index=True, description="ルームID"
+    )
     win_loss: str = Field(description="勝敗 (WIN/LOSE/DRAW)")
     logs: list[BattleLog] = Field(
         default_factory=list, sa_column=Column(JSON), description="バトルログ"
@@ -156,7 +159,7 @@ class BattleRoom(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     status: str = Field(
-        default="OPEN", index=True, description="ステータス (OPEN/DOING/CLOSED)"
+        default="OPEN", index=True, description="ステータス (OPEN/WAITING/COMPLETED)"
     )
     scheduled_at: datetime = Field(description="実行予定時刻")
     created_at: datetime = Field(
@@ -170,7 +173,9 @@ class BattleEntry(SQLModel, table=True):
     __tablename__ = "battle_entries"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: str = Field(index=True, description="Clerk User ID")
+    user_id: str | None = Field(
+        default=None, index=True, description="Clerk User ID (NPC の場合は None)"
+    )
     room_id: uuid.UUID = Field(
         foreign_key="battle_rooms.id", index=True, description="バトルルームID"
     )
@@ -181,6 +186,7 @@ class BattleEntry(SQLModel, table=True):
         sa_column=Column(JSON),
         description="エントリー時点の機体データのスナップショット",
     )
+    is_npc: bool = Field(default=False, index=True, description="NPC（敵機）かどうか")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
