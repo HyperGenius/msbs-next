@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 from pydantic import field_validator
@@ -176,7 +177,7 @@ class BattleEntry(SQLModel, table=True):
     mobile_suit_id: uuid.UUID = Field(
         foreign_key="mobile_suits.id", index=True, description="機体ID"
     )
-    mobile_suit_snapshot: dict = Field(
+    mobile_suit_snapshot: dict[str, Any] = Field(
         sa_column=Column(JSON), description="エントリー時点の機体データのスナップショット"
     )
     created_at: datetime = Field(

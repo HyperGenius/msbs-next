@@ -93,6 +93,7 @@ export default function Home() {
     setEntryLoading(true);
     try {
       // 最初の機体でエントリー
+      // TODO: 将来的にユーザーが機体を選択できるようにする
       await entryBattle(mobileSuits[0].id);
       // エントリー状況を再取得
       await mutateEntryStatus();

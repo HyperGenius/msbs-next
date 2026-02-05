@@ -54,11 +54,12 @@ def get_or_create_open_room(session: Session) -> BattleRoom:
     if existing_room:
         return existing_room
 
-    # なければ新しいルームを作成（次の21:00を予定時刻とする）
+    # なければ新しいルームを作成
+    # 次の21:00 JST (= 12:00 UTC) を予定時刻とする
+    # ※ JST = UTC+9 なので、21:00 JST = 12:00 UTC
     now = datetime.now(UTC)
-    # 簡易的に次の日の21:00 JSTを設定 (UTC 12:00)
     scheduled_time = now.replace(hour=12, minute=0, second=0, microsecond=0)
-    if now.hour >= 12:  # すでに12時を過ぎていたら翌日
+    if now.hour >= 12:  # すでに12時(UTC)を過ぎていたら翌日
         scheduled_time += timedelta(days=1)
 
     new_room = BattleRoom(
