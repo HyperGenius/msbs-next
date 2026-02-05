@@ -146,3 +146,39 @@ class BattleResult(SQLModel, table=True):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
+
+
+class BattleRoom(SQLModel, table=True):
+    """バトルルーム (定期更新バトルの開催回を管理)."""
+
+    __tablename__ = "battle_rooms"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    status: str = Field(
+        default="OPEN", index=True, description="ステータス (OPEN/DOING/CLOSED)"
+    )
+    scheduled_at: datetime = Field(description="実行予定時刻")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+
+
+class BattleEntry(SQLModel, table=True):
+    """バトルエントリー (ユーザーの参加登録情報)."""
+
+    __tablename__ = "battle_entries"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: str = Field(index=True, description="Clerk User ID")
+    room_id: uuid.UUID = Field(
+        foreign_key="battle_rooms.id", index=True, description="バトルルームID"
+    )
+    mobile_suit_id: uuid.UUID = Field(
+        foreign_key="mobile_suits.id", index=True, description="機体ID"
+    )
+    mobile_suit_snapshot: dict = Field(
+        sa_column=Column(JSON), description="エントリー時点の機体データのスナップショット"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )

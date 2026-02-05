@@ -10,14 +10,16 @@ from app.core.auth import get_current_user_optional
 from app.db import get_session
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
+    BattleEntry,
     BattleLog,
     BattleResult,
+    BattleRoom,
     Mission,
     MobileSuit,
     Vector3,
     Weapon,
 )
-from app.routers import mobile_suits
+from app.routers import entries, mobile_suits
 
 app = FastAPI(title="MSBS-Next API")
 
@@ -37,6 +39,7 @@ app.add_middleware(
 
 # Routerの登録
 app.include_router(mobile_suits.router)
+app.include_router(entries.router)
 
 # --- Response Schemas ---
 # models.py にあるクラスを使用する形でも良いですが、
