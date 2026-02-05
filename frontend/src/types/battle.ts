@@ -21,6 +21,14 @@ export interface Weapon {
 }
 
 /**
+ * 戦術設定
+ */
+export interface Tactics {
+    priority: "CLOSEST" | "WEAKEST" | "RANDOM";
+    range: "MELEE" | "RANGED" | "BALANCED" | "FLEE";
+}
+
+/**
  * Mobile Suit
  */
 export interface MobileSuit {
@@ -33,6 +41,7 @@ export interface MobileSuit {
     position: Vector3;
     weapons: Weapon[];
     side: "PLAYER" | "ENEMY";
+    tactics: Tactics;
 }
 
 /**
@@ -66,6 +75,7 @@ export interface MobileSuitUpdate {
     max_hp?: number;
     armor?: number;
     mobility?: number;
+    tactics?: Tactics;
 }
 
 /**
