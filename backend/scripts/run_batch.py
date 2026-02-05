@@ -93,18 +93,6 @@ def _process_room(session: Session, room: BattleRoom) -> None:
 
     print(f"  参加者: {len(entries)} 機")
 
-    # エントリーからMobileSuitを復元
-    units: list[MobileSuit] = []
-    entry_map = {}  # unit_id -> entry のマッピング
-
-    for entry in entries:
-        snapshot = entry.mobile_suit_snapshot
-        # スナップショットからMobileSuitを復元
-        unit = MobileSuit(**snapshot)
-        # 一意のIDを割り当てる（スナップショットのIDを使用）
-        units.append(unit)
-        entry_map[unit.id] = entry
-
     # プレイヤーとエネミーに分ける
     # 簡易版: 最初のプレイヤーエントリーをplayer、残りをenemiesとする
     player_entries = [e for e in entries if not e.is_npc]
@@ -122,11 +110,14 @@ def _process_room(session: Session, room: BattleRoom) -> None:
 
     # 他のユニットは全員敵として扱う
     enemy_units = []
+    unit_to_entry_map = {}  # MobileSuit ID -> BattleEntry のマッピング
+
     for entry in player_entries[1:] + npc_entries:
         enemy_snapshot = entry.mobile_suit_snapshot
         enemy_unit = MobileSuit(**enemy_snapshot)
         enemy_unit.side = "ENEMY"
         enemy_units.append(enemy_unit)
+        unit_to_entry_map[enemy_unit.id] = entry
 
     print(f"  プレイヤー: {player_unit.name}")
     print(f"  敵機: {len(enemy_units)} 機")
@@ -142,21 +133,30 @@ def _process_room(session: Session, room: BattleRoom) -> None:
 
     print(f"  戦闘終了: {turn_count} ターン")
 
-    # 勝敗判定
-    if player_unit.current_hp > 0:
-        win_loss = "WIN"
-        print("  結果: 勝利")
+    # 勝敗判定: プレイヤーが生き残っていれば勝利
+    primary_player_win = player_unit.current_hp > 0
+
+    if primary_player_win:
+        print("  結果: プレイヤー勝利")
     else:
-        win_loss = "LOSE"
-        print("  結果: 敗北")
+        print("  結果: プレイヤー敗北")
 
     # 結果を保存（プレイヤーごと）
     for entry in player_entries:
-        # このプレイヤーの結果を保存
+        # 各プレイヤーの勝敗を判定
+        if entry.id == player_entries[0].id:
+            # 最初のプレイヤー（実際にシミュレートされた）
+            individual_win_loss = "WIN" if primary_player_win else "LOSE"
+        else:
+            # 他のプレイヤー（敵側として扱われた）
+            # 実装簡略化のため、全員敗北扱い
+            # TODO: 将来的にはチーム分けや複数の同時シミュレーションを実装
+            individual_win_loss = "LOSE"
+
         battle_result = BattleResult(
             user_id=entry.user_id,
             room_id=room.id,
-            win_loss=win_loss if entry.id == player_entries[0].id else "LOSE",
+            win_loss=individual_win_loss,
             logs=[log.model_dump() for log in simulator.logs],
         )
         session.add(battle_result)
