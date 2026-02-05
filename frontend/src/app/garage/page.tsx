@@ -19,6 +19,10 @@ export default function GaragePage() {
     max_hp: 0,
     armor: 0,
     mobility: 0,
+    tactics: {
+      priority: "CLOSEST" as const,
+      range: "BALANCED" as const,
+    },
   });
 
   // 機体選択時の処理
@@ -29,6 +33,10 @@ export default function GaragePage() {
       max_hp: ms.max_hp,
       armor: ms.armor,
       mobility: ms.mobility,
+      tactics: ms.tactics || {
+        priority: "CLOSEST",
+        range: "BALANCED",
+      },
     });
     setSuccessMessage(null);
   };
@@ -187,6 +195,68 @@ export default function GaragePage() {
                       }
                       className="w-full px-3 py-2 bg-gray-900 border border-green-700 rounded focus:border-green-500 focus:outline-none"
                     />
+                  </div>
+
+                  {/* Tactics Section */}
+                  <div className="pt-4 border-t border-green-800">
+                    <h3 className="text-lg font-bold mb-4 text-green-300">
+                      戦術設定 (Tactics)
+                    </h3>
+                    
+                    {/* Target Priority */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-bold mb-2">
+                        ターゲット優先度
+                      </label>
+                      <select
+                        value={formData.tactics.priority}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            tactics: {
+                              ...formData.tactics,
+                              priority: e.target.value as "CLOSEST" | "WEAKEST" | "RANDOM",
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 bg-gray-900 border border-green-700 rounded focus:border-green-500 focus:outline-none"
+                      >
+                        <option value="CLOSEST">CLOSEST - 最寄りの敵</option>
+                        <option value="WEAKEST">WEAKEST - HP最小の敵</option>
+                        <option value="RANDOM">RANDOM - ランダム選択</option>
+                      </select>
+                      <p className="text-xs text-green-600 mt-1">
+                        攻撃対象の選択方法を設定します
+                      </p>
+                    </div>
+
+                    {/* Engagement Range */}
+                    <div>
+                      <label className="block text-sm font-bold mb-2">
+                        交戦距離設定
+                      </label>
+                      <select
+                        value={formData.tactics.range}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            tactics: {
+                              ...formData.tactics,
+                              range: e.target.value as "MELEE" | "RANGED" | "BALANCED" | "FLEE",
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 bg-gray-900 border border-green-700 rounded focus:border-green-500 focus:outline-none"
+                      >
+                        <option value="MELEE">MELEE - 近接突撃</option>
+                        <option value="RANGED">RANGED - 遠距離維持</option>
+                        <option value="BALANCED">BALANCED - バランス型</option>
+                        <option value="FLEE">FLEE - 回避優先</option>
+                      </select>
+                      <p className="text-xs text-green-600 mt-1">
+                        戦闘時の移動パターンを設定します
+                      </p>
+                    </div>
                   </div>
 
                   {/* Success Message */}

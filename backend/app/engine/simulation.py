@@ -60,7 +60,7 @@ class BattleSimulator:
             self._process_movement(actor, pos_actor, pos_target, diff_vector, distance)
 
     def _select_target(self, actor: MobileSuit) -> MobileSuit | None:
-        """ターゲットを選択する."""
+        """ターゲットを選択する（戦術に基づく）."""
         # ターゲット選択: 敵対勢力のユニットをリストアップ
         if actor.side == "PLAYER":
             potential_targets = [e for e in self.enemies if e.current_hp > 0]
@@ -71,12 +71,22 @@ class BattleSimulator:
         if not potential_targets:
             return None
 
-        # 最も近い敵を選択
+        # 戦術に基づいてターゲットを選択
+        tactics_priority = actor.tactics.get("priority", "CLOSEST")
         pos_actor = actor.position.to_numpy()
-        target = min(
-            potential_targets,
-            key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
-        )
+
+        if tactics_priority == "WEAKEST":
+            # 最もHPが低い敵を選択
+            target = min(potential_targets, key=lambda t: t.current_hp)
+        elif tactics_priority == "RANDOM":
+            # ランダムに敵を選択
+            target = random.choice(potential_targets)
+        else:  # CLOSEST (デフォルト)
+            # 最も近い敵を選択
+            target = min(
+                potential_targets,
+                key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
+            )
         return target
 
     def _process_attack(
@@ -191,8 +201,76 @@ class BattleSimulator:
         diff_vector: np.ndarray,
         distance: float,
     ) -> None:
-        """移動処理を実行する."""
-        if distance > 0:
+        """移動処理を実行する（戦術に基づく）."""
+        if distance == 0:
+            return
+
+        # 戦術に基づいて移動方向を決定
+        tactics_range = actor.tactics.get("range", "BALANCED")
+        weapon = actor.get_active_weapon()
+
+        if tactics_range == "FLEE":
+            # 敵から逃げる（後退）
+            direction = -diff_vector / distance  # 反対方向
+            speed = actor.mobility * 150
+            move_vector = direction * speed
+            new_pos = pos_actor + move_vector
+            actor.position = Vector3.from_numpy(new_pos)
+
+            self.logs.append(
+                BattleLog(
+                    turn=self.turn,
+                    actor_id=actor.id,
+                    action_type="MOVE",
+                    message=f"{actor.name}が後退中 (距離: {int(distance)}m)",
+                    position_snapshot=actor.position,
+                )
+            )
+        elif tactics_range == "RANGED" and weapon:
+            # 遠距離維持（射程ギリギリの距離を維持）
+            ideal_distance = weapon.range * 0.8  # 射程の80%の距離を維持
+
+            if distance < ideal_distance:
+                # 近すぎる場合は後退
+                direction = -diff_vector / distance
+                speed = actor.mobility * 100
+                move_vector = direction * speed
+                new_pos = pos_actor + move_vector
+                actor.position = Vector3.from_numpy(new_pos)
+
+                self.logs.append(
+                    BattleLog(
+                        turn=self.turn,
+                        actor_id=actor.id,
+                        action_type="MOVE",
+                        message=f"{actor.name}が距離を取る (距離: {int(distance)}m)",
+                        position_snapshot=actor.position,
+                    )
+                )
+            elif distance > weapon.range:
+                # 射程外の場合は接近
+                direction = diff_vector / distance
+                speed = actor.mobility * 100
+                move_vector = direction * speed
+                new_pos = pos_actor + move_vector
+
+                # 行き過ぎ防止
+                if np.linalg.norm(new_pos - pos_actor) > distance:
+                    new_pos = pos_target - (direction * ideal_distance)
+
+                actor.position = Vector3.from_numpy(new_pos)
+
+                self.logs.append(
+                    BattleLog(
+                        turn=self.turn,
+                        actor_id=actor.id,
+                        action_type="MOVE",
+                        message=f"{actor.name}が射程内に移動中 (残距離: {int(distance)}m)",
+                        position_snapshot=actor.position,
+                    )
+                )
+        else:  # MELEE or BALANCED (デフォルト)
+            # 敵に接近
             direction = diff_vector / distance
             speed = actor.mobility * 150
             move_vector = direction * speed

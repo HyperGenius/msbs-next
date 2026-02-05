@@ -63,6 +63,13 @@ class MobileSuit(SQLModel, table=True):
     velocity: Vector3 = Field(default_factory=Vector3, sa_column=Column(JSON))
     weapons: list[Weapon] = Field(default_factory=list, sa_column=Column(JSON))
 
+    # Tactics Configuration
+    tactics: dict = Field(
+        default_factory=lambda: {"priority": "CLOSEST", "range": "BALANCED"},
+        sa_column=Column(JSON),
+        description="戦術設定 (priority: CLOSEST/WEAKEST/RANDOM, range: MELEE/RANGED/BALANCED/FLEE)",
+    )
+
     active_weapon_index: int = Field(default=0)
 
     # Initialize current_hp to max_hp if not set
@@ -89,6 +96,7 @@ class MobileSuitUpdate(SQLModel):
     max_hp: int | None = None
     armor: int | None = None
     mobility: float | None = None
+    tactics: dict | None = None
 
 
 # --- Response Models (APIレスポンス用) ---

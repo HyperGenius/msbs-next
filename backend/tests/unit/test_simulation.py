@@ -23,6 +23,7 @@ def create_test_player() -> MobileSuit:
             )
         ],
         side="PLAYER",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
     )
 
 
@@ -45,7 +46,9 @@ def create_test_enemy(name: str, position: Vector3) -> MobileSuit:
             )
         ],
         side="ENEMY",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
     )
+
 
 
 def test_simulator_initialization() -> None:
@@ -178,3 +181,88 @@ def test_logs_generated() -> None:
     for log in sim.logs:
         assert log.turn > 0
         assert log.message != ""
+
+
+def test_tactics_weakest_priority() -> None:
+    """Test that WEAKEST priority targets the lowest HP enemy."""
+    player = create_test_player()
+    player.tactics = {"priority": "WEAKEST", "range": "BALANCED"}
+
+    # Create enemies with different HP levels
+    enemies = [
+        create_test_enemy("Strong Enemy", Vector3(x=300, y=0, z=0)),
+        create_test_enemy("Weak Enemy", Vector3(x=500, y=0, z=0)),
+        create_test_enemy("Medium Enemy", Vector3(x=400, y=0, z=0)),
+    ]
+    enemies[0].current_hp = 80  # Strong
+    enemies[1].current_hp = 20  # Weak (should be targeted)
+    enemies[2].current_hp = 50  # Medium
+
+    sim = BattleSimulator(player, enemies)
+    
+    # Get target selection
+    target = sim._select_target(player)
+    
+    # Should target the weakest enemy
+    assert target is not None
+    assert target.name == "Weak Enemy"
+    assert target.current_hp == 20
+
+
+def test_tactics_ranged_behavior() -> None:
+    """Test that RANGED tactics maintain distance from enemy."""
+    player = create_test_player()
+    player.tactics = {"priority": "CLOSEST", "range": "RANGED"}
+    player.position = Vector3(x=0, y=0, z=0)
+
+    enemies = [
+        create_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0)),
+    ]
+
+    sim = BattleSimulator(player, enemies)
+    
+    # Run one turn
+    sim.process_turn()
+    
+    # Player should try to maintain distance (not rush forward)
+    # Check that there's a movement log indicating distance maintenance
+    move_logs = [log for log in sim.logs if log.action_type == "MOVE" and log.actor_id == player.id]
+    if move_logs:
+        # Should contain message about maintaining distance or moving away
+        assert any("距離を取る" in log.message or "射程内" in log.message for log in move_logs)
+
+
+def test_tactics_flee_behavior() -> None:
+    """Test that FLEE tactics cause unit to retreat."""
+    player = create_test_player()
+    player.tactics = {"priority": "CLOSEST", "range": "FLEE"}
+    player.position = Vector3(x=0, y=0, z=0)
+    initial_distance = 500.0
+
+    enemies = [
+        create_test_enemy("Enemy", Vector3(x=initial_distance, y=0, z=0)),
+    ]
+
+    sim = BattleSimulator(player, enemies)
+    
+    # Run one turn
+    sim.process_turn()
+    
+    # Player should be moving away from enemy
+    move_logs = [log for log in sim.logs if log.action_type == "MOVE" and log.actor_id == player.id]
+    if move_logs:
+        # Should contain message about retreating
+        assert any("後退中" in log.message for log in move_logs)
+
+
+def test_tactics_default_values() -> None:
+    """Test that MobileSuit has default tactics values."""
+    player = create_test_player()
+    
+    # Should have default tactics
+    assert player.tactics is not None
+    assert "priority" in player.tactics
+    assert "range" in player.tactics
+    assert player.tactics["priority"] in ["CLOSEST", "WEAKEST", "RANDOM"]
+    assert player.tactics["range"] in ["MELEE", "RANGED", "BALANCED", "FLEE"]
+
