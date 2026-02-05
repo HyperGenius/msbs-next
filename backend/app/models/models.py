@@ -178,7 +178,8 @@ class BattleEntry(SQLModel, table=True):
         foreign_key="mobile_suits.id", index=True, description="機体ID"
     )
     mobile_suit_snapshot: dict[str, Any] = Field(
-        sa_column=Column(JSON), description="エントリー時点の機体データのスナップショット"
+        sa_column=Column(JSON),
+        description="エントリー時点の機体データのスナップショット",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"

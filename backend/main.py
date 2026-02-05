@@ -10,10 +10,8 @@ from app.core.auth import get_current_user_optional
 from app.db import get_session
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
-    BattleEntry,
     BattleLog,
     BattleResult,
-    BattleRoom,
     Mission,
     MobileSuit,
     Vector3,

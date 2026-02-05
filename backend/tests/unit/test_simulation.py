@@ -50,7 +50,6 @@ def create_test_enemy(name: str, position: Vector3) -> MobileSuit:
     )
 
 
-
 def test_simulator_initialization() -> None:
     """Test that simulator initializes correctly."""
     player = create_test_player()
@@ -199,10 +198,10 @@ def test_tactics_weakest_priority() -> None:
     enemies[2].current_hp = 50  # Medium
 
     sim = BattleSimulator(player, enemies)
-    
+
     # Get target selection
     target = sim._select_target(player)
-    
+
     # Should target the weakest enemy
     assert target is not None
     assert target.name == "Weak Enemy"
@@ -220,16 +219,22 @@ def test_tactics_ranged_behavior() -> None:
     ]
 
     sim = BattleSimulator(player, enemies)
-    
+
     # Run one turn
     sim.process_turn()
-    
+
     # Player should try to maintain distance (not rush forward)
     # Check that there's a movement log indicating distance maintenance
-    move_logs = [log for log in sim.logs if log.action_type == "MOVE" and log.actor_id == player.id]
+    move_logs = [
+        log
+        for log in sim.logs
+        if log.action_type == "MOVE" and log.actor_id == player.id
+    ]
     if move_logs:
         # Should contain message about maintaining distance or moving away
-        assert any("距離を取る" in log.message or "射程内" in log.message for log in move_logs)
+        assert any(
+            "距離を取る" in log.message or "射程内" in log.message for log in move_logs
+        )
 
 
 def test_tactics_flee_behavior() -> None:
@@ -244,12 +249,16 @@ def test_tactics_flee_behavior() -> None:
     ]
 
     sim = BattleSimulator(player, enemies)
-    
+
     # Run one turn
     sim.process_turn()
-    
+
     # Player should be moving away from enemy
-    move_logs = [log for log in sim.logs if log.action_type == "MOVE" and log.actor_id == player.id]
+    move_logs = [
+        log
+        for log in sim.logs
+        if log.action_type == "MOVE" and log.actor_id == player.id
+    ]
     if move_logs:
         # Should contain message about retreating
         assert any("後退中" in log.message for log in move_logs)
@@ -258,11 +267,10 @@ def test_tactics_flee_behavior() -> None:
 def test_tactics_default_values() -> None:
     """Test that MobileSuit has default tactics values."""
     player = create_test_player()
-    
+
     # Should have default tactics
     assert player.tactics is not None
     assert "priority" in player.tactics
     assert "range" in player.tactics
     assert player.tactics["priority"] in ["CLOSEST", "WEAKEST", "RANDOM"]
     assert player.tactics["range"] in ["MELEE", "RANGED", "BALANCED", "FLEE"]
-

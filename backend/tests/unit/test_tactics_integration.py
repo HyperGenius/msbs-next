@@ -118,9 +118,9 @@ def test_tactics_integration() -> None:
         targeted_weak = any(
             log.target_id == damaged_gouf.id for log in player_attack_logs
         )
-        assert (
-            targeted_weak
-        ), "Player with WEAKEST priority should have targeted the damaged Gouf"
+        assert targeted_weak, (
+            "Player with WEAKEST priority should have targeted the damaged Gouf"
+        )
 
     # Check that various movement patterns were used
     flee_logs = [log for log in sim.logs if "後退中" in log.message]
@@ -131,7 +131,7 @@ def test_tactics_integration() -> None:
     total_tactical_moves = len(flee_logs) + len(ranged_logs) + len(melee_logs)
     assert total_tactical_moves > 0, "Tactical movements should have been executed"
 
-    print(f"✓ Integration test passed!")
+    print("✓ Integration test passed!")
     print(f"  - Turns executed: {turns_executed}")
     print(f"  - Total logs: {len(sim.logs)}")
     print(f"  - Player attacks: {len(player_attack_logs)}")
