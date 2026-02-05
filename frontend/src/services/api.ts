@@ -1,6 +1,6 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry } from "@/types/battle";
 
 // Backend API Base URL
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -137,4 +137,72 @@ export function useBattleDetail(battleId: string | null) {
     isLoading,
     isError: error,
   };
+}
+
+/**
+ * エントリー状況を取得するSWRフック
+ */
+export function useEntryStatus() {
+  const { data, error, isLoading, mutate } = useSWR<EntryStatusResponse>(
+    `${API_BASE_URL}/api/entries/status`,
+    fetcher
+  );
+
+  return {
+    entryStatus: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * エントリーを作成する関数
+ */
+export async function entryBattle(mobileSuitId: string): Promise<BattleEntry> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${API_BASE_URL}/api/entries`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ mobile_suit_id: mobileSuitId }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to create entry: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * エントリーをキャンセルする関数
+ */
+export async function cancelEntry(): Promise<void> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${API_BASE_URL}/api/entries`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to cancel entry: ${res.status} ${res.statusText}`);
+  }
 }

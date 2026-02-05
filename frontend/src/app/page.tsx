@@ -4,13 +4,15 @@
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { BattleLog, MobileSuit } from "@/types/battle";
-import { useMissions } from "@/services/api";
+import { useMissions, useMobileSuits, useEntryStatus, entryBattle, cancelEntry } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
 import Header from "@/components/Header";
 
 export default function Home() {
-  const { getToken } = useAuth();
+  const { getToken, isSignedIn } = useAuth();
   const { missions, isLoading: missionsLoading } = useMissions();
+  const { mobileSuits, isLoading: mobileSuitsLoading } = useMobileSuits();
+  const { entryStatus, isLoading: entryStatusLoading, mutate: mutateEntryStatus } = useEntryStatus();
   const [logs, setLogs] = useState<BattleLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
@@ -21,6 +23,7 @@ export default function Home() {
   // 表示用にstateを追加
   const [playerData, setPlayerData] = useState<MobileSuit | null>(null);
   const [enemiesData, setEnemiesData] = useState<MobileSuit[]>([]);
+  const [entryLoading, setEntryLoading] = useState(false);
 
 
   const startBattle = async (missionId: number) => {
@@ -78,6 +81,43 @@ export default function Home() {
       alert("通信エラーが発生しました。Backendが起動しているか確認してください。");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleEntry = async () => {
+    if (!mobileSuits || mobileSuits.length === 0) {
+      alert("機体がありません。ガレージで機体を作成してください。");
+      return;
+    }
+
+    setEntryLoading(true);
+    try {
+      // 最初の機体でエントリー
+      // TODO: 将来的にユーザーが機体を選択できるようにする
+      await entryBattle(mobileSuits[0].id);
+      // エントリー状況を再取得
+      await mutateEntryStatus();
+      alert("エントリーが完了しました！");
+    } catch (error) {
+      console.error("Error creating entry:", error);
+      alert(`エントリーに失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setEntryLoading(false);
+    }
+  };
+
+  const handleCancelEntry = async () => {
+    setEntryLoading(true);
+    try {
+      await cancelEntry();
+      // エントリー状況を再取得
+      await mutateEntryStatus();
+      alert("エントリーをキャンセルしました。");
+    } catch (error) {
+      console.error("Error cancelling entry:", error);
+      alert(`キャンセルに失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setEntryLoading(false);
     }
   };
 
@@ -155,9 +195,77 @@ export default function Home() {
           </div>
         )}
 
+        {/* Entry Panel */}
+        <div className="mb-8 bg-gray-800 p-6 rounded-lg border border-green-800">
+          <h2 className="text-2xl font-bold mb-4 border-l-4 border-green-500 pl-2">
+            ENTRY / 出撃登録
+          </h2>
+          
+          {!isSignedIn ? (
+            <div className="text-yellow-400 p-4 border border-yellow-700 rounded bg-yellow-900/20">
+              エントリーするにはログインが必要です
+            </div>
+          ) : entryStatusLoading ? (
+            <p className="text-gray-400">エントリー状況を確認中...</p>
+          ) : entryStatus?.is_entered ? (
+            <div className="space-y-4">
+              <div className="p-4 border-2 border-green-500 rounded bg-green-900/30">
+                <p className="text-green-300 font-bold mb-2">✓ エントリー済み</p>
+                <p className="text-sm text-gray-300">
+                  次回更新: {entryStatus.entry && new Date(entryStatus.entry.scheduled_at).toLocaleString('ja-JP')}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  使用機体ID: {entryStatus.entry?.mobile_suit_id}
+                </p>
+              </div>
+              <button
+                onClick={handleCancelEntry}
+                disabled={entryLoading}
+                className={`px-6 py-3 rounded font-bold transition-colors ${
+                  entryLoading
+                    ? "bg-gray-500 cursor-not-allowed text-gray-300"
+                    : "bg-red-700 hover:bg-red-600 text-white"
+                }`}
+              >
+                {entryLoading ? "処理中..." : "エントリーをキャンセル"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="p-4 border border-gray-700 rounded bg-gray-900">
+                <p className="text-gray-300 mb-2">
+                  {entryStatus?.next_room 
+                    ? `次回バトル: ${new Date(entryStatus.next_room.scheduled_at).toLocaleString('ja-JP')}`
+                    : "次回バトルの予定を確認中..."}
+                </p>
+                <p className="text-sm text-gray-400">
+                  エントリーすると次回の定期バトルに参加できます
+                </p>
+              </div>
+              <button
+                onClick={handleEntry}
+                disabled={entryLoading || mobileSuitsLoading || !mobileSuits || mobileSuits.length === 0}
+                className={`px-8 py-3 rounded font-bold text-black transition-colors shadow-lg ${
+                  entryLoading || mobileSuitsLoading || !mobileSuits || mobileSuits.length === 0
+                    ? "bg-gray-500 cursor-not-allowed"
+                    : "bg-green-500 hover:bg-green-400 hover:shadow-green-500/50"
+                }`}
+              >
+                {entryLoading ? "処理中..." : mobileSuitsLoading ? "機体確認中..." : "エントリーする"}
+              </button>
+              {mobileSuits && mobileSuits.length === 0 && (
+                <p className="text-xs text-yellow-500">
+                  ※ エントリーするには機体が必要です。ガレージで機体を作成してください。
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Mission Selection Panel */}
         <div className="mb-8 bg-gray-800 p-6 rounded-lg border border-green-800">
-          <h2 className="text-2xl font-bold mb-4 border-l-4 border-green-500 pl-2">Mission Selection</h2>
+          <h2 className="text-2xl font-bold mb-4 border-l-4 border-green-500 pl-2">即時シミュレーション（テスト機能）</h2>
+          <p className="text-sm text-gray-400 mb-4">※ 開発用の即時バトルシミュレーション機能です</p>
           
           {missionsLoading ? (
             <p className="text-gray-400">Loading missions...</p>
@@ -202,10 +310,10 @@ export default function Home() {
               className={`px-8 py-3 rounded font-bold text-black transition-colors shadow-lg ${
                 isLoading || !missions || missions.length === 0
                   ? "bg-gray-500 cursor-not-allowed"
-                  : "bg-green-500 hover:bg-green-400 hover:shadow-green-500/50"
+                  : "bg-yellow-500 hover:bg-yellow-400 hover:shadow-yellow-500/50"
               }`}
             >
-              {isLoading ? "CALCULATING..." : "START MISSION"}
+              {isLoading ? "CALCULATING..." : "即時シミュレーション実行"}
             </button>
           </div>
         </div>
