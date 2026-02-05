@@ -36,7 +36,11 @@ def upgrade() -> None:
     # Add room_id column to battle_results
     op.add_column("battle_results", sa.Column("room_id", sa.Uuid(), nullable=True))
     op.create_foreign_key(
-        "fk_battle_results_room_id", "battle_results", "battle_rooms", ["room_id"], ["id"]
+        "fk_battle_results_room_id",
+        "battle_results",
+        "battle_rooms",
+        ["room_id"],
+        ["id"],
     )
     op.create_index(
         op.f("ix_battle_results_room_id"), "battle_results", ["room_id"], unique=False
@@ -47,7 +51,9 @@ def downgrade() -> None:
     """Downgrade schema."""
     # Remove room_id column from battle_results
     op.drop_index(op.f("ix_battle_results_room_id"), table_name="battle_results")
-    op.drop_constraint("fk_battle_results_room_id", "battle_results", type_="foreignkey")
+    op.drop_constraint(
+        "fk_battle_results_room_id", "battle_results", type_="foreignkey"
+    )
     op.drop_column("battle_results", "room_id")
 
     # Alter user_id back to not nullable

@@ -40,9 +40,7 @@ class MatchingService:
 
         for room in open_rooms:
             # このルームのエントリーを取得
-            entry_statement = select(BattleEntry).where(
-                BattleEntry.room_id == room.id
-            )
+            entry_statement = select(BattleEntry).where(BattleEntry.room_id == room.id)
             entries = list(self.session.exec(entry_statement).all())
 
             if not entries:
@@ -77,7 +75,9 @@ class MatchingService:
             room.status = "WAITING"
             self.session.add(room)
 
-            print(f"  ルーム {room.id} のマッチング完了: プレイヤー {len(player_entries)} 名 + NPC {npc_count} 体")
+            print(
+                f"  ルーム {room.id} のマッチング完了: プレイヤー {len(player_entries)} 名 + NPC {npc_count} 体"
+            )
             created_rooms.append(room)
 
         # 変更をコミット

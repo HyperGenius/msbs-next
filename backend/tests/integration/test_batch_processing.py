@@ -24,7 +24,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from sqlmodel import Session, select
 
 from app.db import engine
-from app.models.models import BattleEntry, BattleResult, BattleRoom, MobileSuit, Vector3, Weapon
+from app.models.models import (
+    BattleEntry,
+    BattleResult,
+    BattleRoom,
+    MobileSuit,
+    Vector3,
+    Weapon,
+)
 
 
 def setup_test_data(session: Session) -> BattleRoom:
@@ -129,12 +136,12 @@ def verify_results(session: Session, room_id) -> bool:
     if room.status != "COMPLETED":
         print(f"  ✗ Room status is {room.status}, expected COMPLETED")
         return False
-    print(f"  ✓ Room status is COMPLETED")
+    print("  ✓ Room status is COMPLETED")
 
     # Check entries
     entry_statement = select(BattleEntry).where(BattleEntry.room_id == room_id)
     entries = list(session.exec(entry_statement).all())
-    
+
     if len(entries) < 2:
         print(f"  ✗ Expected at least 2 entries, got {len(entries)}")
         return False
@@ -147,9 +154,9 @@ def verify_results(session: Session, room_id) -> bool:
     # Check battle results
     result_statement = select(BattleResult).where(BattleResult.room_id == room_id)
     results = list(session.exec(result_statement).all())
-    
+
     if not results:
-        print(f"  ✗ No battle results found")
+        print("  ✗ No battle results found")
         return False
     print(f"  ✓ Found {len(results)} battle result(s)")
 
@@ -158,7 +165,7 @@ def verify_results(session: Session, room_id) -> bool:
         if not result.logs:
             print(f"  ✗ Battle result {result.id} has no logs")
             return False
-    print(f"  ✓ All results have logs")
+    print("  ✓ All results have logs")
 
     print("\nVerification complete!")
     return True
@@ -179,6 +186,7 @@ def main():
             print("Running batch script...")
             print("-" * 60)
             from scripts.run_batch import main as run_batch_main
+
             run_batch_main()
             print("-" * 60)
 
@@ -199,6 +207,7 @@ def main():
     except Exception as e:
         print(f"\n✗ Test failed with exception: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

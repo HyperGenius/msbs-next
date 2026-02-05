@@ -173,7 +173,9 @@ class BattleEntry(SQLModel, table=True):
     __tablename__ = "battle_entries"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: str | None = Field(default=None, index=True, description="Clerk User ID (NPC の場合は None)")
+    user_id: str | None = Field(
+        default=None, index=True, description="Clerk User ID (NPC の場合は None)"
+    )
     room_id: uuid.UUID = Field(
         foreign_key="battle_rooms.id", index=True, description="バトルルームID"
     )
