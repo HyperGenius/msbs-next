@@ -88,7 +88,7 @@ def _process_room(session: Session, room: BattleRoom) -> None:
     entries = list(session.exec(entry_statement).all())
 
     if not entries:
-        print(f"  警告: エントリーが見つかりません")
+        print("  警告: エントリーが見つかりません")
         return
 
     print(f"  参加者: {len(entries)} 機")
@@ -122,7 +122,7 @@ def _process_room(session: Session, room: BattleRoom) -> None:
 
     # 他のユニットは全員敵として扱う
     enemy_units = []
-    for i, entry in enumerate(player_entries[1:] + npc_entries):
+    for entry in player_entries[1:] + npc_entries:
         enemy_snapshot = entry.mobile_suit_snapshot
         enemy_unit = MobileSuit(**enemy_snapshot)
         enemy_unit.side = "ENEMY"
@@ -145,10 +145,10 @@ def _process_room(session: Session, room: BattleRoom) -> None:
     # 勝敗判定
     if player_unit.current_hp > 0:
         win_loss = "WIN"
-        print(f"  結果: 勝利")
+        print("  結果: 勝利")
     else:
         win_loss = "LOSE"
-        print(f"  結果: 敗北")
+        print("  結果: 敗北")
 
     # 結果を保存（プレイヤーごと）
     for entry in player_entries:
@@ -168,7 +168,7 @@ def _process_room(session: Session, room: BattleRoom) -> None:
     # 変更をコミット
     session.commit()
 
-    print(f"  結果を保存しました")
+    print("  結果を保存しました")
 
 
 def main() -> None:

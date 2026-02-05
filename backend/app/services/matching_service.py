@@ -3,7 +3,6 @@
 
 import random
 import uuid
-from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
