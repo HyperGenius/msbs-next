@@ -109,3 +109,37 @@ export interface BattleResult {
     logs: BattleLog[];
     created_at: string;
 }
+
+/**
+ * バトルルーム（定期更新バトルの開催回）
+ */
+export interface BattleRoom {
+    id: string;
+    status: "OPEN" | "DOING" | "CLOSED";
+    scheduled_at: string;
+    created_at: string;
+}
+
+/**
+ * バトルエントリー
+ */
+export interface BattleEntry {
+    id: string;
+    room_id: string;
+    mobile_suit_id: string;
+    scheduled_at: string;
+    created_at: string;
+}
+
+/**
+ * エントリー状況レスポンス
+ */
+export interface EntryStatusResponse {
+    is_entered: boolean;
+    entry: BattleEntry | null;
+    next_room: {
+        id: string;
+        status: string;
+        scheduled_at: string;
+    } | null;
+}
