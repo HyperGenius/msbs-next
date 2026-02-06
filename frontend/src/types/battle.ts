@@ -33,6 +33,7 @@ export interface Tactics {
  */
 export interface MobileSuit {
     id: string;
+    user_id?: string | null;
     name: string;
     max_hp: number;
     current_hp: number;
@@ -200,4 +201,34 @@ export interface PurchaseResponse {
     message: string;
     mobile_suit_id: string;
     remaining_credits: number;
+}
+
+/**
+ * 強化リクエスト
+ */
+export interface UpgradeRequest {
+    mobile_suit_id: string;
+    target_stat: "hp" | "armor" | "mobility" | "weapon_power";
+}
+
+/**
+ * 強化レスポンス
+ */
+export interface UpgradeResponse {
+    message: string;
+    mobile_suit: MobileSuit;
+    remaining_credits: number;
+    cost_paid: number;
+}
+
+/**
+ * 強化プレビュー
+ */
+export interface UpgradePreview {
+    mobile_suit_id: string;
+    stat_type: string;
+    current_value: number;
+    new_value: number;
+    cost: number;
+    at_max_cap: boolean;
 }

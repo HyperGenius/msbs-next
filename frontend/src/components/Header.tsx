@@ -44,6 +44,12 @@ export default function Header() {
             Shop
           </Link>
           <Link
+            href="/garage/engineering"
+            className="px-6 py-3 bg-purple-900 hover:bg-purple-800 rounded font-bold transition-colors shadow-lg hover:shadow-purple-500/50"
+          >
+            Engineering
+          </Link>
+          <Link
             href="/garage"
             className="px-6 py-3 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors shadow-lg hover:shadow-green-500/50"
           >
