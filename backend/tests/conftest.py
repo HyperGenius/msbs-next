@@ -15,16 +15,19 @@ os.environ["CLERK_SECRET_KEY"] = "sk_test_mock"
 os.environ["NEON_DATABASE_URL"] = "sqlite://"
 
 # 環境変数をセットした後に app をインポート
-from app.db import get_session
+from app.db import get_session, json_serializer
 from main import app
 
 
 @pytest.fixture(name="session")
 def session_fixture() -> Generator[Session, None, None]:
     """テスト用のインメモリDBセッションを作成."""
-    # SQLiteのインメモリDBを使用
+    # SQLiteのインメモリDBを使用（json_serializerを追加）
     engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        json_serializer=json_serializer,
     )
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
