@@ -1,6 +1,6 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse } from "@/types/battle";
 
 // Backend API Base URL
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -222,4 +222,46 @@ export function usePilot() {
     isError: error,
     mutate,
   };
+}
+
+/**
+ * ショップ商品一覧を取得するSWRフック
+ */
+export function useShopListings() {
+  const { data, error, isLoading } = useSWR<ShopListing[]>(
+    `${API_BASE_URL}/api/shop/listings`,
+    fetcher
+  );
+
+  return {
+    listings: data,
+    isLoading,
+    isError: error,
+  };
+}
+
+/**
+ * モビルスーツを購入する関数
+ */
+export async function purchaseMobileSuit(itemId: string): Promise<PurchaseResponse> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${API_BASE_URL}/api/shop/purchase/${itemId}`, {
+    method: "POST",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to purchase: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
 }

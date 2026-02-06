@@ -170,3 +170,34 @@ export interface Pilot {
     created_at: string;
     updated_at: string;
 }
+
+/**
+ * ショップ商品のスペック
+ */
+export interface ShopItemSpecs {
+    max_hp: number;
+    armor: number;
+    mobility: number;
+    sensor_range: number;
+    weapons: Weapon[];
+}
+
+/**
+ * ショップ商品
+ */
+export interface ShopListing {
+    id: string;
+    name: string;
+    price: number;
+    description: string;
+    specs: ShopItemSpecs;
+}
+
+/**
+ * 購入レスポンス
+ */
+export interface PurchaseResponse {
+    message: string;
+    mobile_suit_id: string;
+    remaining_credits: number;
+}
