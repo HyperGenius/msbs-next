@@ -2,8 +2,11 @@
 
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
+import { usePilot } from "@/services/api";
 
 export default function Header() {
+  const { pilot } = usePilot();
+
   return (
     <header className="mb-8 border-b border-green-700 pb-4">
       <div className="flex justify-between items-center">
@@ -12,6 +15,22 @@ export default function Header() {
           <p className="text-sm opacity-70">Phase 1: Prototype Environment</p>
         </div>
         <div className="flex items-center gap-4">
+          <SignedIn>
+            {pilot && (
+              <div className="px-4 py-2 bg-gray-800 rounded border border-green-700">
+                <div className="flex gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-400">Lv.</span>
+                    <span className="text-yellow-400 font-bold ml-1">{pilot.level}</span>
+                  </div>
+                  <div className="border-l border-gray-600 pl-4">
+                    <span className="text-gray-400">Credits:</span>
+                    <span className="text-green-400 font-bold ml-1">{pilot.credits.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </SignedIn>
           <Link
             href="/history"
             className="px-6 py-3 bg-yellow-900 hover:bg-yellow-800 rounded font-bold transition-colors shadow-lg hover:shadow-yellow-500/50"

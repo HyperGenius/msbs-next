@@ -65,6 +65,19 @@ export interface BattleResponse {
     logs: BattleLog[];
     player_info: MobileSuit;
     enemies_info: MobileSuit[];
+    rewards?: BattleRewards;
+}
+
+/**
+ * バトル報酬
+ */
+export interface BattleRewards {
+    exp_gained: number;
+    credits_gained: number;
+    level_before: number;
+    level_after: number;
+    total_exp: number;
+    total_credits: number;
 }
 
 /**
@@ -142,4 +155,18 @@ export interface EntryStatusResponse {
         status: string;
         scheduled_at: string;
     } | null;
+}
+
+/**
+ * パイロット情報
+ */
+export interface Pilot {
+    id: string;
+    user_id: string;
+    name: string;
+    level: number;
+    exp: number;
+    credits: number;
+    created_at: string;
+    updated_at: string;
 }

@@ -1,6 +1,6 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot } from "@/types/battle";
 
 // Backend API Base URL
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -205,4 +205,21 @@ export async function cancelEntry(): Promise<void> {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.detail || `Failed to cancel entry: ${res.status} ${res.statusText}`);
   }
+}
+
+/**
+ * パイロット情報を取得するSWRフック
+ */
+export function usePilot() {
+  const { data, error, isLoading, mutate } = useSWR<Pilot>(
+    `${API_BASE_URL}/api/pilots/me`,
+    fetcher
+  );
+
+  return {
+    pilot: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
 }
