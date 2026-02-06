@@ -136,11 +136,15 @@ class EngineeringService:
             stat_type: Type of stat to upgrade
         """
         if stat_type == "hp":
+            old_max_hp = ms.max_hp
             new_value = ms.max_hp + self.HP_INCREASE
             ms.max_hp = min(new_value, self.MAX_HP_CAP)
             # Also increase current HP proportionally
-            hp_ratio = ms.current_hp / (ms.max_hp - self.HP_INCREASE)
-            ms.current_hp = int(ms.max_hp * hp_ratio)
+            if old_max_hp > 0:
+                hp_ratio = ms.current_hp / old_max_hp
+                ms.current_hp = int(ms.max_hp * hp_ratio)
+            else:
+                ms.current_hp = ms.max_hp
         elif stat_type == "armor":
             new_value = ms.armor + self.ARMOR_INCREASE
             ms.armor = min(new_value, self.MAX_ARMOR_CAP)
