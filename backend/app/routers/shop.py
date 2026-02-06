@@ -1,6 +1,7 @@
 """ショップ機能のAPIルーター."""
 
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -9,7 +10,7 @@ from sqlmodel import Session, select
 from app.core.auth import get_current_user
 from app.core.gamedata import SHOP_LISTINGS, get_shop_listing_by_id
 from app.db import get_session
-from app.models.models import MobileSuit, Pilot, Weapon
+from app.models.models import MobileSuit, Pilot
 
 router = APIRouter(prefix="/api/shop", tags=["shop"])
 
@@ -41,16 +42,18 @@ async def get_shop_listings() -> list[ShopListingResponse]:
     """
     listings = []
     for item in SHOP_LISTINGS:
+        # 型チェックのためのキャスト
+        item = cast(dict[str, Any], item)
         # Weaponオブジェクトをdictに変換
-        specs = item["specs"].copy()
+        specs = cast(dict[str, Any], item["specs"]).copy()
         specs["weapons"] = [w.model_dump() for w in specs["weapons"]]
 
         listings.append(
             ShopListingResponse(
-                id=item["id"],
-                name=item["name"],
-                price=item["price"],
-                description=item["description"],
+                id=cast(str, item["id"]),
+                name=cast(str, item["name"]),
+                price=cast(int, item["price"]),
+                description=cast(str, item["description"]),
                 specs=specs,
             )
         )
