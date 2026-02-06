@@ -24,11 +24,13 @@ def upgrade() -> None:
     """Upgrade schema."""
     # Add skill_points column
     op.add_column(
-        "pilots", sa.Column("skill_points", sa.Integer(), nullable=False, server_default="0")
+        "pilots",
+        sa.Column("skill_points", sa.Integer(), nullable=False, server_default="0"),
     )
     # Add skills column (JSON)
     op.add_column(
-        "pilots", sa.Column("skills", postgresql.JSON(astext_type=sa.Text()), nullable=True)
+        "pilots",
+        sa.Column("skills", postgresql.JSON(astext_type=sa.Text()), nullable=True),
     )
     # Set default value for existing rows
     op.execute("UPDATE pilots SET skills = '{}' WHERE skills IS NULL")

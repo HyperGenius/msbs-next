@@ -159,9 +159,7 @@ class PilotService:
 
         # 最大レベルチェック
         if current_level >= skill_def["max_level"]:
-            raise ValueError(
-                f"スキル {skill_def['name']} は最大レベルに達しています"
-            )
+            raise ValueError(f"スキル {skill_def['name']} は最大レベルに達しています")
 
         # SPチェック
         if pilot.skill_points < SKILL_COST:
