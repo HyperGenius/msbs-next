@@ -87,7 +87,9 @@ async def upgrade_mobile_suit(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.get("/preview/{mobile_suit_id}/{stat_type}", response_model=UpgradePreviewResponse)
+@router.get(
+    "/preview/{mobile_suit_id}/{stat_type}", response_model=UpgradePreviewResponse
+)
 async def get_upgrade_preview(
     mobile_suit_id: str,
     stat_type: str,

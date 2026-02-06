@@ -78,9 +78,7 @@ def test_upgrade_hp(session: Session, pilot: Pilot, mobile_suit: MobileSuit) -> 
     assert cost > 0
 
 
-def test_upgrade_armor(
-    session: Session, pilot: Pilot, mobile_suit: MobileSuit
-) -> None:
+def test_upgrade_armor(session: Session, pilot: Pilot, mobile_suit: MobileSuit) -> None:
     """Test upgrading armor."""
     service = EngineeringService(session)
     initial_credits = pilot.credits
@@ -122,7 +120,9 @@ def test_upgrade_weapon_power(
     initial_credits = pilot.credits
     # Handle both dict and Weapon object
     first_weapon = mobile_suit.weapons[0]
-    initial_power = first_weapon["power"] if isinstance(first_weapon, dict) else first_weapon.power
+    initial_power = (
+        first_weapon["power"] if isinstance(first_weapon, dict) else first_weapon.power
+    )
 
     updated_ms, updated_pilot, cost = service.upgrade_stat(
         str(mobile_suit.id), "weapon_power", pilot
@@ -130,12 +130,13 @@ def test_upgrade_weapon_power(
 
     # Handle both dict and Weapon object for updated
     updated_weapon = updated_ms.weapons[0]
-    updated_power = updated_weapon["power"] if isinstance(updated_weapon, dict) else updated_weapon.power
-    
-    assert (
-        updated_power
-        == initial_power + EngineeringService.WEAPON_POWER_INCREASE
+    updated_power = (
+        updated_weapon["power"]
+        if isinstance(updated_weapon, dict)
+        else updated_weapon.power
     )
+
+    assert updated_power == initial_power + EngineeringService.WEAPON_POWER_INCREASE
     assert updated_pilot.credits == initial_credits - cost
     assert cost > 0
 
@@ -209,10 +210,7 @@ def test_get_upgrade_preview(
     preview = service.get_upgrade_preview(str(mobile_suit.id), "hp")
 
     assert preview["current_value"] == mobile_suit.max_hp
-    assert (
-        preview["new_value"]
-        == mobile_suit.max_hp + EngineeringService.HP_INCREASE
-    )
+    assert preview["new_value"] == mobile_suit.max_hp + EngineeringService.HP_INCREASE
     assert preview["cost"] > 0
     assert preview["at_max_cap"] is False
 
