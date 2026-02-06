@@ -17,7 +17,7 @@ from app.models.models import (
     Vector3,
     Weapon,
 )
-from app.routers import entries, mobile_suits
+from app.routers import entries, mobile_suits, pilots
 
 app = FastAPI(title="MSBS-Next API")
 
@@ -38,11 +38,23 @@ app.add_middleware(
 # Routerの登録
 app.include_router(mobile_suits.router)
 app.include_router(entries.router)
+app.include_router(pilots.router)
 
 # --- Response Schemas ---
 # models.py にあるクラスを使用する形でも良いですが、
 # レスポンス構造用に定義が必要であればここに書くか models.py に Pydantic モデルとして定義します。
 # ここでは簡易的にPydanticのBaseModelを使って定義しなおすか、SQLModelをそのまま使います。
+
+
+class BattleRewards(BaseModel):
+    """戦闘報酬."""
+
+    exp_gained: int
+    credits_gained: int
+    level_before: int
+    level_after: int
+    total_exp: int
+    total_credits: int
 
 
 class BattleResponse(BaseModel):
@@ -52,6 +64,7 @@ class BattleResponse(BaseModel):
     logs: list[BattleLog]
     player_info: MobileSuit
     enemies_info: list[MobileSuit]
+    rewards: BattleRewards | None = None
 
 
 # --- API Endpoints ---
@@ -128,9 +141,11 @@ async def simulate_battle(
     while not sim.is_finished and sim.turn < max_turns:
         sim.process_turn()
 
-    # 6. 勝者判定
+    # 6. 勝者判定と撃墜数カウント
     winner_id = None
     win_loss = "DRAW"
+    kills = sum(1 for e in enemies if e.current_hp <= 0)
+
     if player.current_hp > 0 and all(e.current_hp <= 0 for e in enemies):
         # プレイヤー勝利
         winner_id = str(player.id)
@@ -151,11 +166,45 @@ async def simulate_battle(
     session.add(battle_result)
     session.commit()
 
+    # 8. 報酬の計算と付与（ユーザーがログインしている場合）
+    rewards = None
+    if user_id:
+        from app.services.pilot_service import PilotService
+
+        pilot_service = PilotService(session)
+
+        # パイロット情報を取得または作成
+        pilot = pilot_service.get_or_create_pilot(user_id, player.name)
+        level_before = pilot.level
+        total_exp_before = pilot.exp
+        total_credits_before = pilot.credits
+
+        # 報酬を計算
+        exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
+            win=win_loss == "WIN",
+            kills=kills,
+        )
+
+        # 報酬を付与
+        pilot, reward_logs = pilot_service.add_rewards(
+            pilot, exp_gained, credits_gained
+        )
+
+        rewards = BattleRewards(
+            exp_gained=exp_gained,
+            credits_gained=credits_gained,
+            level_before=level_before,
+            level_after=pilot.level,
+            total_exp=pilot.exp,
+            total_credits=pilot.credits,
+        )
+
     return BattleResponse(
         winner_id=winner_id,
         logs=sim.logs,
         player_info=player,
         enemies_info=enemies,
+        rewards=rewards,
     )
 
 

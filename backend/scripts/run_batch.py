@@ -21,6 +21,7 @@ from app.db import engine
 from app.engine.simulation import BattleSimulator
 from app.models.models import BattleEntry, BattleResult, BattleRoom, MobileSuit
 from app.services.matching_service import MatchingService
+from app.services.pilot_service import PilotService
 
 
 def run_matching_phase(session: Session) -> list[BattleRoom]:
@@ -136,22 +137,29 @@ def _process_room(session: Session, room: BattleRoom) -> None:
     # 勝敗判定: プレイヤーが生き残っていれば勝利
     primary_player_win = player_unit.current_hp > 0
 
+    # 撃墜数をカウント
+    kills = sum(1 for e in enemy_units if e.current_hp <= 0)
+
     if primary_player_win:
-        print("  結果: プレイヤー勝利")
+        print(f"  結果: プレイヤー勝利 (撃墜: {kills}機)")
     else:
-        print("  結果: プレイヤー敗北")
+        print(f"  結果: プレイヤー敗北 (撃墜: {kills}機)")
 
     # 結果を保存（プレイヤーごと）
+    pilot_service = PilotService(session)
+
     for entry in player_entries:
         # 各プレイヤーの勝敗を判定
         if entry.id == player_entries[0].id:
             # 最初のプレイヤー（実際にシミュレートされた）
             individual_win_loss = "WIN" if primary_player_win else "LOSE"
+            individual_kills = kills
         else:
             # 他のプレイヤー（敵側として扱われた）
             # 実装簡略化のため、全員敗北扱い
             # TODO: 将来的にはチーム分けや複数の同時シミュレーションを実装
             individual_win_loss = "LOSE"
+            individual_kills = 0
 
         battle_result = BattleResult(
             user_id=entry.user_id,
@@ -160,6 +168,30 @@ def _process_room(session: Session, room: BattleRoom) -> None:
             logs=[log.model_dump() for log in simulator.logs],
         )
         session.add(battle_result)
+
+        # 報酬を付与（プレイヤーのみ）
+        if entry.user_id:
+            try:
+                # パイロット情報を取得または作成
+                pilot_name = entry.mobile_suit_snapshot.get("name", "Unknown Pilot")
+                pilot = pilot_service.get_or_create_pilot(entry.user_id, pilot_name)
+
+                # 報酬を計算
+                exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
+                    win=individual_win_loss == "WIN",
+                    kills=individual_kills,
+                )
+
+                # 報酬を付与
+                pilot, reward_logs = pilot_service.add_rewards(
+                    pilot, exp_gained, credits_gained
+                )
+
+                print(f"  報酬付与 ({entry.user_id}): {', '.join(reward_logs)}")
+
+            except Exception as e:
+                print(f"  警告: 報酬付与エラー ({entry.user_id}): {e}")
+                traceback.print_exc()
 
     # ルームのステータスを更新
     room.status = "COMPLETED"
