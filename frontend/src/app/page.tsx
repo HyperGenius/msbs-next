@@ -3,8 +3,8 @@
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { BattleLog, MobileSuit } from "@/types/battle";
-import { useMissions, useMobileSuits, useEntryStatus, entryBattle, cancelEntry } from "@/services/api";
+import { BattleLog, MobileSuit, BattleRewards } from "@/types/battle";
+import { useMissions, useMobileSuits, useEntryStatus, entryBattle, cancelEntry, usePilot } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
 import Header from "@/components/Header";
 
@@ -13,6 +13,7 @@ export default function Home() {
   const { missions, isLoading: missionsLoading } = useMissions();
   const { mobileSuits, isLoading: mobileSuitsLoading } = useMobileSuits();
   const { entryStatus, isLoading: entryStatusLoading, mutate: mutateEntryStatus } = useEntryStatus();
+  const { mutate: mutatePilot } = usePilot();
   const [logs, setLogs] = useState<BattleLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
@@ -24,6 +25,7 @@ export default function Home() {
   const [playerData, setPlayerData] = useState<MobileSuit | null>(null);
   const [enemiesData, setEnemiesData] = useState<MobileSuit[]>([]);
   const [entryLoading, setEntryLoading] = useState(false);
+  const [rewards, setRewards] = useState<BattleRewards | null>(null);
 
 
   const startBattle = async (missionId: number) => {
@@ -32,6 +34,7 @@ export default function Home() {
     setWinner(null);
     setWinLoss(null);
     setCurrentTurn(0);
+    setRewards(null);
 
     try {
       const token = await getToken();
@@ -71,6 +74,13 @@ export default function Home() {
       // DBから取得した機体情報をセット
       setPlayerData(data.player_info);
       setEnemiesData(data.enemies_info);
+
+      // 報酬情報をセット
+      if (data.rewards) {
+        setRewards(data.rewards);
+        // パイロット情報を再取得
+        mutatePilot();
+      }
 
       // 最大ターン数を計算して設定
       const lastTurn = data.logs.length > 0 ? data.logs[data.logs.length - 1].turn : 0;
@@ -142,6 +152,38 @@ export default function Home() {
               {winLoss === "LOSE" && "✕ MISSION FAILED ✕"}
               {winLoss === "DRAW" && "- DRAW -"}
             </div>
+          </div>
+        )}
+
+        {/* Rewards Display */}
+        {rewards && (
+          <div className="mb-8 bg-gradient-to-r from-yellow-900/30 to-green-900/30 p-6 rounded-lg border-2 border-yellow-500/50">
+            <h2 className="text-2xl font-bold mb-4 text-yellow-400 border-l-4 border-yellow-500 pl-2">
+              獲得報酬
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-800/70 p-4 rounded border border-green-700">
+                <p className="text-sm text-gray-400 mb-2">経験値</p>
+                <p className="text-3xl font-bold text-green-400">+{rewards.exp_gained}</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  累積: {rewards.total_exp} EXP
+                </p>
+              </div>
+              <div className="bg-gray-800/70 p-4 rounded border border-green-700">
+                <p className="text-sm text-gray-400 mb-2">クレジット</p>
+                <p className="text-3xl font-bold text-yellow-400">+{rewards.credits_gained.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  所持金: {rewards.total_credits.toLocaleString()} CR
+                </p>
+              </div>
+            </div>
+            {rewards.level_after > rewards.level_before && (
+              <div className="mt-4 p-4 bg-yellow-500/20 rounded border-2 border-yellow-400 animate-pulse">
+                <p className="text-center text-xl font-bold text-yellow-300">
+                  🎉 LEVEL UP! Lv.{rewards.level_before} → Lv.{rewards.level_after} 🎉
+                </p>
+              </div>
+            )}
           </div>
         )}
 

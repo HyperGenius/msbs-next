@@ -190,3 +190,22 @@ class BattleEntry(SQLModel, table=True):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
+
+
+class Pilot(SQLModel, table=True):
+    """パイロットデータ (DBテーブル)."""
+
+    __tablename__ = "pilots"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: str = Field(unique=True, index=True, description="Clerk User ID")
+    name: str = Field(description="パイロット名（ユーザー名）")
+    level: int = Field(default=1, description="現在のレベル")
+    exp: int = Field(default=0, description="累積経験値")
+    credits: int = Field(default=1000, description="所持金")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
