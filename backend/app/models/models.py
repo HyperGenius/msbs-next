@@ -203,6 +203,10 @@ class Pilot(SQLModel, table=True):
     level: int = Field(default=1, description="現在のレベル")
     exp: int = Field(default=0, description="累積経験値")
     credits: int = Field(default=1000, description="所持金")
+    skill_points: int = Field(default=0, description="未使用のスキルポイント")
+    skills: dict[str, int] = Field(
+        default_factory=dict, sa_column=Column(JSON), description="習得済みスキル"
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )

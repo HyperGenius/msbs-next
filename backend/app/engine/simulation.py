@@ -9,14 +9,26 @@ from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 class BattleSimulator:
     """戦闘シミュレータ."""
 
-    def __init__(self, player: MobileSuit, enemies: list[MobileSuit]):
-        """初期化."""
+    def __init__(
+        self,
+        player: MobileSuit,
+        enemies: list[MobileSuit],
+        player_skills: dict[str, int] | None = None,
+    ):
+        """初期化.
+
+        Args:
+            player: プレイヤー機体
+            enemies: 敵機体リスト
+            player_skills: プレイヤーのスキル (skill_id: level)
+        """
         self.player = player
         self.enemies = enemies
         self.units: list[MobileSuit] = [player] + enemies
         self.logs: list[BattleLog] = []
         self.turn = 0
         self.is_finished = False
+        self.player_skills = player_skills or {}
 
     def process_turn(self) -> None:
         """1ターン分の処理を実行."""
@@ -107,6 +119,19 @@ class BattleSimulator:
         dist_penalty = (distance / 100) * 2
         evasion_bonus = target.mobility * 10
         hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
+
+        # プレイヤーの攻撃時はスキル補正を適用
+        if actor.side == "PLAYER":
+            # 命中率向上スキル
+            accuracy_skill_level = self.player_skills.get("accuracy_up", 0)
+            hit_chance += accuracy_skill_level * 2.0  # +2% / Lv
+
+        # 敵への攻撃時は回避スキル補正を適用
+        if target.side == "PLAYER":
+            # 回避率向上スキル
+            evasion_skill_level = self.player_skills.get("evasion_up", 0)
+            hit_chance -= evasion_skill_level * 2.0  # 敵の命中率を -2% / Lv
+
         hit_chance = max(0, min(100, hit_chance))
 
         # ダイスロール
@@ -130,7 +155,14 @@ class BattleSimulator:
     ) -> None:
         """命中時の処理."""
         # クリティカル判定
-        is_crit = random.random() < 0.05
+        base_crit_rate = 0.05
+
+        # プレイヤーの攻撃時はクリティカル率スキル補正を適用
+        if actor.side == "PLAYER":
+            crit_skill_level = self.player_skills.get("crit_rate_up", 0)
+            base_crit_rate += (crit_skill_level * 1.0) / 100.0  # +1% / Lv
+
+        is_crit = random.random() < base_crit_rate
 
         if not is_crit:
             base_damage = max(1, weapon.power - target.armor)
@@ -138,6 +170,12 @@ class BattleSimulator:
         else:
             base_damage = int(weapon.power * 1.2)
             log_msg = f"{log_base} -> クリティカルヒット！！"
+
+        # プレイヤーの攻撃時はダメージ向上スキル補正を適用
+        if actor.side == "PLAYER":
+            damage_skill_level = self.player_skills.get("damage_up", 0)
+            damage_multiplier = 1.0 + (damage_skill_level * 3.0) / 100.0  # +3% / Lv
+            base_damage = int(base_damage * damage_multiplier)
 
         # 乱数幅
         variance = random.uniform(0.9, 1.1)
