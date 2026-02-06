@@ -1,9 +1,7 @@
 """Tests for PilotService."""
 
-from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
-import pytest
 from sqlmodel import Session
 
 from app.models.models import Pilot

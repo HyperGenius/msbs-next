@@ -176,8 +176,6 @@ async def simulate_battle(
         # パイロット情報を取得または作成
         pilot = pilot_service.get_or_create_pilot(user_id, player.name)
         level_before = pilot.level
-        total_exp_before = pilot.exp
-        total_credits_before = pilot.credits
 
         # 報酬を計算
         exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
