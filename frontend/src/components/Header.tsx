@@ -38,6 +38,12 @@ export default function Header() {
             History
           </Link>
           <Link
+            href="/shop"
+            className="px-6 py-3 bg-blue-900 hover:bg-blue-800 rounded font-bold transition-colors shadow-lg hover:shadow-blue-500/50"
+          >
+            Shop
+          </Link>
+          <Link
             href="/garage"
             className="px-6 py-3 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors shadow-lg hover:shadow-green-500/50"
           >
