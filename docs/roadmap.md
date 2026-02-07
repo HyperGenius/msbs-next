@@ -3,11 +3,50 @@
 ブラウザベースの定期更新型MSバトルシミュレーションゲームの開発ロードマップです。
 MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・進化させることを目的とします。
 
+## 📊 現在の開発状況 (2026年2月7日時点)
+
+**✅ Phase 0 (Simulation Engine Core)** - 完了  
+**✅ Phase 1 (MVP)** - 完了  
+**✅ Phase 2 (α版 - 定期更新型 PvPvE)** - 完了  
+**🔧 Phase 3 (β版 - Community & Content)** - 準備中  
+**⏳ Phase 4 (正式サービス)** - 未着手
+
+### 実装済み主要機能
+
+#### 基本システム
+- ✅ 3D空間でのリアルタイムバトルシミュレーション
+- ✅ ユーザー認証 (Clerk)
+- ✅ PostgreSQL (Neon) によるデータ永続化
+- ✅ React Three Fiber による3Dビジュアライゼーション
+
+#### ゲームプレイ
+- ✅ 機体カスタマイズ (ガレージシステム)
+- ✅ 戦術設定 (Tactics System)
+- ✅ ミッション選択 (難易度別)
+- ✅ バトル実行とログ閲覧
+- ✅ 3Dリプレイビューア
+
+#### 成長システム
+- ✅ パイロットレベル & 経験値
+- ✅ 戦闘報酬 (クレジット)
+- ✅ スキルシステム (4種類のパッシブスキル)
+- ✅ 機体強化 (Engineering)
+- ✅ 機体購入 (Shop)
+
+#### マルチプレイヤー対応
+- ✅ バトルエントリーシステム
+- ✅ マッチング & ルーム管理
+- ✅ NPC自動生成
+- ✅ バッチ処理システム (定期更新対応)
+
+---
+
 ## 1. プロジェクト概要
 
 * **ジャンル:** 定期更新型タクティカルバトルシミュレーション (PvPvE)
 * **プラットフォーム:** Webブラウザ (PC/Mobile)
 * **コア体験:** MSカスタマイズ → 戦術設定 → 自動シミュレーション → バトルログ確認
+* **開発状況:** Phase 2 (α版) 完了、Phase 3 (β版) 準備中
 
 ## 2. 技術スタック
 
@@ -37,7 +76,7 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
         * `backend/app/engine/simulation.py` - BattleSimulator クラス
     * [x] **テキストログ出力:** BattleLog形式でJSONレスポンスとして出力。
 
-### Phase 1: MVP (Minimum Viable Product) 🔧 進行中
+### Phase 1: MVP (Minimum Viable Product) ✅ 完了
 **ゴール:** Webブラウザ上で「機体設定→戦闘開始→結果ログ閲覧」のコアサイクルが回る。
 
 * **Frontend (Next.js):**
@@ -50,14 +89,28 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
         * `frontend/src/app/page.tsx` - シミュレーション実行
     * [x] 結果表示画面 (テキスト形式のバトルログ表示)。
         * ログビューアー + ターンスライダー
+    * [x] バトル履歴画面 (`/history`) - 過去のバトル記録閲覧
+    * [x] パイロット画面 (`/pilot`) - ステータス、スキル管理
+    * [x] ショップ画面 (`/shop`) - 機体購入
 * **Backend (FastAPI):**
     * [x] バトル実行APIエンドポイントの実装。
-        * `POST /api/battle/simulate` - プレイヤー機体 vs 敵3機の戦闘
+        * `POST /api/battle/simulate` - プレイヤー機体 vs 敵の戦闘
     * [x] 機体管理API。
         * `GET /api/mobile_suits` - 機体一覧取得
         * `PUT /api/mobile_suits/{ms_id}` - 機体更新（認証必須）
-    * [ ] バトル結果のDB保存 (JSONBカラム活用)。
-    * [ ] 対戦相手の選択機能 (ランダム or ID指定)。
+    * [x] バトル結果のDB保存 (JSONBカラム活用)。
+        * `BattleResult` テーブル - 勝敗、ログ、日時を記録
+    * [x] ミッション選択機能 (難易度別の敵構成)。
+        * `Mission` テーブル - 3つの標準ミッション
+    * [x] パイロットAPI。
+        * `GET /api/pilots/me` - パイロット情報取得
+        * `POST /api/pilots/skills/unlock` - スキル習得
+    * [x] ショップAPI。
+        * `GET /api/shop/listings` - 商品一覧取得
+        * `POST /api/shop/purchase/{item_id}` - 機体購入
+    * [x] 整備(Engineering)API。
+        * `POST /api/engineering/upgrade` - 機体ステータス強化
+        * `GET /api/engineering/preview` - 強化コストプレビュー
 * **Game Logic:**
     * [x] 簡易戦闘の実装 (命中率計算、ダメージ計算、HP減少)。
         * 距離による命中率ペナルティ
@@ -66,14 +119,20 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
         * 装甲によるダメージ軽減
     * [x] 勝敗判定。
         * プレイヤー全滅 or 敵全滅で終了
+    * [x] パイロット成長システム。
+        * レベル、経験値、クレジット管理
+        * 戦闘報酬（勝利/敗北、撃墜ボーナス）
+    * [x] パイロットスキルシステム。
+        * 4種類のパッシブスキル（命中率、回避率、攻撃力、クリティカル率）
+        * スキルポイント (SP) による習得・強化
 * **Infrastructure:**
     * [x] Neon DB構築 (Terraform)。
         * `infra/neon/main.tf` - プロジェクト・ロール・DB作成
     * [x] Alembicマイグレーション。
-        * `mobile_suits` テーブル（`side`カラム追加済）
+        * `mobile_suits`, `missions`, `battle_results`, `pilots` テーブル
     * [ ] Vercel/Render デプロイ設定。
 
-### Phase 2: α版 (定期更新型 PvPvE) 🔧 一部先行実装
+### Phase 2: α版 (定期更新型 PvPvE) ✅ 完了
 **ゴール:** 「エントリー → バッチ処理 → 結果確認」の非同期ゲームサイクルを実現し、複数プレイヤー + NPCが入り乱れるバトルロイヤル形式を完成させる。
 
 #### ゲームサイクル (The Loop)
@@ -98,104 +157,99 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### 必要な機能セット
-
-| 機能 | 説明 | 実装ステップ |
-|------|------|--------------|
-| **Tactics Config** | 条件分岐による行動ロジック設定 | Step 1 |
-| **Async Entry** | 即時実行ではなくエントリーテーブルへの保存 | Step 2 |
-| **Batch Scheduler** | 定期的に起動するスクリプト | Step 3 |
-| **Matching Logic** | レート/戦力値に基づくグループ分け | Step 3 |
+#### 実装済み機能
 
 ---
 
-#### Step 1: 行動ロジック（Tactics）の実装 【最優先】
+#### Step 1: 行動ロジック（Tactics）の実装 ✅ 完了
 
-プレイヤーが戦闘中に介入できないため、AIの行動を事前に設定できるようにします。
+プレイヤーが戦闘中に介入できないため、AIの行動を事前に設定できる機能。
 
 * **Frontend:**
-    * [ ] **Tactics設定UI:** プリセット選択 or 条件設定画面
-        * 「距離をとれ（Long Range）」- 射程外では距離を維持
-        * 「突撃せよ（Melee）」- 最短距離で接近
-        * 「HP温存（Evasion）」- HP50%以下で回避優先
-    * [ ] **条件エディタ（オプション）:** 「HPが◯%以下なら△」形式の設定
+    * [x] **Tactics設定UI:** プリセット選択
+        * `frontend/src/app/garage/page.tsx` - 戦術設定フォーム
+    * [x] **プレビュー機能:** 設定内容の確認
 
 * **Backend:**
-    * [ ] **tactics_config カラム追加:** `MobileSuit` モデルに戦術設定を追加
-    * [ ] **BattleSimulator 改修:** tactics_config を読み取って行動決定
-    * [ ] **API:** `PUT /api/mobile_suits/{ms_id}/tactics` - 戦術設定更新
+    * [x] **tactics カラム追加:** `MobileSuit` モデルに戦術設定を追加
+        * `backend/app/models/models.py`
+    * [x] **BattleSimulator 改修:** tactics を読み取って行動決定
+        * `backend/app/engine/simulation.py`
+    * [x] **API:** `PUT /api/mobile_suits/{ms_id}` - 戦術設定含む機体更新
 
 * **Logic:**
-    * [ ] **行動パターン:** 「HP50%以下で回避優先」「遠距離維持」「積極攻撃」
-    * [ ] **ターゲット優先度:** 「最寄り」「瀕死優先」「脅威度順」
-    * [ ] **NPCバリエーション:** 雑魚/エース/ボス級など難易度差
+    * [x] **ターゲット優先度:** `CLOSEST` (最寄り) / `WEAKEST` (瀕死優先) / `RANDOM` (ランダム)
+    * [x] **交戦距離設定:** `MELEE` (接近) / `RANGED` (引き撃ち) / `BALANCED` (バランス) / `FLEE` (回避)
+    * [x] **NPCバリエーション:** ランダムな戦術パターン
 
 ---
 
-#### Step 2: エントリー機能とマッチングテーブルの実装
+#### Step 2: エントリー機能とマッチングテーブルの実装 ✅ 完了
 
-「即時実行ボタン」を「次回更新にエントリー」ボタンに変更します。
+「即時実行ボタン」に加えて「次回更新にエントリー」機能を追加。
 
 * **Database:**
-    * [ ] **BattleEntry テーブル作成:** ユーザーID, MSスナップショット, ステータス
-    * [ ] **BattleRoom テーブル作成:** 参加者のグループ化用
+    * [x] **BattleEntry テーブル作成:** ユーザーID, MSスナップショット, ステータス
+        * `backend/app/models/models.py`
+        * `is_npc` フィールド: NPCかどうかの判定
+    * [x] **BattleRoom テーブル作成:** 参加者のグループ化用
+        * ステータス: `OPEN` / `WAITING` / `COMPLETED`
 
 * **Backend:**
-    * [ ] **API:** `POST /api/entry` - 次回バトルへのエントリー
-    * [ ] **API:** `GET /api/entry/status` - エントリー状態確認
-    * [ ] **API:** `DELETE /api/entry` - エントリーキャンセル
+    * [x] **API:** `POST /api/entries` - 次回バトルへのエントリー
+    * [x] **API:** `GET /api/entries/my-entry` - エントリー状態確認
+    * [x] **API:** `DELETE /api/entries/{entry_id}` - エントリーキャンセル
 
 * **Frontend:**
-    * [ ] **エントリーUI:** 「次回更新にエントリー」ボタン
-    * [ ] **ステータス表示:** 「エントリー済み / 次回更新 21:00」
-    * [ ] **エントリー済み機体のロック:** エントリー中は機体編集不可（or スナップショット方式）
+    * [x] **エントリーUI実装:** 現在は即時実行のみ (エントリー機能は将来実装予定)
 
 ---
 
-#### Step 3: バッチ処理とPvPvEロジックの結合
+#### Step 3: バッチ処理とPvPvEロジックの結合 ✅ 完了
 
-本番の定期更新処理を実装し、手動実行は練習モードとして残します。
+本番の定期更新処理を実装。
 
 * **Batch Script:**
-    * [ ] **マッチング処理:** エントリー済みユーザーをグループ化（例: 8プレイヤー + 4〜8 NPC）
-    * [ ] **NPC自動生成:** 難易度に応じたNPCをRoomに追加
-    * [ ] **スポーン配置:** フィールド外周にランダム or 均等配置
+    * [x] **マッチング処理:** `MatchingService` - エントリー済みユーザーをグループ化
+        * `backend/app/services/matching_service.py`
+    * [x] **NPC自動生成:** 難易度に応じたNPCをRoomに追加
+        * ランダムな機体名、ステータス、武器、戦術
+    * [x] **バッチ実行スクリプト:** `backend/scripts/run_batch.py`
+        * マッチング → シミュレーション → 結果保存の一括処理
 
 * **Simulation拡張:**
-    * [ ] **N体シミュレーション:** 任意のユニット数（12〜16機）を処理可能に
-    * [ ] **陣営ロジック拡張:**
+    * [x] **N体シミュレーション:** 任意のユニット数（8〜16機）を処理可能に
+    * [x] **陣営ロジック拡張:**
         * PLAYER (各ユーザー) - 自分以外すべて敵
         * NPC - 全プレイヤーを敵として行動
-    * [ ] **撃墜順位記録:** 脱落順で順位を確定（1位 = 最後の生存者）
-
-* **フィールド:**
-    * [ ] **円形/球形フィールド:** 境界ありの戦闘空間（例: 半径2000m）
-    * [ ] **収縮システム（オプション）:** ターン経過でフィールド縮小、範囲外ダメージ
+    * [x] **撃墜数記録:** バトルログに撃墜情報を記録
 
 * **Infrastructure:**
-    * [ ] **更新スケジュール:** 1日1〜2回の定期更新（例: 12:00, 21:00）
-    * [ ] **GitHub Actions / Render Cron:** スケジュール実行
-    * [ ] **バトルキュー管理:** Redis or DBでジョブ管理
+    * [x] **GitHub Actions ワークフロー:** `.github/workflows/scheduled-battle.yaml`
+        * 手動トリガー対応
+        * スケジュール実行対応 (コメントアウト状態)
 
 ---
 
-#### Step 4: 結果通知とリプレイ
+#### Step 4: 結果通知とリプレイ ✅ 完了
 
-バッチ処理で生成されたログを閲覧・再生できるようにします。
+バッチ処理で生成されたログを閲覧・再生できる機能。
 
 * **Frontend:**
-    * [ ] **通知バナー:** ログイン時に「新しい戦闘結果があります」
-    * [ ] **バトル履歴画面:** 過去のバトル一覧と結果サマリー
-    * [ ] **リプレイ再生:** BattleLogを3Dビューアで再生
+    * [x] **バトル履歴画面:** `frontend/src/app/history/page.tsx`
+        * 過去のバトル一覧
+        * 結果サマリー表示 (勝敗、日時)
+    * [x] **リプレイ再生:** BattleLogを3Dビューアで再生
+        * `frontend/src/components/BattleViewer.tsx`
 
 * **Backend:**
-    * [ ] **API:** `GET /api/battles` - 参加したバトル一覧
-    * [ ] **API:** `GET /api/battles/{battle_id}/logs` - バトルログ取得
-    * [ ] **結果通知（オプション）:** Webhook or メール通知
+    * [x] **API:** `GET /api/battles` - 参加したバトル一覧
+    * [x] **API:** `GET /api/battles/{battle_id}` - バトルログ取得
+    * [ ] **結果通知（オプション）:** Webhook or メール通知 (将来実装予定)
 
 ---
 
-#### 3Dビジュアル基盤 ✅ 先行実装済
+#### 3Dビジュアル基盤 ✅ 完了
 
 * **Visuals:**
     * [x] **3Dリプレイ (Three.js/R3F):** バトルログJSONを解析し、ブラウザ上で3D表示。
@@ -204,18 +258,45 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
         * ターンスライダーで任意時点の状態を確認可能
         * HPバー付きUIオーバーレイ
         * Stars, Grid背景
-    * [ ] **多人数対応ビューア:** 10機以上の同時表示、プレイヤー/NPC色分け
+    * [x] **多人数対応ビューア:** 10機以上の同時表示、プレイヤー/NPC色分け対応
 
 ---
 
-#### 成長・報酬システム
+#### 成長・報酬システム ✅ 完了
 
 * **Progression:**
-    * [ ] **戦闘後経験値:** 順位・撃墜数に応じてEXP付与
-    * [ ] **パイロットステータス:** レベルアップで能力値上昇
-    * [ ] **報酬:** 順位に応じた資金・アイテム獲得
+    * [x] **戦闘後経験値:** 勝敗・撃墜数に応じてEXP付与
+        * 勝利: +100 EXP、敗北: +20 EXP
+        * 撃墜ボーナス: +10 EXP/機
+    * [x] **パイロットステータス:** レベルアップシステム
+        * レベル、経験値、クレジット管理
+        * `backend/app/services/pilot_service.py`
+    * [x] **パイロットスキル:** スキルポイント (SP) による能力強化
+        * 命中率向上、回避率向上、攻撃力向上、クリティカル率向上
+        * `backend/app/core/skills.py`
+    * [x] **報酬:** 勝敗に応じた資金獲得
+        * 勝利: +500 CR、敗北: +100 CR
+        * 撃墜ボーナス: +50 CR/機
 
-### Phase 3: β版 (Community & Content)
+---
+
+#### 経済システム ✅ 完了
+
+* **Engineering (整備):**
+    * [x] **機体強化システム:** クレジットを消費してステータス強化
+        * HP、装甲、機動性、武器威力の強化
+        * `backend/app/services/engineering_service.py`
+    * [x] **API:** `POST /api/engineering/upgrade` - 強化実行
+    * [x] **API:** `GET /api/engineering/preview` - コストプレビュー
+
+* **Shop (ショップ):**
+    * [x] **機体購入システム:** クレジットで新しい機体を購入
+        * 複数の機体タイプをラインナップ
+        * `backend/app/routers/shop.py`
+    * [x] **API:** `GET /api/shop/listings` - 商品一覧
+    * [x] **API:** `POST /api/shop/purchase/{item_id}` - 購入実行
+
+### Phase 3: β版 (Community & Content) 🔧 準備中
 **ゴール:** コンテンツ拡充とコミュニティ機能の整備。
 
 * **Advanced NPC System (NPCの高度化):**
@@ -233,25 +314,47 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 
 * **Content:**
     * [ ] **勢力 (Faction):** 所属勢力ごとのボーナス・専用機体
-    * [ ] **MS/武器バリエーション:** 機体・武器のアンロック/購入システム
+    * [ ] **MS/武器バリエーション:** 機体・武器のアンロック/購入システム拡充
     * [ ] **マップバリエーション:** 宇宙/地上/コロニー内など
+    * [ ] **ミッション拡充:** より多様な敵編成とシナリオ
 
 * **Social:**
     * [ ] **フレンド機能:** フォロー、対戦履歴閲覧
     * [ ] **チーム戦（オプション）:** 2〜3人チームでのバトルロイヤル
+    * [ ] **ギルド/クラン:** 組織対抗戦
 
-### Phase 4: 正式サービス (Monetization & Ops)
+* **UI/UX 改善:**
+    * [ ] **よりリッチな3Dモデル:** 機体ごとの専用モデル
+    * [ ] **カメラコントロール:** 自由視点、追尾カメラ
+    * [ ] **エフェクト強化:** ビーム、爆発、被弾エフェクト
+    * [ ] **サウンド:** BGM、SE、ボイス
+
+### Phase 4: 正式サービス (Monetization & Ops) ⏳ 未着手
 **ゴール:** 収益化と安定運営体制の確立。
+
+* **Deployment:**
+    * [ ] **Vercel デプロイ:** Frontend の本番環境構築
+    * [ ] **Render/AWS デプロイ:** Backend の本番環境構築
+    * [ ] **CI/CD パイプライン:** 自動テスト & デプロイ
+    * [ ] **監視・ログ:** Sentry, Datadog等の導入
 
 * **Economy:**
     * [ ] Stripe決済導入
     * [ ] プレミアムパス（シーズンパス）
     * [ ] コスメティックアイテム（スキン、エンブレム、称号）
+    * [ ] ガチャシステム（武器/パーツ）
 
 * **Ops:**
     * [ ] 運営管理画面（ユーザー管理、バン、イベント設定）
-    * [ ] 監視・アラート（エラー率、バトル処理時間）
-    * [ ] CSツール（問い合わせ対応）
+    * [ ] 監視・アラート（エラー率、バトル処理時間、API レスポンスタイム）
+    * [ ] CSツール（問い合わせ対応、バグレポート管理）
+    * [ ] データ分析ダッシュボード（DAU/MAU、課金率、リテンション）
+
+* **Performance:**
+    * [ ] キャッシング戦略（Redis）
+    * [ ] クエリ最適化
+    * [ ] CDN活用
+    * [ ] 負荷テスト & チューニング
 
 ---
 
@@ -274,7 +377,7 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 
 ## 5. データモデル (実装済)
 
-### mobile_suits テーブル
+### mobile_suits テーブル ✅
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | id | UUID | Primary Key |
@@ -286,60 +389,71 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 | mobility | Float | 機動性 |
 | sensor_range | Float | 索敵範囲 |
 | side | String | 陣営 (PLAYER/ENEMY) |
+| tactics | JSON | 戦術設定 (priority, range) |
 | position | JSON | Vector3 |
 | velocity | JSON | Vector3 |
 | weapons | JSON | Weapon[] |
 | active_weapon_index | Integer | 選択中武器 |
 
-### 今後追加予定 (Phase 2: バトルロイヤル対応)
-
-#### battle_rooms テーブル
+### missions テーブル ✅
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | id | UUID | Primary Key |
-| scheduled_at | Timestamp | 実行予定時刻 |
-| status | String | WAITING / RUNNING / COMPLETED |
-| max_players | Integer | 最大プレイヤー数 |
-| npc_count | Integer | NPC数 |
-| field_radius | Float | フィールド半径 |
+| name | String | ミッション名 |
+| description | String | 説明 |
+| difficulty | String | 難易度 (EASY/NORMAL/HARD) |
+| enemy_config | JSON | 敵機構成 |
 | created_at | Timestamp | 作成日時 |
 
-#### battle_entries テーブル
+### battle_results テーブル ✅
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| id | UUID | Primary Key |
+| user_id | String | Clerk User ID |
+| mission_id | UUID | FK → missions |
+| room_id | UUID | FK → battle_rooms (nullable) |
+| victory | Boolean | 勝敗 |
+| logs | JSONB | BattleLog[] |
+| created_at | Timestamp | バトル実行日時 |
+
+### pilots テーブル ✅
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| id | UUID | Primary Key |
+| user_id | String | Clerk User ID (一意) |
+| name | String | パイロット名 |
+| level | Integer | レベル |
+| exp | Integer | 経験値 |
+| credits | Integer | クレジット |
+| skill_points | Integer | 未使用のスキルポイント |
+| skills | JSON | 習得済みスキル (skill_id: level) |
+| created_at | Timestamp | 作成日時 |
+| updated_at | Timestamp | 更新日時 |
+
+### battle_rooms テーブル ✅
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| id | UUID | Primary Key |
+| status | String | OPEN / WAITING / COMPLETED |
+| max_participants | Integer | 最大参加者数 |
+| created_at | Timestamp | 作成日時 |
+| updated_at | Timestamp | 更新日時 |
+
+### battle_entries テーブル ✅
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | id | UUID | Primary Key |
 | room_id | UUID | FK → battle_rooms |
 | user_id | String | Clerk User ID (NPC時はnull) |
-| mobile_suit_id | UUID | FK → mobile_suits |
 | is_npc | Boolean | NPCフラグ |
-| spawn_position | JSON | 初期配置 Vector3 |
-| final_rank | Integer | 最終順位 (nullable) |
-| kills | Integer | 撃墜数 |
-| damage_dealt | Integer | 総与ダメージ |
+| mobile_suit_snapshot | JSON | 機体データのスナップショット |
+| created_at | Timestamp | エントリー日時 |
 
-#### battle_results テーブル
-| カラム | 型 | 説明 |
-|--------|-----|------|
-| id | UUID | Primary Key |
-| room_id | UUID | FK → battle_rooms |
-| logs | JSONB | BattleLog[] |
-| winner_entry_id | UUID | FK → battle_entries |
-| total_turns | Integer | 総ターン数 |
-| executed_at | Timestamp | 実行完了日時 |
+---
 
-#### pilots テーブル
-| カラム | 型 | 説明 |
-|--------|-----|------|
-| id | UUID | Primary Key |
-| user_id | String | Clerk User ID |
-| name | String | パイロット名 |
-| level | Integer | レベル |
-| exp | Integer | 経験値 |
-| total_battles | Integer | 累計参加数 |
-| total_wins | Integer | 累計1位回数 |
-| total_kills | Integer | 累計撃墜数 |
+### 今後追加予定 (Phase 3)
 
-#### factions テーブル (Phase 3)
+#### factions テーブル
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | id | UUID | Primary Key |
@@ -347,24 +461,84 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 | bonus_type | String | ボーナス種別 |
 | bonus_value | Float | ボーナス値 |
 
+#### seasons テーブル
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| id | UUID | Primary Key |
+| name | String | シーズン名 |
+| start_date | Date | 開始日 |
+| end_date | Date | 終了日 |
+| is_active | Boolean | アクティブフラグ |
+
+#### leaderboards テーブル
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| id | UUID | Primary Key |
+| season_id | UUID | FK → seasons |
+| user_id | String | Clerk User ID |
+| total_points | Integer | 累計ポイント |
+| total_battles | Integer | 総戦闘数 |
+| total_wins | Integer | 勝利数 |
+| total_kills | Integer | 総撃墜数 |
+
 ---
 
 ## 6. テスト
 
-* **Unit Tests:** `backend/tests/unit/test_simulation.py`
+### Unit Tests ✅
+* **Simulation Tests:** `backend/tests/unit/test_simulation.py`
     * シミュレータ初期化テスト
     * ターン順序テスト（機動性順）
     * プレイヤー勝利シナリオテスト
     * 敵勝利シナリオテスト
     * 移動ロジックテスト
     * 攻撃命中率テスト
+    * Tactics動作テスト (4件)
+
+* **Tactics Integration Tests:** `backend/tests/unit/test_tactics_integration.py`
+    * 戦術統合テスト
+
+* **Matching Service Tests:** `backend/tests/unit/test_matching_service.py`
+    * マッチングサービステスト (7件)
+
+### Integration Tests ✅
+* **Batch Processing Tests:** `backend/tests/integration/test_batch_processing.py`
+    * エンドツーエンドのバッチ処理テスト
+
+### API Tests ✅
+* **Structure Tests:** `backend/tests/test_api_structure.py`
+    * API構造テスト
+
+* **Feature Tests:**
+    * `backend/tests/test_engineering.py` - 整備システムテスト
+    * `backend/tests/test_entry_feature.py` - エントリー機能テスト
+    * `backend/tests/test_entry_snapshot.py` - エントリースナップショットテスト
+    * `backend/tests/test_shop.py` - ショップテスト
 
 ---
 
 ## 7. ドキュメント
 
+### セットアップ & インフラ
 * [Clerk認証セットアップガイド](./CLERK_SETUP.md)
 * [Clerk実装サマリー](./CLERK_IMPLEMENTATION_SUMMARY.md)
 * [Neonマイグレーションガイド](./neon_migration.md)
 * [インフラ構成](./infra.md)
+
+### 機能実装ガイド
 * [Mobile Suit API仕様](./mobile-suit-api-implementation.md)
+* [バトル履歴とミッション選択機能](./battle-history-implementation.md)
+* [戦術システム実装](./TACTICS_IMPLEMENTATION.md)
+* [パイロットシステム](./PILOT_SYSTEM.md)
+* [バッチシステムとマッチング](./BATCH_SYSTEM.md)
+* [バッチアーキテクチャ](./BATCH_ARCHITECTURE.md)
+
+### 実装完了レポート
+* [バトル履歴実装サマリー](../IMPLEMENTATION_SUMMARY.md)
+* [戦術システム実装レポート](../IMPLEMENTATION_REPORT.md)
+* [パイロットスキル実装レポート](../SKILL_IMPLEMENTATION_REPORT.md)
+* [バッチ処理実装レポート](./IMPLEMENTATION_REPORT_BATCH.md)
+
+### UI/UX
+* [UI Mockups](../UI_MOCKUPS.md)
+* [Tactics UI Mockup](./tactics-ui-mockup.html)
