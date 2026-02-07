@@ -1,6 +1,6 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse } from "@/types/battle";
 
 // Backend API Base URL
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -311,6 +311,51 @@ export async function getUpgradePreview(mobileSuitId: string, statType: string):
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.detail || `Failed to get preview: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * 利用可能なスキル一覧を取得するSWRフック
+ */
+export function useSkills() {
+  const { data, error, isLoading } = useSWR<SkillDefinition[]>(
+    `${API_BASE_URL}/api/pilots/skills`,
+    fetcher
+  );
+
+  return {
+    skills: data,
+    isLoading,
+    isError: error,
+  };
+}
+
+/**
+ * スキルを習得または強化する関数
+ */
+export async function unlockSkill(skillId: string): Promise<SkillUnlockResponse> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const request: SkillUnlockRequest = { skill_id: skillId };
+  
+  const res = await fetch(`${API_BASE_URL}/api/pilots/skills/unlock`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to unlock skill: ${res.status} ${res.statusText}`);
   }
 
   return res.json();

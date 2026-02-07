@@ -168,8 +168,36 @@ export interface Pilot {
     level: number;
     exp: number;
     credits: number;
+    skill_points: number;
+    skills: Record<string, number>;
     created_at: string;
     updated_at: string;
+}
+
+/**
+ * スキル定義
+ */
+export interface SkillDefinition {
+    id: string;
+    name: string;
+    description: string;
+    effect_per_level: number;
+    max_level: number;
+}
+
+/**
+ * スキル習得リクエスト
+ */
+export interface SkillUnlockRequest {
+    skill_id: string;
+}
+
+/**
+ * スキル習得レスポンス
+ */
+export interface SkillUnlockResponse {
+    pilot: Pilot;
+    message: string;
 }
 
 /**

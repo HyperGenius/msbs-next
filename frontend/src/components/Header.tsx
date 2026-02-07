@@ -17,18 +17,25 @@ export default function Header() {
         <div className="flex items-center gap-4">
           <SignedIn>
             {pilot && (
-              <div className="px-4 py-2 bg-gray-800 rounded border border-green-700">
+              <Link
+                href="/pilot"
+                className="px-4 py-2 bg-gray-800 rounded border border-green-700 hover:border-green-500 transition-colors"
+              >
                 <div className="flex gap-4 text-sm">
                   <div>
                     <span className="text-gray-400">Lv.</span>
                     <span className="text-yellow-400 font-bold ml-1">{pilot.level}</span>
                   </div>
                   <div className="border-l border-gray-600 pl-4">
+                    <span className="text-gray-400">SP:</span>
+                    <span className="text-purple-400 font-bold ml-1">{pilot.skill_points}</span>
+                  </div>
+                  <div className="border-l border-gray-600 pl-4">
                     <span className="text-gray-400">Credits:</span>
                     <span className="text-green-400 font-bold ml-1">{pilot.credits.toLocaleString()}</span>
                   </div>
                 </div>
-              </div>
+              </Link>
             )}
           </SignedIn>
           <Link

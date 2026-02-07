@@ -109,6 +109,16 @@ async def simulate_battle(
     player.position = Vector3(x=0, y=0, z=0)
     player.side = "PLAYER"
 
+    # 3.5. パイロットスキルを取得（ユーザーがログインしている場合）
+    player_skills: dict[str, int] = {}
+    if user_id:
+        from app.models.models import Pilot
+
+        pilot_statement = select(Pilot).where(Pilot.user_id == user_id)
+        pilot = session.exec(pilot_statement).first()
+        if pilot:
+            player_skills = pilot.skills
+
     # 4. ミッション設定から敵機を生成
     enemies = []
     enemy_configs = mission.enemy_config.get("enemies", [])
@@ -137,8 +147,8 @@ async def simulate_battle(
         )
         enemies.append(enemy)
 
-    # 5. シミュレーション実行
-    sim = BattleSimulator(player, enemies)
+    # 5. シミュレーション実行（スキルを渡す）
+    sim = BattleSimulator(player, enemies, player_skills=player_skills)
     max_turns = 50
     while not sim.is_finished and sim.turn < max_turns:
         sim.process_turn()

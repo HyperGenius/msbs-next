@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
+from app.core.skills import SKILL_COST, get_skill_definition
 from app.models.models import Pilot
 
 
@@ -89,6 +90,7 @@ class PilotService:
             if pilot.exp >= required_exp:
                 pilot.exp -= required_exp
                 pilot.level += 1
+                pilot.skill_points += 1  # レベルアップ時にSP付与
                 level_up_count += 1
                 logs.append(f"レベルアップ! Lv.{pilot.level}")
             else:
@@ -96,6 +98,7 @@ class PilotService:
 
         if level_up_count > 0:
             logs.append(f"合計 {level_up_count} レベル上昇しました")
+            logs.append(f"スキルポイント +{level_up_count}")
 
         self.session.add(pilot)
         self.session.commit()
@@ -132,3 +135,44 @@ class PilotService:
         total_credits = base_credits + kill_credits
 
         return total_exp, total_credits
+
+    def unlock_skill(self, pilot: Pilot, skill_id: str) -> tuple[Pilot, str]:
+        """スキルを習得または強化する.
+
+        Args:
+            pilot: 対象パイロット
+            skill_id: スキルID
+
+        Returns:
+            tuple[Pilot, str]: 更新後のパイロットとメッセージ
+
+        Raises:
+            ValueError: スキルが存在しない、SPが不足している、または最大レベルに達している場合
+        """
+        # スキル定義を取得
+        skill_def = get_skill_definition(skill_id)
+        if not skill_def:
+            raise ValueError(f"スキルが見つかりません: {skill_id}")
+
+        # 現在のスキルレベルを取得
+        current_level = pilot.skills.get(skill_id, 0)
+
+        # 最大レベルチェック
+        if current_level >= skill_def["max_level"]:
+            raise ValueError(f"スキル {skill_def['name']} は最大レベルに達しています")
+
+        # SPチェック
+        if pilot.skill_points < SKILL_COST:
+            raise ValueError(f"スキルポイントが不足しています (必要: {SKILL_COST})")
+
+        # スキルレベルアップとSP消費
+        pilot.skills[skill_id] = current_level + 1
+        pilot.skill_points -= SKILL_COST
+        pilot.updated_at = datetime.now(UTC)
+
+        self.session.add(pilot)
+        self.session.commit()
+        self.session.refresh(pilot)
+
+        message = f"{skill_def['name']} Lv.{pilot.skills[skill_id]} を習得しました"
+        return pilot, message
