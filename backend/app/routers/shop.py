@@ -113,6 +113,8 @@ async def purchase_mobile_suit(
         armor=specs["armor"],
         mobility=specs["mobility"],
         sensor_range=specs["sensor_range"],
+        beam_resistance=specs.get("beam_resistance", 0.0),
+        physical_resistance=specs.get("physical_resistance", 0.0),
         weapons=specs["weapons"],
         side="PLAYER",
     )
