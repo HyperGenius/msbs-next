@@ -115,8 +115,10 @@ class BattleSimulator:
 
         snapshot = Vector3.from_numpy(pos_actor)
 
-        # 命中率計算
-        dist_penalty = (distance / 100) * 2
+        # 命中率計算（最適射程を考慮）
+        # 最適射程からの距離差を計算
+        distance_from_optimal = abs(distance - weapon.optimal_range)
+        dist_penalty = distance_from_optimal * weapon.decay_rate
         evasion_bonus = target.mobility * 10
         hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
 
@@ -138,7 +140,14 @@ class BattleSimulator:
         dice = random.uniform(0, 100)
         is_hit = dice <= hit_chance
 
-        log_base = f"{actor.name}の攻撃！ (命中: {int(hit_chance)}%)"
+        # 距離による状況メッセージ
+        distance_msg = ""
+        if distance_from_optimal < 50:
+            distance_msg = " (最適距離!)"
+        elif distance_from_optimal > 200:
+            distance_msg = " (距離不利)"
+
+        log_base = f"{actor.name}の攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
 
         if is_hit:
             self._process_hit(actor, target, weapon, log_base, snapshot)
@@ -177,6 +186,20 @@ class BattleSimulator:
             damage_multiplier = 1.0 + (damage_skill_level * 3.0) / 100.0  # +3% / Lv
             base_damage = int(base_damage * damage_multiplier)
 
+        # 武器タイプに応じた耐性を適用
+        weapon_type = getattr(weapon, "type", "PHYSICAL")
+        resistance_msg = ""
+        if weapon_type == "BEAM":
+            resistance = getattr(target, "beam_resistance", 0.0)
+            if resistance > 0:
+                base_damage = int(base_damage * (1.0 - resistance))
+                resistance_msg = f" [対ビーム装甲により{int(resistance * 100)}%軽減]"
+        elif weapon_type == "PHYSICAL":
+            resistance = getattr(target, "physical_resistance", 0.0)
+            if resistance > 0:
+                base_damage = int(base_damage * (1.0 - resistance))
+                resistance_msg = f" [対実弾装甲により{int(resistance * 100)}%軽減]"
+
         # 乱数幅
         variance = random.uniform(0.9, 1.1)
         final_damage = int(base_damage * variance)
@@ -190,7 +213,7 @@ class BattleSimulator:
                 action_type="ATTACK",
                 target_id=target.id,
                 damage=final_damage,
-                message=f"{log_msg} {target.name}に{final_damage}ダメージ！",
+                message=f"{log_msg}{resistance_msg} {target.name}に{final_damage}ダメージ！",
                 position_snapshot=snapshot,
             )
         )

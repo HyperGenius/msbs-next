@@ -125,6 +125,15 @@ export default function GaragePage() {
                       <div className="text-sm opacity-70 mt-1">
                         HP: {ms.max_hp} / 装甲: {ms.armor} / 機動性: {ms.mobility}
                       </div>
+                      <div className="text-xs opacity-60 mt-1">
+                        対ビーム: {((ms.beam_resistance || 0) * 100).toFixed(0)}% / 
+                        対実弾: {((ms.physical_resistance || 0) * 100).toFixed(0)}%
+                      </div>
+                      {ms.weapons && ms.weapons.length > 0 && (
+                        <div className="text-xs opacity-60 mt-1">
+                          武器: {ms.weapons[0].name} ({ms.weapons[0].type || "PHYSICAL"})
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -195,6 +204,79 @@ export default function GaragePage() {
                       }
                       className="w-full px-3 py-2 bg-gray-900 border border-green-700 rounded focus:border-green-500 focus:outline-none"
                     />
+                  </div>
+
+                  {/* Specs Display Section */}
+                  <div className="pt-4 border-t border-green-800">
+                    <h3 className="text-lg font-bold mb-4 text-green-300">
+                      機体スペック (詳細)
+                    </h3>
+                    
+                    {/* Resistance Display */}
+                    <div className="mb-4 p-3 bg-gray-900 rounded">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-400">対ビーム防御:</span>
+                          <span className="ml-2 font-bold text-blue-400">
+                            {((selectedMs.beam_resistance || 0) * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">対実弾防御:</span>
+                          <span className="ml-2 font-bold text-yellow-400">
+                            {((selectedMs.physical_resistance || 0) * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Weapons Display */}
+                    {selectedMs.weapons && selectedMs.weapons.length > 0 && (
+                      <div className="p-3 bg-gray-900 rounded">
+                        <h4 className="text-sm font-bold mb-2 text-green-500">
+                          装備武器
+                        </h4>
+                        {selectedMs.weapons.map((weapon, idx) => (
+                          <div key={idx} className="mb-2 text-sm">
+                            <div className="font-bold">{weapon.name}</div>
+                            <div className="grid grid-cols-2 gap-2 text-xs mt-1">
+                              <div>
+                                <span className="text-gray-400">属性:</span>
+                                <span className={`ml-2 font-bold ${
+                                  weapon.type === "BEAM" ? "text-blue-400" : "text-yellow-400"
+                                }`}>
+                                  {weapon.type || "PHYSICAL"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">威力:</span>
+                                <span className="ml-2 font-bold">{weapon.power}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">射程:</span>
+                                <span className="ml-2 font-bold">{weapon.range}m</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">最適射程:</span>
+                                <span className="ml-2 font-bold text-green-400">
+                                  {weapon.optimal_range || 300}m
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">命中率:</span>
+                                <span className="ml-2 font-bold">{weapon.accuracy}%</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">減衰率:</span>
+                                <span className="ml-2 font-bold">
+                                  {((weapon.decay_rate || 0.05) * 100).toFixed(1)}%/100m
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Tactics Section */}

@@ -35,6 +35,9 @@ class Weapon(SQLModel):
     power: int = Field(description="威力")
     range: float = Field(description="射程距離")
     accuracy: float = Field(description="基本命中率(%)")
+    type: str = Field(default="PHYSICAL", description="武器属性 (BEAM/PHYSICAL)")
+    optimal_range: float = Field(default=300.0, description="最適射程距離")
+    decay_rate: float = Field(default=0.05, description="距離による命中率減衰係数")
 
 
 # --- Database Models (テーブル定義) ---
@@ -57,6 +60,8 @@ class MobileSuit(SQLModel, table=True):
     mobility: float = Field(default=1.0, description="機動性(回避・移動速度係数)")
     sensor_range: float = Field(default=500.0, description="索敵範囲")
     side: str = Field(default="PLAYER", description="陣営 (PLAYER/ENEMY)")
+    beam_resistance: float = Field(default=0.0, description="対ビーム防御力 (0.0~1.0)")
+    physical_resistance: float = Field(default=0.0, description="対実弾防御力 (0.0~1.0)")
 
     # Complex Types (Stored as JSON in Postgres)
     # SQLModel + SQLAlchemy JSON Column mapping

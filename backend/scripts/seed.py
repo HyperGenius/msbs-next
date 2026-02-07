@@ -11,14 +11,46 @@ from app.db import engine
 from app.models.models import BattleResult, Mission, MobileSuit, Weapon
 
 # 武器データ
-rifle = Weapon(id="w1", name="Beam Rifle", power=300, range=600, accuracy=80)
-mg = Weapon(id="w2", name="Zaku MG", power=100, range=400, accuracy=60)
+rifle = Weapon(
+    id="w1",
+    name="Beam Rifle",
+    power=300,
+    range=600,
+    accuracy=80,
+    type="BEAM",
+    optimal_range=400.0,
+    decay_rate=0.05,
+)
+mg = Weapon(
+    id="w2",
+    name="Zaku MG",
+    power=100,
+    range=400,
+    accuracy=60,
+    type="PHYSICAL",
+    optimal_range=300.0,
+    decay_rate=0.08,
+)
 
 # 機体データ
 gundam = MobileSuit(
-    name="Gundam", max_hp=1000, armor=100, mobility=1.5, weapons=[rifle]
+    name="Gundam",
+    max_hp=1000,
+    armor=100,
+    mobility=1.5,
+    weapons=[rifle],
+    beam_resistance=0.2,
+    physical_resistance=0.1,
 )
-zaku = MobileSuit(name="Zaku II", max_hp=800, armor=50, mobility=1.0, weapons=[mg])
+zaku = MobileSuit(
+    name="Zaku II",
+    max_hp=800,
+    armor=50,
+    mobility=1.0,
+    weapons=[mg],
+    beam_resistance=0.05,
+    physical_resistance=0.2,
+)
 
 with Session(engine) as session:
     # モビルスーツを追加

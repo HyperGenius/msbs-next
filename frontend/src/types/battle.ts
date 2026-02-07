@@ -18,6 +18,9 @@ export interface Weapon {
     power: number;
     range: number;
     accuracy: number;
+    type?: string;
+    optimal_range?: number;
+    decay_rate?: number;
 }
 
 /**
@@ -43,6 +46,8 @@ export interface MobileSuit {
     weapons: Weapon[];
     side: "PLAYER" | "ENEMY";
     tactics: Tactics;
+    beam_resistance?: number;
+    physical_resistance?: number;
 }
 
 /**
@@ -209,6 +214,8 @@ export interface ShopItemSpecs {
     mobility: number;
     sensor_range: number;
     weapons: Weapon[];
+    beam_resistance?: number;
+    physical_resistance?: number;
 }
 
 /**

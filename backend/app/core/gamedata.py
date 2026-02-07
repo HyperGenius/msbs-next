@@ -14,6 +14,8 @@ SHOP_LISTINGS = [
             "armor": 50,
             "mobility": 1.0,
             "sensor_range": 500.0,
+            "beam_resistance": 0.05,
+            "physical_resistance": 0.2,
             "weapons": [
                 Weapon(
                     id="zaku_mg",
@@ -21,6 +23,9 @@ SHOP_LISTINGS = [
                     power=100,
                     range=400,
                     accuracy=60,
+                    type="PHYSICAL",
+                    optimal_range=300.0,
+                    decay_rate=0.08,
                 )
             ],
         },
@@ -35,6 +40,8 @@ SHOP_LISTINGS = [
             "armor": 80,
             "mobility": 0.8,
             "sensor_range": 500.0,
+            "beam_resistance": 0.1,
+            "physical_resistance": 0.25,
             "weapons": [
                 Weapon(
                     id="giant_bazooka",
@@ -42,6 +49,9 @@ SHOP_LISTINGS = [
                     power=180,
                     range=450,
                     accuracy=55,
+                    type="PHYSICAL",
+                    optimal_range=350.0,
+                    decay_rate=0.1,
                 )
             ],
         },
@@ -56,6 +66,8 @@ SHOP_LISTINGS = [
             "armor": 60,
             "mobility": 1.3,
             "sensor_range": 500.0,
+            "beam_resistance": 0.08,
+            "physical_resistance": 0.15,
             "weapons": [
                 Weapon(
                     id="heat_rod",
@@ -63,6 +75,9 @@ SHOP_LISTINGS = [
                     power=140,
                     range=300,
                     accuracy=70,
+                    type="PHYSICAL",
+                    optimal_range=200.0,
+                    decay_rate=0.12,
                 )
             ],
         },
@@ -77,6 +92,8 @@ SHOP_LISTINGS = [
             "armor": 100,
             "mobility": 1.5,
             "sensor_range": 600.0,
+            "beam_resistance": 0.2,
+            "physical_resistance": 0.1,
             "weapons": [
                 Weapon(
                     id="beam_rifle",
@@ -84,6 +101,9 @@ SHOP_LISTINGS = [
                     power=300,
                     range=600,
                     accuracy=80,
+                    type="BEAM",
+                    optimal_range=400.0,
+                    decay_rate=0.05,
                 )
             ],
         },
@@ -98,6 +118,8 @@ SHOP_LISTINGS = [
             "armor": 85,
             "mobility": 1.4,
             "sensor_range": 550.0,
+            "beam_resistance": 0.15,
+            "physical_resistance": 0.12,
             "weapons": [
                 Weapon(
                     id="beam_rifle_gelgoog",
@@ -105,6 +127,9 @@ SHOP_LISTINGS = [
                     power=280,
                     range=580,
                     accuracy=75,
+                    type="BEAM",
+                    optimal_range=400.0,
+                    decay_rate=0.06,
                 )
             ],
         },
