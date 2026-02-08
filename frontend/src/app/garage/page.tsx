@@ -20,8 +20,8 @@ export default function GaragePage() {
     armor: 0,
     mobility: 0,
     tactics: {
-      priority: "CLOSEST" as const,
-      range: "BALANCED" as const,
+      priority: "CLOSEST" as "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT",
+      range: "BALANCED" as "MELEE" | "RANGED" | "BALANCED" | "FLEE",
     },
   });
 
@@ -297,7 +297,7 @@ export default function GaragePage() {
                             ...formData,
                             tactics: {
                               ...formData.tactics,
-                              priority: e.target.value as "CLOSEST" | "WEAKEST" | "RANDOM",
+                              priority: e.target.value as "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT",
                             },
                           })
                         }
@@ -305,6 +305,8 @@ export default function GaragePage() {
                       >
                         <option value="CLOSEST">CLOSEST - 最寄りの敵</option>
                         <option value="WEAKEST">WEAKEST - HP最小の敵</option>
+                        <option value="STRONGEST">STRONGEST - 強敵優先 (戦略価値)</option>
+                        <option value="THREAT">THREAT - 脅威度優先</option>
                         <option value="RANDOM">RANDOM - ランダム選択</option>
                       </select>
                       <p className="text-xs text-green-600 mt-1">
