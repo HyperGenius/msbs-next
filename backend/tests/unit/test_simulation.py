@@ -390,10 +390,9 @@ def test_tactics_threat_priority() -> None:
     # Get target selection
     target = sim._select_target(player)
     
-    # Should target the closest strong enemy (highest threat)
+    # Should target Close Strong (highest threat: closer distance + higher power than Close Weak)
     assert target is not None
-    # Close strong enemy should be the highest threat
-    assert target.name in ["Close Strong", "Close Weak"]  # Both close, but Close Strong has more power
+    assert target.name == "Close Strong"
 
 
 def test_target_selection_with_multiple_tactics() -> None:

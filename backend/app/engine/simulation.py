@@ -166,11 +166,9 @@ class BattleSimulator:
         if target.weapons:
             weapon_power_avg = sum(w.power for w in target.weapons) / len(target.weapons)
         
-        # パイロットレベル（現時点では未実装なのでデフォルト1とする）
-        pilot_level = 1.0
-        
-        # 戦略価値 = (最大HP + 平均武器威力) * (1 + パイロットレベル * 0.1)
-        strategic_value = (target.max_hp + weapon_power_avg) * (1 + pilot_level * 0.1)
+        # 戦略価値 = 最大HP + 平均武器威力
+        # Note: パイロットレベルは将来的に実装予定
+        strategic_value = target.max_hp + weapon_power_avg
         
         return strategic_value
 
