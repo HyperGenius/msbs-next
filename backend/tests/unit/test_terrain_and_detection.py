@@ -1,13 +1,17 @@
 """Tests for terrain adaptability and detection system."""
 
-from app.engine.simulation import BattleSimulator, TERRAIN_ADAPTABILITY_MODIFIERS
+from app.engine.simulation import BattleSimulator
+from app.engine.constants import (
+    TERRAIN_ADAPTABILITY_MODIFIERS,
+    DEFAULT_TERRAIN_ADAPTABILITY,
+)
 from app.models.models import MobileSuit, Vector3, Weapon
 
 
 def create_test_player(terrain_adaptability: dict[str, str] | None = None) -> MobileSuit:
     """Create a test player mobile suit."""
     if terrain_adaptability is None:
-        terrain_adaptability = {"SPACE": "A", "GROUND": "A", "COLONY": "A", "UNDERWATER": "C"}
+        terrain_adaptability = DEFAULT_TERRAIN_ADAPTABILITY.copy()
     
     return MobileSuit(
         name="Test Gundam",
@@ -40,6 +44,7 @@ def create_test_enemy(
 ) -> MobileSuit:
     """Create a test enemy mobile suit."""
     if terrain_adaptability is None:
+        # Default: slightly worse terrain adaptability
         terrain_adaptability = {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"}
     
     return MobileSuit(

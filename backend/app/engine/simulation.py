@@ -4,15 +4,10 @@ import random
 import numpy as np
 
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
-
-# 地形適正による補正係数
-TERRAIN_ADAPTABILITY_MODIFIERS = {
-    "S": 1.2,
-    "A": 1.0,
-    "B": 0.8,
-    "C": 0.6,
-    "D": 0.4,
-}
+from app.engine.constants import (
+    TERRAIN_ADAPTABILITY_MODIFIERS,
+    DEFAULT_TERRAIN_ADAPTABILITY,
+)
 
 
 class BattleSimulator:
@@ -150,9 +145,8 @@ class BattleSimulator:
         ]
 
         # ターゲットが存在しない場合はNoneを返す
+        # （呼び出し元の_action_phaseで_search_movementが実行される）
         if not detected_targets:
-            # 未発見の敵がいる場合は、最も近い未発見の敵の方向へ移動
-            # (簡易実装: ここでは単にNoneを返し、移動しない)
             return None
 
         # 戦術に基づいてターゲットを選択
