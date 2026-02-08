@@ -5,6 +5,15 @@ import numpy as np
 
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 
+# 地形適正による補正係数
+TERRAIN_ADAPTABILITY_MODIFIERS = {
+    "S": 1.2,
+    "A": 1.0,
+    "B": 0.8,
+    "C": 0.6,
+    "D": 0.4,
+}
+
 
 class BattleSimulator:
     """戦闘シミュレータ."""
@@ -14,6 +23,7 @@ class BattleSimulator:
         player: MobileSuit,
         enemies: list[MobileSuit],
         player_skills: dict[str, int] | None = None,
+        environment: str = "SPACE",
     ):
         """初期化.
 
@@ -21,6 +31,7 @@ class BattleSimulator:
             player: プレイヤー機体
             enemies: 敵機体リスト
             player_skills: プレイヤーのスキル (skill_id: level)
+            environment: 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)
         """
         self.player = player
         self.enemies = enemies
@@ -29,6 +40,13 @@ class BattleSimulator:
         self.turn = 0
         self.is_finished = False
         self.player_skills = player_skills or {}
+        self.environment = environment
+        
+        # 索敵状態管理 (チーム単位で共有)
+        self.team_detected_units: dict[str, set] = {
+            "PLAYER": set(),
+            "ENEMY": set(),
+        }
 
     def process_turn(self) -> None:
         """1ターン分の処理を実行."""
@@ -40,6 +58,9 @@ class BattleSimulator:
         units_with_random = [(u, random.random()) for u in alive_units]
         # 機動性とランダム値でソート（機動性が高い方が先、同値ならランダム）
         units_with_random.sort(key=lambda x: (x[0].mobility, x[1]), reverse=True)
+
+        # 索敵フェーズ（ターン開始時）
+        self._detection_phase()
 
         # 各ユニットの行動を順次実行
         for unit, _ in units_with_random:
@@ -71,16 +92,65 @@ class BattleSimulator:
         else:
             self._process_movement(actor, pos_actor, pos_target, diff_vector, distance)
 
+    def _detection_phase(self) -> None:
+        """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
+        alive_units = [u for u in self.units if u.current_hp > 0]
+        
+        for unit in alive_units:
+            # 敵対勢力を特定
+            if unit.side == "PLAYER":
+                enemy_team = "ENEMY"
+                potential_targets = [e for e in self.enemies if e.current_hp > 0]
+            else:
+                enemy_team = "PLAYER"
+                potential_targets = [self.player] if self.player.current_hp > 0 else []
+            
+            pos_unit = unit.position.to_numpy()
+            
+            # 索敵範囲内の敵をチェック
+            for target in potential_targets:
+                if target.id in self.team_detected_units[unit.side]:
+                    # 既に発見済み
+                    continue
+                    
+                pos_target = target.position.to_numpy()
+                distance = float(np.linalg.norm(pos_target - pos_unit))
+                
+                # 索敵判定 (ミノフスキー粒子の影響は今回は簡易実装でスキップ)
+                if distance <= unit.sensor_range:
+                    # 発見！
+                    self.team_detected_units[unit.side].add(target.id)
+                    
+                    # 発見ログを追加
+                    self.logs.append(
+                        BattleLog(
+                            turn=self.turn,
+                            actor_id=unit.id,
+                            action_type="DETECTION",
+                            target_id=target.id,
+                            message=f"{unit.name}が{target.name}を発見！ (距離: {int(distance)}m)",
+                            position_snapshot=unit.position,
+                        )
+                    )
+
     def _select_target(self, actor: MobileSuit) -> MobileSuit | None:
-        """ターゲットを選択する（戦術に基づく）."""
+        """ターゲットを選択する（戦術と索敵状態に基づく）."""
         # ターゲット選択: 敵対勢力のユニットをリストアップ
         if actor.side == "PLAYER":
             potential_targets = [e for e in self.enemies if e.current_hp > 0]
         else:  # actor.side == "ENEMY"
             potential_targets = [self.player] if self.player.current_hp > 0 else []
 
+        # 索敵済みの敵のみをターゲット候補とする
+        detected_targets = [
+            t for t in potential_targets
+            if t.id in self.team_detected_units[actor.side]
+        ]
+
         # ターゲットが存在しない場合はNoneを返す
-        if not potential_targets:
+        if not detected_targets:
+            # 未発見の敵がいる場合は、最も近い未発見の敵の方向へ移動
+            # (簡易実装: ここでは単にNoneを返し、移動しない)
             return None
 
         # 戦術に基づいてターゲットを選択
@@ -89,14 +159,14 @@ class BattleSimulator:
 
         if tactics_priority == "WEAKEST":
             # 最もHPが低い敵を選択
-            target = min(potential_targets, key=lambda t: t.current_hp)
+            target = min(detected_targets, key=lambda t: t.current_hp)
         elif tactics_priority == "RANDOM":
             # ランダムに敵を選択
-            target = random.choice(potential_targets)
+            target = random.choice(detected_targets)
         else:  # CLOSEST (デフォルト)
             # 最も近い敵を選択
             target = min(
-                potential_targets,
+                detected_targets,
                 key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
             )
         return target
@@ -266,6 +336,10 @@ class BattleSimulator:
         if distance == 0:
             return
 
+        # 地形適正による補正を適用
+        terrain_modifier = self._get_terrain_modifier(actor)
+        effective_mobility = actor.mobility * terrain_modifier
+
         # 戦術に基づいて移動方向を決定
         tactics_range = actor.tactics.get("range", "BALANCED")
         weapon = actor.get_active_weapon()
@@ -273,7 +347,7 @@ class BattleSimulator:
         if tactics_range == "FLEE":
             # 敵から逃げる（後退）
             direction = -diff_vector / distance  # 反対方向
-            speed = actor.mobility * 150
+            speed = effective_mobility * 150
             move_vector = direction * speed
             new_pos = pos_actor + move_vector
             actor.position = Vector3.from_numpy(new_pos)
@@ -294,7 +368,7 @@ class BattleSimulator:
             if distance < ideal_distance:
                 # 近すぎる場合は後退
                 direction = -diff_vector / distance
-                speed = actor.mobility * 100
+                speed = effective_mobility * 100
                 move_vector = direction * speed
                 new_pos = pos_actor + move_vector
                 actor.position = Vector3.from_numpy(new_pos)
@@ -311,7 +385,7 @@ class BattleSimulator:
             elif distance > weapon.range:
                 # 射程外の場合は接近
                 direction = diff_vector / distance
-                speed = actor.mobility * 100
+                speed = effective_mobility * 100
                 move_vector = direction * speed
                 new_pos = pos_actor + move_vector
 
@@ -333,7 +407,7 @@ class BattleSimulator:
         else:  # MELEE or BALANCED (デフォルト)
             # 敵に接近
             direction = diff_vector / distance
-            speed = actor.mobility * 150
+            speed = effective_mobility * 150
             move_vector = direction * speed
 
             new_pos = pos_actor + move_vector
@@ -353,3 +427,12 @@ class BattleSimulator:
                     position_snapshot=actor.position,
                 )
             )
+
+    def _get_terrain_modifier(self, unit: MobileSuit) -> float:
+        """地形適正による補正係数を取得."""
+        # 地形適正を取得
+        terrain_adaptability = getattr(unit, "terrain_adaptability", {})
+        adaptability_grade = terrain_adaptability.get(self.environment, "A")
+        
+        # 補正係数を返す
+        return TERRAIN_ADAPTABILITY_MODIFIERS.get(adaptability_grade, 1.0)

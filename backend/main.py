@@ -126,6 +126,7 @@ async def simulate_battle(
     for enemy_config in enemy_configs:
         pos_dict = enemy_config.get("position", {"x": 500, "y": 0, "z": 0})
         weapon_dict = enemy_config.get("weapon", {})
+        terrain_adapt = enemy_config.get("terrain_adaptability", {"SPACE": "A", "GROUND": "A", "COLONY": "A", "UNDERWATER": "C"})
 
         enemy = MobileSuit(
             name=enemy_config.get("name", "ザクII"),
@@ -134,6 +135,7 @@ async def simulate_battle(
             armor=enemy_config.get("armor", 5),
             mobility=enemy_config.get("mobility", 1.2),
             position=Vector3(**pos_dict),
+            terrain_adaptability=terrain_adapt,
             weapons=[
                 Weapon(
                     id=weapon_dict.get("id", "weapon"),
@@ -147,8 +149,8 @@ async def simulate_battle(
         )
         enemies.append(enemy)
 
-    # 5. シミュレーション実行（スキルを渡す）
-    sim = BattleSimulator(player, enemies, player_skills=player_skills)
+    # 5. シミュレーション実行（スキルと環境を渡す）
+    sim = BattleSimulator(player, enemies, player_skills=player_skills, environment=mission.environment)
     max_turns = 50
     while not sim.is_finished and sim.turn < max_turns:
         sim.process_turn()

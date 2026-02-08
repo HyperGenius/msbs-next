@@ -17,6 +17,7 @@ missions = [
         name="Mission 01: ザク小隊",
         difficulty=1,
         description="3機のザクII小隊を撃破せよ",
+        environment="SPACE",
         enemy_config={
             "enemies": [
                 {
@@ -25,6 +26,7 @@ missions = [
                     "armor": 5,
                     "mobility": 1.2,
                     "position": {"x": 500, "y": -200, "z": 0},
+                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
                     "weapon": {
                         "id": "zaku_mg_1",
                         "name": "ザクマシンガン",
@@ -42,6 +44,7 @@ missions = [
                     "armor": 5,
                     "mobility": 1.2,
                     "position": {"x": 500, "y": 0, "z": 0},
+                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
                     "weapon": {
                         "id": "zaku_mg_2",
                         "name": "ザクマシンガン",
@@ -59,6 +62,7 @@ missions = [
                     "armor": 5,
                     "mobility": 1.2,
                     "position": {"x": 500, "y": 200, "z": 0},
+                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
                     "weapon": {
                         "id": "zaku_mg_3",
                         "name": "ザクマシンガン",
@@ -78,6 +82,7 @@ missions = [
         name="Mission 02: 防衛線突破",
         difficulty=2,
         description="4機のザクII防衛部隊を突破せよ",
+        environment="GROUND",
         enemy_config={
             "enemies": [
                 {
@@ -86,6 +91,7 @@ missions = [
                     "armor": 8,
                     "mobility": 1.3,
                     "position": {"x": 400, "y": -300, "z": 0},
+                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
                     "weapon": {
                         "id": "zaku_mg_1",
                         "name": "ザクマシンガン",
@@ -103,6 +109,7 @@ missions = [
                     "armor": 8,
                     "mobility": 1.3,
                     "position": {"x": 400, "y": -100, "z": 0},
+                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
                     "weapon": {
                         "id": "zaku_mg_2",
                         "name": "ザクマシンガン",
@@ -120,6 +127,7 @@ missions = [
                     "armor": 8,
                     "mobility": 1.3,
                     "position": {"x": 400, "y": 100, "z": 0},
+                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
                     "weapon": {
                         "id": "zaku_mg_3",
                         "name": "ザクマシンガン",
@@ -137,6 +145,7 @@ missions = [
                     "armor": 8,
                     "mobility": 1.3,
                     "position": {"x": 400, "y": 300, "z": 0},
+                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
                     "weapon": {
                         "id": "zaku_mg_4",
                         "name": "ザクマシンガン",
@@ -156,6 +165,7 @@ missions = [
         name="Mission 03: エース部隊撃破",
         difficulty=3,
         description="高性能ザクII 2機を撃破せよ",
+        environment="COLONY",
         enemy_config={
             "enemies": [
                 {
@@ -164,6 +174,7 @@ missions = [
                     "armor": 12,
                     "mobility": 1.5,
                     "position": {"x": 450, "y": -150, "z": 0},
+                    "terrain_adaptability": {"SPACE": "S", "GROUND": "A", "COLONY": "S", "UNDERWATER": "C"},
                     "weapon": {
                         "id": "zaku_mg_s1",
                         "name": "ザクマシンガン改",
@@ -181,6 +192,7 @@ missions = [
                     "armor": 12,
                     "mobility": 1.5,
                     "position": {"x": 450, "y": 150, "z": 0},
+                    "terrain_adaptability": {"SPACE": "S", "GROUND": "A", "COLONY": "S", "UNDERWATER": "C"},
                     "weapon": {
                         "id": "zaku_mg_s2",
                         "name": "ザクマシンガン改",
