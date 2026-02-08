@@ -42,12 +42,14 @@ export interface MobileSuit {
     current_hp: number;
     armor: number;
     mobility: number;
+    sensor_range?: number;
     position: Vector3;
     weapons: Weapon[];
     side: "PLAYER" | "ENEMY";
     tactics: Tactics;
     beam_resistance?: number;
     physical_resistance?: number;
+    terrain_adaptability?: Record<string, string>;
 }
 
 /**
@@ -56,7 +58,7 @@ export interface MobileSuit {
 export interface BattleLog {
     turn: number;
     actor_id: string;
-    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS";
+    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION";
     target_id?: string;
     damage?: number;
     message: string;
@@ -105,6 +107,7 @@ export interface Mission {
     name: string;
     difficulty: number;
     description: string;
+    environment?: string;
     enemy_config: {
         enemies: Array<{
             name: string;
@@ -113,6 +116,7 @@ export interface Mission {
             mobility: number;
             position: Vector3;
             weapon: Weapon;
+            terrain_adaptability?: Record<string, string>;
         }>;
     };
 }
