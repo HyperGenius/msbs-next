@@ -92,14 +92,16 @@ class BattleSimulator:
         self, actor: MobileSuit, target: MobileSuit, reason: str, details: str
     ) -> None:
         """ターゲット選択の理由をログに記録する.
-        
+
         Args:
             actor: 選択を行った機体
             target: 選択されたターゲット
             reason: 選択理由（戦術名）
             details: 詳細情報（スコア値など）
         """
-        message = f"{actor.name}がターゲット選択: {target.name} (戦術: {reason}, {details})"
+        message = (
+            f"{actor.name}がターゲット選択: {target.name} (戦術: {reason}, {details})"
+        )
         self.logs.append(
             BattleLog(
                 turn=self.turn,
@@ -154,31 +156,33 @@ class BattleSimulator:
 
     def _calculate_strategic_value(self, target: MobileSuit) -> float:
         """敵の戦略価値を計算する.
-        
+
         Args:
             target: 評価対象の敵機体
-            
+
         Returns:
             戦略価値スコア（高いほど価値が高い）
         """
         # 武器の平均威力を計算
         weapon_power_avg = 0.0
         if target.weapons:
-            weapon_power_avg = sum(w.power for w in target.weapons) / len(target.weapons)
-        
+            weapon_power_avg = sum(w.power for w in target.weapons) / len(
+                target.weapons
+            )
+
         # 戦略価値 = 最大HP + 平均武器威力
         # Note: パイロットレベルは将来的に実装予定
         strategic_value = target.max_hp + weapon_power_avg
-        
+
         return strategic_value
 
     def _calculate_threat_level(self, actor: MobileSuit, target: MobileSuit) -> float:
         """敵の脅威度を計算する.
-        
+
         Args:
             actor: 評価する自機
             target: 評価対象の敵機体
-            
+
         Returns:
             脅威度スコア（高いほど脅威が高い）
         """
@@ -186,23 +190,23 @@ class BattleSimulator:
         attack_power = 0.0
         if target.weapons:
             attack_power = sum(w.power for w in target.weapons) / len(target.weapons)
-        
+
         # 距離を計算
         pos_actor = actor.position.to_numpy()
         pos_target = target.position.to_numpy()
         distance = float(np.linalg.norm(pos_target - pos_actor))
-        
+
         # 距離が0の場合は最小距離を設定（ゼロ除算回避）
         if distance < 1.0:
             distance = 1.0
-        
+
         # 自機の現在HPが0の場合は最小HPを設定（ゼロ除算回避）
         current_hp = max(1.0, float(actor.current_hp))
-        
+
         # 脅威度 = (敵の攻撃力 / 自機の現在HP) * (1000 / 距離)
         # 距離で1000を割ることで、距離が近いほど脅威度が高くなる
         threat_level = (attack_power / current_hp) * (1000.0 / distance)
-        
+
         return threat_level
 
     def _select_target(self, actor: MobileSuit) -> MobileSuit | None:
@@ -230,17 +234,27 @@ class BattleSimulator:
         if tactics_priority == "WEAKEST":
             # 最もHPが低い敵を選択
             target = min(detected_targets, key=lambda t: t.current_hp)
-            self._log_target_selection(actor, target, "WEAKEST", f"HP: {target.current_hp}")
+            self._log_target_selection(
+                actor, target, "WEAKEST", f"HP: {target.current_hp}"
+            )
         elif tactics_priority == "STRONGEST":
             # 戦略価値が最も高い敵を選択
-            target = max(detected_targets, key=lambda t: self._calculate_strategic_value(t))
+            target = max(
+                detected_targets, key=lambda t: self._calculate_strategic_value(t)
+            )
             strategic_value = self._calculate_strategic_value(target)
-            self._log_target_selection(actor, target, "STRONGEST", f"戦略価値: {strategic_value:.1f}")
+            self._log_target_selection(
+                actor, target, "STRONGEST", f"戦略価値: {strategic_value:.1f}"
+            )
         elif tactics_priority == "THREAT":
             # 脅威度が最も高い敵を選択
-            target = max(detected_targets, key=lambda t: self._calculate_threat_level(actor, t))
+            target = max(
+                detected_targets, key=lambda t: self._calculate_threat_level(actor, t)
+            )
             threat_level = self._calculate_threat_level(actor, target)
-            self._log_target_selection(actor, target, "THREAT", f"脅威度: {threat_level:.2f}")
+            self._log_target_selection(
+                actor, target, "THREAT", f"脅威度: {threat_level:.2f}"
+            )
         elif tactics_priority == "RANDOM":
             # ランダムに敵を選択
             target = random.choice(detected_targets)
@@ -252,7 +266,9 @@ class BattleSimulator:
                 key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
             )
             distance = np.linalg.norm(target.position.to_numpy() - pos_actor)
-            self._log_target_selection(actor, target, "CLOSEST", f"距離: {int(distance)}m")
+            self._log_target_selection(
+                actor, target, "CLOSEST", f"距離: {int(distance)}m"
+            )
         return target
 
     def _process_attack(

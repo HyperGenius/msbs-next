@@ -5,10 +5,16 @@ import sys
 # パスを通す
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+from sqlalchemy import text
 from sqlmodel import Session
 
 from app.db import engine
-from app.models.models import BattleResult, Mission, MobileSuit, Weapon
+from app.models.models import (
+    BattleResult,
+    Mission,
+    MobileSuit,
+    Weapon,
+)
 
 # 武器データ
 rifle = Weapon(
@@ -53,6 +59,15 @@ zaku = MobileSuit(
 )
 
 with Session(engine) as session:
+    # 既存のデータを削除（外部キー制約を考慮した順序）
+    session.execute(text("DELETE FROM battle_entries"))
+    session.execute(text("DELETE FROM battle_results"))
+    session.execute(text("DELETE FROM battle_rooms"))
+    session.execute(text("DELETE FROM pilots"))
+    session.execute(text("DELETE FROM missions"))
+    session.execute(text("DELETE FROM mobile_suits"))
+    session.commit()
+
     # モビルスーツを追加
     session.add(gundam)
     session.add(zaku)

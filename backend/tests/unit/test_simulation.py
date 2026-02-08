@@ -282,23 +282,23 @@ def test_tactics_default_values() -> None:
 def test_calculate_strategic_value() -> None:
     """Test strategic value calculation."""
     player = create_test_player()
-    
+
     # Create enemies with different specs
     weak_enemy = create_test_enemy("Weak Zaku", Vector3(x=300, y=0, z=0))
     weak_enemy.max_hp = 50
     weak_enemy.weapons[0].power = 10
-    
+
     strong_enemy = create_test_enemy("Strong Gundam", Vector3(x=500, y=0, z=0))
     strong_enemy.max_hp = 150
     strong_enemy.weapons[0].power = 40
-    
+
     enemies = [weak_enemy, strong_enemy]
     sim = BattleSimulator(player, enemies)
-    
+
     # Calculate strategic values
     weak_value = sim._calculate_strategic_value(weak_enemy)
     strong_value = sim._calculate_strategic_value(strong_enemy)
-    
+
     # Strong enemy should have higher strategic value
     assert strong_value > weak_value
     assert weak_value > 0
@@ -310,21 +310,21 @@ def test_calculate_threat_level() -> None:
     player = create_test_player()
     player.current_hp = 100
     player.position = Vector3(x=0, y=0, z=0)
-    
+
     # Create enemies at different distances
     close_enemy = create_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
     close_enemy.weapons[0].power = 20
-    
+
     far_enemy = create_test_enemy("Far Enemy", Vector3(x=500, y=0, z=0))
     far_enemy.weapons[0].power = 20
-    
+
     enemies = [close_enemy, far_enemy]
     sim = BattleSimulator(player, enemies)
-    
+
     # Calculate threat levels
     close_threat = sim._calculate_threat_level(player, close_enemy)
     far_threat = sim._calculate_threat_level(player, far_enemy)
-    
+
     # Close enemy should have higher threat level
     assert close_threat > far_threat
     assert close_threat > 0
@@ -336,29 +336,29 @@ def test_tactics_strongest_priority() -> None:
     player = create_test_player()
     player.tactics = {"priority": "STRONGEST", "range": "BALANCED"}
     player.position = Vector3(x=0, y=0, z=0)
-    
+
     # Create enemies with different strategic values
     weak_enemy = create_test_enemy("Weak Zaku", Vector3(x=200, y=0, z=0))
     weak_enemy.max_hp = 50
     weak_enemy.weapons[0].power = 10
-    
+
     strong_enemy = create_test_enemy("Strong Gundam", Vector3(x=400, y=0, z=0))
     strong_enemy.max_hp = 150
     strong_enemy.weapons[0].power = 40
-    
+
     medium_enemy = create_test_enemy("Medium GM", Vector3(x=300, y=0, z=0))
     medium_enemy.max_hp = 100
     medium_enemy.weapons[0].power = 25
-    
+
     enemies = [weak_enemy, strong_enemy, medium_enemy]
     sim = BattleSimulator(player, enemies)
-    
+
     # Run detection phase so enemies are detected
     sim._detection_phase()
-    
+
     # Get target selection
     target = sim._select_target(player)
-    
+
     # Should target the strongest enemy (highest strategic value)
     assert target is not None
     assert target.name == "Strong Gundam"
@@ -370,26 +370,26 @@ def test_tactics_threat_priority() -> None:
     player.tactics = {"priority": "THREAT", "range": "BALANCED"}
     player.position = Vector3(x=0, y=0, z=0)
     player.current_hp = 50  # Lower HP to make threat more significant
-    
+
     # Create enemies at different distances with different power
     close_weak = create_test_enemy("Close Weak", Vector3(x=100, y=0, z=0))
     close_weak.weapons[0].power = 15
-    
+
     far_strong = create_test_enemy("Far Strong", Vector3(x=500, y=0, z=0))
     far_strong.weapons[0].power = 40
-    
+
     close_strong = create_test_enemy("Close Strong", Vector3(x=150, y=0, z=0))
     close_strong.weapons[0].power = 30
-    
+
     enemies = [close_weak, far_strong, close_strong]
     sim = BattleSimulator(player, enemies)
-    
+
     # Run detection phase so enemies are detected
     sim._detection_phase()
-    
+
     # Get target selection
     target = sim._select_target(player)
-    
+
     # Should target Close Strong (highest threat: closer distance + higher power than Close Weak)
     assert target is not None
     assert target.name == "Close Strong"
@@ -397,32 +397,33 @@ def test_tactics_threat_priority() -> None:
 
 def test_target_selection_with_multiple_tactics() -> None:
     """Test that different tactics produce different target selections."""
+
     # Setup: Same scenario with three different enemies
     def create_scenario():
         player = create_test_player()
         player.position = Vector3(x=0, y=0, z=0)
         player.current_hp = 100
-        
+
         # Close weak enemy
         close_weak = create_test_enemy("Close Zaku", Vector3(x=150, y=0, z=0))
         close_weak.max_hp = 50
         close_weak.current_hp = 50
         close_weak.weapons[0].power = 10
-        
+
         # Far strong enemy
         far_strong = create_test_enemy("Far Gundam", Vector3(x=450, y=0, z=0))
         far_strong.max_hp = 150
         far_strong.current_hp = 150
         far_strong.weapons[0].power = 40
-        
+
         # Medium enemy, damaged
         medium_damaged = create_test_enemy("Damaged GM", Vector3(x=300, y=0, z=0))
         medium_damaged.max_hp = 100
         medium_damaged.current_hp = 30  # Low HP
         medium_damaged.weapons[0].power = 25
-        
+
         return player, [close_weak, far_strong, medium_damaged]
-    
+
     # Test CLOSEST
     player, enemies = create_scenario()
     player.tactics = {"priority": "CLOSEST", "range": "BALANCED"}
@@ -431,7 +432,7 @@ def test_target_selection_with_multiple_tactics() -> None:
     target = sim._select_target(player)
     assert target is not None
     assert target.name == "Close Zaku"
-    
+
     # Test WEAKEST
     player, enemies = create_scenario()
     player.tactics = {"priority": "WEAKEST", "range": "BALANCED"}
@@ -440,7 +441,7 @@ def test_target_selection_with_multiple_tactics() -> None:
     target = sim._select_target(player)
     assert target is not None
     assert target.name == "Damaged GM"
-    
+
     # Test STRONGEST
     player, enemies = create_scenario()
     player.tactics = {"priority": "STRONGEST", "range": "BALANCED"}
