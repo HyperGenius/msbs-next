@@ -42,9 +42,29 @@ class BattleSimulator:
             "ENEMY": set(),
         }
 
+        # リソース状態管理（戦闘中の一時ステータス）
+        self.unit_resources: dict = {}
+        for unit in self.units:
+            unit_id = str(unit.id)
+            self.unit_resources[unit_id] = {
+                "current_en": unit.max_en,
+                "current_propellant": unit.max_propellant,
+                "weapon_states": {},
+            }
+            # 各武器のリソース状態を初期化
+            for weapon in unit.weapons:
+                weapon_id = weapon.id
+                self.unit_resources[unit_id]["weapon_states"][weapon_id] = {
+                    "current_ammo": weapon.max_ammo if weapon.max_ammo is not None else None,
+                    "current_cool_down": 0,
+                }
+
     def process_turn(self) -> None:
         """1ターン分の処理を実行."""
         self.turn += 1
+
+        # リフレッシュフェーズ（EN回復、クールダウン減少）
+        self._refresh_phase()
 
         # 生存している全ユニットを機動性の降順でソート
         alive_units = [u for u in self.units if u.current_hp > 0]
@@ -61,6 +81,27 @@ class BattleSimulator:
             if self.is_finished:
                 break
             self._action_phase(unit)
+
+    def _refresh_phase(self) -> None:
+        """リフレッシュフェーズ: ENの回復とクールダウンの減少."""
+        for unit in self.units:
+            if unit.current_hp <= 0:
+                continue
+
+            unit_id = str(unit.id)
+            resources = self.unit_resources[unit_id]
+
+            # ENを回復（最大値を超えない）
+            current_en = resources["current_en"]
+            max_en = unit.max_en
+            en_recovery = unit.en_recovery
+            new_en = min(current_en + en_recovery, max_en)
+            resources["current_en"] = new_en
+
+            # 武器のクールダウンを減少
+            for weapon_id, weapon_state in resources["weapon_states"].items():
+                if weapon_state["current_cool_down"] > 0:
+                    weapon_state["current_cool_down"] -= 1
 
     def _action_phase(self, actor: MobileSuit) -> None:
         """片方のユニットの行動処理."""
@@ -285,6 +326,55 @@ class BattleSimulator:
 
         snapshot = Vector3.from_numpy(pos_actor)
 
+        # リソース状態を取得
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
+        weapon_state = resources["weapon_states"].get(weapon.id)
+
+        if not weapon_state:
+            # 武器状態が見つからない場合は初期化
+            weapon_state = {
+                "current_ammo": weapon.max_ammo if weapon.max_ammo is not None else None,
+                "current_cool_down": 0,
+            }
+            resources["weapon_states"][weapon.id] = weapon_state
+
+        # リソースチェック: 弾数、EN、クールダウン
+        can_attack = True
+        failure_reason = ""
+
+        # 弾数チェック（max_ammoがNoneまたは0の場合は無制限）
+        if weapon.max_ammo is not None and weapon.max_ammo > 0:
+            current_ammo = weapon_state["current_ammo"]
+            if current_ammo is None or current_ammo <= 0:
+                can_attack = False
+                failure_reason = "弾切れ"
+
+        # ENチェック
+        if can_attack and weapon.en_cost > 0:
+            current_en = resources["current_en"]
+            if current_en < weapon.en_cost:
+                can_attack = False
+                failure_reason = "EN不足"
+
+        # クールダウンチェック
+        if can_attack and weapon_state["current_cool_down"] > 0:
+            can_attack = False
+            failure_reason = f"クールダウン中 (残り{weapon_state['current_cool_down']}ターン)"
+
+        # リソース不足の場合は待機
+        if not can_attack:
+            self.logs.append(
+                BattleLog(
+                    turn=self.turn,
+                    actor_id=actor.id,
+                    action_type="WAIT",
+                    message=f"{actor.name}は{failure_reason}のため攻撃できない（待機）",
+                    position_snapshot=snapshot,
+                )
+            )
+            return
+
         # 命中率計算（最適射程を考慮）
         # 最適射程からの距離差を計算
         distance_from_optimal = abs(distance - weapon.optimal_range)
@@ -318,6 +408,20 @@ class BattleSimulator:
             distance_msg = " (距離不利)"
 
         log_base = f"{actor.name}の攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
+
+        # リソース消費（攻撃実行時）
+        # 弾数を消費
+        if weapon.max_ammo is not None and weapon.max_ammo > 0:
+            if weapon_state["current_ammo"] is not None:
+                weapon_state["current_ammo"] -= 1
+
+        # ENを消費
+        if weapon.en_cost > 0:
+            resources["current_en"] -= weapon.en_cost
+
+        # クールダウンを設定
+        if weapon.cool_down_turn > 0:
+            weapon_state["current_cool_down"] = weapon.cool_down_turn
 
         if is_hit:
             self._process_hit(actor, target, weapon, log_base, snapshot)
