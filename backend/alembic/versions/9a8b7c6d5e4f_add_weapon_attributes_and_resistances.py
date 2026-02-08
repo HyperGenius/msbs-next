@@ -1,7 +1,7 @@
 """add_weapon_attributes_and_resistances.
 
 Revision ID: 9a8b7c6d5e4f
-Revises: 2f18b99001c
+Revises: 7b8c9d0e1f2a
 Create Date: 2026-02-07 06:00:00.000000
 
 """
@@ -14,7 +14,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "9a8b7c6d5e4f"
-down_revision: str | Sequence[str] | None = "2f18b99001c"
+down_revision: str | Sequence[str] | None = "7b8c9d0e1f2a"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
