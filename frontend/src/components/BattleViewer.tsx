@@ -52,9 +52,10 @@ interface BattleViewerProps {
     player: MobileSuit;
     enemies: MobileSuit[];
     currentTurn: number;
+    environment?: string;
 }
 
-export default function BattleViewer({ logs, player, enemies, currentTurn }: BattleViewerProps) {
+export default function BattleViewer({ logs, player, enemies, currentTurn, environment = "SPACE" }: BattleViewerProps) {
 
     // 現在のターン時点での情報を計算する関数
     const getSnapshot = (targetId: string, initialMs: MobileSuit) => {
@@ -86,6 +87,21 @@ export default function BattleViewer({ logs, player, enemies, currentTurn }: Bat
         return { pos, hp: Math.max(0, hp) };
     };
 
+    // 環境に応じた背景色を決定
+    const getEnvironmentColor = () => {
+        switch (environment) {
+            case "GROUND":
+                return "#1a3a1a"; // 濃い緑
+            case "COLONY":
+                return "#2a2a3a"; // 濃い紫
+            case "UNDERWATER":
+                return "#0a2a3a"; // 濃い青
+            case "SPACE":
+            default:
+                return "#000000"; // 黒
+        }
+    };
+
     const playerState = getSnapshot(player.id, player);
     const enemyStates = enemies.map(enemy => ({
         enemy,
@@ -93,7 +109,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn }: Bat
     }));
 
     return (
-        <div className="w-full h-[400px] bg-black rounded border border-green-800 mb-4 overflow-hidden relative">
+        <div className="w-full h-[400px] rounded border border-green-800 mb-4 overflow-hidden relative" style={{ backgroundColor: getEnvironmentColor() }}>
             <Canvas
                 camera={{ position: [50, 50, 50], fov: 60 }}
                 dpr={[1, 2]}

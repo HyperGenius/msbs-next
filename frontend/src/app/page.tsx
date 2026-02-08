@@ -26,6 +26,7 @@ export default function Home() {
   const [enemiesData, setEnemiesData] = useState<MobileSuit[]>([]);
   const [entryLoading, setEntryLoading] = useState(false);
   const [rewards, setRewards] = useState<BattleRewards | null>(null);
+  const [currentEnvironment, setCurrentEnvironment] = useState<string>("SPACE");
 
 
   const startBattle = async (missionId: number) => {
@@ -44,6 +45,12 @@ export default function Home() {
       
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      // ミッション情報を取得して環境を設定
+      const selectedMission = missions?.find(m => m.id === missionId);
+      if (selectedMission?.environment) {
+        setCurrentEnvironment(selectedMission.environment);
       }
       
       // バックエンドからデータを取得
@@ -190,7 +197,9 @@ export default function Home() {
         {/* 3D Viewer Area: ログがある時だけ表示 */}
         {logs.length > 0 && playerData && enemiesData.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-xl font-bold mb-2 border-l-4 border-green-500 pl-2">Tactical Monitor</h2>
+            <h2 className="text-xl font-bold mb-2 border-l-4 border-green-500 pl-2">
+              Tactical Monitor - {currentEnvironment}
+            </h2>
 
             {/* 3D Canvas Component */}
             <BattleViewer
@@ -198,6 +207,7 @@ export default function Home() {
               player={playerData}
               enemies={enemiesData}
               currentTurn={currentTurn}
+              environment={currentEnvironment}
             />
 
             {/* Turn Controller */}
@@ -330,9 +340,16 @@ export default function Home() {
                     </span>
                   </div>
                   <p className="text-sm text-gray-400">{mission.description}</p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    敵機: {mission.enemy_config?.enemies?.length || 0} 機
-                  </p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-xs text-gray-500">
+                      敵機: {mission.enemy_config?.enemies?.length || 0} 機
+                    </p>
+                    {mission.environment && (
+                      <span className="text-xs px-2 py-1 rounded bg-blue-900 text-blue-300">
+                        環境: {mission.environment}
+                      </span>
+                    )}
+                  </div>
                 </button>
               ))}
             </div>
