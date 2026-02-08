@@ -113,14 +113,20 @@ def test_beam_weapon_vs_beam_resistance() -> None:
         sim.process_turn()
 
     # Check that damage was dealt
-    attack_logs = [log for log in sim.logs if log.action_type == "ATTACK" and log.damage]
+    attack_logs = [
+        log for log in sim.logs if log.action_type == "ATTACK" and log.damage
+    ]
     # Filter for player's attacks (which use beam weapon against enemy)
     if attack_logs:
         player_attacks = [log for log in attack_logs if log.actor_id == player.id]
         if player_attacks:
             # Verify that resistance message is in the log
-            resistance_logs = [log for log in player_attacks if "対ビーム装甲" in log.message]
-            assert len(resistance_logs) > 0, "Beam resistance message should appear in player's attack logs"
+            resistance_logs = [
+                log for log in player_attacks if "対ビーム装甲" in log.message
+            ]
+            assert len(resistance_logs) > 0, (
+                "Beam resistance message should appear in player's attack logs"
+            )
 
 
 def test_physical_weapon_vs_physical_resistance() -> None:
@@ -136,15 +142,21 @@ def test_physical_weapon_vs_physical_resistance() -> None:
         sim.process_turn()
 
     # Check for physical resistance message
-    attack_logs = [log for log in sim.logs if log.action_type == "ATTACK" and log.damage]
+    attack_logs = [
+        log for log in sim.logs if log.action_type == "ATTACK" and log.damage
+    ]
     # Note: Due to randomness, attacks might miss. Just verify the logic structure is correct
     # If there are attack logs with damage, check for resistance message
     if attack_logs:
         # Filter for player's attacks (which use physical weapon against enemy)
         player_attacks = [log for log in attack_logs if log.actor_id == player.id]
         if player_attacks:
-            resistance_logs = [log for log in player_attacks if "対実弾装甲" in log.message]
-            assert len(resistance_logs) > 0, "Physical resistance message should appear in player's attack logs"
+            resistance_logs = [
+                log for log in player_attacks if "対実弾装甲" in log.message
+            ]
+            assert len(resistance_logs) > 0, (
+                "Physical resistance message should appear in player's attack logs"
+            )
 
 
 def test_optimal_range_hit_bonus() -> None:
@@ -159,7 +171,9 @@ def test_optimal_range_hit_bonus() -> None:
 
     # Check for optimal distance message
     optimal_logs = [log for log in sim.logs if "最適距離" in log.message]
-    assert len(optimal_logs) > 0, "Optimal distance message should appear when at optimal range"
+    assert len(optimal_logs) > 0, (
+        "Optimal distance message should appear when at optimal range"
+    )
 
 
 def test_suboptimal_range_penalty() -> None:
@@ -173,7 +187,7 @@ def test_suboptimal_range_penalty() -> None:
     sim.process_turn()
 
     # Check for distance penalty message
-    penalty_logs = [log for log in sim.logs if "距離不利" in log.message]
+    # penalty_logs = [log for log in sim.logs if "距離不利" in log.message]
     # Note: Penalty message only appears if distance_from_optimal > 200
     # 600 - 400 = 200, so should be at the threshold
 

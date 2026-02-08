@@ -1,4 +1,5 @@
 """Debug script to demonstrate advanced battle logic with weapon types and resistances."""
+
 import os
 import sys
 
@@ -220,7 +221,7 @@ def run_optimal_range_test():
         physical_resistance=0.2,
     )
 
-    print(f"ケース1: 敵は最適射程（400m）に配置")
+    print("ケース1: 敵は最適射程（400m）に配置")
     sim1 = BattleSimulator(gundam, [zaku_optimal])
     sim1.process_turn()
     for log in sim1.logs:
@@ -253,7 +254,7 @@ def run_optimal_range_test():
         physical_resistance=0.2,
     )
 
-    print(f"\nケース2: 敵は遠距離（600m）に配置")
+    print("\nケース2: 敵は遠距離（600m）に配置")
     sim2 = BattleSimulator(gundam, [zaku_far])
     sim2.process_turn()
     for log in sim2.logs:
