@@ -21,6 +21,9 @@ export interface Weapon {
     type?: string;
     optimal_range?: number;
     decay_rate?: number;
+    max_ammo?: number | null;
+    en_cost?: number;
+    cool_down_turn?: number;
 }
 
 /**
@@ -50,6 +53,9 @@ export interface MobileSuit {
     beam_resistance?: number;
     physical_resistance?: number;
     terrain_adaptability?: Record<string, string>;
+    max_en?: number;
+    en_recovery?: number;
+    max_propellant?: number;
 }
 
 /**
