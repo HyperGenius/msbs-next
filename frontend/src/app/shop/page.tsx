@@ -136,7 +136,7 @@ export default function ShopPage() {
                       <h4 className="text-sm font-bold mb-2 text-green-500">
                         SPECIFICATIONS
                       </h4>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
                         <div>
                           <span className="text-gray-400">HP:</span>
                           <span className="ml-2 font-bold">{item.specs.max_hp}</span>
@@ -156,6 +156,65 @@ export default function ShopPage() {
                           </span>
                         </div>
                       </div>
+                      
+                      {/* Resistance Info */}
+                      <div className="border-t border-green-900 pt-2 mb-2">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-gray-400">対ビーム:</span>
+                            <span className="ml-2 font-bold text-blue-400">
+                              {((item.specs.beam_resistance || 0) * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">対実弾:</span>
+                            <span className="ml-2 font-bold text-yellow-400">
+                              {((item.specs.physical_resistance || 0) * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Weapon Details */}
+                      {item.specs.weapons && item.specs.weapons.length > 0 && (
+                        <div className="border-t border-green-900 pt-2">
+                          <div className="text-xs">
+                            <div className="font-bold text-green-400 mb-1">
+                              {item.specs.weapons[0].name}
+                            </div>
+                            <div className="grid grid-cols-2 gap-1">
+                              <div>
+                                <span className="text-gray-500">属性:</span>
+                                <span className={`ml-1 font-bold ${
+                                  item.specs.weapons[0].type === "BEAM" 
+                                    ? "text-blue-400" 
+                                    : "text-yellow-400"
+                                }`}>
+                                  {item.specs.weapons[0].type || "PHYSICAL"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">威力:</span>
+                                <span className="ml-1 font-bold">
+                                  {item.specs.weapons[0].power}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">最適射程:</span>
+                                <span className="ml-1 font-bold text-green-400">
+                                  {item.specs.weapons[0].optimal_range || 300}m
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">命中:</span>
+                                <span className="ml-1 font-bold">
+                                  {item.specs.weapons[0].accuracy}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Purchase Button */}

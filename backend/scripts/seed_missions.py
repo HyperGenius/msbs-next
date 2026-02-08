@@ -31,6 +31,9 @@ missions = [
                         "power": 15,
                         "range": 400,
                         "accuracy": 70,
+                        "type": "PHYSICAL",
+                        "optimal_range": 300.0,
+                        "decay_rate": 0.08,
                     },
                 },
                 {
@@ -45,6 +48,9 @@ missions = [
                         "power": 15,
                         "range": 400,
                         "accuracy": 70,
+                        "type": "PHYSICAL",
+                        "optimal_range": 300.0,
+                        "decay_rate": 0.08,
                     },
                 },
                 {
@@ -59,6 +65,9 @@ missions = [
                         "power": 15,
                         "range": 400,
                         "accuracy": 70,
+                        "type": "PHYSICAL",
+                        "optimal_range": 300.0,
+                        "decay_rate": 0.08,
                     },
                 },
             ]
@@ -83,6 +92,9 @@ missions = [
                         "power": 18,
                         "range": 400,
                         "accuracy": 75,
+                        "type": "PHYSICAL",
+                        "optimal_range": 300.0,
+                        "decay_rate": 0.08,
                     },
                 },
                 {
@@ -97,6 +109,9 @@ missions = [
                         "power": 18,
                         "range": 400,
                         "accuracy": 75,
+                        "type": "PHYSICAL",
+                        "optimal_range": 300.0,
+                        "decay_rate": 0.08,
                     },
                 },
                 {
@@ -111,6 +126,9 @@ missions = [
                         "power": 18,
                         "range": 400,
                         "accuracy": 75,
+                        "type": "PHYSICAL",
+                        "optimal_range": 300.0,
+                        "decay_rate": 0.08,
                     },
                 },
                 {
@@ -125,6 +143,9 @@ missions = [
                         "power": 18,
                         "range": 400,
                         "accuracy": 75,
+                        "type": "PHYSICAL",
+                        "optimal_range": 300.0,
+                        "decay_rate": 0.08,
                     },
                 },
             ]
@@ -149,6 +170,9 @@ missions = [
                         "power": 22,
                         "range": 450,
                         "accuracy": 80,
+                        "type": "PHYSICAL",
+                        "optimal_range": 350.0,
+                        "decay_rate": 0.07,
                     },
                 },
                 {
@@ -163,6 +187,9 @@ missions = [
                         "power": 22,
                         "range": 450,
                         "accuracy": 80,
+                        "type": "PHYSICAL",
+                        "optimal_range": 350.0,
+                        "decay_rate": 0.07,
                     },
                 },
             ]
