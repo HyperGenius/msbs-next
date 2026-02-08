@@ -199,6 +199,9 @@ def test_tactics_weakest_priority() -> None:
 
     sim = BattleSimulator(player, enemies)
 
+    # Run detection phase so enemies are detected
+    sim._detection_phase()
+
     # Get target selection
     target = sim._select_target(player)
 

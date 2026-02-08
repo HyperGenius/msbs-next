@@ -77,6 +77,8 @@ class BattleSimulator:
         # ターゲット選択
         target = self._select_target(actor)
         if not target:
+            # 発見済みの敵がいない場合、最も近い未発見の敵の方向へ移動
+            self._search_movement(actor)
             return
 
         pos_actor = actor.position.to_numpy()
@@ -436,3 +438,54 @@ class BattleSimulator:
         
         # 補正係数を返す
         return TERRAIN_ADAPTABILITY_MODIFIERS.get(adaptability_grade, 1.0)
+
+    def _search_movement(self, actor: MobileSuit) -> None:
+        """索敵移動: 未発見の敵を探すための移動."""
+        # 敵対勢力を特定
+        if actor.side == "PLAYER":
+            potential_targets = [e for e in self.enemies if e.current_hp > 0]
+        else:
+            potential_targets = [self.player] if self.player.current_hp > 0 else []
+        
+        if not potential_targets:
+            return
+        
+        # 最も近い敵の方向へ移動（まだ発見していなくても）
+        pos_actor = actor.position.to_numpy()
+        closest_enemy = min(
+            potential_targets,
+            key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor)
+        )
+        
+        pos_target = closest_enemy.position.to_numpy()
+        diff_vector = pos_target - pos_actor
+        distance = float(np.linalg.norm(diff_vector))
+        
+        if distance == 0:
+            return
+        
+        # 地形適正による補正を適用
+        terrain_modifier = self._get_terrain_modifier(actor)
+        effective_mobility = actor.mobility * terrain_modifier
+        
+        # 索敵のための移動
+        direction = diff_vector / distance
+        speed = effective_mobility * 150
+        move_vector = direction * speed
+        new_pos = pos_actor + move_vector
+        
+        # 行き過ぎ防止
+        if np.linalg.norm(new_pos - pos_actor) > distance:
+            new_pos = pos_target - (direction * 50)
+        
+        actor.position = Vector3.from_numpy(new_pos)
+        
+        self.logs.append(
+            BattleLog(
+                turn=self.turn,
+                actor_id=actor.id,
+                action_type="MOVE",
+                message=f"{actor.name}が索敵中 (残距離: {int(distance)}m)",
+                position_snapshot=actor.position,
+            )
+        )
