@@ -27,7 +27,7 @@ export interface Weapon {
  * 戦術設定
  */
 export interface Tactics {
-    priority: "CLOSEST" | "WEAKEST" | "RANDOM";
+    priority: "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT";
     range: "MELEE" | "RANGED" | "BALANCED" | "FLEE";
 }
 
