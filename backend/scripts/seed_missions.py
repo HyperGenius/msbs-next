@@ -26,7 +26,12 @@ missions = [
                     "armor": 5,
                     "mobility": 1.2,
                     "position": {"x": 500, "y": -200, "z": 0},
-                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
+                    "terrain_adaptability": {
+                        "SPACE": "A",
+                        "GROUND": "B",
+                        "COLONY": "A",
+                        "UNDERWATER": "D",
+                    },
                     "weapon": {
                         "id": "zaku_mg_1",
                         "name": "ザクマシンガン",
@@ -44,7 +49,12 @@ missions = [
                     "armor": 5,
                     "mobility": 1.2,
                     "position": {"x": 500, "y": 0, "z": 0},
-                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
+                    "terrain_adaptability": {
+                        "SPACE": "A",
+                        "GROUND": "B",
+                        "COLONY": "A",
+                        "UNDERWATER": "D",
+                    },
                     "weapon": {
                         "id": "zaku_mg_2",
                         "name": "ザクマシンガン",
@@ -62,7 +72,12 @@ missions = [
                     "armor": 5,
                     "mobility": 1.2,
                     "position": {"x": 500, "y": 200, "z": 0},
-                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
+                    "terrain_adaptability": {
+                        "SPACE": "A",
+                        "GROUND": "B",
+                        "COLONY": "A",
+                        "UNDERWATER": "D",
+                    },
                     "weapon": {
                         "id": "zaku_mg_3",
                         "name": "ザクマシンガン",
@@ -91,7 +106,12 @@ missions = [
                     "armor": 8,
                     "mobility": 1.3,
                     "position": {"x": 400, "y": -300, "z": 0},
-                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
+                    "terrain_adaptability": {
+                        "SPACE": "A",
+                        "GROUND": "B",
+                        "COLONY": "A",
+                        "UNDERWATER": "D",
+                    },
                     "weapon": {
                         "id": "zaku_mg_1",
                         "name": "ザクマシンガン",
@@ -109,7 +129,12 @@ missions = [
                     "armor": 8,
                     "mobility": 1.3,
                     "position": {"x": 400, "y": -100, "z": 0},
-                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
+                    "terrain_adaptability": {
+                        "SPACE": "A",
+                        "GROUND": "B",
+                        "COLONY": "A",
+                        "UNDERWATER": "D",
+                    },
                     "weapon": {
                         "id": "zaku_mg_2",
                         "name": "ザクマシンガン",
@@ -127,7 +152,12 @@ missions = [
                     "armor": 8,
                     "mobility": 1.3,
                     "position": {"x": 400, "y": 100, "z": 0},
-                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
+                    "terrain_adaptability": {
+                        "SPACE": "A",
+                        "GROUND": "B",
+                        "COLONY": "A",
+                        "UNDERWATER": "D",
+                    },
                     "weapon": {
                         "id": "zaku_mg_3",
                         "name": "ザクマシンガン",
@@ -145,7 +175,12 @@ missions = [
                     "armor": 8,
                     "mobility": 1.3,
                     "position": {"x": 400, "y": 300, "z": 0},
-                    "terrain_adaptability": {"SPACE": "A", "GROUND": "B", "COLONY": "A", "UNDERWATER": "D"},
+                    "terrain_adaptability": {
+                        "SPACE": "A",
+                        "GROUND": "B",
+                        "COLONY": "A",
+                        "UNDERWATER": "D",
+                    },
                     "weapon": {
                         "id": "zaku_mg_4",
                         "name": "ザクマシンガン",
@@ -174,7 +209,12 @@ missions = [
                     "armor": 12,
                     "mobility": 1.5,
                     "position": {"x": 450, "y": -150, "z": 0},
-                    "terrain_adaptability": {"SPACE": "S", "GROUND": "A", "COLONY": "S", "UNDERWATER": "C"},
+                    "terrain_adaptability": {
+                        "SPACE": "S",
+                        "GROUND": "A",
+                        "COLONY": "S",
+                        "UNDERWATER": "C",
+                    },
                     "weapon": {
                         "id": "zaku_mg_s1",
                         "name": "ザクマシンガン改",
@@ -192,7 +232,12 @@ missions = [
                     "armor": 12,
                     "mobility": 1.5,
                     "position": {"x": 450, "y": 150, "z": 0},
-                    "terrain_adaptability": {"SPACE": "S", "GROUND": "A", "COLONY": "S", "UNDERWATER": "C"},
+                    "terrain_adaptability": {
+                        "SPACE": "S",
+                        "GROUND": "A",
+                        "COLONY": "S",
+                        "UNDERWATER": "C",
+                    },
                     "weapon": {
                         "id": "zaku_mg_s2",
                         "name": "ザクマシンガン改",

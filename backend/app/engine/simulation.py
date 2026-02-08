@@ -3,11 +3,10 @@ import random
 
 import numpy as np
 
-from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 from app.engine.constants import (
     TERRAIN_ADAPTABILITY_MODIFIERS,
-    DEFAULT_TERRAIN_ADAPTABILITY,
 )
+from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 
 
 class BattleSimulator:
@@ -36,7 +35,7 @@ class BattleSimulator:
         self.is_finished = False
         self.player_skills = player_skills or {}
         self.environment = environment
-        
+
         # 索敵状態管理 (チーム単位で共有)
         self.team_detected_units: dict[str, set] = {
             "PLAYER": set(),
@@ -92,32 +91,32 @@ class BattleSimulator:
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
         alive_units = [u for u in self.units if u.current_hp > 0]
-        
+
         for unit in alive_units:
             # 敵対勢力を特定
             if unit.side == "PLAYER":
-                enemy_team = "ENEMY"
+                # enemy_team = "ENEMY"
                 potential_targets = [e for e in self.enemies if e.current_hp > 0]
             else:
-                enemy_team = "PLAYER"
+                # enemy_team = "PLAYER"
                 potential_targets = [self.player] if self.player.current_hp > 0 else []
-            
+
             pos_unit = unit.position.to_numpy()
-            
+
             # 索敵範囲内の敵をチェック
             for target in potential_targets:
                 if target.id in self.team_detected_units[unit.side]:
                     # 既に発見済み
                     continue
-                    
+
                 pos_target = target.position.to_numpy()
                 distance = float(np.linalg.norm(pos_target - pos_unit))
-                
+
                 # 索敵判定 (ミノフスキー粒子の影響は今回は簡易実装でスキップ)
                 if distance <= unit.sensor_range:
                     # 発見！
                     self.team_detected_units[unit.side].add(target.id)
-                    
+
                     # 発見ログを追加
                     self.logs.append(
                         BattleLog(
@@ -140,8 +139,7 @@ class BattleSimulator:
 
         # 索敵済みの敵のみをターゲット候補とする
         detected_targets = [
-            t for t in potential_targets
-            if t.id in self.team_detected_units[actor.side]
+            t for t in potential_targets if t.id in self.team_detected_units[actor.side]
         ]
 
         # ターゲットが存在しない場合はNoneを返す
@@ -429,7 +427,7 @@ class BattleSimulator:
         # 地形適正を取得
         terrain_adaptability = getattr(unit, "terrain_adaptability", {})
         adaptability_grade = terrain_adaptability.get(self.environment, "A")
-        
+
         # 補正係数を返す
         return TERRAIN_ADAPTABILITY_MODIFIERS.get(adaptability_grade, 1.0)
 
@@ -440,40 +438,40 @@ class BattleSimulator:
             potential_targets = [e for e in self.enemies if e.current_hp > 0]
         else:
             potential_targets = [self.player] if self.player.current_hp > 0 else []
-        
+
         if not potential_targets:
             return
-        
+
         # 最も近い敵の方向へ移動（まだ発見していなくても）
         pos_actor = actor.position.to_numpy()
         closest_enemy = min(
             potential_targets,
-            key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor)
+            key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
         )
-        
+
         pos_target = closest_enemy.position.to_numpy()
         diff_vector = pos_target - pos_actor
         distance = float(np.linalg.norm(diff_vector))
-        
+
         if distance == 0:
             return
-        
+
         # 地形適正による補正を適用
         terrain_modifier = self._get_terrain_modifier(actor)
         effective_mobility = actor.mobility * terrain_modifier
-        
+
         # 索敵のための移動
         direction = diff_vector / distance
         speed = effective_mobility * 150
         move_vector = direction * speed
         new_pos = pos_actor + move_vector
-        
+
         # 行き過ぎ防止
         if np.linalg.norm(new_pos - pos_actor) > distance:
             new_pos = pos_target - (direction * 50)
-        
+
         actor.position = Vector3.from_numpy(new_pos)
-        
+
         self.logs.append(
             BattleLog(
                 turn=self.turn,

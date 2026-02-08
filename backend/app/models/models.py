@@ -65,7 +65,12 @@ class MobileSuit(SQLModel, table=True):
         default=0.0, description="対実弾防御力 (0.0~1.0)"
     )
     terrain_adaptability: dict[str, str] = Field(
-        default_factory=lambda: {"SPACE": "A", "GROUND": "A", "COLONY": "A", "UNDERWATER": "C"},
+        default_factory=lambda: {
+            "SPACE": "A",
+            "GROUND": "A",
+            "COLONY": "A",
+            "UNDERWATER": "C",
+        },
         sa_column=Column(JSON),
         description="地形適正 (SPACE/GROUND/COLONY/UNDERWATER: S/A/B/C/D)",
     )
@@ -137,7 +142,9 @@ class Mission(SQLModel, table=True):
     name: str = Field(index=True, description="ミッション名")
     difficulty: int = Field(default=1, description="難易度 (1-5)")
     description: str = Field(default="", description="ミッション説明")
-    environment: str = Field(default="SPACE", description="戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)")
+    environment: str = Field(
+        default="SPACE", description="戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)"
+    )
     enemy_config: dict = Field(
         default_factory=dict, sa_column=Column(JSON), description="敵機の構成情報"
     )

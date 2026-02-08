@@ -14,5 +14,5 @@ DEFAULT_TERRAIN_ADAPTABILITY = {
     "SPACE": "A",
     "GROUND": "A",
     "COLONY": "A",
-    "UNDERWATER": "C"
+    "UNDERWATER": "C",
 }
