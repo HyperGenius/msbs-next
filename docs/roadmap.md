@@ -3,11 +3,12 @@
 ブラウザベースの定期更新型MSバトルシミュレーションゲームの開発ロードマップです。
 MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・進化させることを目的とします。
 
-## 📊 現在の開発状況 (2026年2月7日時点)
+## 📊 現在の開発状況 (2026年2月9日時点)
 
 **✅ Phase 0 (Simulation Engine Core)** - 完了  
 **✅ Phase 1 (MVP)** - 完了  
 **✅ Phase 2 (α版 - 定期更新型 PvPvE)** - 完了  
+**✅ Phase 2.5 (シミュレーションエンジンの高度化)** - 完了  
 **🔧 Phase 3 (β版 - Community & Content)** - 準備中  
 **⏳ Phase 4 (正式サービス)** - 未着手
 
@@ -22,9 +23,10 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 #### ゲームプレイ
 - ✅ 機体カスタマイズ (ガレージシステム)
 - ✅ 戦術設定 (Tactics System)
-- ✅ ミッション選択 (難易度別)
+- ✅ ミッション選択 (難易度別、環境タイプ)
 - ✅ バトル実行とログ閲覧
 - ✅ 3Dリプレイビューア
+- ✅ 高度な戦闘システム (武器属性、地形適正、索敵、リソース管理)
 
 #### 成長システム
 - ✅ パイロットレベル & 経験値
@@ -112,11 +114,18 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
         * `POST /api/engineering/upgrade` - 機体ステータス強化
         * `GET /api/engineering/preview` - 強化コストプレビュー
 * **Game Logic:**
-    * [x] 簡易戦闘の実装 (命中率計算、ダメージ計算、HP減少)。
-        * 距離による命中率ペナルティ
+    * [x] 高度な戦闘システムの実装。
+        * 武器属性 (BEAM/PHYSICAL) と耐性
+        * 距離適正による命中率変動 (最適射程、減衰係数)
+        * 地形適正による移動速度補正 (S/A/B/C/D)
+        * 索敵システム (Fog of War)
+        * リソース管理 (弾薬、EN、クールダウン)
         * 機動性による回避ボーナス
         * クリティカルヒット判定 (5%)
-        * 装甲によるダメージ軽減
+        * 装甲と耐性によるダメージ軽減
+    * [x] 戦略AI。
+        * 戦略価値と脅威度の計算
+        * 戦術に基づくターゲット選択
     * [x] 勝敗判定。
         * プレイヤー全滅 or 敵全滅で終了
     * [x] パイロット成長システム。
@@ -296,6 +305,31 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
     * [x] **API:** `GET /api/shop/listings` - 商品一覧
     * [x] **API:** `POST /api/shop/purchase/{item_id}` - 購入実行
 
+### Phase 2.5: シミュレーションエンジンの高度化 ✅ 完了
+**ゴール:** 戦闘の戦略性と深みを向上させる。  
+**完了日:** 2026年2月8日
+
+* **武器属性と相性システム (Attributes & Compatibility):** ✅
+    * [x] ビーム/実弾の武器タイプとそれに対応する耐性。
+    * [x] 武器ごとの最適射程と距離減衰。
+* **バトルフィールドと索敵 (Field & Detection):** ✅
+    * [x] 地形タイプ（宇宙/地上/コロニー/水中）と地形適正。
+    * [x] Fog of War（索敵範囲内の敵のみターゲット可能）。
+* **戦略AI (Rule-based AI):** ✅
+    * [x] 戦略価値と脅威度の計算。
+    * [x] 戦術設定に基づいた賢いターゲット選択。
+* **リソース管理 (Resource Management):** ✅
+    * [x] 弾薬制限、ENゲージ、武器クールダウン。
+    * [x] リフレッシュフェーズ（ターン開始時の回復処理）。
+
+詳細: [battle_simulation_roadmap.md](./battle_simulation_roadmap.md)  
+実装レポート:
+- [ADVANCED_BATTLE_LOGIC_REPORT.md](../ADVANCED_BATTLE_LOGIC_REPORT.md)
+- [TERRAIN_DETECTION_IMPLEMENTATION_REPORT.md](../TERRAIN_DETECTION_IMPLEMENTATION_REPORT.md)
+- [RESOURCE_MANAGEMENT_IMPLEMENTATION.md](../RESOURCE_MANAGEMENT_IMPLEMENTATION.md)
+
+---
+
 ### Phase 3: β版 (Community & Content) 🔧 準備中
 **ゴール:** コンテンツ拡充とコミュニティ機能の整備。
 
@@ -337,18 +371,51 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
     * [ ] **Render/AWS デプロイ:** Backend の本番環境構築
     * [ ] **CI/CD パイプライン:** 自動テスト & デプロイ
     * [ ] **監視・ログ:** Sentry, Datadog等の導入
+### 基本システム
+* **フィールド:**
+    * 境界なしの3D空間。
+    * 環境タイプ: `SPACE` (宇宙), `GROUND` (地上), `COLONY` (コロニー内), `UNDERWATER` (水中)
+    * 障害物は未実装（将来実装予定）。
+* **移動:**
+    * 慣性は考慮せず、毎ターン `mobility × 基本速度 × 地形補正` 分だけ戦術に応じた方向へベクトル移動。
+    * 地形補正: 地形適正 (S/A/B/C/D) に応じて 1.2 / 1.0 / 0.8 / 0.6 / 0.4 倍
+    * 基本移動速度: `max(5.0, mobility * 50)`
 
-* **Economy:**
-    * [ ] Stripe決済導入
-    * [ ] プレミアムパス（シーズンパス）
-    * [ ] コスメティックアイテム（スキン、エンブレム、称号）
-    * [ ] ガチャシステム（武器/パーツ）
+### 戦闘システム
+* **索敵:**
+    * `sensor_range` 内の敵のみをターゲット候補とする (Fog of War)。
+    * 索敵状態はチーム単位で共有される。
+* **ターゲット選択:**
+    * 戦術設定 (tactics) に基づいて選択:
+        * `CLOSEST` - 最も近い敵
+        * `WEAKEST` - 最もHPが低い敵
+        * `HIGHEST_THREAT` - 脅威度が最も高い敵
+        * `HIGHEST_VALUE` - 戦略価値が最も高い敵
+        * `RANDOM` - ランダム
+* **攻撃判定:**
+    * 射程内かつリソース（弾数・EN・クールダウン）が足りていれば攻撃、そうでなければ移動。
+* **命中率:**
+    * 基本式: `base_accuracy - (distance_penalty) - (target.mobility * 10) + skill_bonus`
+    * 距離ペナルティ: 武器の `optimal_range` からの偏差に応じた正規分布曲線
+    * 最適射程で命中率が最も高く、離れるほど低下する。
+* **ダメージ:**
+    * 基本式: `max(1, weapon.power - target.armor) * variance(0.9~1.1)`
+    * 武器属性と耐性による軽減:
+        * ビーム兵器: `beam_resistance` により最大100%軽減
+        * 実弾兵器: `physical_resistance` により最大100%軽減
+    * **クリティカル:** 5%確率で `power * 1.2` (装甲無視)
 
-* **Ops:**
-    * [ ] 運営管理画面（ユーザー管理、バン、イベント設定）
-    * [ ] 監視・アラート（エラー率、バトル処理時間、API レスポンスタイム）
-    * [ ] CSツール（問い合わせ対応、バグレポート管理）
-    * [ ] データ分析ダッシュボード（DAU/MAU、課金率、リテンション）
+### リソース管理
+* **弾薬 (Ammo):**
+    * 武器ごとに `max_ammo` が設定され、0になると使用不可。
+    * `max_ammo = None` の場合は無限（EN兵器）。
+* **エネルギー (EN):**
+    * 機体ごとに `max_en` と `en_recovery` が設定。
+    * ビーム兵器は `en_cost` を消費し、ENが足りないと発射不可。
+    * 毎ターン開始時に `en_recovery` 分回復。
+* **クールダウン:**
+    * 武器ごとに `cool_down_turn` が設定され、発射後は指定ターン数待機が必要。
+    * 毎ターン開始時に残りクールダウンが1減少。
 
 * **Performance:**
     * [ ] キャッシング戦略（Redis）
@@ -361,10 +428,17 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 ## 4. シミュレーション仕様 (実装済)
 
 物理エンジンは使用せず、数学的な計算のみで処理する。
+| beam_resistance | Float | 対ビーム防御力 (0.0~1.0) |
+| physical_resistance | Float | 対実弾防御力 (0.0~1.0) |
+| terrain_adaptability | JSON | 地形適正 (環境: S/A/B/C/D) |
+| max_en | Integer | 最大エネルギー容量 |
+| en_recovery | Integer | ターン毎のEN回復量 |
+| max_propellant | Integer | 最大推進剤容量 |
 
 * **フィールド:**
     * 境界なしの3D空間 (現状)。
-    * 障害物は未実装。
+  environment | String | 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER) |
+|   * 障害物は未実装。
 * **移動:**
     * 慣性は考慮せず、毎ターン `mobility × 基本速度` 分だけターゲット方向へベクトル移動。
     * 移動速度: `max(5.0, mobility * 50)`
@@ -495,6 +569,12 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
     * 攻撃命中率テスト
     * Tactics動作テスト (4件)
 
+* **Terrain & Detection Tests:** `backend/tests/unit/test_terrain_and_detection.py`
+    * 地形適正システムテスト
+    * 地形補正による移動速度変化テスト
+    * 索敵システムテスト (Fog of War)
+    * 環境効果テスト
+
 * **Tactics Integration Tests:** `backend/tests/unit/test_tactics_integration.py`
     * 戦術統合テスト
 
@@ -538,6 +618,9 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 * [戦術システム実装レポート](../IMPLEMENTATION_REPORT.md)
 * [パイロットスキル実装レポート](../SKILL_IMPLEMENTATION_REPORT.md)
 * [バッチ処理実装レポート](./IMPLEMENTATION_REPORT_BATCH.md)
+* [武器属性と距離適正実装レポート](../ADVANCED_BATTLE_LOGIC_REPORT.md)
+* [地形適正と索敵システム実装レポート](../TERRAIN_DETECTION_IMPLEMENTATION_REPORT.md)
+* [リソース管理システム実装レポート](../RESOURCE_MANAGEMENT_IMPLEMENTATION.md)
 
 ### UI/UX
 * [UI Mockups](../UI_MOCKUPS.md)
