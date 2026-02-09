@@ -14,6 +14,20 @@ function getHpColor(current: number, max: number) {
     return "red"; // 危険
 }
 
+// HPバーの色を計算
+function getHpBarColor(ratio: number): string {
+    if (ratio > 0.5) return '#3b82f6'; // 青
+    if (ratio > 0.2) return '#eab308'; // 黄
+    return '#ef4444'; // 赤
+}
+
+// 敵のHPバーの色を計算
+function getEnemyHpBarColor(ratio: number): string {
+    if (ratio > 0.5) return '#ef4444'; // 赤
+    if (ratio > 0.2) return '#eab308'; // 黄
+    return '#dc2626'; // 濃い赤
+}
+
 // デフォルト値定数
 const DEFAULT_MAX_EN = 1000;
 const EN_WARNING_THRESHOLD = 0.2; // 20%以下でEN不足警告
@@ -295,7 +309,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         // 警告状態を判定
         // EN不足: EN_WARNING_THRESHOLD以下
         const maxEn = initialMs.max_en || DEFAULT_MAX_EN;
-        if (en / maxEn < EN_WARNING_THRESHOLD) {
+        if (maxEn > 0 && en / maxEn < EN_WARNING_THRESHOLD) {
             warnings.push('energy');
         }
         
@@ -348,49 +362,45 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
     // 現在のターンのログを一度だけフィルタリング
     const currentTurnLogs = logs.filter(log => log.turn === currentTurn);
     
-    // 現在のターンのバトルイベントを取得
-    const getBattleEvent = (unitId: string): BattleEventEffect | null => {
-        for (const log of currentTurnLogs) {
-            // クリティカルヒット検出
-            if (log.action_type === "ATTACK" && log.actor_id === unitId && 
-                log.message.includes("クリティカルヒット")) {
-                return {
-                    type: 'critical',
-                    text: 'CRITICAL HIT!!',
-                    color: '#ff0000'
-                };
-            }
-            
-            // 防御/軽減検出（ダメージを受けた側）
-            if (log.action_type === "ATTACK" && log.target_id === unitId) {
-                if (log.message.includes("対ビーム装甲により") || log.message.includes("対実弾装甲により")) {
-                    const resistMatch = log.message.match(RESIST_PATTERN);
-                    const percent = resistMatch ? resistMatch[1] : '';
-                    return {
-                        type: 'resist',
-                        text: `RESIST ${percent}%`,
-                        color: '#4caf50'
-                    };
-                }
-                
-                // 通常ダメージの場合、ダメージ数値を表示
-                if (log.damage && log.damage > 0) {
-                    return {
-                        type: 'damage',
-                        text: `-${log.damage}`,
-                        color: '#ff5722'
-                    };
-                }
-            }
+    // ユニットIDごとのバトルイベントマップを作成（パフォーマンス最適化）
+    const battleEventMap = new Map<string, BattleEventEffect | null>();
+    
+    for (const log of currentTurnLogs) {
+        // クリティカルヒット検出
+        if (log.action_type === "ATTACK" && log.actor_id && 
+            log.message.includes("クリティカルヒット") && !battleEventMap.has(log.actor_id)) {
+            battleEventMap.set(log.actor_id, {
+                type: 'critical',
+                text: 'CRITICAL HIT!!',
+                color: '#ff0000'
+            });
         }
         
-        return null;
-    };
+        // 防御/軽減検出（ダメージを受けた側）
+        if (log.action_type === "ATTACK" && log.target_id && !battleEventMap.has(log.target_id)) {
+            if (log.message.includes("対ビーム装甲により") || log.message.includes("対実弾装甲により")) {
+                const resistMatch = log.message.match(RESIST_PATTERN);
+                const percent = resistMatch ? resistMatch[1] : '';
+                battleEventMap.set(log.target_id, {
+                    type: 'resist',
+                    text: `RESIST ${percent}%`,
+                    color: '#4caf50'
+                });
+            } else if (log.damage && log.damage > 0) {
+                // 通常ダメージの場合、ダメージ数値を表示
+                battleEventMap.set(log.target_id, {
+                    type: 'damage',
+                    text: `-${log.damage}`,
+                    color: '#ff5722'
+                });
+            }
+        }
+    }
     
-    const playerEvent = getBattleEvent(player.id);
+    const playerEvent = battleEventMap.get(player.id) || null;
     const enemyEvents = enemies.map(enemy => ({
         id: enemy.id,
-        event: getBattleEvent(enemy.id)
+        event: battleEventMap.get(enemy.id) || null
     }));
 
     return (
@@ -467,10 +477,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                             className="h-full transition-all duration-300" 
                             style={{ 
                                 width: `${(playerState.hp / player.max_hp) * 100}%`,
-                                backgroundColor: (() => {
-                                    const ratio = playerState.hp / player.max_hp;
-                                    return ratio > 0.5 ? '#3b82f6' : ratio > 0.2 ? '#eab308' : '#ef4444';
-                                })()
+                                backgroundColor: getHpBarColor(playerState.hp / player.max_hp)
                             }}
                         ></div>
                     </div>
@@ -503,10 +510,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                                 className="h-full transition-all duration-300" 
                                 style={{ 
                                     width: `${(state.hp / enemy.max_hp) * 100}%`,
-                                    backgroundColor: (() => {
-                                        const ratio = state.hp / enemy.max_hp;
-                                        return ratio > 0.5 ? '#ef4444' : ratio > 0.2 ? '#eab308' : '#dc2626';
-                                    })()
+                                    backgroundColor: getEnemyHpBarColor(state.hp / enemy.max_hp)
                                 }}
                             ></div>
                         </div>
