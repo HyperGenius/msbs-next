@@ -16,6 +16,8 @@ function getHpColor(current: number, max: number) {
 
 // デフォルト値定数
 const DEFAULT_MAX_EN = 1000;
+const EN_WARNING_THRESHOLD = 0.2; // 20%以下でEN不足警告
+const RESIST_PATTERN = /(\d+)%軽減/; // 軽減率パターン
 
 // 警告アイコンの種類
 type WarningType = 'ammo' | 'energy' | 'cooldown';
@@ -291,9 +293,9 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         }
         
         // 警告状態を判定
-        // EN不足: 20%以下
+        // EN不足: EN_WARNING_THRESHOLD以下
         const maxEn = initialMs.max_en || DEFAULT_MAX_EN;
-        if (en / maxEn < 0.2) {
+        if (en / maxEn < EN_WARNING_THRESHOLD) {
             warnings.push('energy');
         }
         
@@ -307,9 +309,13 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         
         // クールダウン判定（簡易版：最後の攻撃から一定ターン以内）
         // 注: より正確な実装には武器ごとのクールダウン追跡が必要
-        const lastAttackTurn = [...logs]
-            .reverse()
-            .find(log => log.action_type === "ATTACK" && log.actor_id === targetId)?.turn || 0;
+        let lastAttackTurn = 0;
+        for (let i = logs.length - 1; i >= 0; i--) {
+            if (logs[i].action_type === "ATTACK" && logs[i].actor_id === targetId) {
+                lastAttackTurn = logs[i].turn;
+                break;
+            }
+        }
         const cooldownTurns = firstWeapon?.cool_down_turn || 0;
         if (cooldownTurns > 0 && currentTurn - lastAttackTurn < cooldownTurns) {
             warnings.push('cooldown');
@@ -339,10 +345,11 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         state: getSnapshot(enemy.id, enemy)
     }));
     
+    // 現在のターンのログを一度だけフィルタリング
+    const currentTurnLogs = logs.filter(log => log.turn === currentTurn);
+    
     // 現在のターンのバトルイベントを取得
     const getBattleEvent = (unitId: string): BattleEventEffect | null => {
-        const currentTurnLogs = logs.filter(log => log.turn === currentTurn);
-        
         for (const log of currentTurnLogs) {
             // クリティカルヒット検出
             if (log.action_type === "ATTACK" && log.actor_id === unitId && 
@@ -357,7 +364,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
             // 防御/軽減検出（ダメージを受けた側）
             if (log.action_type === "ATTACK" && log.target_id === unitId) {
                 if (log.message.includes("対ビーム装甲により") || log.message.includes("対実弾装甲により")) {
-                    const resistMatch = log.message.match(/(\d+)%軽減/);
+                    const resistMatch = log.message.match(RESIST_PATTERN);
                     const percent = resistMatch ? resistMatch[1] : '';
                     return {
                         type: 'resist',
@@ -460,8 +467,10 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                             className="h-full transition-all duration-300" 
                             style={{ 
                                 width: `${(playerState.hp / player.max_hp) * 100}%`,
-                                backgroundColor: playerState.hp / player.max_hp > 0.5 ? '#3b82f6' : 
-                                                playerState.hp / player.max_hp > 0.2 ? '#eab308' : '#ef4444'
+                                backgroundColor: (() => {
+                                    const ratio = playerState.hp / player.max_hp;
+                                    return ratio > 0.5 ? '#3b82f6' : ratio > 0.2 ? '#eab308' : '#ef4444';
+                                })()
                             }}
                         ></div>
                     </div>
@@ -494,8 +503,10 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                                 className="h-full transition-all duration-300" 
                                 style={{ 
                                     width: `${(state.hp / enemy.max_hp) * 100}%`,
-                                    backgroundColor: state.hp / enemy.max_hp > 0.5 ? '#ef4444' : 
-                                                    state.hp / enemy.max_hp > 0.2 ? '#eab308' : '#dc2626'
+                                    backgroundColor: (() => {
+                                        const ratio = state.hp / enemy.max_hp;
+                                        return ratio > 0.5 ? '#ef4444' : ratio > 0.2 ? '#eab308' : '#dc2626';
+                                    })()
                                 }}
                             ></div>
                         </div>
