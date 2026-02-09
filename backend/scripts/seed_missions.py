@@ -41,6 +41,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 300.0,
                         "decay_rate": 0.08,
+                        "max_ammo": 120,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
                 {
@@ -64,6 +67,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 300.0,
                         "decay_rate": 0.08,
+                        "max_ammo": 120,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
                 {
@@ -87,6 +93,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 300.0,
                         "decay_rate": 0.08,
+                        "max_ammo": 120,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
             ]
@@ -121,6 +130,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 300.0,
                         "decay_rate": 0.08,
+                        "max_ammo": 120,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
                 {
@@ -144,6 +156,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 300.0,
                         "decay_rate": 0.08,
+                        "max_ammo": 120,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
                 {
@@ -167,6 +182,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 300.0,
                         "decay_rate": 0.08,
+                        "max_ammo": 120,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
                 {
@@ -190,6 +208,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 300.0,
                         "decay_rate": 0.08,
+                        "max_ammo": 120,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
             ]
@@ -224,6 +245,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 350.0,
                         "decay_rate": 0.07,
+                        "max_ammo": 150,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
                 {
@@ -247,6 +271,9 @@ missions = [
                         "type": "PHYSICAL",
                         "optimal_range": 350.0,
                         "decay_rate": 0.07,
+                        "max_ammo": 150,
+                        "en_cost": 0,
+                        "cool_down_turn": 0,
                     },
                 },
             ]

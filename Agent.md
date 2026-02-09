@@ -99,6 +99,55 @@
 1. **Alembic Migrations**: スキーマ変更は必ず `alembic` を使用してマイグレーションファイルを生成・適用する。
 2. **SQLModel ORM**: データアクセスには SQLModel を使用し、型安全性を確保する。
 
+#### マイグレーション作成時の注意事項
+
+複数ブランチで並行してマイグレーションを作成すると、**複数のheadリビジョン**が発生し、`alembic upgrade head` がエラーになります。
+
+**コンフリクト回避のベストプラクティス:**
+
+1. **マイグレーション作成前に履歴を確認する**
+   ```bash
+   cd backend
+   alembic heads  # 複数のheadがないか確認（1つであるべき）
+   alembic history  # マイグレーション履歴と依存関係を確認
+   ```
+
+2. **mainブランチを最新化してから作業する**
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b feature/your-feature
+   cd backend
+   alembic upgrade head  # 最新の状態に更新
+   ```
+
+3. **複数headが発生した場合の解決方法**
+   ```bash
+   # 現在のheadを確認
+   alembic heads
+   
+   # 2つのheadをマージするマイグレーションを作成
+   alembic merge -m "merge_heads" <revision1> <revision2>
+   
+   # マージマイグレーションを適用
+   alembic upgrade head
+   ```
+
+4. **Dry Run（マイグレーションの事前確認）**
+   ```bash
+   # 実行されるSQLを確認（実際には適用されない）
+   alembic upgrade head --sql
+   
+   # 特定のリビジョンまでのSQLを確認
+   alembic upgrade <revision_id> --sql
+   
+   # 現在のDBバージョンを確認
+   alembic current
+   
+   # 次に実行されるマイグレーションを確認
+   alembic show head
+   ```
+
 ---
 
 ## 5. テスト方針 (Testing Strategy)

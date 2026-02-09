@@ -26,6 +26,9 @@ rifle = Weapon(
     type="BEAM",
     optimal_range=400.0,
     decay_rate=0.05,
+    max_ammo=None,  # ビーム兵器は弾数無制限
+    en_cost=50,  # ENを50消費
+    cool_down_turn=0,  # クールタイムなし
 )
 mg = Weapon(
     id="w2",
@@ -36,6 +39,9 @@ mg = Weapon(
     type="PHYSICAL",
     optimal_range=300.0,
     decay_rate=0.08,
+    max_ammo=100,  # 実弾兵器は100発まで
+    en_cost=0,  # 実弾なのでEN消費なし
+    cool_down_turn=0,  # クールタイムなし
 )
 
 # 機体データ
@@ -47,6 +53,9 @@ gundam = MobileSuit(
     weapons=[rifle],
     beam_resistance=0.2,
     physical_resistance=0.1,
+    max_en=2000,  # ガンダムは高出力ジェネレータ
+    en_recovery=150,  # 高い回復力
+    max_propellant=1500,  # 将来の推進剤用
 )
 zaku = MobileSuit(
     name="Zaku II",
@@ -56,6 +65,9 @@ zaku = MobileSuit(
     weapons=[mg],
     beam_resistance=0.05,
     physical_resistance=0.2,
+    max_en=1000,  # 標準的なジェネレータ
+    en_recovery=80,  # 標準的な回復力
+    max_propellant=1000,  # 将来の推進剤用
 )
 
 with Session(engine) as session:

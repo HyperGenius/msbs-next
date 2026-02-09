@@ -38,6 +38,11 @@ class Weapon(SQLModel):
     type: str = Field(default="PHYSICAL", description="武器属性 (BEAM/PHYSICAL)")
     optimal_range: float = Field(default=300.0, description="最適射程距離")
     decay_rate: float = Field(default=0.05, description="距離による命中率減衰係数")
+    max_ammo: int | None = Field(
+        default=None, description="最大弾数 (Noneまたは0の場合は無限/EN兵器)"
+    )
+    en_cost: int = Field(default=0, description="射撃ごとの消費EN (実弾兵器は通常0)")
+    cool_down_turn: int = Field(default=0, description="発射後の再使用待機ターン数")
 
 
 # --- Database Models (テーブル定義) ---
@@ -73,6 +78,15 @@ class MobileSuit(SQLModel, table=True):
         },
         sa_column=Column(JSON),
         description="地形適正 (SPACE/GROUND/COLONY/UNDERWATER: S/A/B/C/D)",
+    )
+
+    # Energy & Propellant Systems
+    max_en: int = Field(
+        default=1000, description="最大エネルギー容量 (ジェネレーター出力)"
+    )
+    en_recovery: int = Field(default=100, description="ターン毎のEN回復量")
+    max_propellant: int = Field(
+        default=1000, description="最大推進剤容量 (将来的な移動コスト用)"
     )
 
     # Complex Types (Stored as JSON in Postgres)

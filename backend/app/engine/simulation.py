@@ -42,9 +42,31 @@ class BattleSimulator:
             "ENEMY": set(),
         }
 
+        # リソース状態管理（戦闘中の一時ステータス）
+        self.unit_resources: dict = {}
+        for unit in self.units:
+            unit_id = str(unit.id)
+            self.unit_resources[unit_id] = {
+                "current_en": unit.max_en,
+                "current_propellant": unit.max_propellant,
+                "weapon_states": {},
+            }
+            # 各武器のリソース状態を初期化
+            for weapon in unit.weapons:
+                weapon_id = weapon.id
+                self.unit_resources[unit_id]["weapon_states"][weapon_id] = {
+                    "current_ammo": weapon.max_ammo
+                    if weapon.max_ammo is not None
+                    else None,
+                    "current_cool_down": 0,
+                }
+
     def process_turn(self) -> None:
         """1ターン分の処理を実行."""
         self.turn += 1
+
+        # リフレッシュフェーズ（EN回復、クールダウン減少）
+        self._refresh_phase()
 
         # 生存している全ユニットを機動性の降順でソート
         alive_units = [u for u in self.units if u.current_hp > 0]
@@ -61,6 +83,27 @@ class BattleSimulator:
             if self.is_finished:
                 break
             self._action_phase(unit)
+
+    def _refresh_phase(self) -> None:
+        """リフレッシュフェーズ: ENの回復とクールダウンの減少."""
+        for unit in self.units:
+            if unit.current_hp <= 0:
+                continue
+
+            unit_id = str(unit.id)
+            resources = self.unit_resources[unit_id]
+
+            # ENを回復（最大値を超えない）
+            current_en = resources["current_en"]
+            max_en = unit.max_en
+            en_recovery = unit.en_recovery
+            new_en = min(current_en + en_recovery, max_en)
+            resources["current_en"] = new_en
+
+            # 武器のクールダウンを減少
+            for _, weapon_state in resources["weapon_states"].items():
+                if weapon_state["current_cool_down"] > 0:
+                    weapon_state["current_cool_down"] -= 1
 
     def _action_phase(self, actor: MobileSuit) -> None:
         """片方のユニットの行動処理."""
@@ -271,6 +314,91 @@ class BattleSimulator:
             )
         return target
 
+    def _get_or_init_weapon_state(self, weapon: Weapon, resources: dict) -> dict:
+        """武器状態を取得または初期化する."""
+        weapon_state = resources["weapon_states"].get(weapon.id)
+        if not weapon_state:
+            weapon_state = {
+                "current_ammo": weapon.max_ammo
+                if weapon.max_ammo is not None
+                else None,
+                "current_cool_down": 0,
+            }
+            resources["weapon_states"][weapon.id] = weapon_state
+        return weapon_state
+
+    def _check_attack_resources(
+        self, weapon: Weapon, weapon_state: dict, resources: dict
+    ) -> tuple[bool, str]:
+        """攻撃に必要なリソースをチェックする.
+
+        Returns:
+            tuple[bool, str]: (攻撃可能か, 失敗理由)
+        """
+        # 弾数チェック（max_ammoがNoneまたは0の場合は無制限）
+        if weapon.max_ammo is not None and weapon.max_ammo > 0:
+            current_ammo = weapon_state["current_ammo"]
+            if current_ammo is None or current_ammo <= 0:
+                return False, "弾切れ"
+
+        # ENチェック
+        if weapon.en_cost > 0:
+            current_en = resources["current_en"]
+            if current_en < weapon.en_cost:
+                return False, "EN不足"
+
+        # クールダウンチェック
+        if weapon_state["current_cool_down"] > 0:
+            return (
+                False,
+                f"クールダウン中 (残り{weapon_state['current_cool_down']}ターン)",
+            )
+
+        return True, ""
+
+    def _calculate_hit_chance(
+        self, actor: MobileSuit, target: MobileSuit, weapon: Weapon, distance: float
+    ) -> tuple[float, float]:
+        """命中率を計算する.
+
+        Returns:
+            tuple[float, float]: (命中率, 最適距離からの差)
+        """
+        distance_from_optimal = abs(distance - weapon.optimal_range)
+        dist_penalty = distance_from_optimal * weapon.decay_rate
+        evasion_bonus = target.mobility * 10
+        hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
+
+        # プレイヤーの攻撃時はスキル補正を適用
+        if actor.side == "PLAYER":
+            accuracy_skill_level = self.player_skills.get("accuracy_up", 0)
+            hit_chance += accuracy_skill_level * 2.0  # +2% / Lv
+
+        # 敵への攻撃時は回避スキル補正を適用
+        if target.side == "PLAYER":
+            evasion_skill_level = self.player_skills.get("evasion_up", 0)
+            hit_chance -= evasion_skill_level * 2.0  # 敵の命中率を -2% / Lv
+
+        hit_chance = max(0, min(100, hit_chance))
+        return hit_chance, distance_from_optimal
+
+    def _consume_attack_resources(
+        self, weapon: Weapon, weapon_state: dict, resources: dict
+    ) -> None:
+        """攻撃実行時のリソースを消費する."""
+        # 弾数を消費
+        if weapon.max_ammo is not None and weapon.max_ammo > 0:
+            if weapon_state["current_ammo"] is not None:
+                weapon_state["current_ammo"] -= 1
+
+        # ENを消費
+        if weapon.en_cost > 0:
+            resources["current_en"] -= weapon.en_cost
+
+        # クールダウンを設定
+        if weapon.cool_down_turn > 0:
+            weapon_state["current_cool_down"] = weapon.cool_down_turn
+
     def _process_attack(
         self,
         actor: MobileSuit,
@@ -284,31 +412,36 @@ class BattleSimulator:
             return
 
         snapshot = Vector3.from_numpy(pos_actor)
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
 
-        # 命中率計算（最適射程を考慮）
-        # 最適射程からの距離差を計算
-        distance_from_optimal = abs(distance - weapon.optimal_range)
-        dist_penalty = distance_from_optimal * weapon.decay_rate
-        evasion_bonus = target.mobility * 10
-        hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
+        # リソース状態を取得または初期化
+        weapon_state = self._get_or_init_weapon_state(weapon, resources)
 
-        # プレイヤーの攻撃時はスキル補正を適用
-        if actor.side == "PLAYER":
-            # 命中率向上スキル
-            accuracy_skill_level = self.player_skills.get("accuracy_up", 0)
-            hit_chance += accuracy_skill_level * 2.0  # +2% / Lv
+        # リソースチェック
+        can_attack, failure_reason = self._check_attack_resources(
+            weapon, weapon_state, resources
+        )
 
-        # 敵への攻撃時は回避スキル補正を適用
-        if target.side == "PLAYER":
-            # 回避率向上スキル
-            evasion_skill_level = self.player_skills.get("evasion_up", 0)
-            hit_chance -= evasion_skill_level * 2.0  # 敵の命中率を -2% / Lv
+        if not can_attack:
+            self.logs.append(
+                BattleLog(
+                    turn=self.turn,
+                    actor_id=actor.id,
+                    action_type="WAIT",
+                    message=f"{actor.name}は{failure_reason}のため攻撃できない（待機）",
+                    position_snapshot=snapshot,
+                )
+            )
+            return
 
-        hit_chance = max(0, min(100, hit_chance))
+        # 命中率計算
+        hit_chance, distance_from_optimal = self._calculate_hit_chance(
+            actor, target, weapon, distance
+        )
 
         # ダイスロール
-        dice = random.uniform(0, 100)
-        is_hit = dice <= hit_chance
+        is_hit = random.uniform(0, 100) <= hit_chance
 
         # 距離による状況メッセージ
         distance_msg = ""
@@ -318,6 +451,9 @@ class BattleSimulator:
             distance_msg = " (距離不利)"
 
         log_base = f"{actor.name}の攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
+
+        # リソース消費
+        self._consume_attack_resources(weapon, weapon_state, resources)
 
         if is_hit:
             self._process_hit(actor, target, weapon, log_base, snapshot)

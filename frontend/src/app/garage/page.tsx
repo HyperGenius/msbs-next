@@ -212,6 +212,33 @@ export default function GaragePage() {
                       機体スペック (詳細)
                     </h3>
                     
+                    {/* Energy & Propellant Display */}
+                    <div className="mb-4 p-3 bg-gray-900 rounded">
+                      <h4 className="text-sm font-bold mb-2 text-cyan-400">
+                        エネルギー・推進剤
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-400">最大EN:</span>
+                          <span className="ml-2 font-bold text-cyan-400">
+                            {selectedMs.max_en || 1000}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">EN回復:</span>
+                          <span className="ml-2 font-bold text-cyan-400">
+                            {selectedMs.en_recovery || 100}/ターン
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">最大推進剤:</span>
+                          <span className="ml-2 font-bold text-purple-400">
+                            {selectedMs.max_propellant || 1000}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Resistance Display */}
                     <div className="mb-4 p-3 bg-gray-900 rounded">
                       <div className="grid grid-cols-2 gap-3 text-sm">
@@ -237,7 +264,7 @@ export default function GaragePage() {
                           装備武器
                         </h4>
                         {selectedMs.weapons.map((weapon, idx) => (
-                          <div key={idx} className="mb-2 text-sm">
+                          <div key={idx} className="mb-3 text-sm border-b border-green-800 pb-2 last:border-b-0">
                             <div className="font-bold">{weapon.name}</div>
                             <div className="grid grid-cols-2 gap-2 text-xs mt-1">
                               <div>
@@ -270,6 +297,27 @@ export default function GaragePage() {
                                 <span className="text-gray-400">減衰率:</span>
                                 <span className="ml-2 font-bold">
                                   {((weapon.decay_rate || 0.05) * 100).toFixed(1)}%/100m
+                                </span>
+                              </div>
+                              {/* Resource Info */}
+                              <div>
+                                <span className="text-gray-400">弾数:</span>
+                                <span className="ml-2 font-bold text-orange-400">
+                                  {weapon.max_ammo !== null && weapon.max_ammo !== undefined 
+                                    ? weapon.max_ammo 
+                                    : "∞"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">EN消費:</span>
+                                <span className="ml-2 font-bold text-cyan-400">
+                                  {weapon.en_cost || 0}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">クールタイム:</span>
+                                <span className="ml-2 font-bold text-pink-400">
+                                  {weapon.cool_down_turn || 0}ターン
                                 </span>
                               </div>
                             </div>
