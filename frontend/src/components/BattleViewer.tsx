@@ -14,6 +14,9 @@ function getHpColor(current: number, max: number) {
     return "red"; // 危険
 }
 
+// デフォルト値定数
+const DEFAULT_MAX_EN = 1000;
+
 // MSを表示する球体コンポーネント
 function MobileSuitMesh({
     position,
@@ -132,7 +135,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
     const getSnapshot = (targetId: string, initialMs: MobileSuit) => {
         let pos = initialMs.position;
         let hp = initialMs.max_hp; // 戦闘開始時は満タンと仮定（あるいはinitialMs.current_hp）
-        let en = initialMs.max_en || 1000;
+        let en = initialMs.max_en || DEFAULT_MAX_EN;
         const ammo: Record<string, number> = {};
         
         // 武器の初期弾数を設定
@@ -164,6 +167,8 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
             }
             
             // リソース消費の推測（簡易版）
+            // 注意: この実装では最初の武器を常に使用すると仮定しています
+            // ログデータに武器情報が含まれていないため、実際の武器使用を追跡できません
             if (log.action_type === "ATTACK" && log.actor_id === targetId) {
                 const weapon = initialMs.weapons[0]; // 簡略化: 最初の武器を使用と仮定
                 if (weapon) {
@@ -260,9 +265,9 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                     
                     {/* EN Display */}
                     <div className="mt-1">
-                        <span className="text-cyan-400">EN:</span> {playerState.en} / {player.max_en || 1000}
+                        <span className="text-cyan-400">EN:</span> {playerState.en} / {player.max_en || DEFAULT_MAX_EN}
                         <div className="w-24 h-1 bg-gray-700 mt-1">
-                            <div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${(playerState.en / (player.max_en || 1000)) * 100}%` }}></div>
+                            <div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${(playerState.en / (player.max_en || DEFAULT_MAX_EN)) * 100}%` }}></div>
                         </div>
                     </div>
                     
