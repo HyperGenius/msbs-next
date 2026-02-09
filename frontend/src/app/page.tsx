@@ -396,19 +396,52 @@ export default function Home() {
                     || log.actor_id;
                 const isPlayer = log.actor_id === playerData?.id;
 
+                // リソース関連メッセージかどうかを判定
+                const isResourceMessage = log.message.includes("弾切れ") || 
+                                        log.message.includes("EN不足") || 
+                                        log.message.includes("クールダウン") ||
+                                        log.message.includes("待機");
+                
+                // 地形・索敵関連メッセージかどうかを判定
+                const isTerrainMessage = log.action_type === "DETECTION" ||
+                                       log.message.includes("地形") ||
+                                       log.message.includes("索敵");
+                
+                // 属性関連メッセージかどうかを判定
+                const isAttributeMessage = log.message.includes("BEAM") ||
+                                         log.message.includes("PHYSICAL") ||
+                                         log.message.includes("ビーム") ||
+                                         log.message.includes("実弾");
+
+                // メッセージタイプに応じたスタイルを決定
+                let messageStyle = "";
+                let borderStyle = "border-green-900";
+                let bgStyle = "";
+                
+                if (isCurrentTurn) {
+                  borderStyle = "border-green-400";
+                  bgStyle = "bg-green-900/30";
+                } else if (isResourceMessage) {
+                  borderStyle = "border-orange-500";
+                  messageStyle = "text-orange-400 font-semibold";
+                } else if (isTerrainMessage) {
+                  borderStyle = "border-cyan-500";
+                  messageStyle = "text-cyan-400";
+                } else if (isAttributeMessage) {
+                  borderStyle = "border-purple-500";
+                  messageStyle = "text-purple-400";
+                }
+
                 return (
                   <li
                     key={index}
-                    className={`border-l-2 pl-2 py-1 transition-colors ${isCurrentTurn
-                      ? "border-green-400 bg-green-900/30 text-white"
-                      : "border-green-900 text-green-600"
-                      }`}
+                    className={`border-l-2 pl-2 py-1 transition-colors ${borderStyle} ${bgStyle || (isCurrentTurn ? "text-white" : "text-green-600")}`}
                   >
                     <span className="opacity-50 mr-4 w-16 inline-block">[Turn {log.turn}]</span>
                     <span className={`font-bold mr-2 ${isPlayer ? 'text-blue-400' : 'text-red-400'}`}>
                       {actorName}:
                     </span>
-                    <span>{log.message}</span>
+                    <span className={messageStyle || ""}>{log.message}</span>
                   </li>
                 );
               })}
