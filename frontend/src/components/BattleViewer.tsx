@@ -2,7 +2,7 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Stars, Grid } from "@react-three/drei";
+import { OrbitControls, Stars, Grid, Html } from "@react-three/drei";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import * as THREE from "three";
 
@@ -17,6 +17,9 @@ function getHpColor(current: number, max: number) {
 // デフォルト値定数
 const DEFAULT_MAX_EN = 1000;
 
+// 警告アイコンの種類
+type WarningType = 'ammo' | 'energy' | 'cooldown';
+
 // MSを表示する球体コンポーネント
 function MobileSuitMesh({
     position,
@@ -24,6 +27,8 @@ function MobileSuitMesh({
     currentHp,
     sensorRange,
     showSensorRange,
+    name,
+    warnings,
 }: {
     position: { x: number; y: number; z: number };
     maxHp: number;
@@ -31,10 +36,18 @@ function MobileSuitMesh({
     name: string;
     sensorRange?: number;
     showSensorRange?: boolean;
+    warnings?: WarningType[];
 }) {
     const scale = 0.05;
     const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
     const color = getHpColor(currentHp, maxHp);
+
+    // 警告アイコンのマッピング
+    const warningIcons: Record<WarningType, { icon: string; color: string; label: string }> = {
+        ammo: { icon: '⚠️', color: '#ff9800', label: '弾切れ' },
+        energy: { icon: '⚡', color: '#ffeb3b', label: 'EN不足' },
+        cooldown: { icon: '⏳', color: '#2196f3', label: 'クールダウン' }
+    };
 
     return (
         <group position={vec}>
@@ -51,12 +64,45 @@ function MobileSuitMesh({
                 />
             </mesh>
             
-            {/* Sensor Range Visualization */}
+            {/* Sensor Range Visualization - Enhanced with grid pattern */}
             {showSensorRange && sensorRange && (
-                <mesh position={[0, -1.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                    <ringGeometry args={[sensorRange * scale * 0.95, sensorRange * scale, 32]} />
-                    <meshBasicMaterial color="#00ff00" transparent opacity={0.2} side={THREE.DoubleSide} />
-                </mesh>
+                <>
+                    {/* Main sensor ring with grid effect */}
+                    <mesh position={[0, -1.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <ringGeometry args={[sensorRange * scale * 0.95, sensorRange * scale, 64]} />
+                        <meshBasicMaterial color="#00ff00" transparent opacity={0.3} side={THREE.DoubleSide} />
+                    </mesh>
+                    {/* Inner pulsing circle for better visibility */}
+                    <mesh position={[0, -1.75, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <circleGeometry args={[sensorRange * scale, 32]} />
+                        <meshBasicMaterial color="#00ff00" transparent opacity={0.05} side={THREE.DoubleSide} />
+                    </mesh>
+                </>
+            )}
+            
+            {/* Status Warning Indicators above the unit */}
+            {warnings && warnings.length > 0 && (
+                <Html position={[0, 3, 0]} center>
+                    <div className="flex gap-1 items-center pointer-events-none">
+                        {warnings.map((warning, idx) => {
+                            const info = warningIcons[warning];
+                            return (
+                                <div 
+                                    key={idx}
+                                    className="flex flex-col items-center text-xs font-bold px-2 py-1 rounded"
+                                    style={{ 
+                                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                        border: `2px solid ${info.color}`,
+                                        color: info.color
+                                    }}
+                                >
+                                    <span className="text-lg">{info.icon}</span>
+                                    <span className="text-[10px] whitespace-nowrap">{info.label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </Html>
             )}
         </group>
     );
@@ -92,31 +138,50 @@ function EnvironmentEffects({ environment }: { environment: string }) {
         case "GROUND":
             return (
                 <>
-                    <fog attach="fog" args={[fogColor, 20, 100]} />
+                    {/* 明るい照明 */}
+                    <directionalLight position={[10, 20, 10]} intensity={1.2} />
+                    <hemisphereLight args={['#87CEEB', '#2a3a2a', 0.6]} />
+                    <fog attach="fog" args={[fogColor, 30, 120]} />
                     {/* 地面の表現 */}
                     <mesh position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
                         <planeGeometry args={[200, 200]} />
-                        <meshStandardMaterial color="#2a3a2a" roughness={0.9} />
+                        <meshStandardMaterial color="#3a5a3a" roughness={0.9} />
+                    </mesh>
+                    {/* 空の表現 (簡易版) */}
+                    <mesh position={[0, 50, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <planeGeometry args={[200, 200]} />
+                        <meshBasicMaterial color="#87CEEB" side={THREE.BackSide} />
                     </mesh>
                 </>
             );
         case "COLONY":
             return (
                 <>
+                    {/* 人工的な照明 */}
+                    <ambientLight intensity={0.4} />
+                    <pointLight position={[0, 20, 0]} intensity={1.0} color="#ffffff" />
                     <fog attach="fog" args={[fogColor, 30, 120]} />
+                    {/* 人工的な天井/空 */}
+                    <mesh position={[0, 40, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <planeGeometry args={[200, 200]} />
+                        <meshBasicMaterial color="#5a5a7a" side={THREE.BackSide} />
+                    </mesh>
                 </>
             );
         case "UNDERWATER":
             return (
                 <>
+                    {/* 暗めで青い照明 */}
+                    <ambientLight intensity={0.3} color="#1a4a6a" />
+                    <directionalLight position={[0, 10, 0]} intensity={0.5} color="#3a8aba" />
                     <fog attach="fog" args={[fogColor, 15, 80]} />
                     {/* 水面エフェクト（簡易版） */}
-                    <mesh position={[0, 10, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                    <mesh position={[0, 15, 0]} rotation={[-Math.PI / 2, 0, 0]}>
                         <planeGeometry args={[200, 200]} />
                         <meshStandardMaterial 
                             color="#1a4a6a" 
                             transparent 
-                            opacity={0.3} 
+                            opacity={0.4} 
                             roughness={0.1}
                             metalness={0.8}
                         />
@@ -125,7 +190,12 @@ function EnvironmentEffects({ environment }: { environment: string }) {
             );
         case "SPACE":
         default:
-            return null;
+            return (
+                <>
+                    {/* 暗い照明 */}
+                    <ambientLight intensity={0.3} />
+                </>
+            );
     }
 }
 
@@ -137,6 +207,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         let hp = initialMs.max_hp; // 戦闘開始時は満タンと仮定（あるいはinitialMs.current_hp）
         let en = initialMs.max_en || DEFAULT_MAX_EN;
         const ammo: Record<string, number> = {};
+        const warnings: WarningType[] = [];
         
         // 武器の初期弾数を設定
         initialMs.weapons.forEach(weapon => {
@@ -181,8 +252,33 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                 }
             }
         }
+        
+        // 警告状態を判定
+        // EN不足: 20%以下
+        const maxEn = initialMs.max_en || DEFAULT_MAX_EN;
+        if (en / maxEn < 0.2) {
+            warnings.push('energy');
+        }
+        
+        // 弾切れ: 第1武器の弾薬が0
+        const firstWeapon = initialMs.weapons[0];
+        if (firstWeapon && firstWeapon.max_ammo !== null && firstWeapon.max_ammo !== undefined) {
+            if (ammo[firstWeapon.id] === 0) {
+                warnings.push('ammo');
+            }
+        }
+        
+        // クールダウン判定（簡易版：最後の攻撃から一定ターン以内）
+        // 注: より正確な実装には武器ごとのクールダウン追跡が必要
+        const lastAttackTurn = [...logs]
+            .reverse()
+            .find(log => log.action_type === "ATTACK" && log.actor_id === targetId)?.turn || 0;
+        const cooldownTurns = firstWeapon?.cool_down_turn || 0;
+        if (cooldownTurns > 0 && currentTurn - lastAttackTurn < cooldownTurns) {
+            warnings.push('cooldown');
+        }
 
-        return { pos, hp: Math.max(0, hp), en, ammo };
+        return { pos, hp: Math.max(0, hp), en, ammo, warnings };
     };
 
     // 環境に応じた背景色を決定
@@ -215,14 +311,17 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                 <ambientLight intensity={0.5} />
                 <pointLight position={[10, 10, 10]} intensity={1.5} />
 
-                <Stars radius={100} depth={50} count={2000} factor={4} fade speed={1} />
+                {/* Only show stars in SPACE environment */}
+                {environment === "SPACE" && (
+                    <Stars radius={100} depth={50} count={2000} factor={4} fade speed={1} />
+                )}
                 <Grid 
                     infiniteGrid 
                     sectionSize={10} 
                     cellSize={1} 
                     fadeDistance={100} 
-                    sectionColor={environment === "COLONY" ? "#6a6a9a" : "#00ff00"} 
-                    cellColor={environment === "COLONY" ? "#3a3a5a" : "#003300"} 
+                    sectionColor={environment === "COLONY" ? "#8a8aaa" : "#00ff00"} 
+                    cellColor={environment === "COLONY" ? "#4a4a6a" : "#003300"} 
                 />
                 <OrbitControls />
 
@@ -237,6 +336,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                     name={player.name}
                     sensorRange={player.sensor_range}
                     showSensorRange={true}
+                    warnings={playerState.warnings}
                 />
 
                 {/* Enemies */}
@@ -249,6 +349,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                         name={enemy.name}
                         sensorRange={enemy.sensor_range}
                         showSensorRange={false}
+                        warnings={state.warnings}
                     />
                 ))}
             </Canvas>
@@ -259,15 +360,25 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                     <span className="font-bold text-blue-400">{player.name}</span>
                     <br />
                     HP: {playerState.hp} / {player.max_hp}
-                    <div className="w-24 h-1 bg-gray-700 mt-1">
-                        <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${(playerState.hp / player.max_hp) * 100}%` }}></div>
+                    <div className="w-24 h-2 bg-gray-700 mt-1 rounded overflow-hidden border border-gray-600">
+                        <div 
+                            className="h-full transition-all duration-300" 
+                            style={{ 
+                                width: `${(playerState.hp / player.max_hp) * 100}%`,
+                                backgroundColor: playerState.hp / player.max_hp > 0.5 ? '#3b82f6' : 
+                                                playerState.hp / player.max_hp > 0.2 ? '#eab308' : '#ef4444'
+                            }}
+                        ></div>
                     </div>
                     
                     {/* EN Display */}
                     <div className="mt-1">
                         <span className="text-cyan-400">EN:</span> {playerState.en} / {player.max_en || DEFAULT_MAX_EN}
-                        <div className="w-24 h-1 bg-gray-700 mt-1">
-                            <div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${(playerState.en / (player.max_en || DEFAULT_MAX_EN)) * 100}%` }}></div>
+                        <div className="w-24 h-2 bg-gray-700 mt-1 rounded overflow-hidden border border-gray-600">
+                            <div 
+                                className="h-full bg-cyan-500 transition-all duration-300" 
+                                style={{ width: `${(playerState.en / (player.max_en || DEFAULT_MAX_EN)) * 100}%` }}
+                            ></div>
                         </div>
                     </div>
                     
@@ -283,8 +394,15 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                         <span className="font-bold text-red-400">{enemy.name}</span>
                         <br />
                         HP: {state.hp} / {enemy.max_hp}
-                        <div className="w-24 h-1 bg-gray-700 mt-1">
-                            <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(state.hp / enemy.max_hp) * 100}%` }}></div>
+                        <div className="w-24 h-2 bg-gray-700 mt-1 rounded overflow-hidden border border-gray-600">
+                            <div 
+                                className="h-full transition-all duration-300" 
+                                style={{ 
+                                    width: `${(state.hp / enemy.max_hp) * 100}%`,
+                                    backgroundColor: state.hp / enemy.max_hp > 0.5 ? '#ef4444' : 
+                                                    state.hp / enemy.max_hp > 0.2 ? '#eab308' : '#dc2626'
+                                }}
+                            ></div>
                         </div>
                     </div>
                 ))}
