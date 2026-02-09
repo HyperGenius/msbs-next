@@ -67,6 +67,65 @@ interface BattleViewerProps {
     environment?: string;
 }
 
+// 環境エフェクトコンポーネント（外部で定義）
+function EnvironmentEffects({ environment }: { environment: string }) {
+    const getFogColor = () => {
+        switch (environment) {
+            case "GROUND":
+                return "#2a5a2a"; // 緑系の霧
+            case "COLONY":
+                return "#4a4a6a"; // 紫系の霧
+            case "UNDERWATER":
+                return "#1a4a6a"; // 青系の霧
+            case "SPACE":
+            default:
+                return "#000000"; // 霧なし
+        }
+    };
+    
+    const fogColor = getFogColor();
+    
+    switch (environment) {
+        case "GROUND":
+            return (
+                <>
+                    <fog attach="fog" args={[fogColor, 20, 100]} />
+                    {/* 地面の表現 */}
+                    <mesh position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <planeGeometry args={[200, 200]} />
+                        <meshStandardMaterial color="#2a3a2a" roughness={0.9} />
+                    </mesh>
+                </>
+            );
+        case "COLONY":
+            return (
+                <>
+                    <fog attach="fog" args={[fogColor, 30, 120]} />
+                </>
+            );
+        case "UNDERWATER":
+            return (
+                <>
+                    <fog attach="fog" args={[fogColor, 15, 80]} />
+                    {/* 水面エフェクト（簡易版） */}
+                    <mesh position={[0, 10, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <planeGeometry args={[200, 200]} />
+                        <meshStandardMaterial 
+                            color="#1a4a6a" 
+                            transparent 
+                            opacity={0.3} 
+                            roughness={0.1}
+                            metalness={0.8}
+                        />
+                    </mesh>
+                </>
+            );
+        case "SPACE":
+        default:
+            return null;
+    }
+}
+
 export default function BattleViewer({ logs, player, enemies, currentTurn, environment = "SPACE" }: BattleViewerProps) {
 
     // 現在のターン時点での情報を計算する関数
@@ -74,7 +133,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         let pos = initialMs.position;
         let hp = initialMs.max_hp; // 戦闘開始時は満タンと仮定（あるいはinitialMs.current_hp）
         let en = initialMs.max_en || 1000;
-        let ammo: Record<string, number> = {};
+        const ammo: Record<string, number> = {};
         
         // 武器の初期弾数を設定
         initialMs.weapons.forEach(weapon => {
@@ -136,66 +195,6 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         }
     };
 
-    // 環境に応じた霧の色を決定
-    const getFogColor = () => {
-        switch (environment) {
-            case "GROUND":
-                return "#2a5a2a"; // 緑系の霧
-            case "COLONY":
-                return "#4a4a6a"; // 紫系の霧
-            case "UNDERWATER":
-                return "#1a4a6a"; // 青系の霧
-            case "SPACE":
-            default:
-                return "#000000"; // 霧なし
-        }
-    };
-
-    // 環境エフェクトコンポーネント
-    const EnvironmentEffects = () => {
-        const fogColor = getFogColor();
-        
-        switch (environment) {
-            case "GROUND":
-                return (
-                    <>
-                        <fog attach="fog" args={[fogColor, 20, 100]} />
-                        {/* 地面の表現 */}
-                        <mesh position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                            <planeGeometry args={[200, 200]} />
-                            <meshStandardMaterial color="#2a3a2a" roughness={0.9} />
-                        </mesh>
-                    </>
-                );
-            case "COLONY":
-                return (
-                    <>
-                        <fog attach="fog" args={[fogColor, 30, 120]} />
-                    </>
-                );
-            case "UNDERWATER":
-                return (
-                    <>
-                        <fog attach="fog" args={[fogColor, 15, 80]} />
-                        {/* 水面エフェクト（簡易版） */}
-                        <mesh position={[0, 10, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                            <planeGeometry args={[200, 200]} />
-                            <meshStandardMaterial 
-                                color="#1a4a6a" 
-                                transparent 
-                                opacity={0.3} 
-                                roughness={0.1}
-                                metalness={0.8}
-                            />
-                        </mesh>
-                    </>
-                );
-            case "SPACE":
-            default:
-                return null;
-        }
-    };
-
     const playerState = getSnapshot(player.id, player);
     const enemyStates = enemies.map(enemy => ({
         enemy,
@@ -223,7 +222,7 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                 <OrbitControls />
 
                 {/* Environment Effects */}
-                <EnvironmentEffects />
+                <EnvironmentEffects environment={environment} />
 
                 {/* Player */}
                 <MobileSuitMesh
