@@ -20,6 +20,43 @@ const DEFAULT_MAX_EN = 1000;
 // 警告アイコンの種類
 type WarningType = 'ammo' | 'energy' | 'cooldown';
 
+// バトルイベント効果の種類
+interface BattleEventEffect {
+    type: 'critical' | 'resist' | 'guard' | 'damage';
+    text: string;
+    color: string;
+}
+
+// バトルイベントを表示するコンポーネント
+function BattleEventDisplay({ 
+    position, 
+    event 
+}: { 
+    position: { x: number; y: number; z: number }; 
+    event: BattleEventEffect | null;
+}) {
+    const scale = 0.05;
+    const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
+    
+    if (!event) return null;
+    
+    return (
+        <Html position={[vec.x, vec.y + 5, vec.z]} center>
+            <div 
+                className="animate-bounce pointer-events-none font-bold text-center"
+                style={{
+                    color: event.color,
+                    textShadow: `0 0 10px ${event.color}, 0 0 20px ${event.color}`,
+                    fontSize: event.type === 'critical' ? '20px' : '16px',
+                    fontWeight: 'bold',
+                }}
+            >
+                {event.text}
+            </div>
+        </Html>
+    );
+}
+
 // MSを表示する球体コンポーネント
 function MobileSuitMesh({
     position,
@@ -301,6 +338,53 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         enemy,
         state: getSnapshot(enemy.id, enemy)
     }));
+    
+    // 現在のターンのバトルイベントを取得
+    const getBattleEvent = (unitId: string): BattleEventEffect | null => {
+        const currentTurnLogs = logs.filter(log => log.turn === currentTurn);
+        
+        for (const log of currentTurnLogs) {
+            // クリティカルヒット検出
+            if (log.action_type === "ATTACK" && log.actor_id === unitId && 
+                log.message.includes("クリティカルヒット")) {
+                return {
+                    type: 'critical',
+                    text: 'CRITICAL HIT!!',
+                    color: '#ff0000'
+                };
+            }
+            
+            // 防御/軽減検出（ダメージを受けた側）
+            if (log.action_type === "ATTACK" && log.target_id === unitId) {
+                if (log.message.includes("対ビーム装甲により") || log.message.includes("対実弾装甲により")) {
+                    const resistMatch = log.message.match(/(\d+)%軽減/);
+                    const percent = resistMatch ? resistMatch[1] : '';
+                    return {
+                        type: 'resist',
+                        text: `RESIST ${percent}%`,
+                        color: '#4caf50'
+                    };
+                }
+                
+                // 通常ダメージの場合、ダメージ数値を表示
+                if (log.damage && log.damage > 0) {
+                    return {
+                        type: 'damage',
+                        text: `-${log.damage}`,
+                        color: '#ff5722'
+                    };
+                }
+            }
+        }
+        
+        return null;
+    };
+    
+    const playerEvent = getBattleEvent(player.id);
+    const enemyEvents = enemies.map(enemy => ({
+        id: enemy.id,
+        event: getBattleEvent(enemy.id)
+    }));
 
     return (
         <div className="w-full h-[400px] rounded border border-green-800 mb-4 overflow-hidden relative" style={{ backgroundColor: getEnvironmentColor() }}>
@@ -352,6 +436,17 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                         warnings={state.warnings}
                     />
                 ))}
+                
+                {/* Battle Event Effects */}
+                {playerEvent && (
+                    <BattleEventDisplay position={playerState.pos} event={playerEvent} />
+                )}
+                {enemyEvents.map(({ id, event }) => {
+                    const enemyData = enemyStates.find(e => e.enemy.id === id);
+                    return event && enemyData ? (
+                        <BattleEventDisplay key={id} position={enemyData.state.pos} event={event} />
+                    ) : null;
+                })}
             </Canvas>
 
             {/* UIオーバーレイ */}
