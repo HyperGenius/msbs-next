@@ -5,7 +5,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Stars, Grid, Html } from "@react-three/drei";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import * as THREE from "three";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 
 // 色計算用のヘルパー
 function getHpColor(current: number, max: number) {
@@ -193,6 +193,20 @@ interface BattleViewerProps {
 function UnderwaterParticles() {
     const particlesRef = useRef<THREE.Points>(null);
     
+    // パーティクルの位置を生成（メモ化して一度だけ計算）
+    const positions = useMemo(() => {
+        const particleCount = 200;
+        const pos = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            pos[i * 3] = (Math.random() - 0.5) * 100;
+            pos[i * 3 + 1] = (Math.random() - 0.5) * 40;
+            pos[i * 3 + 2] = (Math.random() - 0.5) * 100;
+        }
+        return pos;
+    }, []); // 空の依存配列で初回のみ計算
+    
+    const particleCount = positions.length / 3;
+    
     useFrame((state) => {
         if (particlesRef.current) {
             // ゆっくりと上昇する動き
@@ -200,15 +214,6 @@ function UnderwaterParticles() {
             particlesRef.current.rotation.y = state.clock.elapsedTime * 0.1;
         }
     });
-    
-    // パーティクルの位置を生成
-    const particleCount = 200;
-    const positions = new Float32Array(particleCount * 3);
-    for (let i = 0; i < particleCount; i++) {
-        positions[i * 3] = (Math.random() - 0.5) * 100;
-        positions[i * 3 + 1] = (Math.random() - 0.5) * 40;
-        positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
-    }
     
     return (
         <points ref={particlesRef}>
@@ -486,8 +491,10 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
         state: getSnapshot(enemy.id, enemy)
     }));
     
-    // 現在のターンのログを一度だけフィルタリング
-    const currentTurnLogs = logs.filter(log => log.turn === currentTurn);
+    // 現在のターンのログを一度だけフィルタリング（メモ化）
+    const currentTurnLogs = useMemo(() => {
+        return logs.filter(log => log.turn === currentTurn);
+    }, [logs, currentTurn]);
     
     // ユニットIDごとのバトルイベントマップを作成（パフォーマンス最適化）
     const battleEventMap = new Map<string, BattleEventEffect | null>();
