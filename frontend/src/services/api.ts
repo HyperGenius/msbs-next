@@ -157,6 +157,24 @@ export function useEntryStatus() {
 }
 
 /**
+ * エントリー数を取得するSWRフック
+ */
+export function useEntryCount() {
+  const { data, error, isLoading, mutate } = useSWR<{ count: number }>(
+    `${API_BASE_URL}/api/entries/count`,
+    fetcher,
+    { refreshInterval: 10000 } // 10秒ごとに自動更新
+  );
+
+  return {
+    entryCount: data?.count ?? 0,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
  * エントリーを作成する関数
  */
 export async function entryBattle(mobileSuitId: string): Promise<BattleEntry> {

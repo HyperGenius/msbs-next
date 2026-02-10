@@ -200,6 +200,25 @@ async def get_entry_status(
     )
 
 
+@router.get("/count")
+async def get_entry_count(
+    session: Session = Depends(get_session),
+) -> dict[str, int]:
+    """現在募集中のルームへのエントリー数を取得する."""
+    # 現在募集中のルームを取得
+    room_statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
+    room = session.exec(room_statement).first()
+
+    if not room:
+        return {"count": 0}
+
+    # このルームへのエントリー数をカウント
+    entry_statement = select(BattleEntry).where(BattleEntry.room_id == room.id)
+    entries = session.exec(entry_statement).all()
+
+    return {"count": len(entries)}
+
+
 @router.delete("/")
 async def cancel_entry(
     session: Session = Depends(get_session),
