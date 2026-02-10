@@ -17,7 +17,6 @@ interface UnitState {
 interface BattleOverlayProps {
     player: MobileSuit;
     playerState: UnitState;
-    enemies: MobileSuit[];
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     environment: string;
     currentTurn: number;
@@ -27,7 +26,6 @@ interface BattleOverlayProps {
 export function BattleOverlay({
     player,
     playerState,
-    enemies,
     enemyStates,
     environment,
     currentTurn,

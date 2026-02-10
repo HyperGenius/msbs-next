@@ -7,8 +7,7 @@ import { RESIST_PATTERN } from "../utils";
 
 export function useBattleEvents(
     logs: BattleLog[],
-    currentTurn: number,
-    unitIds: string[]
+    currentTurn: number
 ): Map<string, BattleEventEffect | null> {
     return useMemo(() => {
         const currentTurnLogs = logs.filter(log => log.turn === currentTurn);

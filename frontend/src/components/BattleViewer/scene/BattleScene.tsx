@@ -23,7 +23,6 @@ interface BattleSceneProps {
     player: MobileSuit;
     playerState: UnitState;
     playerEvent: BattleEventEffect | null;
-    enemies: MobileSuit[];
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     enemyEvents: Array<{ id: string; event: BattleEventEffect | null }>;
 }
@@ -33,7 +32,6 @@ export function BattleScene({
     player,
     playerState,
     playerEvent,
-    enemies,
     enemyStates,
     enemyEvents,
 }: BattleSceneProps) {

@@ -15,7 +15,6 @@ export function MobileSuitMesh({
     currentHp,
     sensorRange,
     showSensorRange,
-    name,
     warnings,
 }: {
     position: { x: number; y: number; z: number };

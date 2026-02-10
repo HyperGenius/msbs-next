@@ -34,6 +34,7 @@ export function HpBar({
             );
             
             if (tookDamage) {
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setFlash(true);
                 setTimeout(() => setFlash(false), 300);
             }

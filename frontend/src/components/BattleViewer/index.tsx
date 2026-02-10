@@ -3,7 +3,7 @@
 "use client";
 
 import { BattleLog, MobileSuit } from "@/types/battle";
-import { useBattleSnapshot } from "./hooks/useBattleSnapshot";
+import { getBattleSnapshot } from "./hooks/useBattleSnapshot";
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
@@ -24,16 +24,15 @@ export default function BattleViewer({
     currentTurn, 
     environment = "SPACE" 
 }: BattleViewerProps) {
-    // カスタムフックでロジックを抽出
-    const playerState = useBattleSnapshot(player.id, player, logs, currentTurn);
+    // 状態計算（純粋関数として抽出）
+    const playerState = getBattleSnapshot(player.id, player, logs, currentTurn);
     const enemyStates = enemies.map(enemy => ({
         enemy,
-        state: useBattleSnapshot(enemy.id, enemy, logs, currentTurn)
+        state: getBattleSnapshot(enemy.id, enemy, logs, currentTurn)
     }));
     
     // バトルイベントの取得
-    const unitIds = [player.id, ...enemies.map(e => e.id)];
-    const battleEventMap = useBattleEvents(logs, currentTurn, unitIds);
+    const battleEventMap = useBattleEvents(logs, currentTurn);
     
     const playerEvent = battleEventMap.get(player.id) || null;
     const enemyEvents = enemies.map(enemy => ({
@@ -51,7 +50,6 @@ export default function BattleViewer({
                 player={player}
                 playerState={playerState}
                 playerEvent={playerEvent}
-                enemies={enemies}
                 enemyStates={enemyStates}
                 enemyEvents={enemyEvents}
             />
@@ -59,7 +57,6 @@ export default function BattleViewer({
             <BattleOverlay
                 player={player}
                 playerState={playerState}
-                enemies={enemies}
                 enemyStates={enemyStates}
                 environment={environment}
                 currentTurn={currentTurn}

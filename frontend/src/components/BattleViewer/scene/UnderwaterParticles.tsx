@@ -15,8 +15,11 @@ export function UnderwaterParticles() {
         const particleCount = 200;
         const pos = new Float32Array(particleCount * 3);
         for (let i = 0; i < particleCount; i++) {
+            // eslint-disable-next-line react-hooks/purity
             pos[i * 3] = (Math.random() - 0.5) * 100;
+            // eslint-disable-next-line react-hooks/purity
             pos[i * 3 + 1] = (Math.random() - 0.5) * 40;
+            // eslint-disable-next-line react-hooks/purity
             pos[i * 3 + 2] = (Math.random() - 0.5) * 100;
         }
         return pos;

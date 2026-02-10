@@ -4,7 +4,7 @@ import { BattleLog, MobileSuit } from "@/types/battle";
 import { DEFAULT_MAX_EN, EN_WARNING_THRESHOLD } from "../utils";
 import { WarningType } from "../types";
 
-interface UnitSnapshot {
+export interface UnitSnapshot {
     pos: { x: number; y: number; z: number };
     hp: number;
     en: number;
@@ -12,7 +12,8 @@ interface UnitSnapshot {
     warnings: WarningType[];
 }
 
-export function useBattleSnapshot(
+// 現在のターン時点での情報を計算する関数（Hookではない）
+export function getBattleSnapshot(
     targetId: string,
     initialMs: MobileSuit,
     logs: BattleLog[],
