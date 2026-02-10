@@ -1,18 +1,22 @@
 /* frontend/src/app/page.tsx */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { BattleLog, MobileSuit, BattleRewards } from "@/types/battle";
-import { useMissions, useMobileSuits, useEntryStatus, entryBattle, cancelEntry, usePilot } from "@/services/api";
+import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
 import Header from "@/components/Header";
+import CountdownTimer from "@/components/Dashboard/CountdownTimer";
+import EntryDashboard from "@/components/Dashboard/EntryDashboard";
+import BattleResultModal from "@/components/Dashboard/BattleResultModal";
 
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
   const { missions, isLoading: missionsLoading } = useMissions();
   const { mobileSuits, isLoading: mobileSuitsLoading } = useMobileSuits();
   const { entryStatus, isLoading: entryStatusLoading, mutate: mutateEntryStatus } = useEntryStatus();
+  const { entryCount, mutate: mutateEntryCount } = useEntryCount();
   const { mutate: mutatePilot } = usePilot();
   const [logs, setLogs] = useState<BattleLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,6 +31,25 @@ export default function Home() {
   const [entryLoading, setEntryLoading] = useState(false);
   const [rewards, setRewards] = useState<BattleRewards | null>(null);
   const [currentEnvironment, setCurrentEnvironment] = useState<string>("SPACE");
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [modalResult, setModalResult] = useState<{
+    winLoss: "WIN" | "LOSE" | "DRAW";
+    rewards: BattleRewards | null;
+  } | null>(null);
+
+  // カウントダウンタイマー用の次回バトル時刻を計算
+  const getNextBattleTime = (): Date | null => {
+    if (!entryStatus?.next_room?.scheduled_at) return null;
+    return new Date(entryStatus.next_room.scheduled_at);
+  };
+
+  // シミュレーション実行時に結果モーダルを表示
+  useEffect(() => {
+    if (winLoss && rewards) {
+      setModalResult({ winLoss, rewards });
+      setShowResultModal(true);
+    }
+  }, [winLoss, rewards]);
 
 
   const startBattle = async (missionId: number) => {
@@ -114,6 +137,8 @@ export default function Home() {
       await entryBattle(mobileSuits[0].id);
       // エントリー状況を再取得
       await mutateEntryStatus();
+      // エントリー数を再取得
+      await mutateEntryCount();
       alert("エントリーが完了しました！");
     } catch (error) {
       console.error("Error creating entry:", error);
@@ -129,6 +154,8 @@ export default function Home() {
       await cancelEntry();
       // エントリー状況を再取得
       await mutateEntryStatus();
+      // エントリー数を再取得
+      await mutateEntryCount();
       alert("エントリーをキャンセルしました。");
     } catch (error) {
       console.error("Error cancelling entry:", error);
@@ -247,7 +274,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* Entry Panel */}
+        {/* Countdown Timer */}
+        <div className="mb-8">
+          <CountdownTimer targetTime={getNextBattleTime()} />
+        </div>
+
+        {/* Entry Dashboard */}
         <div className="mb-8 bg-gray-800 p-6 rounded-lg border border-green-800">
           <h2 className="text-2xl font-bold mb-4 border-l-4 border-green-500 pl-2">
             ENTRY / 出撃登録
@@ -259,60 +291,31 @@ export default function Home() {
             </div>
           ) : entryStatusLoading ? (
             <p className="text-gray-400">エントリー状況を確認中...</p>
-          ) : entryStatus?.is_entered ? (
-            <div className="space-y-4">
-              <div className="p-4 border-2 border-green-500 rounded bg-green-900/30">
-                <p className="text-green-300 font-bold mb-2">✓ エントリー済み</p>
-                <p className="text-sm text-gray-300">
-                  次回更新: {entryStatus.entry && new Date(entryStatus.entry.scheduled_at).toLocaleString('ja-JP')}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  使用機体ID: {entryStatus.entry?.mobile_suit_id}
-                </p>
-              </div>
-              <button
-                onClick={handleCancelEntry}
-                disabled={entryLoading}
-                className={`px-6 py-3 rounded font-bold transition-colors ${
-                  entryLoading
-                    ? "bg-gray-500 cursor-not-allowed text-gray-300"
-                    : "bg-red-700 hover:bg-red-600 text-white"
-                }`}
-              >
-                {entryLoading ? "処理中..." : "エントリーをキャンセル"}
-              </button>
-            </div>
           ) : (
-            <div className="space-y-4">
-              <div className="p-4 border border-gray-700 rounded bg-gray-900">
-                <p className="text-gray-300 mb-2">
-                  {entryStatus?.next_room 
-                    ? `次回バトル: ${new Date(entryStatus.next_room.scheduled_at).toLocaleString('ja-JP')}`
-                    : "次回バトルの予定を確認中..."}
-                </p>
-                <p className="text-sm text-gray-400">
-                  エントリーすると次回の定期バトルに参加できます
-                </p>
-              </div>
-              <button
-                onClick={handleEntry}
-                disabled={entryLoading || mobileSuitsLoading || !mobileSuits || mobileSuits.length === 0}
-                className={`px-8 py-3 rounded font-bold text-black transition-colors shadow-lg ${
-                  entryLoading || mobileSuitsLoading || !mobileSuits || mobileSuits.length === 0
-                    ? "bg-gray-500 cursor-not-allowed"
-                    : "bg-green-500 hover:bg-green-400 hover:shadow-green-500/50"
-                }`}
-              >
-                {entryLoading ? "処理中..." : mobileSuitsLoading ? "機体確認中..." : "エントリーする"}
-              </button>
-              {mobileSuits && mobileSuits.length === 0 && (
-                <p className="text-xs text-yellow-500">
-                  ※ エントリーするには機体が必要です。ガレージで機体を作成してください。
-                </p>
-              )}
-            </div>
+            <EntryDashboard
+              isEntered={entryStatus?.is_entered || false}
+              entryCount={entryCount}
+              mobileSuit={
+                entryStatus?.is_entered && mobileSuits
+                  ? mobileSuits.find((ms) => ms.id === entryStatus.entry?.mobile_suit_id)
+                  : undefined
+              }
+              onEntry={handleEntry}
+              onCancel={handleCancelEntry}
+              isLoading={entryLoading}
+              disabled={!mobileSuits || mobileSuits.length === 0}
+            />
           )}
         </div>
+
+        {/* Battle Result Modal */}
+        {showResultModal && modalResult && (
+          <BattleResultModal
+            winLoss={modalResult.winLoss}
+            rewards={modalResult.rewards}
+            onClose={() => setShowResultModal(false)}
+          />
+        )}
 
         {/* Mission Selection Panel */}
         <div className="mb-8 bg-gray-800 p-6 rounded-lg border border-green-800">
