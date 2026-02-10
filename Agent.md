@@ -93,6 +93,14 @@
 1. **Server/Client Components**: デフォルトは Server Component。`useState` や `useEffect` が必要な場合のみ `'use client'` を付与する。
 2. **SWR Usage**: データ取得は `useSWR` を使用し、`src/utils/fetcher.ts` を経由する。
 3. **Type Safety**: `any` 型の使用は原則禁止。`src/types` に定義された型を使用する。
+4. **Component Complexity (Logic Extraction)**:
+   - データの整形、フィルタリング、複雑な状態計算ロジックはコンポーネント内に記述せず、必ず **Custom Hooks** (`useLogicName`) に切り出す。
+   - コンポーネントは「描画」に専念し、ロジックを持たないようにする (View vs Logic の分離)。
+5. **React Three Fiber (R3F) Separation**:
+   - 3Dシーン (`Canvas` 内部) と 2D UI (HTML オーバーレイ) は、同じファイルに混在させず、それぞれ別のコンポーネントファイルに分割する。
+   - `Canvas` を含む親コンポーネントは、レイアウトとデータの受け渡しのみを行う構成（Container Component）にする。
+6. **Constants & Utils**:
+   - 複数の場所で使用される定数や、3行以上の計算ロジック（色計算など）は `utils/` や `constants.ts` に移動し、純粋関数として定義する。
 
 ### Database (Neon/PostgreSQL)
 
