@@ -131,7 +131,10 @@ export default function EntryDashboard({
         <div className="mt-2 h-2 bg-gray-800 rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
-            style={{ width: `${Math.min(entryCount * 10, 100)}%` }}
+            style={{ 
+              // プログレスバーは参加者10人で100%になるように設定
+              width: `${Math.min(entryCount * 10, 100)}%` 
+            }}
           ></div>
         </div>
       </div>
