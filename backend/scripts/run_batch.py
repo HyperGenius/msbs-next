@@ -203,6 +203,47 @@ def _process_room(session: Session, room: BattleRoom) -> None:
     print("  結果を保存しました")
 
 
+def create_next_open_room(session: Session) -> None:
+    """次の募集期間用の OPEN ルームを作成する.
+
+    Args:
+        session: データベースセッション
+    """
+    print("\n" + "=" * 60)
+    print("次回バトル用ルーム作成フェーズを開始")
+    print("=" * 60)
+
+    from datetime import UTC, datetime, timedelta
+
+    # 既存の OPEN ルームがあるか確認
+    statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
+    existing_room = session.exec(statement).first()
+
+    if existing_room:
+        print("既存のOPENルームが存在します。スキップします。")
+        print(f"  ルームID: {existing_room.id}")
+        print(f"  予定時刻: {existing_room.scheduled_at}")
+        return
+
+    # 次の21:00 JST (= 12:00 UTC) を予定時刻とする
+    now = datetime.now(UTC)
+    scheduled_time = now.replace(hour=12, minute=0, second=0, microsecond=0)
+    if now.hour >= 12:
+        scheduled_time += timedelta(days=1)
+
+    new_room = BattleRoom(
+        status="OPEN",
+        scheduled_at=scheduled_time,
+    )
+    session.add(new_room)
+    session.commit()
+    session.refresh(new_room)
+
+    print("新しいOPENルームを作成しました")
+    print(f"  ルームID: {new_room.id}")
+    print(f"  予定時刻: {new_room.scheduled_at}")
+
+
 def main() -> None:
     """メイン処理."""
     print("\n" + "=" * 60)
@@ -215,6 +256,9 @@ def main() -> None:
 
         # フェーズ2: シミュレーション
         run_simulation_phase(session)
+
+        # フェーズ3: 次回バトル用のルームを作成
+        create_next_open_room(session)
 
     print("\n" + "=" * 60)
     print("定期実行バッチが完了しました")

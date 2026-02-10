@@ -151,17 +151,8 @@ async def get_entry_status(
     user_id: str = Depends(get_current_user),
 ) -> EntryStatusResponse:
     """自分のエントリー状況を確認する."""
-    # 現在募集中のルームを取得
-    room_statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
-    room = session.exec(room_statement).first()
-
-    if not room:
-        # 募集中のルームがない場合
-        return EntryStatusResponse(
-            is_entered=False,
-            entry=None,
-            next_room=None,
-        )
+    # 現在募集中のルームを取得または作成
+    room = get_or_create_open_room(session)
 
     # 自分のエントリーをチェック
     entry_statement = (
