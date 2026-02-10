@@ -11,6 +11,7 @@
 import os
 import sys
 import traceback
+from datetime import UTC, datetime, timedelta
 
 # パスを通す
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -212,8 +213,6 @@ def create_next_open_room(session: Session) -> None:
     print("\n" + "=" * 60)
     print("次回バトル用ルーム作成フェーズを開始")
     print("=" * 60)
-
-    from datetime import UTC, datetime, timedelta
 
     # 既存の OPEN ルームがあるか確認
     statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
