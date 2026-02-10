@@ -50,6 +50,7 @@ export function getBattleSnapshot(
         }
         
         // リソース消費の推測（簡易版）
+        // 注意: ログデータに武器情報が含まれていないため、最初の武器を使用したと仮定しています
         if (log.action_type === "ATTACK" && log.actor_id === targetId) {
             const weapon = initialMs.weapons[0]; // 簡略化: 最初の武器を使用と仮定
             if (weapon) {
@@ -79,6 +80,7 @@ export function getBattleSnapshot(
     }
     
     // クールダウン判定（簡易版：最後の攻撃から一定ターン以内）
+    // 注: より正確な実装には武器ごとのクールダウン追跡が必要
     let lastAttackTurn = 0;
     for (let i = logs.length - 1; i >= 0; i--) {
         if (logs[i].action_type === "ATTACK" && logs[i].actor_id === targetId) {
