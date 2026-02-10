@@ -1,10 +1,11 @@
 /* frontend/src/components/BattleViewer.tsx */
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Stars, Grid, Html } from "@react-three/drei";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import * as THREE from "three";
+import { useRef, useState, useEffect } from "react";
 
 // 色計算用のヘルパー
 function getHpColor(current: number, max: number) {
@@ -41,6 +42,36 @@ interface BattleEventEffect {
     type: 'critical' | 'resist' | 'guard' | 'damage';
     text: string;
     color: string;
+}
+
+// アニメーション付きセンサーリングコンポーネント
+function AnimatedSensorRing({ sensorRange, scale }: { sensorRange: number; scale: number }) {
+    const ringRef = useRef<THREE.Mesh>(null);
+    const circleRef = useRef<THREE.Mesh>(null);
+    
+    useFrame((state) => {
+        if (ringRef.current && circleRef.current) {
+            // パルス効果: 0.3 から 0.5 の間で透明度を変化
+            const opacity = 0.3 + Math.sin(state.clock.elapsedTime * 2) * 0.2;
+            (ringRef.current.material as THREE.MeshBasicMaterial).opacity = opacity;
+            (circleRef.current.material as THREE.MeshBasicMaterial).opacity = opacity * 0.15;
+        }
+    });
+    
+    return (
+        <>
+            {/* メインセンサーリング */}
+            <mesh ref={ringRef} position={[0, -1.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[sensorRange * scale * 0.95, sensorRange * scale, 64]} />
+                <meshBasicMaterial color="#00ff00" transparent opacity={0.3} side={THREE.DoubleSide} />
+            </mesh>
+            {/* 内側の円 */}
+            <mesh ref={circleRef} position={[0, -1.75, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <circleGeometry args={[sensorRange * scale, 32]} />
+                <meshBasicMaterial color="#00ff00" transparent opacity={0.05} side={THREE.DoubleSide} />
+            </mesh>
+        </>
+    );
 }
 
 // バトルイベントを表示するコンポーネント
@@ -117,20 +148,9 @@ function MobileSuitMesh({
                 />
             </mesh>
             
-            {/* Sensor Range Visualization - Enhanced with grid pattern */}
+            {/* Sensor Range Visualization - Enhanced with animation */}
             {showSensorRange && sensorRange && (
-                <>
-                    {/* Main sensor ring with grid effect */}
-                    <mesh position={[0, -1.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                        <ringGeometry args={[sensorRange * scale * 0.95, sensorRange * scale, 64]} />
-                        <meshBasicMaterial color="#00ff00" transparent opacity={0.3} side={THREE.DoubleSide} />
-                    </mesh>
-                    {/* Inner pulsing circle for better visibility */}
-                    <mesh position={[0, -1.75, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                        <circleGeometry args={[sensorRange * scale, 32]} />
-                        <meshBasicMaterial color="#00ff00" transparent opacity={0.05} side={THREE.DoubleSide} />
-                    </mesh>
-                </>
+                <AnimatedSensorRing sensorRange={sensorRange} scale={scale} />
             )}
             
             {/* Status Warning Indicators above the unit */}
@@ -167,6 +187,48 @@ interface BattleViewerProps {
     enemies: MobileSuit[];
     currentTurn: number;
     environment?: string;
+}
+
+// 水中浮遊パーティクルコンポーネント
+function UnderwaterParticles() {
+    const particlesRef = useRef<THREE.Points>(null);
+    
+    useFrame((state) => {
+        if (particlesRef.current) {
+            // ゆっくりと上昇する動き
+            particlesRef.current.position.y = (state.clock.elapsedTime * 0.5) % 20 - 10;
+            particlesRef.current.rotation.y = state.clock.elapsedTime * 0.1;
+        }
+    });
+    
+    // パーティクルの位置を生成
+    const particleCount = 200;
+    const positions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 100;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 40;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+    }
+    
+    return (
+        <points ref={particlesRef}>
+            <bufferGeometry>
+                <bufferAttribute
+                    attach="attributes-position"
+                    count={particleCount}
+                    array={positions}
+                    itemSize={3}
+                />
+            </bufferGeometry>
+            <pointsMaterial
+                size={0.1}
+                color="#5ac5ea"
+                transparent
+                opacity={0.3}
+                sizeAttenuation
+            />
+        </points>
+    );
 }
 
 // 環境エフェクトコンポーネント（外部で定義）
@@ -214,6 +276,15 @@ function EnvironmentEffects({ environment }: { environment: string }) {
                     <ambientLight intensity={0.4} />
                     <pointLight position={[0, 20, 0]} intensity={1.0} color="#ffffff" />
                     <fog attach="fog" args={[fogColor, 30, 120]} />
+                    {/* 強調されたメタリック床 */}
+                    <mesh position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <planeGeometry args={[200, 200]} />
+                        <meshStandardMaterial 
+                            color="#3a3a5a" 
+                            roughness={0.3}
+                            metalness={0.7}
+                        />
+                    </mesh>
                     {/* 人工的な天井/空 */}
                     <mesh position={[0, 40, 0]} rotation={[-Math.PI / 2, 0, 0]}>
                         <planeGeometry args={[200, 200]} />
@@ -239,6 +310,8 @@ function EnvironmentEffects({ environment }: { environment: string }) {
                             metalness={0.8}
                         />
                     </mesh>
+                    {/* 浮遊パーティクル */}
+                    <UnderwaterParticles />
                 </>
             );
         case "SPACE":
@@ -250,6 +323,60 @@ function EnvironmentEffects({ environment }: { environment: string }) {
                 </>
             );
     }
+}
+
+// HPバーコンポーネント（ダメージフラッシュ効果付き）
+function HpBar({ 
+    current, 
+    max, 
+    colorFunc, 
+    currentTurn,
+    unitId,
+    logs
+}: { 
+    current: number; 
+    max: number; 
+    colorFunc: (ratio: number) => string;
+    currentTurn: number;
+    unitId: string;
+    logs: BattleLog[];
+}) {
+    const [flash, setFlash] = useState(false);
+    const prevTurnRef = useRef(currentTurn);
+    
+    useEffect(() => {
+        // ターンが変わったときにダメージを受けたかチェック
+        if (currentTurn !== prevTurnRef.current) {
+            const turnLogs = logs.filter(log => log.turn === currentTurn);
+            const tookDamage = turnLogs.some(log => 
+                (log.action_type === "ATTACK" && log.target_id === unitId && log.damage && log.damage > 0) ||
+                (log.action_type === "DAMAGE" && log.actor_id === unitId && log.damage && log.damage > 0)
+            );
+            
+            if (tookDamage) {
+                setFlash(true);
+                setTimeout(() => setFlash(false), 300);
+            }
+            
+            prevTurnRef.current = currentTurn;
+        }
+    }, [currentTurn, unitId, logs]);
+    
+    const ratio = current / max;
+    const bgColor = colorFunc(ratio);
+    
+    return (
+        <div className="w-24 h-2 bg-gray-700 mt-1 rounded overflow-hidden border border-gray-600 relative">
+            <div 
+                className={`h-full transition-all duration-300 ${flash ? 'animate-pulse' : ''}`}
+                style={{ 
+                    width: `${ratio * 100}%`,
+                    backgroundColor: bgColor,
+                    boxShadow: flash ? `0 0 8px ${bgColor}` : 'none'
+                }}
+            ></div>
+        </div>
+    );
 }
 
 export default function BattleViewer({ logs, player, enemies, currentTurn, environment = "SPACE" }: BattleViewerProps) {
@@ -472,15 +599,14 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                     <span className="font-bold text-blue-400">{player.name}</span>
                     <br />
                     HP: {playerState.hp} / {player.max_hp}
-                    <div className="w-24 h-2 bg-gray-700 mt-1 rounded overflow-hidden border border-gray-600">
-                        <div 
-                            className="h-full transition-all duration-300" 
-                            style={{ 
-                                width: `${(playerState.hp / player.max_hp) * 100}%`,
-                                backgroundColor: getHpBarColor(playerState.hp / player.max_hp)
-                            }}
-                        ></div>
-                    </div>
+                    <HpBar 
+                        current={playerState.hp} 
+                        max={player.max_hp} 
+                        colorFunc={getHpBarColor}
+                        currentTurn={currentTurn}
+                        unitId={player.id}
+                        logs={logs}
+                    />
                     
                     {/* EN Display */}
                     <div className="mt-1">
@@ -505,15 +631,14 @@ export default function BattleViewer({ logs, player, enemies, currentTurn, envir
                         <span className="font-bold text-red-400">{enemy.name}</span>
                         <br />
                         HP: {state.hp} / {enemy.max_hp}
-                        <div className="w-24 h-2 bg-gray-700 mt-1 rounded overflow-hidden border border-gray-600">
-                            <div 
-                                className="h-full transition-all duration-300" 
-                                style={{ 
-                                    width: `${(state.hp / enemy.max_hp) * 100}%`,
-                                    backgroundColor: getEnemyHpBarColor(state.hp / enemy.max_hp)
-                                }}
-                            ></div>
-                        </div>
+                        <HpBar 
+                            current={state.hp} 
+                            max={enemy.max_hp} 
+                            colorFunc={getEnemyHpBarColor}
+                            currentTurn={currentTurn}
+                            unitId={enemy.id}
+                            logs={logs}
+                        />
                     </div>
                 ))}
             </div>
