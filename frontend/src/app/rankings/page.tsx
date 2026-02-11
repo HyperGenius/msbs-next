@@ -14,17 +14,17 @@ export default function RankingsPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   return (
-    <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
+    <main className="min-h-screen bg-gray-900 text-green-400 p-4 sm:p-8 font-mono">
       <div className="max-w-6xl mx-auto">
         <Header />
 
-        <div className="mb-6 flex justify-between items-center">
-          <h1 className="text-3xl font-bold border-l-4 border-green-500 pl-2">
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
+          <h1 className="text-2xl sm:text-3xl font-bold border-l-4 border-green-500 pl-2">
             Pilot Rankings
           </h1>
           <Link
             href="/"
-            className="px-4 py-2 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors"
+            className="px-4 py-2 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors w-full sm:w-auto text-center"
           >
             ← Back to Dashboard
           </Link>
@@ -55,8 +55,8 @@ export default function RankingsPage() {
 
         {rankings && rankings.length > 0 && (
           <div className="bg-gray-800 border border-green-800 rounded-lg overflow-hidden">
-            {/* Table Header */}
-            <div className="bg-green-900/30 px-6 py-4 grid grid-cols-6 gap-4 font-bold text-green-300 border-b border-green-800">
+            {/* Table Header - Hidden on mobile, shown on desktop */}
+            <div className="hidden md:grid bg-green-900/30 px-6 py-4 grid-cols-6 gap-4 font-bold text-green-300 border-b border-green-800">
               <div className="text-center">Rank</div>
               <div className="col-span-2">Pilot Name</div>
               <div className="text-center">Wins</div>
@@ -72,17 +72,17 @@ export default function RankingsPage() {
                   <button
                     key={entry.user_id}
                     onClick={() => setSelectedUserId(entry.user_id)}
-                    className={`w-full px-6 py-4 grid grid-cols-6 gap-4 transition-colors text-left ${
+                    className={`w-full px-4 sm:px-6 py-3 sm:py-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 sm:gap-4 transition-colors text-left ${
                       isCurrentUser
                         ? "bg-green-900/20 hover:bg-green-900/30"
                         : "hover:bg-gray-700/50"
                     }`}
                   >
                     {/* Rank */}
-                    <div className="text-center font-bold">
+                    <div className="text-center font-bold col-span-2 sm:col-span-1">
                       {entry.rank <= 3 ? (
                         <span
-                          className={`inline-block px-3 py-1 rounded ${
+                          className={`inline-block px-2 sm:px-3 py-1 rounded text-xs sm:text-sm ${
                             entry.rank === 1
                               ? "bg-yellow-600 text-yellow-100"
                               : entry.rank === 2
@@ -93,21 +93,21 @@ export default function RankingsPage() {
                           #{entry.rank}
                         </span>
                       ) : (
-                        <span className="text-gray-400">#{entry.rank}</span>
+                        <span className="text-gray-400 text-sm sm:text-base">#{entry.rank}</span>
                       )}
                     </div>
 
                     {/* Pilot Name */}
-                    <div className="col-span-2 flex items-center">
+                    <div className="col-span-2 sm:col-span-2 md:col-span-2 flex items-center">
                       <span
-                        className={`${
+                        className={`truncate text-sm sm:text-base ${
                           isCurrentUser ? "text-green-300 font-bold" : ""
                         }`}
                       >
                         {entry.pilot_name}
                       </span>
                       {isCurrentUser && (
-                        <span className="ml-2 px-2 py-0.5 bg-green-900 text-green-300 text-xs rounded">
+                        <span className="ml-2 px-2 py-0.5 bg-green-900 text-green-300 text-xs rounded shrink-0">
                           YOU
                         </span>
                       )}
@@ -115,20 +115,27 @@ export default function RankingsPage() {
 
                     {/* Wins */}
                     <div className="text-center">
-                      <span className="text-green-400 font-bold">
+                      <div className="md:hidden text-xs text-gray-400 mb-0.5">Wins</div>
+                      <span className="text-green-400 font-bold text-sm sm:text-base">
                         {entry.wins}
                       </span>
-                      <span className="text-gray-500 text-sm ml-1">
+                      <span className="text-gray-500 text-xs sm:text-sm ml-1">
                         / {entry.losses}
                       </span>
                     </div>
 
                     {/* Kills */}
-                    <div className="text-center text-red-400">{entry.kills}</div>
+                    <div className="text-center">
+                      <div className="md:hidden text-xs text-gray-400 mb-0.5">Kills</div>
+                      <span className="text-red-400 text-sm sm:text-base">{entry.kills}</span>
+                    </div>
 
                     {/* Credits */}
-                    <div className="text-center text-yellow-400">
-                      {entry.credits_earned.toLocaleString()}
+                    <div className="text-center col-span-2 sm:col-span-1">
+                      <div className="md:hidden text-xs text-gray-400 mb-0.5">Credits</div>
+                      <span className="text-yellow-400 text-sm sm:text-base">
+                        {entry.credits_earned.toLocaleString()}
+                      </span>
                     </div>
                   </button>
                 );
@@ -141,7 +148,7 @@ export default function RankingsPage() {
         {rankings && rankings.length > 0 && (
           <div className="mt-6 p-4 bg-gray-800 border border-gray-700 rounded">
             <h3 className="text-sm font-bold mb-2 text-gray-400">Legend:</h3>
-            <div className="grid grid-cols-3 gap-4 text-xs text-gray-500">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs text-gray-500">
               <div>
                 <span className="text-green-400">●</span> Wins / Losses
               </div>
