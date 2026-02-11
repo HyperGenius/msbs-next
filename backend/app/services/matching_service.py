@@ -3,24 +3,30 @@
 
 import random
 import uuid
+from typing import Any, cast
 
 from sqlmodel import Session, select
 
+from app.core.npc_data import ACE_PILOTS, PERSONALITY_TYPES
 from app.models.models import BattleEntry, BattleRoom, MobileSuit, Vector3, Weapon
 
 
 class MatchingService:
     """マッチング処理サービス."""
 
-    def __init__(self, session: Session, room_size: int = 8):
+    def __init__(
+        self, session: Session, room_size: int = 8, ace_spawn_rate: float = 0.05
+    ):
         """初期化.
 
         Args:
             session: データベースセッション
             room_size: 1ルームあたりの定員（デフォルト: 8機）
+            ace_spawn_rate: エースパイロットの出現確率（デフォルト: 5%）
         """
         self.session = session
         self.room_size = room_size
+        self.ace_spawn_rate = ace_spawn_rate
 
     def create_rooms(self) -> list[BattleRoom]:
         """未処理のエントリーを取得し、ルームを作成する.
@@ -55,6 +61,30 @@ class MatchingService:
 
             if npc_count > 0:
                 print(f"  NPC {npc_count} 体を生成します")
+
+                # エースパイロットの出現判定（1回のみ）
+                # ace_spawned = False
+                if random.random() < self.ace_spawn_rate:
+                    ace_suit = self._create_ace_pilot()
+                    self.session.add(ace_suit)
+                    self.session.flush()
+
+                    npc_entry = BattleEntry(
+                        user_id=None,
+                        room_id=room.id,
+                        mobile_suit_id=ace_suit.id,
+                        mobile_suit_snapshot=ace_suit.model_dump(),
+                        is_npc=True,
+                    )
+                    self.session.add(npc_entry)
+                    entries.append(npc_entry)
+                    # ace_spawned = True
+                    print(
+                        f"  ★ エースパイロット出現: {ace_suit.pilot_name} ({ace_suit.name})"
+                    )
+                    npc_count -= 1
+
+                # 残りは通常NPCで埋める
                 for _ in range(npc_count):
                     npc_suit = self._create_npc_mobile_suit()
                     self.session.add(npc_suit)
@@ -135,11 +165,25 @@ class MatchingService:
             z=random.uniform(0, 500),
         )
 
-        # ランダムな戦術
-        tactics_options = {
-            "priority": random.choice(["CLOSEST", "WEAKEST", "RANDOM"]),
-            "range": random.choice(["MELEE", "RANGED", "BALANCED"]),
-        }
+        # ランダムな性格を付与
+        personality = random.choice(PERSONALITY_TYPES)
+
+        # 性格に応じた戦術を設定
+        if personality == "AGGRESSIVE":
+            tactics_options = {
+                "priority": random.choice(["CLOSEST", "WEAKEST"]),
+                "range": "MELEE",
+            }
+        elif personality == "CAUTIOUS":
+            tactics_options = {
+                "priority": random.choice(["WEAKEST", "RANDOM"]),
+                "range": "BALANCED",
+            }
+        else:  # SNIPER
+            tactics_options = {
+                "priority": "CLOSEST",
+                "range": "RANGED",
+            }
 
         npc = MobileSuit(
             name=name,
@@ -152,6 +196,50 @@ class MatchingService:
             side="ENEMY",
             tactics=tactics_options,
             user_id=None,  # NPCはユーザーIDなし
+            personality=personality,  # 性格を設定
         )
 
         return npc
+
+    def _create_ace_pilot(self) -> MobileSuit:
+        """エースパイロットのモビルスーツを生成する.
+
+        Returns:
+            生成されたエースパイロットのモビルスーツ
+        """
+        # ランダムにエースパイロットを選択
+        ace_data = cast(dict[str, Any], random.choice(ACE_PILOTS))
+        ms_data = cast(dict[str, Any], ace_data["mobile_suit"])
+
+        # ランダムな初期位置（1000m x 1000m x 500m の空間）
+        position = Vector3(
+            x=random.uniform(-500, 500),
+            y=random.uniform(-500, 500),
+            z=random.uniform(0, 500),
+        )
+
+        ace = MobileSuit(
+            name=ms_data["name"],
+            max_hp=ms_data["max_hp"],
+            current_hp=ms_data["max_hp"],
+            armor=ms_data["armor"],
+            mobility=ms_data["mobility"],
+            sensor_range=ms_data["sensor_range"],
+            beam_resistance=ms_data["beam_resistance"],
+            physical_resistance=ms_data["physical_resistance"],
+            max_en=ms_data.get("max_en", 1000),
+            en_recovery=ms_data.get("en_recovery", 100),
+            position=position,
+            weapons=ms_data["weapons"],
+            side="ENEMY",
+            tactics=ms_data["tactics"],
+            user_id=None,
+            personality=ace_data["personality"],
+            is_ace=True,
+            ace_id=ace_data["id"],
+            pilot_name=ace_data["pilot_name"],
+            bounty_exp=ace_data["bounty_exp"],
+            bounty_credits=ace_data["bounty_credits"],
+        )
+
+        return ace

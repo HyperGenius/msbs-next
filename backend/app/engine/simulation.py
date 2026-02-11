@@ -3,6 +3,7 @@ import random
 
 import numpy as np
 
+from app.core.npc_data import BATTLE_CHATTER
 from app.engine.constants import (
     TERRAIN_ADAPTABILITY_MODIFIERS,
 )
@@ -60,6 +61,33 @@ class BattleSimulator:
                     else None,
                     "current_cool_down": 0,
                 }
+
+    def _generate_chatter(self, unit: MobileSuit, chatter_type: str) -> str | None:
+        """NPCのセリフを生成する.
+
+        Args:
+            unit: ユニット
+            chatter_type: セリフの種類 (attack/hit/destroyed/miss)
+
+        Returns:
+            str | None: セリフ。NPCでない場合や確率で発言しない場合はNone
+        """
+        # NPCでない場合はセリフなし
+        if not unit.personality:
+            return None
+
+        # 30%の確率でセリフを発言
+        if random.random() > 0.3:
+            return None
+
+        # 性格に応じたセリフを取得
+        personality = unit.personality
+        if personality in BATTLE_CHATTER:
+            chatter_list = BATTLE_CHATTER[personality].get(chatter_type, [])
+            if chatter_list:
+                return random.choice(chatter_list)
+
+        return None
 
     def process_turn(self) -> None:
         """1ターン分の処理を実行."""
@@ -455,10 +483,13 @@ class BattleSimulator:
         # リソース消費
         self._consume_attack_resources(weapon, weapon_state, resources)
 
+        # 攻撃時のセリフ生成
+        attack_chatter = self._generate_chatter(actor, "attack")
+
         if is_hit:
-            self._process_hit(actor, target, weapon, log_base, snapshot)
+            self._process_hit(actor, target, weapon, log_base, snapshot, attack_chatter)
         else:
-            self._process_miss(actor, target, log_base, snapshot)
+            self._process_miss(actor, target, log_base, snapshot, attack_chatter)
 
     def _process_hit(
         self,
@@ -467,6 +498,7 @@ class BattleSimulator:
         weapon: Weapon,
         log_base: str,
         snapshot: Vector3,
+        attack_chatter: str | None = None,
     ) -> None:
         """命中時の処理."""
         # クリティカル判定
@@ -512,6 +544,9 @@ class BattleSimulator:
 
         target.current_hp -= final_damage
 
+        # 被弾時のセリフ生成
+        hit_chatter = self._generate_chatter(target, "hit")
+
         self.logs.append(
             BattleLog(
                 turn=self.turn,
@@ -521,6 +556,7 @@ class BattleSimulator:
                 damage=final_damage,
                 message=f"{log_msg}{resistance_msg} {target.name}に{final_damage}ダメージ！",
                 position_snapshot=snapshot,
+                chatter=attack_chatter or hit_chatter,
             )
         )
 
@@ -528,9 +564,17 @@ class BattleSimulator:
             self._process_destruction(target)
 
     def _process_miss(
-        self, actor: MobileSuit, target: MobileSuit, log_base: str, snapshot: Vector3
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        log_base: str,
+        snapshot: Vector3,
+        attack_chatter: str | None = None,
     ) -> None:
         """ミス時の処理."""
+        # ミス時のセリフ生成
+        miss_chatter = self._generate_chatter(actor, "miss")
+
         self.logs.append(
             BattleLog(
                 turn=self.turn,
@@ -539,19 +583,32 @@ class BattleSimulator:
                 target_id=target.id,
                 message=f"{log_base} -> 回避された！",
                 position_snapshot=snapshot,
+                chatter=attack_chatter or miss_chatter,
             )
         )
 
     def _process_destruction(self, target: MobileSuit) -> None:
         """撃破時の処理."""
         target.current_hp = 0
+
+        # 撃破時のセリフ生成
+        destroyed_chatter = self._generate_chatter(target, "destroyed")
+
+        # エース撃破時の特別メッセージ
+        ace_msg = ""
+        if getattr(target, "is_ace", False):
+            ace_msg = (
+                f" ★【エース撃破】{getattr(target, 'pilot_name', 'Unknown')}を撃破！"
+            )
+
         self.logs.append(
             BattleLog(
                 turn=self.turn,
                 actor_id=target.id,
                 action_type="DESTROYED",
-                message=f"{target.name} は爆散した...",
+                message=f"{target.name} は爆散した...{ace_msg}",
                 position_snapshot=target.position,
+                chatter=destroyed_chatter,
             )
         )
         # 勝利判定
