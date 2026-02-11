@@ -137,24 +137,27 @@ def test_get_or_create_pilot_creates_new_pilot_with_starter_suit() -> None:
     assert pilot.level == 1
     assert pilot.credits == 1000
 
-    # session.add が2回呼ばれることを確認 (pilot + mobile_suit)
+    # session.add が2回呼ばれることを確認 (1回目: pilot, 2回目: mobile_suit)
     assert session.add.call_count == 2
 
-    # session.commit が2回呼ばれることを確認 (pilot + mobile_suit)
+    # session.commit が2回呼ばれることを確認 (1回目: pilot, 2回目: mobile_suit)
     assert session.commit.call_count == 2
 
     # 追加されたオブジェクトの確認
     add_calls = session.add.call_args_list
     # 1回目の呼び出しは Pilot
-    assert isinstance(add_calls[0][0][0], Pilot)
+    pilot_add_call = add_calls[0][0][0]
+    assert isinstance(pilot_add_call, Pilot)
+    assert pilot_add_call.user_id == "test_user_123"
+    
     # 2回目の呼び出しは MobileSuit
-    assert isinstance(add_calls[1][0][0], MobileSuit)
+    mobile_suit_add_call = add_calls[1][0][0]
+    assert isinstance(mobile_suit_add_call, MobileSuit)
 
     # スターター機体の名前に "Starter" が含まれることを確認
-    starter_suit = add_calls[1][0][0]
-    assert "Starter" in starter_suit.name
-    assert starter_suit.user_id == "test_user_123"
-    assert starter_suit.side == "PLAYER"
+    assert "Starter" in mobile_suit_add_call.name
+    assert mobile_suit_add_call.user_id == "test_user_123"
+    assert mobile_suit_add_call.side == "PLAYER"
 
 
 def test_get_or_create_pilot_returns_existing_pilot() -> None:

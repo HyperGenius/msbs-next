@@ -40,7 +40,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     title: "ステップ 3: バトル開始",
     message:
       "[即時シミュレーション実行] ボタンを押してシミュレーションを開始します。あなたの初陣を楽しんでください！",
-    targetSelector: "button",
+    targetSelector: "button[data-action='start-simulation']",
     position: "top",
   },
 ];

@@ -417,6 +417,7 @@ export default function Home() {
                 disabled={isLoading || !missions || missions.length === 0}
                 variant="secondary"
                 size="lg"
+                data-action="start-simulation"
               >
                 {isLoading ? "CALCULATING..." : "即時シミュレーション実行"}
               </SciFiButton>

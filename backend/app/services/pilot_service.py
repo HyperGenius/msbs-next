@@ -74,8 +74,11 @@ class PilotService:
         # Zaku II をスターター機体として使用
         starter_template = get_shop_listing_by_id("zaku_ii")
         if not starter_template:
-            # フォールバック: テンプレートが見つからない場合はハードコード
-            raise ValueError("Starter mobile suit template 'zaku_ii' not found in gamedata")
+            # フォールバック: テンプレートが見つからない場合はエラー
+            raise ValueError(
+                "Starter mobile suit template 'zaku_ii' not found in gamedata. "
+                "Check SHOP_LISTINGS in app.core.gamedata to ensure 'zaku_ii' is defined."
+            )
 
         specs = starter_template["specs"]
 
