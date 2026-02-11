@@ -42,7 +42,7 @@ export default function BattleViewer({
 
     return (
         <div 
-            className="w-full h-[400px] rounded border border-green-800 mb-4 overflow-hidden relative" 
+            className="w-full h-[300px] sm:h-[400px] md:h-[500px] rounded border border-green-800 mb-4 overflow-hidden relative touch-none" 
             style={{ backgroundColor: getEnvironmentColor(environment) }}
         >
             <BattleScene

@@ -42,6 +42,36 @@ body {
   background: var(--sf-deep-black);
   color: var(--sf-neon-green);
   font-family: var(--font-geist-mono), 'Courier New', monospace;
+  /* Improve text rendering on mobile */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mobile Touch Optimizations */
+button,
+a,
+[role="button"] {
+  /* Ensure touch targets are at least 44x44px for accessibility */
+  min-height: 44px;
+  min-width: 44px;
+  /* Disable tap highlight on iOS/Android */
+  -webkit-tap-highlight-color: transparent;
+  /* Prevent text selection on buttons */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Touch-action for better scrolling and gesture handling */
+.touch-scroll {
+  touch-action: pan-y pinch-zoom;
+}
+
+.touch-none {
+  touch-action: none;
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
 }
 
 /* SF Effects - Neon Glow */

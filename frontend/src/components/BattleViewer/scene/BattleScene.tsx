@@ -55,7 +55,22 @@ export function BattleScene({
                 sectionColor={environment === "COLONY" ? "#8a8aaa" : "#00ff00"} 
                 cellColor={environment === "COLONY" ? "#4a4a6a" : "#003300"} 
             />
-            <OrbitControls />
+            <OrbitControls 
+                enableZoom={true}
+                enablePan={true}
+                enableRotate={true}
+                zoomSpeed={0.5}
+                rotateSpeed={0.5}
+                panSpeed={0.5}
+                minDistance={30}
+                maxDistance={150}
+                enableDamping={true}
+                dampingFactor={0.05}
+                touches={{
+                    ONE: 2, // TOUCH.ROTATE
+                    TWO: 1  // TOUCH.DOLLY_PAN
+                }}
+            />
 
             {/* Environment Effects */}
             <EnvironmentEffects environment={environment} />
