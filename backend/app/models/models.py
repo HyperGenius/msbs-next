@@ -104,6 +104,16 @@ class MobileSuit(SQLModel, table=True):
 
     active_weapon_index: int = Field(default=0)
 
+    # NPC Personality System
+    personality: str | None = Field(
+        default=None, description="NPC性格 (AGGRESSIVE/CAUTIOUS/SNIPER)"
+    )
+    is_ace: bool = Field(default=False, description="エースパイロットかどうか")
+    ace_id: str | None = Field(default=None, description="エースパイロットID")
+    pilot_name: str | None = Field(default=None, description="パイロット名")
+    bounty_exp: int = Field(default=0, description="撃破時のボーナス経験値")
+    bounty_credits: int = Field(default=0, description="撃破時のボーナスクレジット")
+
     # Initialize current_hp to max_hp if not set
     @field_validator("current_hp")
     @classmethod
@@ -145,6 +155,7 @@ class BattleLog(SQLModel):
     damage: int | None = None
     message: str
     position_snapshot: Vector3  # その瞬間の座標（3D再生用）
+    chatter: str | None = None  # NPCのセリフ（戦闘中の掛け声など）
 
 
 class Mission(SQLModel, table=True):
