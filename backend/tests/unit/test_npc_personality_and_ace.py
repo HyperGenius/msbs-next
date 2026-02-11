@@ -1,13 +1,13 @@
 """Tests for NPC personality and ace pilot features."""
 
-import pytest
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from sqlmodel import Session, create_engine
 
+from app.core.npc_data import ACE_PILOTS, BATTLE_CHATTER, PERSONALITY_TYPES
 from app.models.models import BattleEntry, BattleRoom, MobileSuit, Vector3, Weapon
 from app.services.matching_service import MatchingService
-from app.core.npc_data import ACE_PILOTS, PERSONALITY_TYPES, BATTLE_CHATTER
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ def test_battle_chatter_defined():
 def test_ace_pilots_defined():
     """Test that ace pilots are properly defined."""
     assert len(ACE_PILOTS) > 0
-    
+
     for ace in ACE_PILOTS:
         # Required fields
         assert "id" in ace
@@ -62,10 +62,10 @@ def test_ace_pilots_defined():
         assert "mobile_suit" in ace
         assert "bounty_exp" in ace
         assert "bounty_credits" in ace
-        
+
         # Validate personality
         assert ace["personality"] in PERSONALITY_TYPES
-        
+
         # Validate mobile suit data
         ms = ace["mobile_suit"]
         assert "name" in ms
@@ -80,15 +80,15 @@ def test_ace_pilots_defined():
 def test_npc_creation_with_personality(in_memory_session):
     """Test that NPCs are created with personality."""
     service = MatchingService(in_memory_session)
-    
+
     # Create multiple NPCs to test randomization
     npcs = [service._create_npc_mobile_suit() for _ in range(10)]
-    
+
     for npc in npcs:
         # Each NPC should have a personality
         assert npc.personality is not None
         assert npc.personality in PERSONALITY_TYPES
-        
+
         # Personality should affect tactics
         if npc.personality == "AGGRESSIVE":
             assert npc.tactics["range"] == "MELEE"
@@ -101,10 +101,10 @@ def test_npc_creation_with_personality(in_memory_session):
 def test_ace_pilot_creation(in_memory_session):
     """Test that ace pilots are created correctly."""
     service = MatchingService(in_memory_session)
-    
+
     # Create ace pilot
     ace = service._create_ace_pilot()
-    
+
     # Validate ace pilot properties
     assert ace.is_ace is True
     assert ace.ace_id is not None
@@ -112,7 +112,7 @@ def test_ace_pilot_creation(in_memory_session):
     assert ace.personality in PERSONALITY_TYPES
     assert ace.bounty_exp > 0
     assert ace.bounty_credits > 0
-    
+
     # Ace should be stronger than normal NPCs
     assert ace.max_hp >= 1100  # Minimum ace HP
     assert ace.mobility >= 2.0  # Minimum ace mobility
@@ -122,7 +122,7 @@ def test_ace_spawn_rate(in_memory_session):
     """Test ace pilot spawn probability."""
     # Test with 100% spawn rate
     service = MatchingService(in_memory_session, room_size=8, ace_spawn_rate=1.0)
-    
+
     room = BattleRoom(
         status="OPEN",
         scheduled_at=datetime.now(UTC) + timedelta(hours=1),
@@ -130,7 +130,7 @@ def test_ace_spawn_rate(in_memory_session):
     in_memory_session.add(room)
     in_memory_session.commit()
     in_memory_session.refresh(room)
-    
+
     # Create at least one player entry (required for matching to process)
     player_suit = MobileSuit(
         name="Player Suit",
@@ -153,7 +153,7 @@ def test_ace_spawn_rate(in_memory_session):
     )
     in_memory_session.add(player_suit)
     in_memory_session.commit()
-    
+
     player_entry = BattleEntry(
         user_id="test_user",
         room_id=room.id,
@@ -163,20 +163,21 @@ def test_ace_spawn_rate(in_memory_session):
     )
     in_memory_session.add(player_entry)
     in_memory_session.commit()
-    
+
     # Process the room (should spawn an ace)
     created_rooms = service.create_rooms()
-    
+
     assert len(created_rooms) == 1
-    
+
     # Check that at least one ace was created
     from sqlmodel import select
+
     entries = in_memory_session.exec(
         select(BattleEntry).where(BattleEntry.room_id == room.id)
     ).all()
-    
+
     assert len(entries) == 8  # Should be full
-    
+
     # Check if any entry is an ace
     ace_found = False
     for entry in entries:
@@ -186,7 +187,7 @@ def test_ace_spawn_rate(in_memory_session):
             assert snapshot.get("pilot_name") is not None
             assert snapshot.get("bounty_exp", 0) > 0
             break
-    
+
     assert ace_found, "No ace pilot found with 100% spawn rate"
 
 
@@ -194,7 +195,7 @@ def test_no_ace_spawn_with_zero_rate(in_memory_session):
     """Test that no ace spawns with 0% rate."""
     # Test with 0% spawn rate
     service = MatchingService(in_memory_session, room_size=8, ace_spawn_rate=0.0)
-    
+
     room = BattleRoom(
         status="OPEN",
         scheduled_at=datetime.now(UTC) + timedelta(hours=1),
@@ -202,7 +203,7 @@ def test_no_ace_spawn_with_zero_rate(in_memory_session):
     in_memory_session.add(room)
     in_memory_session.commit()
     in_memory_session.refresh(room)
-    
+
     # Create at least one player entry (required for matching to process)
     player_suit = MobileSuit(
         name="Player Suit",
@@ -225,7 +226,7 @@ def test_no_ace_spawn_with_zero_rate(in_memory_session):
     )
     in_memory_session.add(player_suit)
     in_memory_session.commit()
-    
+
     player_entry = BattleEntry(
         user_id="test_user",
         room_id=room.id,
@@ -235,18 +236,19 @@ def test_no_ace_spawn_with_zero_rate(in_memory_session):
     )
     in_memory_session.add(player_entry)
     in_memory_session.commit()
-    
+
     # Process the room (should not spawn an ace)
     created_rooms = service.create_rooms()
-    
+
     assert len(created_rooms) == 1
-    
+
     # Check that no ace was created
     from sqlmodel import select
+
     entries = in_memory_session.exec(
         select(BattleEntry).where(BattleEntry.room_id == room.id)
     ).all()
-    
+
     # Check that no entry is an ace
     for entry in entries:
         snapshot = entry.mobile_suit_snapshot
@@ -265,11 +267,11 @@ def test_ace_pilot_data_integrity():
             assert weapon.power > 0
             assert weapon.range > 0
             assert weapon.accuracy > 0
-        
+
         # Test that bounty rewards are reasonable
         assert 0 < ace["bounty_exp"] <= 1000
         assert 0 < ace["bounty_credits"] <= 5000
-        
+
         # Test that stats are higher than normal NPCs
         assert ms["max_hp"] >= 1100
         assert ms["mobility"] >= 2.0
@@ -277,25 +279,27 @@ def test_ace_pilot_data_integrity():
 
 def test_personality_affects_tactics():
     """Test that personality properly affects tactical settings."""
-    from app.services.matching_service import MatchingService
     from sqlmodel import Session, create_engine
+
     from app.db import json_serializer
-    
+    from app.services.matching_service import MatchingService
+
     engine = create_engine("sqlite:///:memory:", json_serializer=json_serializer)
     from sqlmodel import SQLModel
+
     SQLModel.metadata.create_all(engine)
-    
+
     with Session(engine) as session:
         service = MatchingService(session)
-        
+
         # Create many NPCs to verify personality-tactics mapping
         aggressive_count = 0
         cautious_count = 0
         sniper_count = 0
-        
+
         for _ in range(30):
             npc = service._create_npc_mobile_suit()
-            
+
             if npc.personality == "AGGRESSIVE":
                 assert npc.tactics["range"] == "MELEE"
                 aggressive_count += 1
@@ -305,7 +309,7 @@ def test_personality_affects_tactics():
             elif npc.personality == "SNIPER":
                 assert npc.tactics["range"] == "RANGED"
                 sniper_count += 1
-        
+
         # Verify we got a mix of personalities
         assert aggressive_count > 0
         assert cautious_count > 0

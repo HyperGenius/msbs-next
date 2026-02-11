@@ -62,9 +62,7 @@ class BattleSimulator:
                     "current_cool_down": 0,
                 }
 
-    def _generate_chatter(
-        self, unit: MobileSuit, chatter_type: str
-    ) -> str | None:
+    def _generate_chatter(self, unit: MobileSuit, chatter_type: str) -> str | None:
         """NPCのセリフを生成する.
 
         Args:
@@ -599,7 +597,9 @@ class BattleSimulator:
         # エース撃破時の特別メッセージ
         ace_msg = ""
         if getattr(target, "is_ace", False):
-            ace_msg = f" ★【エース撃破】{getattr(target, 'pilot_name', 'Unknown')}を撃破！"
+            ace_msg = (
+                f" ★【エース撃破】{getattr(target, 'pilot_name', 'Unknown')}を撃破！"
+            )
 
         self.logs.append(
             BattleLog(

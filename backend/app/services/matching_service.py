@@ -3,6 +3,7 @@
 
 import random
 import uuid
+from typing import Any, cast
 
 from sqlmodel import Session, select
 
@@ -60,14 +61,14 @@ class MatchingService:
 
             if npc_count > 0:
                 print(f"  NPC {npc_count} 体を生成します")
-                
+
                 # エースパイロットの出現判定（1回のみ）
-                ace_spawned = False
+                # ace_spawned = False
                 if random.random() < self.ace_spawn_rate:
                     ace_suit = self._create_ace_pilot()
                     self.session.add(ace_suit)
                     self.session.flush()
-                    
+
                     npc_entry = BattleEntry(
                         user_id=None,
                         room_id=room.id,
@@ -77,10 +78,12 @@ class MatchingService:
                     )
                     self.session.add(npc_entry)
                     entries.append(npc_entry)
-                    ace_spawned = True
-                    print(f"  ★ エースパイロット出現: {ace_suit.pilot_name} ({ace_suit.name})")
+                    # ace_spawned = True
+                    print(
+                        f"  ★ エースパイロット出現: {ace_suit.pilot_name} ({ace_suit.name})"
+                    )
                     npc_count -= 1
-                
+
                 # 残りは通常NPCで埋める
                 for _ in range(npc_count):
                     npc_suit = self._create_npc_mobile_suit()
@@ -205,8 +208,8 @@ class MatchingService:
             生成されたエースパイロットのモビルスーツ
         """
         # ランダムにエースパイロットを選択
-        ace_data = random.choice(ACE_PILOTS)
-        ms_data = ace_data["mobile_suit"]
+        ace_data = cast(dict[str, Any], random.choice(ACE_PILOTS))
+        ms_data = cast(dict[str, Any], ace_data["mobile_suit"])
 
         # ランダムな初期位置（1000m x 1000m x 500m の空間）
         position = Vector3(
