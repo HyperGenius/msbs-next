@@ -225,10 +225,9 @@ async def purchase_weapon(
     if pilot.inventory is None:
         pilot.inventory = {}
 
-    weapon_id_str = cast(str, listing["id"])
-    current_count = pilot.inventory.get(weapon_id_str, 0)
+    current_count = pilot.inventory.get(weapon_id, 0)
     # 新しいdictオブジェクトを作成して代入（SQLModelのJSON変更検知のため）
-    pilot.inventory = {**pilot.inventory, weapon_id_str: current_count + 1}
+    pilot.inventory = {**pilot.inventory, weapon_id: current_count + 1}
 
     pilot.updated_at = datetime.now(UTC)
 
@@ -238,6 +237,6 @@ async def purchase_weapon(
 
     return WeaponPurchaseResponse(
         message=f"{listing['name']}を購入しました！",
-        weapon_id=weapon_id_str,
+        weapon_id=weapon_id,
         remaining_credits=pilot.credits,
     )

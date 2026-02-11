@@ -133,8 +133,12 @@ export default function ShopPage() {
         <div className="mb-8 border-b-2 border-[#ffb000]/30 pb-4">
           <div className="flex justify-between items-center">
             <div>
-              <SciFiHeading level={2} variant="secondary">SHOP</SciFiHeading>
-              <p className="text-sm text-[#ffb000]/60 ml-5">ショップ</p>
+              <SciFiHeading level={2} variant="secondary">
+                {activeTab === "mobile_suits" ? "MOBILE SUIT SHOP" : "WEAPON SHOP"}
+              </SciFiHeading>
+              <p className="text-sm text-[#ffb000]/60 ml-5">
+                {activeTab === "mobile_suits" ? "モビルスーツ販売所" : "武器販売所"}
+              </p>
             </div>
             <Link href="/garage">
               <SciFiButton variant="primary" size="sm">&lt; Back to Garage</SciFiButton>
