@@ -4,13 +4,16 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { BattleLog, MobileSuit, BattleRewards } from "@/types/battle";
-import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot } from "@/services/api";
+import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
 import Header from "@/components/Header";
 import CountdownTimer from "@/components/Dashboard/CountdownTimer";
 import EntryDashboard from "@/components/Dashboard/EntryDashboard";
 import BattleResultModal from "@/components/Dashboard/BattleResultModal";
+import OnboardingOverlay from "@/components/Tutorial/OnboardingOverlay";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiSelect } from "@/components/ui";
+
+const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
 
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
@@ -19,6 +22,7 @@ export default function Home() {
   const { entryStatus, isLoading: entryStatusLoading, mutate: mutateEntryStatus } = useEntryStatus();
   const { entryCount, mutate: mutateEntryCount } = useEntryCount();
   const { mutate: mutatePilot } = usePilot();
+  const { battles, isLoading: battlesLoading } = useBattleHistory(1);
   const [logs, setLogs] = useState<BattleLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
@@ -37,6 +41,35 @@ export default function Home() {
     winLoss: "WIN" | "LOSE" | "DRAW";
     rewards: BattleRewards | null;
   } | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // オンボーディングの表示判定
+  useEffect(() => {
+    if (!isSignedIn || mobileSuitsLoading || battlesLoading) return;
+
+    // localStorage からオンボーディング完了状態を確認
+    const onboardingCompleted =
+      typeof window !== "undefined" &&
+      localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true";
+
+    // 初回ユーザー判定: 機体が1機以下（スターターのみ）でバトル履歴がない
+    const isFirstTimeUser =
+      mobileSuits &&
+      mobileSuits.length <= 1 &&
+      battles &&
+      battles.length === 0;
+
+    if (isFirstTimeUser && !onboardingCompleted) {
+      setShowOnboarding(true);
+    }
+  }, [isSignedIn, mobileSuits, mobileSuitsLoading, battles, battlesLoading]);
+
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
+    }
+  };
 
   // カウントダウンタイマー用の次回バトル時刻を計算
   const getNextBattleTime = (): Date | null => {
@@ -321,8 +354,14 @@ export default function Home() {
           />
         )}
 
+        {/* Onboarding Overlay */}
+        <OnboardingOverlay
+          show={showOnboarding}
+          onComplete={handleOnboardingComplete}
+        />
+
         {/* Mission Selection Panel */}
-        <SciFiPanel variant="secondary" className="mb-8">
+        <SciFiPanel variant="secondary" className="mb-8 mission-selection-panel">
           <div className="p-6">
             <SciFiHeading level={2} className="mb-4" variant="secondary">
               即時シミュレーション（テスト機能）
