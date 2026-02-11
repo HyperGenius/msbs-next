@@ -306,3 +306,29 @@ export interface EquipWeaponRequest {
     weapon_id: string;
     slot_index?: number;
 }
+
+/**
+ * ランキングエントリー
+ */
+export interface LeaderboardEntry {
+    rank: number;
+    user_id: string;
+    pilot_name: string;
+    wins: number;
+    losses: number;
+    kills: number;
+    credits_earned: number;
+}
+
+/**
+ * プレイヤープロフィール（公開情報）
+ */
+export interface PlayerProfile {
+    pilot_name: string;
+    level: number;
+    wins: number;
+    losses: number;
+    kills: number;
+    mobile_suit: MobileSuit | null;
+    skills: Record<string, number>;
+}
