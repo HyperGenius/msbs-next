@@ -263,7 +263,9 @@ class Season(SQLModel, table=True):
     name: str = Field(description="シーズン名 (例: プレシーズン, Season 1)")
     start_date: datetime = Field(description="シーズン開始日時")
     end_date: datetime | None = Field(default=None, description="シーズン終了日時")
-    is_active: bool = Field(default=True, index=True, description="アクティブシーズンか")
+    is_active: bool = Field(
+        default=True, index=True, description="アクティブシーズンか"
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )

@@ -109,7 +109,9 @@ def test_ranking_migration():
 def test_batch_integration():
     """Test that run_batch.py integrates ranking updates."""
     print("Testing batch integration...")
-    batch_path = os.path.join(os.path.dirname(__file__), "..", "scripts", "run_batch.py")
+    batch_path = os.path.join(
+        os.path.dirname(__file__), "..", "scripts", "run_batch.py"
+    )
 
     assert os.path.exists(batch_path), "Batch script not found"
     print("  ✓ Batch script exists")
@@ -134,19 +136,27 @@ def test_profile_security():
     profile_fields = PlayerProfile.model_fields.keys()
 
     for field in sensitive_fields:
-        assert (
-            field not in profile_fields
-        ), f"Sensitive field {field} found in PlayerProfile"
+        assert field not in profile_fields, (
+            f"Sensitive field {field} found in PlayerProfile"
+        )
 
     print("  ✓ No sensitive fields in PlayerProfile")
 
     # Check that it has expected public fields
-    expected_fields = ["pilot_name", "level", "wins", "losses", "kills", "mobile_suit", "skills"]
+    expected_fields = [
+        "pilot_name",
+        "level",
+        "wins",
+        "losses",
+        "kills",
+        "mobile_suit",
+        "skills",
+    ]
 
     for field in expected_fields:
-        assert (
-            field in profile_fields
-        ), f"Expected field {field} not found in PlayerProfile"
+        assert field in profile_fields, (
+            f"Expected field {field} not found in PlayerProfile"
+        )
 
     print("  ✓ All expected public fields present")
 

@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+from sqlalchemy import case
 from sqlmodel import Session, func, select
 
 from app.models.models import BattleResult, Leaderboard, Pilot, Season
@@ -53,14 +54,14 @@ class RankingService:
             select(
                 BattleResult.user_id,
                 func.count().label("total_battles"),
-                func.sum(func.case((BattleResult.win_loss == "WIN", 1), else_=0)).label(
-                    "wins"
-                ),
                 func.sum(
-                    func.case((BattleResult.win_loss == "LOSE", 1), else_=0)
+                    case([(BattleResult.win_loss == "WIN", 1)], else_=0)  # type: ignore[arg-type]
+                ).label("wins"),
+                func.sum(
+                    case([(BattleResult.win_loss == "LOSE", 1)], else_=0)  # type: ignore[arg-type]
                 ).label("losses"),
             )
-            .where(BattleResult.user_id.is_not(None))
+            .where(BattleResult.user_id != None)  # type: ignore[union-attr]  # noqa: E711
             .group_by(BattleResult.user_id)
         )
 
@@ -70,6 +71,10 @@ class RankingService:
             user_id = row[0]
             wins = row[2] or 0
             losses = row[3] or 0
+
+            # user_idがNoneの場合はスキップ（型チェック対策）
+            if user_id is None:
+                continue
 
             # Pilotからパイロット名を取得
             pilot_statement = select(Pilot).where(Pilot.user_id == user_id)
@@ -176,10 +181,15 @@ class RankingService:
         """
         season = self.get_or_create_current_season()
 
+        from sqlalchemy import desc
+
         statement = (
             select(Leaderboard)
             .where(Leaderboard.season_id == season.id)
-            .order_by(Leaderboard.wins.desc(), Leaderboard.kills.desc())
+            .order_by(
+                desc(Leaderboard.wins),  # type: ignore[arg-type]
+                desc(Leaderboard.kills),  # type: ignore[arg-type]
+            )
             .limit(limit)
         )
 
