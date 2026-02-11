@@ -357,7 +357,7 @@ export default function GaragePage() {
                           <SciFiButton
                             variant="primary"
                             size="sm"
-                            onClick={() => handleOpenWeaponModal(0)}  {/* 現在は1つ目の武器のみ変更可能 */}
+                            onClick={() => handleOpenWeaponModal(0)}
                           >
                             変更
                           </SciFiButton>
