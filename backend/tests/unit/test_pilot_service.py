@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 from sqlmodel import Session
 
-from app.models.models import Pilot
+from app.models.models import MobileSuit, Pilot
 from app.services.pilot_service import PilotService
 
 
@@ -116,3 +116,74 @@ def test_add_rewards_multiple_level_ups() -> None:
     assert updated_pilot.exp == 50
     assert updated_pilot.credits == 1500
     assert any("2 レベル上昇しました" in log for log in logs)
+
+
+def test_get_or_create_pilot_creates_new_pilot_with_starter_suit() -> None:
+    """新規パイロット作成時にスターター機体が付与されることをテスト."""
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    # パイロットが存在しない場合の Mock 設定
+    mock_exec_result = MagicMock()
+    mock_exec_result.first.return_value = None  # パイロットが存在しない
+    session.exec.return_value = mock_exec_result
+
+    # 新規パイロット作成
+    pilot = service.get_or_create_pilot("test_user_123", "Test Pilot")
+
+    # パイロットが作成されたことを確認
+    assert pilot.user_id == "test_user_123"
+    assert pilot.name == "Test Pilot"
+    assert pilot.level == 1
+    assert pilot.credits == 1000
+
+    # session.add が2回呼ばれることを確認 (1回目: pilot, 2回目: mobile_suit)
+    assert session.add.call_count == 2
+
+    # session.commit が2回呼ばれることを確認 (1回目: pilot, 2回目: mobile_suit)
+    assert session.commit.call_count == 2
+
+    # 追加されたオブジェクトの確認
+    add_calls = session.add.call_args_list
+    # 1回目の呼び出しは Pilot
+    pilot_add_call = add_calls[0][0][0]
+    assert isinstance(pilot_add_call, Pilot)
+    assert pilot_add_call.user_id == "test_user_123"
+
+    # 2回目の呼び出しは MobileSuit
+    mobile_suit_add_call = add_calls[1][0][0]
+    assert isinstance(mobile_suit_add_call, MobileSuit)
+
+    # スターター機体の名前に "Starter" が含まれることを確認
+    assert "Starter" in mobile_suit_add_call.name
+    assert mobile_suit_add_call.user_id == "test_user_123"
+    assert mobile_suit_add_call.side == "PLAYER"
+
+
+def test_get_or_create_pilot_returns_existing_pilot() -> None:
+    """既存のパイロットが存在する場合は新規作成しないことをテスト."""
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    # 既存のパイロットを Mock
+    existing_pilot = Pilot(
+        user_id="existing_user",
+        name="Existing Pilot",
+        level=5,
+        exp=250,
+        credits=3000,
+    )
+
+    mock_exec_result = MagicMock()
+    mock_exec_result.first.return_value = existing_pilot
+    session.exec.return_value = mock_exec_result
+
+    # 既存パイロットを取得
+    pilot = service.get_or_create_pilot("existing_user", "Existing Pilot")
+
+    # 既存のパイロットが返されることを確認
+    assert pilot == existing_pilot
+
+    # session.add が呼ばれないことを確認（新規作成していない）
+    session.add.assert_not_called()
+    session.commit.assert_not_called()

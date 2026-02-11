@@ -4,8 +4,9 @@ from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
+from app.core.gamedata import get_shop_listing_by_id
 from app.core.skills import SKILL_COST, get_skill_definition
-from app.models.models import Pilot
+from app.models.models import MobileSuit, Pilot
 
 
 class PilotService:
@@ -56,7 +57,51 @@ class PilotService:
             self.session.commit()
             self.session.refresh(pilot)
 
+            # 新規パイロットにスターター機体を付与
+            self._create_starter_mobile_suit(user_id)
+
         return pilot
+
+    def _create_starter_mobile_suit(self, user_id: str) -> MobileSuit:
+        """新規パイロットにスターター機体を作成して付与する.
+
+        Args:
+            user_id: Clerk User ID
+
+        Returns:
+            MobileSuit: 作成された機体
+        """
+        # Zaku II をスターター機体として使用
+        starter_template = get_shop_listing_by_id("zaku_ii")
+        if not starter_template:
+            # フォールバック: テンプレートが見つからない場合はエラー
+            raise ValueError(
+                "Starter mobile suit template 'zaku_ii' not found in gamedata. "
+                "Check SHOP_LISTINGS in app.core.gamedata to ensure 'zaku_ii' is defined."
+            )
+
+        specs = starter_template["specs"]
+
+        # スターター機体を作成
+        starter_suit = MobileSuit(
+            user_id=user_id,
+            name=f"{starter_template['name']} (Starter)",
+            max_hp=specs["max_hp"],
+            current_hp=specs["max_hp"],
+            armor=specs["armor"],
+            mobility=specs["mobility"],
+            sensor_range=specs.get("sensor_range", 500.0),
+            beam_resistance=specs.get("beam_resistance", 0.0),
+            physical_resistance=specs.get("physical_resistance", 0.0),
+            weapons=specs["weapons"],
+            side="PLAYER",
+        )
+
+        self.session.add(starter_suit)
+        self.session.commit()
+        self.session.refresh(starter_suit)
+
+        return starter_suit
 
     def add_rewards(
         self,
