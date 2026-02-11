@@ -23,6 +23,7 @@ from app.engine.simulation import BattleSimulator
 from app.models.models import BattleEntry, BattleResult, BattleRoom, MobileSuit
 from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
+from app.services.ranking_service import RankingService
 
 
 def run_matching_phase(session: Session) -> list[BattleRoom]:
@@ -243,6 +244,22 @@ def create_next_open_room(session: Session) -> None:
     print(f"  予定時刻: {new_room.scheduled_at}")
 
 
+def update_rankings(session: Session) -> None:
+    """ランキング更新フェーズ: バトル結果を集計してランキングを更新.
+
+    Args:
+        session: データベースセッション
+    """
+    print("\n" + "=" * 60)
+    print("ランキング更新フェーズを開始")
+    print("=" * 60)
+
+    ranking_service = RankingService(session)
+    ranking_service.calculate_ranking()
+
+    print("ランキングを更新しました")
+
+
 def main() -> None:
     """メイン処理."""
     print("\n" + "=" * 60)
@@ -256,7 +273,10 @@ def main() -> None:
         # フェーズ2: シミュレーション
         run_simulation_phase(session)
 
-        # フェーズ3: 次回バトル用のルームを作成
+        # フェーズ3: ランキング更新
+        update_rankings(session)
+
+        # フェーズ4: 次回バトル用のルームを作成
         create_next_open_room(session)
 
     print("\n" + "=" * 60)

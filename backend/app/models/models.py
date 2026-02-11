@@ -252,3 +252,38 @@ class Pilot(SQLModel, table=True):
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="更新日時"
     )
+
+
+class Season(SQLModel, table=True):
+    """シーズン管理テーブル."""
+
+    __tablename__ = "seasons"
+
+    id: int = Field(default=None, primary_key=True)
+    name: str = Field(description="シーズン名 (例: プレシーズン, Season 1)")
+    start_date: datetime = Field(description="シーズン開始日時")
+    end_date: datetime | None = Field(default=None, description="シーズン終了日時")
+    is_active: bool = Field(default=True, index=True, description="アクティブシーズンか")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+
+
+class Leaderboard(SQLModel, table=True):
+    """ランキングデータテーブル."""
+
+    __tablename__ = "leaderboards"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    season_id: int = Field(
+        foreign_key="seasons.id", index=True, description="シーズンID"
+    )
+    user_id: str = Field(index=True, description="Clerk User ID")
+    pilot_name: str = Field(description="パイロット名")
+    wins: int = Field(default=0, description="勝利数")
+    losses: int = Field(default=0, description="敗北数")
+    kills: int = Field(default=0, description="撃墜数")
+    credits_earned: int = Field(default=0, description="獲得クレジット")
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
