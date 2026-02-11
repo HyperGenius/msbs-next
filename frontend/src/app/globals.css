@@ -48,10 +48,12 @@ body {
 }
 
 /* Mobile Touch Optimizations */
-button,
-a,
-[role="button"] {
-  /* Ensure touch targets are at least 44x44px for accessibility */
+/* Ensure touch targets are accessible (apply to main interactive elements) */
+button:not(.no-min-size),
+a:not(.no-min-size),
+[role="button"]:not(.no-min-size) {
+  /* Minimum touch target size for accessibility (44x44px recommended) */
+  /* Can be disabled with .no-min-size class for special cases */
   min-height: 44px;
   min-width: 44px;
   /* Disable tap highlight on iOS/Android */
