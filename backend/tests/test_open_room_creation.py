@@ -122,9 +122,9 @@ def test_batch_creates_next_open_room():
         if now.hour >= 12:
             expected_time += timedelta(days=1)
 
-        assert (
-            new_open_room.scheduled_at == expected_time
-        ), f"Scheduled time should be {expected_time}, got {new_open_room.scheduled_at}"
+        assert new_open_room.scheduled_at == expected_time, (
+            f"Scheduled time should be {expected_time}, got {new_open_room.scheduled_at}"
+        )
         print("  ✓ Scheduled time is correct")
 
         print("  ✓ Test passed: Batch creates next OPEN room\n")
@@ -167,16 +167,16 @@ def test_api_always_returns_next_room():
         if now.hour >= 12:
             expected_time += timedelta(days=1)
 
-        assert (
-            room.scheduled_at == expected_time
-        ), f"Scheduled time should be {expected_time}, got {room.scheduled_at}"
+        assert room.scheduled_at == expected_time, (
+            f"Scheduled time should be {expected_time}, got {room.scheduled_at}"
+        )
         print("  ✓ Scheduled time is correct")
 
         # Call again to verify it returns the same room
         room2 = get_or_create_open_room(session)
-        assert (
-            room2.id == room.id
-        ), "Should return same room when OPEN room already exists"
+        assert room2.id == room.id, (
+            "Should return same room when OPEN room already exists"
+        )
         print("  ✓ Returns existing room on second call")
 
         print("  ✓ Test passed: API always returns next_room\n")
@@ -206,7 +206,9 @@ def test_no_duplicate_open_rooms():
         statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
         open_rooms = list(session.exec(statement).all())
 
-        assert len(open_rooms) == 1, f"Should have exactly 1 OPEN room, got {len(open_rooms)}"
+        assert len(open_rooms) == 1, (
+            f"Should have exactly 1 OPEN room, got {len(open_rooms)}"
+        )
         print(f"  Only 1 OPEN room exists after multiple calls: {open_rooms[0].id}")
         print("  ✓ Test passed: No duplicate OPEN rooms\n")
 

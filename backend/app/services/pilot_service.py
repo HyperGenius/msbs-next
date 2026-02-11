@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
-from app.core.gamedata import SHOP_LISTINGS, get_shop_listing_by_id
+from app.core.gamedata import get_shop_listing_by_id
 from app.core.skills import SKILL_COST, get_skill_definition
 from app.models.models import MobileSuit, Pilot
 

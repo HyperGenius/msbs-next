@@ -1,6 +1,6 @@
 """Tests for PilotService."""
 
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 from sqlmodel import Session
 
@@ -149,7 +149,7 @@ def test_get_or_create_pilot_creates_new_pilot_with_starter_suit() -> None:
     pilot_add_call = add_calls[0][0][0]
     assert isinstance(pilot_add_call, Pilot)
     assert pilot_add_call.user_id == "test_user_123"
-    
+
     # 2回目の呼び出しは MobileSuit
     mobile_suit_add_call = add_calls[1][0][0]
     assert isinstance(mobile_suit_add_call, MobileSuit)
