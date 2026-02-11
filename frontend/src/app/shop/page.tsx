@@ -6,6 +6,7 @@ import { useShopListings, purchaseMobileSuit, usePilot } from "@/services/api";
 import { ShopListing } from "@/types/battle";
 import Link from "next/link";
 import Header from "@/components/Header";
+import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
 
 export default function ShopPage() {
   const { listings, isLoading, isError } = useShopListings();
@@ -62,40 +63,45 @@ export default function ShopPage() {
 
   if (isError) {
     return (
-      <div className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
+      <div className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
         <div className="max-w-7xl mx-auto">
-          <p className="text-red-500">データの取得に失敗しました。</p>
-          <p className="text-sm mt-2">Backendが起動しているか確認してください。</p>
+          <SciFiPanel variant="secondary">
+            <div className="p-6">
+              <p className="text-[#ffb000] font-bold text-xl mb-2">ERROR: データ取得失敗</p>
+              <p className="text-sm">Backendが起動しているか確認してください。</p>
+            </div>
+          </SciFiPanel>
         </div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
+    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <Header />
 
         {/* Page Title */}
-        <div className="mb-8 border-b border-green-700 pb-4">
+        <div className="mb-8 border-b-2 border-[#ffb000]/30 pb-4">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-2xl font-bold">MOBILE SUIT SHOP</h2>
-              <p className="text-sm opacity-70">モビルスーツ販売所</p>
+              <SciFiHeading level={2} variant="secondary">MOBILE SUIT SHOP</SciFiHeading>
+              <p className="text-sm text-[#ffb000]/60 ml-5">モビルスーツ販売所</p>
             </div>
-            <Link
-              href="/garage"
-              className="px-4 py-2 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors"
-            >
-              &lt; Back to Garage
+            <Link href="/garage">
+              <SciFiButton variant="primary" size="sm">&lt; Back to Garage</SciFiButton>
             </Link>
           </div>
         </div>
 
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
-            <p className="text-xl animate-pulse">LOADING INVENTORY...</p>
+            <SciFiPanel variant="secondary">
+              <div className="p-8">
+                <p className="text-xl animate-pulse text-[#ffb000]">LOADING INVENTORY...</p>
+              </div>
+            </SciFiPanel>
           </div>
         ) : (
           <>
@@ -105,21 +111,18 @@ export default function ShopPage() {
                 const affordable = canAfford(item.price);
                 
                 return (
-                  <div
+                  <SciFiCard
                     key={item.id}
-                    className={`bg-gray-800 p-6 rounded-lg border transition-all ${
-                      affordable
-                        ? "border-green-800 hover:border-green-600"
-                        : "border-red-900 opacity-60"
-                    }`}
+                    variant={affordable ? "secondary" : "primary"}
+                    className={affordable ? "" : "opacity-60"}
                   >
                     {/* Item Header */}
                     <div className="mb-4">
-                      <h3 className="text-xl font-bold text-green-300 mb-2">
+                      <h3 className="text-xl font-bold text-[#ffb000] mb-2">
                         {item.name}
                       </h3>
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-2xl font-bold text-yellow-400">
+                        <span className="text-2xl font-bold text-[#ffb000]">
                           {item.price.toLocaleString()} C
                         </span>
                         {!affordable && (
@@ -128,29 +131,29 @@ export default function ShopPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-400">{item.description}</p>
+                      <p className="text-sm text-[#00ff41]/60">{item.description}</p>
                     </div>
 
                     {/* Specs */}
-                    <div className="mb-4 p-3 bg-gray-900 rounded border border-green-900">
-                      <h4 className="text-sm font-bold mb-2 text-green-500">
+                    <div className="mb-4 p-3 bg-[#0a0a0a] border-2 border-[#ffb000]/30">
+                      <h4 className="text-sm font-bold mb-2 text-[#ffb000]">
                         SPECIFICATIONS
                       </h4>
-                      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                      <div className="grid grid-cols-2 gap-2 text-sm mb-3 text-[#00ff41]">
                         <div>
-                          <span className="text-gray-400">HP:</span>
+                          <span className="text-[#00ff41]/60">HP:</span>
                           <span className="ml-2 font-bold">{item.specs.max_hp}</span>
                         </div>
                         <div>
-                          <span className="text-gray-400">装甲:</span>
+                          <span className="text-[#00ff41]/60">装甲:</span>
                           <span className="ml-2 font-bold">{item.specs.armor}</span>
                         </div>
                         <div>
-                          <span className="text-gray-400">機動性:</span>
+                          <span className="text-[#00ff41]/60">機動性:</span>
                           <span className="ml-2 font-bold">{item.specs.mobility}</span>
                         </div>
                         <div>
-                          <span className="text-gray-400">武器:</span>
+                          <span className="text-[#00ff41]/60">武器:</span>
                           <span className="ml-2 font-bold">
                             {item.specs.weapons[0]?.name || "N/A"}
                           </span>
@@ -158,17 +161,17 @@ export default function ShopPage() {
                       </div>
                       
                       {/* Resistance Info */}
-                      <div className="border-t border-green-900 pt-2 mb-2">
+                      <div className="border-t-2 border-[#ffb000]/30 pt-2 mb-2">
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div>
-                            <span className="text-gray-400">対ビーム:</span>
-                            <span className="ml-2 font-bold text-blue-400">
+                            <span className="text-[#00ff41]/60">対ビーム:</span>
+                            <span className="ml-2 font-bold text-[#00f0ff]">
                               {((item.specs.beam_resistance || 0) * 100).toFixed(0)}%
                             </span>
                           </div>
                           <div>
-                            <span className="text-gray-400">対実弾:</span>
-                            <span className="ml-2 font-bold text-yellow-400">
+                            <span className="text-[#00ff41]/60">対実弾:</span>
+                            <span className="ml-2 font-bold text-[#ffb000]">
                               {((item.specs.physical_resistance || 0) * 100).toFixed(0)}%
                             </span>
                           </div>
@@ -177,36 +180,36 @@ export default function ShopPage() {
 
                       {/* Weapon Details */}
                       {item.specs.weapons && item.specs.weapons.length > 0 && (
-                        <div className="border-t border-green-900 pt-2">
+                        <div className="border-t-2 border-[#ffb000]/30 pt-2">
                           <div className="text-xs">
-                            <div className="font-bold text-green-400 mb-1">
+                            <div className="font-bold text-[#00ff41] mb-1">
                               {item.specs.weapons[0].name}
                             </div>
                             <div className="grid grid-cols-2 gap-1">
                               <div>
-                                <span className="text-gray-500">属性:</span>
+                                <span className="text-[#00ff41]/60">属性:</span>
                                 <span className={`ml-1 font-bold ${
                                   item.specs.weapons[0].type === "BEAM" 
-                                    ? "text-blue-400" 
-                                    : "text-yellow-400"
+                                    ? "text-[#00f0ff]" 
+                                    : "text-[#ffb000]"
                                 }`}>
                                   {item.specs.weapons[0].type || "PHYSICAL"}
                                 </span>
                               </div>
                               <div>
-                                <span className="text-gray-500">威力:</span>
+                                <span className="text-[#00ff41]/60">威力:</span>
                                 <span className="ml-1 font-bold">
                                   {item.specs.weapons[0].power}
                                 </span>
                               </div>
                               <div>
-                                <span className="text-gray-500">最適射程:</span>
-                                <span className="ml-1 font-bold text-green-400">
+                                <span className="text-[#00ff41]/60">最適射程:</span>
+                                <span className="ml-1 font-bold text-[#00ff41]">
                                   {item.specs.weapons[0].optimal_range || 300}m
                                 </span>
                               </div>
                               <div>
-                                <span className="text-gray-500">命中:</span>
+                                <span className="text-[#00ff41]/60">命中:</span>
                                 <span className="ml-1 font-bold">
                                   {item.specs.weapons[0].accuracy}%
                                 </span>
@@ -218,18 +221,16 @@ export default function ShopPage() {
                     </div>
 
                     {/* Purchase Button */}
-                    <button
+                    <SciFiButton
                       onClick={() => handlePurchaseClick(item)}
                       disabled={!affordable || isPurchasing}
-                      className={`w-full px-4 py-3 rounded font-bold text-black transition-colors ${
-                        affordable && !isPurchasing
-                          ? "bg-green-500 hover:bg-green-400 cursor-pointer"
-                          : "bg-gray-600 cursor-not-allowed"
-                      }`}
+                      variant={affordable ? "secondary" : "danger"}
+                      size="md"
+                      className="w-full"
                     >
                       {affordable ? "購入する (BUY)" : "購入不可"}
-                    </button>
-                  </div>
+                    </SciFiButton>
+                  </SciFiCard>
                 );
               })}
             </div>
@@ -238,69 +239,72 @@ export default function ShopPage() {
 
         {/* Confirmation Dialog */}
         {showConfirmDialog && selectedItem && (
-          <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-            <div className="bg-gray-800 p-8 rounded-lg border-2 border-green-500 max-w-md w-full mx-4">
-              <h3 className="text-xl font-bold mb-4 text-green-300">
-                購入確認
-              </h3>
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <SciFiPanel variant="secondary" chiseled={true}>
+              <div className="p-8 max-w-md mx-4">
+                <SciFiHeading level={3} className="mb-4" variant="secondary">
+                  購入確認
+                </SciFiHeading>
               
-              {purchaseMessage ? (
-                <div className={`p-4 rounded mb-4 ${
-                  purchaseMessage.startsWith("エラー")
-                    ? "bg-red-900/50 border border-red-500 text-red-300"
-                    : "bg-green-900/50 border border-green-500 text-green-300"
-                }`}>
-                  {purchaseMessage}
-                </div>
-              ) : (
-                <>
-                  <p className="mb-4">
-                    <span className="font-bold text-yellow-400">
-                      {selectedItem.name}
-                    </span>
-                    を
-                    <span className="font-bold text-yellow-400 mx-1">
-                      {selectedItem.price.toLocaleString()} Credits
-                    </span>
-                    で購入しますか？
-                  </p>
-
-                  <div className="mb-6 p-3 bg-gray-900 rounded">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">現在の所持金:</span>
-                      <span className="font-bold">{pilot?.credits.toLocaleString()} C</span>
+                {purchaseMessage ? (
+                  <SciFiPanel 
+                    variant={purchaseMessage.startsWith("エラー") ? "danger" as any : "primary"}
+                    chiseled={false}
+                  >
+                    <div className="p-4">
+                      {purchaseMessage}
                     </div>
-                    <div className="flex justify-between text-sm mt-2">
-                      <span className="text-gray-400">購入後:</span>
-                      <span className="font-bold text-green-400">
-                        {((pilot?.credits || 0) - selectedItem.price).toLocaleString()} C
+                  </SciFiPanel>
+                ) : (
+                  <>
+                    <p className="mb-4 text-[#00ff41]">
+                      <span className="font-bold text-[#ffb000]">
+                        {selectedItem.name}
                       </span>
-                    </div>
-                  </div>
+                      を
+                      <span className="font-bold text-[#ffb000] mx-1">
+                        {selectedItem.price.toLocaleString()} Credits
+                      </span>
+                      で購入しますか？
+                    </p>
 
-                  <div className="flex gap-4">
-                    <button
-                      onClick={handleConfirmPurchase}
-                      disabled={isPurchasing}
-                      className={`flex-1 px-4 py-3 rounded font-bold transition-colors ${
-                        isPurchasing
-                          ? "bg-gray-600 cursor-not-allowed text-gray-400"
-                          : "bg-green-500 hover:bg-green-400 text-black"
-                      }`}
-                    >
-                      {isPurchasing ? "処理中..." : "購入"}
-                    </button>
-                    <button
-                      onClick={handleCancelPurchase}
-                      disabled={isPurchasing}
-                      className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded font-bold transition-colors"
-                    >
-                      キャンセル
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+                    <div className="mb-6 p-3 bg-[#0a0a0a] border-2 border-[#ffb000]/30">
+                      <div className="flex justify-between text-sm text-[#00ff41]">
+                        <span className="text-[#00ff41]/60">現在の所持金:</span>
+                        <span className="font-bold">{pilot?.credits.toLocaleString()} C</span>
+                      </div>
+                      <div className="flex justify-between text-sm mt-2 text-[#00ff41]">
+                        <span className="text-[#00ff41]/60">購入後:</span>
+                        <span className="font-bold text-[#00ff41]">
+                          {((pilot?.credits || 0) - selectedItem.price).toLocaleString()} C
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-4">
+                      <SciFiButton
+                        onClick={handleConfirmPurchase}
+                        disabled={isPurchasing}
+                        variant="secondary"
+                        size="md"
+                        className="flex-1"
+                      >
+                        {isPurchasing ? "処理中..." : "購入"}
+                      </SciFiButton>
+                      <SciFiButton
+                        onClick={handleCancelPurchase}
+                        disabled={isPurchasing}
+                        variant="danger"
+                        size="md"
+                        className="flex-1"
+                      >
+                        キャンセル
+                      </SciFiButton>
+                    </div>
+                  </>
+                )}
+              </div>
+            </SciFiPanel>
           </div>
         )}
       </div>
