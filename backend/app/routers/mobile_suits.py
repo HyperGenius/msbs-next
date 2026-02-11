@@ -1,13 +1,24 @@
 # backend/app/routers/mobile_suits.py
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from pydantic import BaseModel
+from sqlmodel import Session, select
 
 from app.core.auth import get_current_user
+from app.core.gamedata import get_weapon_listing_by_id
 from app.db import get_session
-from app.models.models import MobileSuit, MobileSuitUpdate
+from app.models.models import MobileSuit, MobileSuitUpdate, Pilot
 from app.services.mobile_suit_service import MobileSuitService
 
 router = APIRouter(prefix="/api/mobile_suits", tags=["mobile_suits"])
+
+
+class EquipWeaponRequest(BaseModel):
+    """武器装備リクエストモデル."""
+
+    weapon_id: str
+    slot_index: int = 0
 
 
 @router.get("/", response_model=list[MobileSuit])
@@ -28,3 +39,86 @@ async def update_mobile_suit(
     if not updated_ms:
         raise HTTPException(status_code=404, detail="Mobile Suit not found")
     return updated_ms
+
+
+@router.put("/{ms_id}/equip", response_model=MobileSuit)
+async def equip_weapon(
+    ms_id: str,
+    equip_request: EquipWeaponRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> MobileSuit:
+    """機体に武器を装備する.
+
+    Args:
+        ms_id: 機体ID
+        equip_request: 装備する武器のID
+        session: データベースセッション
+        user_id: 現在のユーザーID
+
+    Returns:
+        MobileSuit: 更新された機体情報
+
+    Raises:
+        HTTPException: 機体が存在しない、武器を所持していないなどのエラー
+    """
+    # 1. 機体を取得（UUIDに変換）
+    try:
+        ms_uuid = uuid.UUID(ms_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="無効な機体IDです") from e
+
+    mobile_suit = session.get(MobileSuit, ms_uuid)
+    if not mobile_suit:
+        raise HTTPException(status_code=404, detail="機体が見つかりません")
+
+    # 2. 機体の所有者チェック
+    if mobile_suit.user_id != user_id:
+        raise HTTPException(
+            status_code=403, detail="この機体を編集する権限がありません"
+        )
+
+    # 3. 武器データを取得
+    weapon_listing = get_weapon_listing_by_id(equip_request.weapon_id)
+    if not weapon_listing:
+        raise HTTPException(status_code=404, detail="武器が見つかりません")
+
+    # 4. パイロット情報を取得して所持チェック
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    pilot = session.exec(statement).first()
+    if not pilot:
+        raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
+
+    # 5. 武器の所持チェック
+    if pilot.inventory is None:
+        pilot.inventory = {}
+
+    if (
+        equip_request.weapon_id not in pilot.inventory
+        or pilot.inventory[equip_request.weapon_id] < 1
+    ):
+        raise HTTPException(status_code=400, detail="この武器を所持していません")
+
+    # 6. 武器を装備（スロットインデックスに応じて）
+    weapon_obj = weapon_listing["weapon"]
+
+    # 武器リストを初期化（もしなければ）
+    if mobile_suit.weapons is None:
+        mobile_suit.weapons = []
+
+    # 新しいリストを作成（SQLModelのJSON変更検知のため）
+    new_weapons = list(mobile_suit.weapons)
+
+    # スロットインデックスが範囲外の場合は追加
+    if equip_request.slot_index >= len(new_weapons):
+        new_weapons.append(weapon_obj)
+    else:
+        new_weapons[equip_request.slot_index] = weapon_obj
+
+    mobile_suit.weapons = new_weapons
+
+    session.add(mobile_suit)
+    session.commit()
+    session.refresh(mobile_suit)
+
+    return mobile_suit

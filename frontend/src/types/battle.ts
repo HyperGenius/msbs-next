@@ -185,6 +185,7 @@ export interface Pilot {
     credits: number;
     skill_points: number;
     skills: Record<string, number>;
+    inventory?: Record<string, number>;
     created_at: string;
     updated_at: string;
 }
@@ -276,4 +277,32 @@ export interface UpgradePreview {
     new_value: number;
     cost: number;
     at_max_cap: boolean;
+}
+
+/**
+ * 武器ショップ商品
+ */
+export interface WeaponListing {
+    id: string;
+    name: string;
+    price: number;
+    description: string;
+    weapon: Weapon;
+}
+
+/**
+ * 武器購入レスポンス
+ */
+export interface WeaponPurchaseResponse {
+    message: string;
+    weapon_id: string;
+    remaining_credits: number;
+}
+
+/**
+ * 武器装備リクエスト
+ */
+export interface EquipWeaponRequest {
+    weapon_id: string;
+    slot_index?: number;
 }
