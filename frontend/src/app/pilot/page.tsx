@@ -54,14 +54,14 @@ export default function PilotPage() {
   const expProgress = (pilot.exp / requiredExp) * 100;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-green-400 p-8">
+    <div className="min-h-screen bg-gray-900 text-green-400 p-4 sm:p-6 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8 text-center">Pilot Skills</h1>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 sm:mb-8 text-center">Pilot Skills</h1>
 
         {/* Pilot Status */}
-        <div className="bg-gray-800 border border-green-700 rounded-lg p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4">{pilot.name}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gray-800 border border-green-700 rounded-lg p-4 sm:p-6 mb-4 sm:mb-8">
+          <h2 className="text-xl sm:text-2xl font-bold mb-4">{pilot.name}</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <div>
               <p className="text-gray-400 text-sm">Level</p>
               <p className="text-2xl font-bold text-yellow-400">{pilot.level}</p>

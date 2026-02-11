@@ -120,18 +120,18 @@ export default function GaragePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
+    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <Header />
-        <div className="mb-8 border-b-2 border-[#00ff41]/30 pb-4">
-          <div className="flex justify-between items-center">
+        <div className="mb-4 sm:mb-8 border-b-2 border-[#00ff41]/30 pb-4">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
             <div>
-              <SciFiHeading level={2}>GARAGE - Mobile Suit Hangar</SciFiHeading>
-              <p className="text-sm text-[#00ff41]/60 ml-5">機体管理システム</p>
+              <SciFiHeading level={2} className="text-xl sm:text-2xl">GARAGE - Mobile Suit Hangar</SciFiHeading>
+              <p className="text-xs sm:text-sm text-[#00ff41]/60 ml-0 sm:ml-5">機体管理システム</p>
             </div>
-            <Link href="/">
-              <SciFiButton variant="primary" size="sm">&lt; Back to Simulator</SciFiButton>
+            <Link href="/" className="w-full sm:w-auto">
+              <SciFiButton variant="primary" size="sm" className="w-full sm:w-auto">&lt; Back to Simulator</SciFiButton>
             </Link>
           </div>
         </div>
@@ -145,11 +145,11 @@ export default function GaragePage() {
             </SciFiPanel>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Left Pane: 機体リスト */}
             <SciFiPanel variant="primary">
-              <div className="p-6">
-                <SciFiHeading level={3} className="mb-4">機体一覧</SciFiHeading>
+              <div className="p-4 sm:p-6">
+                <SciFiHeading level={3} className="mb-4 text-lg sm:text-xl">機体一覧</SciFiHeading>
               
                 {mobileSuits && mobileSuits.length > 0 ? (
                   <ul className="space-y-2">
@@ -159,22 +159,22 @@ export default function GaragePage() {
                         variant="primary"
                         interactive
                         onClick={() => handleSelectMs(ms)}
-                        className={`p-4 ${
+                        className={`p-3 sm:p-4 touch-manipulation ${
                           selectedMs?.id === ms.id
                             ? "bg-[#00ff41]/10"
                             : ""
                         }`}
                       >
-                        <div className="font-bold text-lg">{ms.name}</div>
-                        <div className="text-sm text-[#00ff41]/70 mt-1">
+                        <div className="font-bold text-base sm:text-lg">{ms.name}</div>
+                        <div className="text-xs sm:text-sm text-[#00ff41]/70 mt-1">
                           HP: {ms.max_hp} / 装甲: {ms.armor} / 機動性: {ms.mobility}
                         </div>
-                        <div className="text-xs text-[#00ff41]/60 mt-1">
+                        <div className="text-[10px] sm:text-xs text-[#00ff41]/60 mt-1">
                           対ビーム: {((ms.beam_resistance || 0) * 100).toFixed(0)}% / 
                           対実弾: {((ms.physical_resistance || 0) * 100).toFixed(0)}%
                         </div>
                         {ms.weapons && ms.weapons.length > 0 && (
-                          <div className="text-xs text-[#00ff41]/60 mt-1">
+                          <div className="text-[10px] sm:text-xs text-[#00ff41]/60 mt-1">
                             武器: {ms.weapons[0].name} ({ms.weapons[0].type || "PHYSICAL"})
                           </div>
                         )}
@@ -182,15 +182,15 @@ export default function GaragePage() {
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-[#00ff41]/50">機体データがありません。</p>
+                  <p className="text-[#00ff41]/50 text-sm">機体データがありません。</p>
                 )}
               </div>
             </SciFiPanel>
 
             {/* Right Pane: ステータス編集フォーム */}
             <SciFiPanel variant="accent">
-              <div className="p-6">
-                <SciFiHeading level={3} className="mb-4" variant="accent">
+              <div className="p-4 sm:p-6">
+                <SciFiHeading level={3} className="mb-4 text-lg sm:text-xl" variant="accent">
                   機体ステータス編集
                 </SciFiHeading>
 

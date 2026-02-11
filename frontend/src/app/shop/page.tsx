@@ -124,34 +124,35 @@ export default function ShopPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
+    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <Header />
 
         {/* Page Title */}
-        <div className="mb-8 border-b-2 border-[#ffb000]/30 pb-4">
-          <div className="flex justify-between items-center">
+        <div className="mb-4 sm:mb-8 border-b-2 border-[#ffb000]/30 pb-4">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
             <div>
-              <SciFiHeading level={2} variant="secondary">
+              <SciFiHeading level={2} variant="secondary" className="text-xl sm:text-2xl">
                 {activeTab === "mobile_suits" ? "MOBILE SUIT SHOP" : "WEAPON SHOP"}
               </SciFiHeading>
-              <p className="text-sm text-[#ffb000]/60 ml-5">
+              <p className="text-xs sm:text-sm text-[#ffb000]/60 ml-0 sm:ml-5">
                 {activeTab === "mobile_suits" ? "モビルスーツ販売所" : "武器販売所"}
               </p>
             </div>
-            <Link href="/garage">
-              <SciFiButton variant="primary" size="sm">&lt; Back to Garage</SciFiButton>
+            <Link href="/garage" className="w-full sm:w-auto">
+              <SciFiButton variant="primary" size="sm" className="w-full sm:w-auto">&lt; Back to Garage</SciFiButton>
             </Link>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="mb-6 flex gap-4">
+        <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-4">
           <SciFiButton
             variant={activeTab === "mobile_suits" ? "secondary" : "primary"}
             onClick={() => setActiveTab("mobile_suits")}
             size="md"
+            className="w-full sm:w-auto"
           >
             モビルスーツ (Mobile Suits)
           </SciFiButton>
@@ -159,6 +160,7 @@ export default function ShopPage() {
             variant={activeTab === "weapons" ? "secondary" : "primary"}
             onClick={() => setActiveTab("weapons")}
             size="md"
+            className="w-full sm:w-auto"
           >
             武器 (Weapons)
           </SciFiButton>
@@ -176,7 +178,7 @@ export default function ShopPage() {
           <>
             {/* Mobile Suits Tab */}
             {activeTab === "mobile_suits" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 {listings?.map((item) => {
                 const affordable = canAfford(item.price);
                 
