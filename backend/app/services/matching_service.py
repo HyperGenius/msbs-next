@@ -218,6 +218,11 @@ class MatchingService:
             z=random.uniform(0, 500),
         )
 
+        # weaponsをWeaponオブジェクトに変換（辞書の場合）
+        weapons_list = ms_data["weapons"]
+        if weapons_list and isinstance(weapons_list[0], dict):
+            weapons_list = [Weapon(**w) for w in weapons_list]
+
         ace = MobileSuit(
             name=ms_data["name"],
             max_hp=ms_data["max_hp"],
@@ -230,7 +235,7 @@ class MatchingService:
             max_en=ms_data.get("max_en", 1000),
             en_recovery=ms_data.get("en_recovery", 100),
             position=position,
-            weapons=ms_data["weapons"],
+            weapons=weapons_list,
             side="ENEMY",
             tactics=ms_data["tactics"],
             user_id=None,

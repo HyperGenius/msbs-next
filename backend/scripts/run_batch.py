@@ -20,7 +20,14 @@ from sqlmodel import Session, select
 
 from app.db import engine
 from app.engine.simulation import BattleSimulator
-from app.models.models import BattleEntry, BattleResult, BattleRoom, MobileSuit
+from app.models.models import (
+    BattleEntry,
+    BattleResult,
+    BattleRoom,
+    MobileSuit,
+    Vector3,
+    Weapon,
+)
 from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
@@ -79,53 +86,71 @@ def run_simulation_phase(session: Session) -> None:
             continue
 
 
-def _process_room(session: Session, room: BattleRoom) -> None:
-    """個別ルームの戦闘シミュレーションを実行.
+def _convert_snapshot_to_mobile_suit(snapshot: dict) -> MobileSuit:
+    """スナップショットをMobileSuitオブジェクトに変換.
 
     Args:
-        session: データベースセッション
-        room: 処理対象のルーム
+        snapshot: MobileSuitのスナップショット辞書
+
+    Returns:
+        変換されたMobileSuitオブジェクト
     """
-    # このルームのエントリーを取得
-    entry_statement = select(BattleEntry).where(BattleEntry.room_id == room.id)
-    entries = list(session.exec(entry_statement).all())
+    # positionとvelocityをVector3オブジェクトに変換
+    if "position" in snapshot and isinstance(snapshot["position"], dict):
+        snapshot["position"] = Vector3(**snapshot["position"])
+    if "velocity" in snapshot and isinstance(snapshot["velocity"], dict):
+        snapshot["velocity"] = Vector3(**snapshot["velocity"])
+    # weaponsフィールドをWeaponオブジェクトに変換
+    if "weapons" in snapshot and isinstance(snapshot["weapons"], list):
+        snapshot["weapons"] = [
+            Weapon(**w) if isinstance(w, dict) else w for w in snapshot["weapons"]
+        ]
+    return MobileSuit(**snapshot)
 
-    if not entries:
-        print("  警告: エントリーが見つかりません")
-        return
 
-    print(f"  参加者: {len(entries)} 機")
+def _prepare_battle_units(
+    player_entries: list[BattleEntry], npc_entries: list[BattleEntry]
+) -> tuple[MobileSuit, list[MobileSuit], dict]:
+    """プレイヤーと敵ユニットを準備.
 
-    # プレイヤーとエネミーに分ける
-    # 簡易版: 最初のプレイヤーエントリーをplayer、残りをenemiesとする
-    player_entries = [e for e in entries if not e.is_npc]
-    npc_entries = [e for e in entries if e.is_npc]
+    Args:
+        player_entries: プレイヤーエントリーのリスト
+        npc_entries: NPCエントリーのリスト
 
-    if not player_entries:
-        print("  警告: プレイヤーエントリーがありません")
-        return
-
-    # 多人数対戦形式: 全員をenemiesとして扱い、最初のプレイヤーだけplayerとする
-    # （本来はチーム分けなど高度な処理が必要だが、ここでは簡易実装）
-    player_snapshot = player_entries[0].mobile_suit_snapshot
-    player_unit = MobileSuit(**player_snapshot)
+    Returns:
+        (プレイヤーユニット, 敵ユニットリスト, ユニットIDとエントリーのマッピング)
+    """
+    # 最初のプレイヤーをplayerとして設定
+    player_unit = _convert_snapshot_to_mobile_suit(
+        player_entries[0].mobile_suit_snapshot
+    )
     player_unit.side = "PLAYER"
 
     # 他のユニットは全員敵として扱う
     enemy_units = []
-    unit_to_entry_map = {}  # MobileSuit ID -> BattleEntry のマッピング
+    unit_to_entry_map = {}
 
     for entry in player_entries[1:] + npc_entries:
-        enemy_snapshot = entry.mobile_suit_snapshot
-        enemy_unit = MobileSuit(**enemy_snapshot)
+        enemy_unit = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
         enemy_unit.side = "ENEMY"
         enemy_units.append(enemy_unit)
         unit_to_entry_map[enemy_unit.id] = entry
 
-    print(f"  プレイヤー: {player_unit.name}")
-    print(f"  敵機: {len(enemy_units)} 機")
+    return player_unit, enemy_units, unit_to_entry_map
 
-    # シミュレーション実行
+
+def _run_simulation(
+    player_unit: MobileSuit, enemy_units: list[MobileSuit]
+) -> tuple[BattleSimulator, bool, int]:
+    """戦闘シミュレーションを実行.
+
+    Args:
+        player_unit: プレイヤーユニット
+        enemy_units: 敵ユニットリスト
+
+    Returns:
+        (シミュレーター, 勝利フラグ, 撃墜数)
+    """
     simulator = BattleSimulator(player_unit, enemy_units)
 
     max_turns = 100
@@ -136,30 +161,39 @@ def _process_room(session: Session, room: BattleRoom) -> None:
 
     print(f"  戦闘終了: {turn_count} ターン")
 
-    # 勝敗判定: プレイヤーが生き残っていれば勝利
+    # 勝敗判定
     primary_player_win = player_unit.current_hp > 0
-
-    # 撃墜数をカウント
     kills = sum(1 for e in enemy_units if e.current_hp <= 0)
 
-    if primary_player_win:
-        print(f"  結果: プレイヤー勝利 (撃墜: {kills}機)")
-    else:
-        print(f"  結果: プレイヤー敗北 (撃墜: {kills}機)")
+    return simulator, primary_player_win, kills
 
-    # 結果を保存（プレイヤーごと）
+
+def _save_battle_results(
+    session: Session,
+    room: BattleRoom,
+    player_entries: list[BattleEntry],
+    simulator: BattleSimulator,
+    primary_player_win: bool,
+    kills: int,
+) -> None:
+    """戦闘結果を保存し報酬を付与.
+
+    Args:
+        session: データベースセッション
+        room: ルーム
+        player_entries: プレイヤーエントリーリスト
+        simulator: シミュレーター
+        primary_player_win: 勝利フラグ
+        kills: 撃墜数
+    """
     pilot_service = PilotService(session)
 
     for entry in player_entries:
         # 各プレイヤーの勝敗を判定
         if entry.id == player_entries[0].id:
-            # 最初のプレイヤー（実際にシミュレートされた）
             individual_win_loss = "WIN" if primary_player_win else "LOSE"
             individual_kills = kills
         else:
-            # 他のプレイヤー（敵側として扱われた）
-            # 実装簡略化のため、全員敗北扱い
-            # TODO: 将来的にはチーム分けや複数の同時シミュレーションを実装
             individual_win_loss = "LOSE"
             individual_kills = 0
 
@@ -171,20 +205,17 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         )
         session.add(battle_result)
 
-        # 報酬を付与（プレイヤーのみ）
+        # 報酬を付与
         if entry.user_id:
             try:
-                # パイロット情報を取得または作成
                 pilot_name = entry.mobile_suit_snapshot.get("name", "Unknown Pilot")
                 pilot = pilot_service.get_or_create_pilot(entry.user_id, pilot_name)
 
-                # 報酬を計算
                 exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
                     win=individual_win_loss == "WIN",
                     kills=individual_kills,
                 )
 
-                # 報酬を付与
                 pilot, reward_logs = pilot_service.add_rewards(
                     pilot, exp_gained, credits_gained
                 )
@@ -195,12 +226,54 @@ def _process_room(session: Session, room: BattleRoom) -> None:
                 print(f"  警告: 報酬付与エラー ({entry.user_id}): {e}")
                 traceback.print_exc()
 
-    # ルームのステータスを更新
     room.status = "COMPLETED"
     session.add(room)
-
-    # 変更をコミット
     session.commit()
+
+
+def _process_room(session: Session, room: BattleRoom) -> None:
+    """個別ルームの戦闘シミュレーションを実行.
+
+    Args:
+        session: データベースセッション
+        room: 処理対象のルーム
+    """
+    # エントリーを取得
+    entry_statement = select(BattleEntry).where(BattleEntry.room_id == room.id)
+    entries = list(session.exec(entry_statement).all())
+
+    if not entries:
+        print("  警告: エントリーが見つかりません")
+        return
+
+    print(f"  参加者: {len(entries)} 機")
+
+    # プレイヤーとNPCに分ける
+    player_entries = [e for e in entries if not e.is_npc]
+    npc_entries = [e for e in entries if e.is_npc]
+
+    if not player_entries:
+        print("  警告: プレイヤーエントリーがありません")
+        return
+
+    # ユニット準備
+    player_unit, enemy_units, _ = _prepare_battle_units(player_entries, npc_entries)
+
+    print(f"  プレイヤー: {player_unit.name}")
+    print(f"  敵機: {len(enemy_units)} 機")
+
+    # シミュレーション実行
+    simulator, primary_player_win, kills = _run_simulation(player_unit, enemy_units)
+
+    if primary_player_win:
+        print(f"  結果: プレイヤー勝利 (撃墜: {kills}機)")
+    else:
+        print(f"  結果: プレイヤー敗北 (撃墜: {kills}機)")
+
+    # 結果保存
+    _save_battle_results(
+        session, room, player_entries, simulator, primary_player_win, kills
+    )
 
     print("  結果を保存しました")
 
