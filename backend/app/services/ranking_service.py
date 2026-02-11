@@ -55,10 +55,10 @@ class RankingService:
                 BattleResult.user_id,
                 func.count().label("total_battles"),
                 func.sum(
-                    case([(BattleResult.win_loss == "WIN", 1)], else_=0)  # type: ignore[arg-type]
+                    case((BattleResult.win_loss == "WIN", 1), else_=0)  # type: ignore[arg-type]
                 ).label("wins"),
                 func.sum(
-                    case([(BattleResult.win_loss == "LOSE", 1)], else_=0)  # type: ignore[arg-type]
+                    case((BattleResult.win_loss == "LOSE", 1), else_=0)  # type: ignore[arg-type]
                 ).label("losses"),
             )
             .where(BattleResult.user_id != None)  # type: ignore[union-attr]  # noqa: E711
