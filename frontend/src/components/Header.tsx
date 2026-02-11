@@ -3,77 +3,66 @@
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePilot } from "@/services/api";
+import { SciFiButton, SciFiHeading } from "@/components/ui";
 
 export default function Header() {
   const { pilot } = usePilot();
 
   return (
-    <header className="mb-8 border-b border-green-700 pb-4">
+    <header className="mb-8 border-b-2 border-[#00ff41]/30 pb-4 sf-scanline">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">MSBS-Next Simulator</h1>
-          <p className="text-sm opacity-70">Phase 1: Prototype Environment</p>
+          <SciFiHeading level={1} className="text-2xl">
+            MSBS-Next Simulator
+          </SciFiHeading>
+          <p className="text-sm text-[#00ff41]/60 font-mono ml-5">Phase 1: Prototype Environment</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <SignedIn>
             {pilot && (
               <Link
                 href="/pilot"
-                className="px-4 py-2 bg-gray-800 rounded border border-green-700 hover:border-green-500 transition-colors"
+                className="px-4 py-2 bg-[#0a0a0a] border-2 border-[#00ff41]/50 hover:border-[#00ff41] hover:sf-border-glow-green transition-all font-mono text-sm"
               >
-                <div className="flex gap-4 text-sm">
+                <div className="flex gap-4">
                   <div>
-                    <span className="text-gray-400">Lv.</span>
-                    <span className="text-yellow-400 font-bold ml-1">{pilot.level}</span>
+                    <span className="text-[#00ff41]/60">LV.</span>
+                    <span className="text-[#ffb000] font-bold ml-1">{pilot.level}</span>
                   </div>
-                  <div className="border-l border-gray-600 pl-4">
-                    <span className="text-gray-400">SP:</span>
-                    <span className="text-purple-400 font-bold ml-1">{pilot.skill_points}</span>
+                  <div className="border-l-2 border-[#00ff41]/30 pl-4">
+                    <span className="text-[#00ff41]/60">SP:</span>
+                    <span className="text-[#00f0ff] font-bold ml-1">{pilot.skill_points}</span>
                   </div>
-                  <div className="border-l border-gray-600 pl-4">
-                    <span className="text-gray-400">Credits:</span>
-                    <span className="text-green-400 font-bold ml-1">{pilot.credits.toLocaleString()}</span>
+                  <div className="border-l-2 border-[#00ff41]/30 pl-4">
+                    <span className="text-[#00ff41]/60">CREDITS:</span>
+                    <span className="text-[#00ff41] font-bold ml-1">{pilot.credits.toLocaleString()}</span>
                   </div>
                 </div>
               </Link>
             )}
           </SignedIn>
-          <Link
-            href="/history"
-            className="px-6 py-3 bg-yellow-900 hover:bg-yellow-800 rounded font-bold transition-colors shadow-lg hover:shadow-yellow-500/50"
-          >
-            History
+          <Link href="/history">
+            <SciFiButton variant="secondary" size="sm">History</SciFiButton>
           </Link>
-          <Link
-            href="/shop"
-            className="px-6 py-3 bg-blue-900 hover:bg-blue-800 rounded font-bold transition-colors shadow-lg hover:shadow-blue-500/50"
-          >
-            Shop
+          <Link href="/shop">
+            <SciFiButton variant="accent" size="sm">Shop</SciFiButton>
           </Link>
-          <Link
-            href="/garage/engineering"
-            className="px-6 py-3 bg-purple-900 hover:bg-purple-800 rounded font-bold transition-colors shadow-lg hover:shadow-purple-500/50"
-          >
-            Engineering
+          <Link href="/garage/engineering">
+            <SciFiButton variant="accent" size="sm">Engineering</SciFiButton>
           </Link>
-          <Link
-            href="/garage"
-            className="px-6 py-3 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors shadow-lg hover:shadow-green-500/50"
-          >
-            Open Hangar
+          <Link href="/garage">
+            <SciFiButton variant="primary" size="sm">Open Hangar</SciFiButton>
           </Link>
           <SignedOut>
             <SignInButton mode="modal">
-              <button className="px-6 py-3 bg-blue-900 hover:bg-blue-800 rounded font-bold transition-colors shadow-lg hover:shadow-blue-500/50">
-                Sign In
-              </button>
+              <SciFiButton variant="accent" size="sm">Sign In</SciFiButton>
             </SignInButton>
           </SignedOut>
           <SignedIn>
             <UserButton 
               appearance={{
                 elements: {
-                  avatarBox: "w-10 h-10"
+                  avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
                 }
               }}
             />

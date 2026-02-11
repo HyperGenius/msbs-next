@@ -26,8 +26,6 @@ export default function SciFiHeading({
     4: "text-lg md:text-xl",
   };
 
-  const Tag = `h${level}` as keyof JSX.IntrinsicElements;
-
   const baseClasses = `
     font-bold
     font-mono
@@ -40,5 +38,16 @@ export default function SciFiHeading({
     ${className}
   `.trim();
 
-  return <Tag className={baseClasses}>{children}</Tag>;
+  switch (level) {
+    case 1:
+      return <h1 className={baseClasses}>{children}</h1>;
+    case 2:
+      return <h2 className={baseClasses}>{children}</h2>;
+    case 3:
+      return <h3 className={baseClasses}>{children}</h3>;
+    case 4:
+      return <h4 className={baseClasses}>{children}</h4>;
+    default:
+      return <h1 className={baseClasses}>{children}</h1>;
+  }
 }
