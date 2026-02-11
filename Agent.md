@@ -3,7 +3,23 @@
 
 ## 1. プロジェクト概要
 
-プロジェクトはPhase.0です
+**プロジェクト名:** MSBS-Next (仮)  
+**ジャンル:** 定期更新型タクティカルバトルシミュレーション (PvPvE)  
+**プラットフォーム:** Webブラウザ (PC/Mobile対応予定)  
+**現在のフェーズ:** Phase 2.6 (UI/UX強化) 完了、Phase 3 (β版) 準備中
+
+### 実装済み主要機能
+
+- ✅ 3D空間でのリアルタイムバトルシミュレーション
+- ✅ ユーザー認証 (Clerk)
+- ✅ 機体カスタマイズ & 戦術設定
+- ✅ 高度な戦闘システム (武器属性、地形適正、索敵、リソース管理)
+- ✅ パイロット成長 & スキルシステム
+- ✅ 機体強化 (Engineering) & ショップ
+- ✅ バトルエントリー & マッチング
+- ✅ バッチ処理システム (定期更新対応)
+- ✅ 3Dバトルビューア (環境別演出、索敵範囲可視化、リソース表示)
+- ✅ ダッシュボード (エントリー管理、カウントダウン、結果モーダル)
 
 ## 2. 技術スタック (Tech Stack)
 
@@ -19,9 +35,10 @@
 * **Framework**: Next.js 15+ (App Router)
 * **Language**: TypeScript
 * **Styling**: Tailwind CSS
-* **UI Library**: shadcn/ui
+* **UI Library**: カスタムSciFiデザインシステム (`src/components/ui/`)
+* **3D Rendering**: React Three Fiber (@react-three/fiber, @react-three/drei)
 * **Data Fetching**: SWR
-* **Testing**: Playwright (E2E)
+* **Testing**: Playwright (E2E, 準備中)
 
 ### Database & Infra
 
@@ -37,23 +54,33 @@
 /
 ├── backend/
 │   ├── app/
-│   │   ├── api/        # 依存性注入 (Dependencies)
-│   │   ├── core/       # 設定 (Config), 定数, プロンプト定義
-│   │   ├── db/         # DB接続クライアント
-│   │   ├── models/     # Pydanticモデル (Schema)
+│   │   ├── core/       # 設定 (Config), スキル定義, 定数
+│   │   ├── db/         # DB接続 (db.py)
+│   │   ├── models/     # SQLModel (ORM) & Pydanticモデル
 │   │   ├── routers/    # APIエンドポイント定義
-│   │   └── services/   # ビジネスロジック
-│   ├── scripts/        # バッチ処理, ユーティリティスクリプト
-│   └── tests/          # 単体テスト (Unit Tests)
+│   │   ├── services/   # ビジネスロジック (マッチング、パイロット、整備等)
+│   │   └── engine/     # バトルシミュレーションエンジン
+│   ├── alembic/        # DBマイグレーション
+│   ├── scripts/        # バッチ処理 (run_batch.py), シードデータ
+│   └── tests/          # 単体テスト & 統合テスト
+│       ├── unit/       # ユニットテスト
+│       └── integration/# 統合テスト
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── app/        # Next.js App Router Pages
 │   │   ├── components/ # UIコンポーネント
-│   │   ├── services/   # API呼び出し関数
+│   │   │   ├── ui/     # カスタムSciFiコンポーネント (SciFiButton等)
+│   │   │   ├── Dashboard/ # ダッシュボード関連コンポーネント
+│   │   │   └── BattleViewer/ # 3Dバトルビューア (R3F)
+│   │   ├── services/   # API呼び出し (api.ts)
 │   │   ├── types/      # TypeScript型定義
 │   │   └── utils/      # 汎用ユーティリティ
-│   └── e2e/            # Playwrightテスト
+│   └── e2e/            # Playwrightテスト (準備中)
+│
+├── docs/               # プロジェクトドキュメント
+│   ├── roadmap.md      # 開発ロードマップ (メインドキュメント)
+│   └── ...             # 各種実装ガイド & レポート
 │
 └── infra/              # Terraform HCL
     └── neon/           # Neon DB作成
@@ -96,11 +123,18 @@
 4. **Component Complexity (Logic Extraction)**:
    - データの整形、フィルタリング、複雑な状態計算ロジックはコンポーネント内に記述せず、必ず **Custom Hooks** (`useLogicName`) に切り出す。
    - コンポーネントは「描画」に専念し、ロジックを持たないようにする (View vs Logic の分離)。
+   - 実装例: `BattleViewer` → `useBattleSnapshot`, `useBattleEvents` に状態計算を分離
 5. **React Three Fiber (R3F) Separation**:
    - 3Dシーン (`Canvas` 内部) と 2D UI (HTML オーバーレイ) は、同じファイルに混在させず、それぞれ別のコンポーネントファイルに分割する。
    - `Canvas` を含む親コンポーネントは、レイアウトとデータの受け渡しのみを行う構成（Container Component）にする。
+   - 実装例: `BattleViewer/index.tsx` (Container) → `scene/BattleScene.tsx` (3D) + `ui/BattleOverlay.tsx` (2D UI)
 6. **Constants & Utils**:
    - 複数の場所で使用される定数や、3行以上の計算ロジック（色計算など）は `utils/` や `constants.ts` に移動し、純粋関数として定義する。
+   - 実装例: `BattleViewer/utils.ts` - HPバー色計算、環境色取得
+7. **SciFi Design System**:
+   - UIコンポーネントは `src/components/ui/` のカスタムコンポーネントを使用する。
+   - 利用可能: `SciFiButton`, `SciFiPanel`, `SciFiHeading`, `SciFiSelect`, `SciFiInput` 等
+   - 統一感のあるサイバーパンク風デザインを維持する。
 
 ### Database (Neon/PostgreSQL)
 
@@ -194,4 +228,78 @@ AI AgentがIssueに取り組む際は、以下の手順を遵守してくださ�
 1. **Design**: `app/models` (Backend) や `src/types` (Frontend) の定義から始める。データ構造を先に確定させる。
 2. **Backend Impl**: `Service` クラスの実装 → `Router` の実装 → `Unit Test` の作成・パス。
 3. **Frontend Impl**: `Service` (API Client) の実装 → UIコンポーネントの実装 → ページへの組み込み。
-4. **Integration**: `E2E Test` を実行し、一連のフローが動作することを確認する。
+4. **Integration**: `E2E Test` を実行し、一連のフローが動作することを確認する（現在準備中）。
+
+---
+
+## 7. プロジェクト固有の重要事項
+
+### バトルシミュレーションエンジン
+
+* **Location**: `backend/app/engine/simulation.py`
+* **Class**: `BattleSimulator`
+* **Key Features**:
+  - 3D空間でのベクトル計算（NumPy使用）
+  - 武器属性（BEAM/PHYSICAL）と耐性システム
+  - 地形適正による移動速度補正
+  - 索敵システム（Fog of War）
+  - リソース管理（EN、弾薬、クールダウン）
+  - 戦術（Tactics）に基づくAI行動
+
+### バッチ処理システム
+
+* **Location**: `backend/scripts/run_batch.py`
+* **Purpose**: 定期更新型ゲームの自動マッチング＆シミュレーション実行
+* **Flow**:
+  1. `MatchingService` でエントリーをルーム分け
+  2. NPC自動生成（不足分を補う）
+  3. 各ルームでバトルシミュレーション実行
+  4. 結果をDBに保存
+* **Schedule**: GitHub Actions (毎日JST 21:00 / UTC 12:00) - 手動トリガーも可能
+
+### 3Dビジュアライゼーション
+
+* **Location**: `frontend/src/components/BattleViewer/`
+* **Structure**:
+  - `index.tsx` - Container Component
+  - `scene/BattleScene.tsx` - 3Dシーン（Canvas内部）
+  - `ui/BattleOverlay.tsx` - 2D UIオーバーレイ
+  - `hooks/` - カスタムフック（状態計算、イベント取得）
+  - `utils.ts` - ユーティリティ関数
+* **Features**:
+  - 環境別演出（SPACE/GROUND/COLONY/UNDERWATER）
+  - 索敵範囲可視化（アニメーションリング）
+  - リアルタイムリソース表示
+  - ダメージフラッシュエフェクト
+
+### 主要ドキュメント
+
+開発時に参照すべき主要ドキュメント：
+
+* **`docs/roadmap.md`** - プロジェクトの全体像、実装済み機能、今後の計画
+* **`docs/battle_simulation_roadmap.md`** - シミュレーションエンジンの詳細仕様
+* **`docs/BATCH_SYSTEM.md`** - バッチ処理システムの仕様
+* **`docs/PILOT_SYSTEM.md`** - パイロット成長・スキルシステム
+* **実装レポート** (ルートディレクトリの `*_REPORT.md`, `*_SUMMARY.md`) - 各機能の実装詳細
+
+### 環境設定
+
+* **Backend起動**: `cd backend && uvicorn main:app --reload`
+* **Frontend起動**: `cd frontend && npm run dev`
+* **バッチ実行**: `cd backend && python scripts/run_batch.py`
+* **マイグレーション**: `cd backend && alembic upgrade head`
+* **テスト実行**: `cd backend && pytest`
+
+---
+
+## 8. Pull Request作成時の注意
+
+PRを作成する際は、以下を必ず含めてください：
+
+1. **変更内容の要約** - 何を実装したか
+2. **関連Issue** - `Closes #123` 形式でリンク
+3. **テスト結果** - 実行したテストとその結果
+4. **スクリーンショット** - UI変更の場合は必須
+5. **ドキュメント更新** - 必要に応じてREADMEやdocs/を更新
+
+**PR説明文は日本語で記述すること。**（`.github/copilot-instructions.md`に規定）

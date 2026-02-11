@@ -3,12 +3,13 @@
 ブラウザベースの定期更新型MSバトルシミュレーションゲームの開発ロードマップです。
 MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・進化させることを目的とします。
 
-## 📊 現在の開発状況 (2026年2月9日時点)
+## 📊 現在の開発状況 (2026年2月11日時点)
 
 **✅ Phase 0 (Simulation Engine Core)** - 完了  
 **✅ Phase 1 (MVP)** - 完了  
 **✅ Phase 2 (α版 - 定期更新型 PvPvE)** - 完了  
 **✅ Phase 2.5 (シミュレーションエンジンの高度化)** - 完了  
+**✅ Phase 2.6 (UI/UX強化)** - 完了  
 **🔧 Phase 3 (β版 - Community & Content)** - 準備中  
 **⏳ Phase 4 (正式サービス)** - 未着手
 
@@ -19,14 +20,16 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 - ✅ ユーザー認証 (Clerk)
 - ✅ PostgreSQL (Neon) によるデータ永続化
 - ✅ React Three Fiber による3Dビジュアライゼーション
+- ✅ SciFiデザインシステム (カスタムUIコンポーネント)
 
 #### ゲームプレイ
 - ✅ 機体カスタマイズ (ガレージシステム)
 - ✅ 戦術設定 (Tactics System)
 - ✅ ミッション選択 (難易度別、環境タイプ)
 - ✅ バトル実行とログ閲覧
-- ✅ 3Dリプレイビューア
+- ✅ 3Dリプレイビューア (環境別演出、索敵範囲可視化、リソース表示、ダメージフラッシュ)
 - ✅ 高度な戦闘システム (武器属性、地形適正、索敵、リソース管理)
+- ✅ ダッシュボード (エントリー状況、カウントダウンタイマー、バトル結果モーダル)
 
 #### 成長システム
 - ✅ パイロットレベル & 経験値
@@ -48,19 +51,20 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 * **ジャンル:** 定期更新型タクティカルバトルシミュレーション (PvPvE)
 * **プラットフォーム:** Webブラウザ (PC/Mobile)
 * **コア体験:** MSカスタマイズ → 戦術設定 → 自動シミュレーション → バトルログ確認
-* **開発状況:** Phase 2 (α版) 完了、Phase 3 (β版) 準備中
+* **開発状況:** Phase 2.6 (UI/UX強化) 完了、Phase 3 (β版) 準備中
 
 ## 2. 技術スタック
 
 | 領域 | 技術 | 状態 |
 |------|------|------|
-| Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS | ✅ 稼働中 |
+| Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS, React Three Fiber | ✅ 稼働中 |
 | Backend | Python (FastAPI), Pydantic v2, SQLModel | ✅ 稼働中 |
 | Simulation | NumPy (ベクトル計算), Pure Python Logic | ✅ 実装済 |
 | Database | Neon (PostgreSQL), Alembic (マイグレーション) | ✅ 稼働中 |
 | Auth | Clerk (JWT/JWKS) | ✅ 実装済 |
-| Visuals | React Three Fiber (@react-three/fiber, drei) | ✅ 実装済 |
-| Infra | Terraform (Neon), Vercel (Frontend), Render (Backend予定) | 🔧 一部構築済 |
+| Visuals | React Three Fiber (@react-three/fiber, @react-three/drei) | ✅ 実装済 |
+| UI Components | カスタムSciFiデザインシステム | ✅ 実装済 |
+| Infra | Terraform (Neon), Vercel (Frontend予定), Render (Backend予定) | 🔧 一部構築済 |
 
 ## 3. 開発フェーズ
 
@@ -330,6 +334,65 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 
 ---
 
+### Phase 2.6: UI/UX強化 ✅ 完了
+**ゴール:** プレイヤー体験の向上、バトルビューアの視覚表現強化、ダッシュボードの改善。  
+**完了日:** 2026年2月11日
+
+* **3Dバトルビューアの大幅強化:** ✅
+    * [x] 環境別の演出強化 (SPACE/GROUND/COLONY/UNDERWATER)
+        * 地面メッシュ、水面エフェクト、メタリック床
+        * 環境に応じたフォグと照明
+    * [x] 索敵範囲の可視化 (Fog of War)
+        * アニメーションする緑色のリング表示
+        * sensor_range パラメータに基づく動的サイズ
+    * [x] リアルタイムリソース表示
+        * ENゲージ（シアン色）
+        * 弾薬残量（オレンジ色）
+        * ゲージバーとアイコン表示
+    * [x] ダメージフラッシュエフェクト
+        * 被ダメージ時の赤色フラッシュ
+        * HPバーの視覚的フィードバック
+    * [x] バトルイベント演出
+        * 攻撃・被弾・撃墜のアニメーション表示
+    * [x] コンポーネント分離とパフォーマンス最適化
+        * `BattleScene` / `BattleOverlay` / `UnitMesh` の分離
+        * `useMemo` によるレンダリング最適化
+
+* **ダッシュボードUI刷新:** ✅
+    * [x] **カウントダウンタイマー:** 次回バトルまでの残り時間を大きく表示
+        * 1秒ごとのリアルタイム更新
+        * グラデーションデザイン
+    * [x] **エントリーダッシュボード:** エントリー状況を直感的に表示
+        * 大きなENTRYボタン
+        * 参加者数プログレスバー
+        * エントリー済み機体のサムネイル・スペック表示
+    * [x] **バトル結果モーダル:** 勝敗に応じた演出
+        * WIN時: 緑/青グラデーション、星エフェクト
+        * LOSE時: 赤グラデーション、警告アイコン
+        * 経験値・報酬の視覚的表示
+
+* **ガレージUIの機能拡張:** ✅
+    * [x] 地形適正表示セクション
+        * 4つの環境（SPACE/GROUND/COLONY/UNDERWATER）
+        * ランク表示（S/A/B/C/D）と色分け
+        * 補正値表示（+20% ~ -60%）
+        * アイコン表示（🌌/🏔️/🏢/🌊）
+
+* **ログ表示の改善:** ✅
+    * [x] メッセージの色分け強調表示
+        * リソース制限: オレンジ色（弾切れ、EN不足、クールダウン）
+        * 地形・索敵: シアン色
+        * 属性相性: 紫色（BEAM、PHYSICAL）
+
+実装レポート:
+- [PHASE_2_5_COMPLETION_REPORT.md](../PHASE_2_5_COMPLETION_REPORT.md) - Phase 2.5 UI実装完了報告
+- [IMPLEMENTATION_SUMMARY_BATTLE_VIEWER.md](../IMPLEMENTATION_SUMMARY_BATTLE_VIEWER.md) - バトルビューア視覚表現強化
+- [DASHBOARD_IMPLEMENTATION_REPORT.md](../DASHBOARD_IMPLEMENTATION_REPORT.md) - ダッシュボード改善
+- [BATTLE_VIEWER_ENHANCEMENTS.md](../BATTLE_VIEWER_ENHANCEMENTS.md) - バトルビューアー強化詳細
+- [SF_DESIGN_IMPLEMENTATION_SUMMARY.md](../SF_DESIGN_IMPLEMENTATION_SUMMARY.md) - SciFiデザインシステム
+
+---
+
 ### Phase 3: β版 (Community & Content) 🔧 準備中
 **ゴール:** コンテンツ拡充とコミュニティ機能の整備。
 
@@ -337,31 +400,47 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
     * [ ] **NPC永続化 (Persistence):**
         * NPCを `Mission` 設定値から、`Pilots`/`MobileSuits` テーブルのレコードとして独立させる。
         * 個体識別（"あの時のザク"）を可能にする。
+        * NPC用のプロフィールと戦績管理。
     * [ ] **自律成長 (Autonomous Growth):**
         * バトル結果に基づいてNPCも経験値を獲得しレベルアップする。
         * 獲得した報酬で機体を強化・換装するAIロジックの実装。
+        * NPCの戦術をより多様化。
 
 * **ランキング & 統計:**
     * [ ] **シーズンランキング:** 累計ポイント・勝利数・撃墜数
-    * [ ] **個人戦績:** 参加履歴、平均順位、K/D比
-    * [ ] **リーダーボード:** Top100表示
+    * [ ] **個人戦績:** 参加履歴、平均順位、K/D比、勝率
+    * [ ] **リーダーボード:** Top100表示、シーズン別ランキング
+    * [ ] **バトル統計:** 武器使用率、地形別勝率、戦術効果分析
 
 * **Content:**
     * [ ] **勢力 (Faction):** 所属勢力ごとのボーナス・専用機体
-    * [ ] **MS/武器バリエーション:** 機体・武器のアンロック/購入システム拡充
-    * [ ] **マップバリエーション:** 宇宙/地上/コロニー内など
-    * [ ] **ミッション拡充:** より多様な敵編成とシナリオ
+        * 地球連邦 / ジオン / その他勢力
+        * 勢力ミッション、勢力ランキング
+    * [ ] **MS/武器バリエーション:** 
+        * 機体・武器のアンロック/購入システム拡充
+        * レア度システム (Common/Rare/Epic/Legendary)
+        * 機体ツリー（開発系統）
+    * [ ] **マップバリエーション:** 
+        * 宇宙/地上/コロニー内/水中など環境の追加
+        * 障害物システム（岩、建物、デブリ）
+        * 特殊地形効果（重力井戸、ミノフスキー粒子）
+    * [ ] **ミッション拡充:** 
+        * より多様な敵編成とシナリオ
+        * ストーリーミッション
+        * イベントミッション
 
 * **Social:**
-    * [ ] **フレンド機能:** フォロー、対戦履歴閲覧
-    * [ ] **チーム戦（オプション）:** 2〜3人チームでのバトルロイヤル
-    * [ ] **ギルド/クラン:** 組織対抗戦
+    * [ ] **フレンド機能:** フォロー、対戦履歴閲覧、プライベートマッチ
+    * [ ] **チーム戦:** 2〜3人チームでのバトルロイヤル
+    * [ ] **ギルド/クラン:** 組織対抗戦、ギルド専用報酬
+    * [ ] **チャット機能:** ロビーチャット、バトル後チャット
 
-* **UI/UX 改善:**
-    * [ ] **よりリッチな3Dモデル:** 機体ごとの専用モデル
-    * [ ] **カメラコントロール:** 自由視点、追尾カメラ
-    * [ ] **エフェクト強化:** ビーム、爆発、被弾エフェクト
+* **UI/UX 更なる改善:**
+    * [ ] **よりリッチな3Dモデル:** 機体ごとの専用3Dモデル（現在は球体）
+    * [ ] **カメラコントロール:** 自由視点、追尾カメラ、リプレイのカメラワーク改善
+    * [ ] **エフェクト強化:** ビーム、爆発、被弾エフェクトのグラフィック向上
     * [ ] **サウンド:** BGM、SE、ボイス
+    * [ ] **モバイル対応:** タッチUI、レスポンシブ最適化
 
 ### Phase 4: 正式サービス (Monetization & Ops) ⏳ 未着手
 **ゴール:** 収益化と安定運営体制の確立。
@@ -371,7 +450,30 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
     * [ ] **Render/AWS デプロイ:** Backend の本番環境構築
     * [ ] **CI/CD パイプライン:** 自動テスト & デプロイ
     * [ ] **監視・ログ:** Sentry, Datadog等の導入
-### 基本システム
+    * [ ] **CDN設定:** 静的アセットの配信最適化
+
+* **Performance:**
+    * [ ] **キャッシング戦略（Redis）:** セッション管理、リーダーボードキャッシュ
+    * [ ] **クエリ最適化:** インデックス設計、N+1問題の解消
+    * [ ] **CDN活用:** 画像・3Dアセットの配信
+    * [ ] **負荷テスト & チューニング:** 大規模ユーザー対応
+
+* **Monetization:**
+    * [ ] **課金システム:** プレミアム機能、アイテム課金
+    * [ ] **サブスクリプション:** 月額会員制度
+    * [ ] **広告統合:** 無料ユーザー向け広告表示
+
+* **Operations:**
+    * [ ] **カスタマーサポート:** 問い合わせフォーム、FAQ
+    * [ ] **利用規約・プライバシーポリシー:** 法的文書の整備
+    * [ ] **不正行為対策:** チート検出、BANシステム
+    * [ ] **データバックアップ戦略:** 定期バックアップ、災害復旧計画
+
+---
+
+## 4. シミュレーション仕様 (実装済)
+
+物理エンジンは使用せず、数学的な計算のみで処理する。
 * **フィールド:**
     * 境界なしの3D空間。
     * 環境タイプ: `SPACE` (宇宙), `GROUND` (地上), `COLONY` (コロニー内), `UNDERWATER` (水中)
@@ -621,7 +723,18 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 * [武器属性と距離適正実装レポート](../ADVANCED_BATTLE_LOGIC_REPORT.md)
 * [地形適正と索敵システム実装レポート](../TERRAIN_DETECTION_IMPLEMENTATION_REPORT.md)
 * [リソース管理システム実装レポート](../RESOURCE_MANAGEMENT_IMPLEMENTATION.md)
+* [Phase 2.5 UI実装完了報告](../PHASE_2_5_COMPLETION_REPORT.md)
+* [バトルビューア視覚表現強化](../IMPLEMENTATION_SUMMARY_BATTLE_VIEWER.md)
+* [ダッシュボード改善レポート](../DASHBOARD_IMPLEMENTATION_REPORT.md)
+* [バトルビューアー強化詳細](../BATTLE_VIEWER_ENHANCEMENTS.md)
 
-### UI/UX
+### UI/UX ガイド
 * [UI Mockups](../UI_MOCKUPS.md)
+* [UI実装サマリー](../UI_IMPLEMENTATION_SUMMARY.md)
+* [UI Visual Mockup](../UI_VISUAL_MOCKUP.md)
+* [SciFiデザインシステム](../SF_DESIGN_IMPLEMENTATION_SUMMARY.md)
+* [SciFi UIコンポーネントガイド](../SF_UI_COMPONENTS_GUIDE.md)
+* [Phase 2.5 UI比較](../PHASE_2_5_UI_COMPARISON.md)
+* [Phase 2.5 UI実装ガイド](../PHASE_2_5_UI_IMPLEMENTATION.md)
+* [バトルビューア視覚ガイド](../VISUAL_GUIDE_BATTLE_VIEWER.md)
 * [Tactics UI Mockup](./tactics-ui-mockup.html)
