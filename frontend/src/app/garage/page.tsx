@@ -2,17 +2,21 @@
 "use client";
 
 import { useState } from "react";
-import { useMobileSuits, updateMobileSuit } from "@/services/api";
-import { MobileSuit } from "@/types/battle";
+import { useMobileSuits, updateMobileSuit, usePilot, useWeaponListings, equipWeapon } from "@/services/api";
+import { MobileSuit, Weapon } from "@/types/battle";
 import Link from "next/link";
 import Header from "@/components/Header";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiInput, SciFiCard, SciFiSelect } from "@/components/ui";
 
 export default function GaragePage() {
   const { mobileSuits, isLoading, isError, mutate } = useMobileSuits();
+  const { pilot } = usePilot();
+  const { weaponListings } = useWeaponListings();
   const [selectedMs, setSelectedMs] = useState<MobileSuit | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showWeaponModal, setShowWeaponModal] = useState(false);
+  const [selectedWeaponSlot, setSelectedWeaponSlot] = useState(0);
 
   // フォーム用のstate
   const [formData, setFormData] = useState({
@@ -62,6 +66,39 @@ export default function GaragePage() {
     } catch (error) {
       console.error("Update error:", error);
       alert("更新に失敗しました。");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 武器変更モーダルを開く
+  const handleOpenWeaponModal = (slotIndex: number) => {
+    setSelectedWeaponSlot(slotIndex);
+    setShowWeaponModal(true);
+  };
+
+  // 武器を装備
+  const handleEquipWeapon = async (weaponId: string) => {
+    if (!selectedMs) return;
+
+    setIsSaving(true);
+    try {
+      const updatedMs = await equipWeapon(selectedMs.id, {
+        weapon_id: weaponId,
+        slot_index: selectedWeaponSlot,
+      });
+      
+      setSuccessMessage("武器を装備しました");
+      setShowWeaponModal(false);
+      
+      // SWRのキャッシュを更新
+      mutate();
+      
+      // 選択中の機体情報も更新
+      setSelectedMs(updatedMs);
+    } catch (error) {
+      console.error("Equip error:", error);
+      alert(error instanceof Error ? error.message : "武器の装備に失敗しました");
     } finally {
       setIsSaving(false);
     }
@@ -313,9 +350,18 @@ export default function GaragePage() {
                     {/* Weapons Display */}
                     {selectedMs.weapons && selectedMs.weapons.length > 0 && (
                       <div className="p-3 bg-gray-900 rounded">
-                        <h4 className="text-sm font-bold mb-2 text-green-500">
-                          装備武器
-                        </h4>
+                        <div className="flex justify-between items-center mb-2">
+                          <h4 className="text-sm font-bold text-green-500">
+                            装備武器
+                          </h4>
+                          <SciFiButton
+                            variant="primary"
+                            size="sm"
+                            onClick={() => handleOpenWeaponModal(0)}
+                          >
+                            変更
+                          </SciFiButton>
+                        </div>
                         {selectedMs.weapons.map((weapon, idx) => (
                           <div key={idx} className="mb-3 text-sm border-b border-green-800 pb-2 last:border-b-0">
                             <div className="font-bold">{weapon.name}</div>
@@ -463,6 +509,111 @@ export default function GaragePage() {
                   <p>機体を選択してください</p>
                 </div>
               )}
+              </div>
+            </SciFiPanel>
+          </div>
+        )}
+
+        {/* Weapon Change Modal */}
+        {showWeaponModal && selectedMs && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <SciFiPanel variant="accent" chiseled={true}>
+              <div className="p-8 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+                <SciFiHeading level={3} className="mb-4" variant="accent">
+                  武器変更
+                </SciFiHeading>
+                
+                <p className="mb-4 text-sm text-green-400">
+                  所持している武器から選択してください
+                </p>
+
+                {/* Available Weapons List */}
+                <div className="space-y-3 mb-6">
+                  {weaponListings
+                    ?.filter(
+                      (weaponListing) =>
+                        pilot?.inventory &&
+                        pilot.inventory[weaponListing.id] &&
+                        pilot.inventory[weaponListing.id] > 0
+                    )
+                    .map((weaponListing) => {
+                      const weapon = weaponListing.weapon;
+                      return (
+                        <SciFiCard
+                          key={weaponListing.id}
+                          variant="accent"
+                          className="cursor-pointer hover:border-green-400 transition-colors"
+                          onClick={() => handleEquipWeapon(weaponListing.id)}
+                        >
+                          <div className="p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <h4 className="font-bold text-green-300">
+                                  {weapon.name}
+                                </h4>
+                                <p className="text-xs text-green-600">
+                                  所持数: {pilot?.inventory?.[weaponListing.id] || 0}
+                                </p>
+                              </div>
+                              <span className={`px-2 py-1 text-xs font-bold rounded ${
+                                weapon.type === "BEAM" 
+                                  ? "bg-blue-500/20 text-blue-400" 
+                                  : "bg-yellow-500/20 text-yellow-400"
+                              }`}>
+                                {weapon.type || "PHYSICAL"}
+                              </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div>
+                                <span className="text-gray-400">威力:</span>
+                                <span className="ml-1 font-bold text-green-400">
+                                  {weapon.power}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">射程:</span>
+                                <span className="ml-1 font-bold text-green-400">
+                                  {weapon.range}m
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-400">命中:</span>
+                                <span className="ml-1 font-bold text-green-400">
+                                  {weapon.accuracy}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </SciFiCard>
+                      );
+                    })}
+                  
+                  {(!pilot?.inventory ||
+                    !weaponListings?.some(
+                      (w) =>
+                        pilot.inventory?.[w.id] &&
+                        pilot.inventory[w.id] > 0
+                    )) && (
+                    <div className="text-center py-8 text-gray-400">
+                      <p>所持している武器がありません</p>
+                      <p className="text-sm mt-2">
+                        ショップで武器を購入してください
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-4">
+                  <SciFiButton
+                    onClick={() => setShowWeaponModal(false)}
+                    variant="danger"
+                    size="md"
+                    className="flex-1"
+                  >
+                    閉じる
+                  </SciFiButton>
+                </div>
               </div>
             </SciFiPanel>
           </div>
