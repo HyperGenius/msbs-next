@@ -1,8 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* SF Design Tokens - Base Colors */
+  --sf-deep-black: #050505;
+  --sf-dark-black: #0a0a0a;
+  --sf-darker-gray: #0f0f0f;
+  
+  /* SF Design Tokens - Primary (System/Friendly) */
+  --sf-neon-green: #00ff41;
+  --sf-green-dark: #00cc33;
+  --sf-green-darker: #009922;
+  
+  /* SF Design Tokens - Secondary (Warning/Physical) */
+  --sf-amber: #ffb000;
+  --sf-amber-dark: #cc8800;
+  
+  /* SF Design Tokens - Accent (Info/Energy) */
+  --sf-cyan: #00f0ff;
+  --sf-cyan-dark: #00b8cc;
+  
+  --background: var(--sf-deep-black);
+  --foreground: var(--sf-neon-green);
 }
 
 @theme inline {
@@ -10,17 +28,96 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  
+  /* SF Theme Colors */
+  --color-sf-deep-black: var(--sf-deep-black);
+  --color-sf-dark-black: var(--sf-dark-black);
+  --color-sf-neon-green: var(--sf-neon-green);
+  --color-sf-green-dark: var(--sf-green-dark);
+  --color-sf-amber: var(--sf-amber);
+  --color-sf-cyan: var(--sf-cyan);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--sf-deep-black);
+  color: var(--sf-neon-green);
+  font-family: var(--font-geist-mono), 'Courier New', monospace;
+}
+
+/* SF Effects - Neon Glow */
+.sf-glow-green {
+  box-shadow: 
+    0 0 5px rgba(0, 255, 65, 0.5),
+    0 0 10px rgba(0, 255, 65, 0.3),
+    0 0 15px rgba(0, 255, 65, 0.2);
+}
+
+.sf-glow-cyan {
+  box-shadow: 
+    0 0 5px rgba(0, 240, 255, 0.5),
+    0 0 10px rgba(0, 240, 255, 0.3),
+    0 0 15px rgba(0, 240, 255, 0.2);
+}
+
+.sf-glow-amber {
+  box-shadow: 
+    0 0 5px rgba(255, 176, 0, 0.5),
+    0 0 10px rgba(255, 176, 0, 0.3),
+    0 0 15px rgba(255, 176, 0, 0.2);
+}
+
+/* SF Effects - Scanline */
+.sf-scanline {
+  position: relative;
+  overflow: hidden;
+}
+
+.sf-scanline::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 65, 0.03) 0px,
+    transparent 2px,
+    transparent 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* SF Effects - Chiseled Corner */
+.sf-chiseled {
+  clip-path: polygon(
+    0 8px,
+    8px 0,
+    calc(100% - 8px) 0,
+    100% 8px,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    8px 100%,
+    0 calc(100% - 8px)
+  );
+}
+
+/* SF Effects - Border Glow */
+.sf-border-glow-green {
+  border-color: var(--sf-neon-green);
+  box-shadow: 
+    inset 0 0 10px rgba(0, 255, 65, 0.2),
+    0 0 5px rgba(0, 255, 65, 0.3);
+}
+
+.sf-border-glow-cyan {
+  border-color: var(--sf-cyan);
+  box-shadow: 
+    inset 0 0 10px rgba(0, 240, 255, 0.2),
+    0 0 5px rgba(0, 240, 255, 0.3);
+}
+
+.sf-border-glow-amber {
+  border-color: var(--sf-amber);
+  box-shadow: 
+    inset 0 0 10px rgba(255, 176, 0, 0.2),
+    0 0 5px rgba(255, 176, 0, 0.3);
 }
