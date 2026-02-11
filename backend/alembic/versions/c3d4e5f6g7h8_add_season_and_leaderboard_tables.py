@@ -1,7 +1,7 @@
 """add_season_and_leaderboard_tables.
 
 Revision ID: c3d4e5f6g7h8
-Revises: 1cfa385ca4aa
+Revises: b2c3d4e5f6g7
 Create Date: 2026-02-11 04:50:00.000000
 
 """
@@ -15,7 +15,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c3d4e5f6g7h8"
-down_revision: str | Sequence[str] | None = "1cfa385ca4aa"
+down_revision: str | Sequence[str] | None = "b2c3d4e5f6g7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -33,7 +33,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_seasons_is_active"), "seasons", ["is_active"], unique=False)
+    op.create_index(
+        op.f("ix_seasons_is_active"), "seasons", ["is_active"], unique=False
+    )
 
     # ### Create leaderboards table ###
     op.create_table(
@@ -50,8 +52,12 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["season_id"], ["seasons.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_leaderboards_season_id"), "leaderboards", ["season_id"], unique=False)
-    op.create_index(op.f("ix_leaderboards_user_id"), "leaderboards", ["user_id"], unique=False)
+    op.create_index(
+        op.f("ix_leaderboards_season_id"), "leaderboards", ["season_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_leaderboards_user_id"), "leaderboards", ["user_id"], unique=False
+    )
     # ### end Alembic commands ###
 
 
