@@ -160,7 +160,7 @@ export default function Home() {
     }
   };
 
-  const handleEntry = () => {
+  const handleEntry = async () => {
     if (!mobileSuits || mobileSuits.length === 0) {
       alert("機体がありません。ガレージで機体を作成してください。");
       return;
@@ -168,7 +168,7 @@ export default function Home() {
 
     // 機体が1機のみの場合は即座にエントリー
     if (mobileSuits.length === 1) {
-      executeEntry(mobileSuits[0].id);
+      await executeEntry(mobileSuits[0].id);
     } else {
       // 複数機体がある場合はモーダルを表示
       setShowEntryModal(true);

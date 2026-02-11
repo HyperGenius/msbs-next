@@ -75,7 +75,7 @@ export default function EntrySelectionModal({
                     <div className="space-y-1">
                       {ms.weapons.map((weapon, idx) => (
                         <div
-                          key={idx}
+                          key={`${ms.id}-weapon-${idx}`}
                           className="text-xs text-[#00ff41]/80 flex items-center justify-between"
                         >
                           <span>• {weapon.name}</span>
