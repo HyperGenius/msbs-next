@@ -8,7 +8,12 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.core.auth import get_current_user
-from app.core.gamedata import SHOP_LISTINGS, get_shop_listing_by_id
+from app.core.gamedata import (
+    SHOP_LISTINGS,
+    WEAPON_SHOP_LISTINGS,
+    get_shop_listing_by_id,
+    get_weapon_listing_by_id,
+)
 from app.db import get_session
 from app.models.models import MobileSuit, Pilot
 
@@ -30,6 +35,24 @@ class PurchaseResponse(BaseModel):
 
     message: str
     mobile_suit_id: str
+    remaining_credits: int
+
+
+class WeaponListingResponse(BaseModel):
+    """武器商品のレスポンスモデル."""
+
+    id: str
+    name: str
+    price: int
+    description: str
+    weapon: dict
+
+
+class WeaponPurchaseResponse(BaseModel):
+    """武器購入レスポンスモデル."""
+
+    message: str
+    weapon_id: str
     remaining_credits: int
 
 
@@ -127,5 +150,93 @@ async def purchase_mobile_suit(
     return PurchaseResponse(
         message=f"{listing['name']}を購入しました！",
         mobile_suit_id=str(new_mobile_suit.id),
+        remaining_credits=pilot.credits,
+    )
+
+
+@router.get("/weapons", response_model=list[WeaponListingResponse])
+async def get_weapon_listings() -> list[WeaponListingResponse]:
+    """武器ショップの商品一覧を取得する.
+
+    Returns:
+        list[WeaponListingResponse]: 武器商品一覧
+    """
+    listings = []
+    for item in WEAPON_SHOP_LISTINGS:
+        # 型チェックのためのキャスト
+        item = cast(dict[str, Any], item)
+
+        listings.append(
+            WeaponListingResponse(
+                id=cast(str, item["id"]),
+                name=cast(str, item["name"]),
+                price=cast(int, item["price"]),
+                description=cast(str, item["description"]),
+                weapon=item["weapon"].model_dump(),
+            )
+        )
+
+    return listings
+
+
+@router.post("/purchase/weapon/{weapon_id}", response_model=WeaponPurchaseResponse)
+async def purchase_weapon(
+    weapon_id: str,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> WeaponPurchaseResponse:
+    """武器を購入する.
+
+    Args:
+        weapon_id: 購入する武器のID
+        session: データベースセッション
+        user_id: 現在のユーザーID
+
+    Returns:
+        WeaponPurchaseResponse: 購入結果
+
+    Raises:
+        HTTPException: 武器が存在しない、所持金不足などのエラー
+    """
+    # 1. 武器データを取得
+    listing = get_weapon_listing_by_id(weapon_id)
+    if not listing:
+        raise HTTPException(status_code=404, detail="武器が見つかりません")
+
+    # 2. パイロット情報を取得
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    pilot = session.exec(statement).first()
+
+    if not pilot:
+        raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
+
+    # 3. 所持金チェック
+    if pilot.credits < listing["price"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"所持金が不足しています。必要: {listing['price']} Credits, 所持: {pilot.credits} Credits",
+        )
+
+    # 4. 所持金を減算
+    pilot.credits -= listing["price"]
+
+    # 5. インベントリに武器を追加
+    if pilot.inventory is None:
+        pilot.inventory = {}
+
+    weapon_id_str = cast(str, listing["id"])
+    current_count = pilot.inventory.get(weapon_id_str, 0)
+    # 新しいdictオブジェクトを作成して代入（SQLModelのJSON変更検知のため）
+    pilot.inventory = {**pilot.inventory, weapon_id_str: current_count + 1}
+
+    pilot.updated_at = datetime.now(UTC)
+
+    session.add(pilot)
+    session.commit()
+    session.refresh(pilot)
+
+    return WeaponPurchaseResponse(
+        message=f"{listing['name']}を購入しました！",
+        weapon_id=weapon_id_str,
         remaining_credits=pilot.credits,
     )

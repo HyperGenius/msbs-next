@@ -241,6 +241,11 @@ class Pilot(SQLModel, table=True):
     skills: dict[str, int] = Field(
         default_factory=dict, sa_column=Column(JSON), description="習得済みスキル"
     )
+    inventory: dict[str, int] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description="所持武器インベントリ（武器ID: 所持数）",
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
