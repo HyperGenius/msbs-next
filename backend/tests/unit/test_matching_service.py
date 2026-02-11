@@ -185,6 +185,8 @@ def test_create_rooms_fills_to_capacity(in_memory_session):
     in_memory_session.commit()
 
     # Run matching with room size 8
+    service = MatchingService(in_memory_session, room_size=8)
+    rooms = service.create_rooms()
 
     # Verify
     from sqlmodel import select
