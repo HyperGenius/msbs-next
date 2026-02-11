@@ -248,7 +248,7 @@ export default function ShopPage() {
               
                 {purchaseMessage ? (
                   <SciFiPanel 
-                    variant={purchaseMessage.startsWith("エラー") ? "danger" as any : "primary"}
+                    variant={purchaseMessage.startsWith("エラー") ? "secondary" : "primary"}
                     chiseled={false}
                   >
                     <div className="p-4">

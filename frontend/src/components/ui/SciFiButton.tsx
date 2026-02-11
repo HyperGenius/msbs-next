@@ -41,7 +41,6 @@ export default function SciFiButton({
     border-2
     transition-all
     duration-200
-    clip-path-[polygon(4px_0,100%_0,100%_calc(100%-4px),calc(100%-4px)_100%,0_100%,0_4px)]
     ${variantClasses[variant]}
     ${sizeClasses[size]}
     ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}
