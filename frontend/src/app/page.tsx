@@ -10,6 +10,7 @@ import Header from "@/components/Header";
 import CountdownTimer from "@/components/Dashboard/CountdownTimer";
 import EntryDashboard from "@/components/Dashboard/EntryDashboard";
 import BattleResultModal from "@/components/Dashboard/BattleResultModal";
+import { SciFiPanel, SciFiButton, SciFiHeading, SciFiSelect } from "@/components/ui";
 
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
@@ -166,67 +167,66 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
+    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
       <div className="max-w-4xl mx-auto">
         <Header />
 
         {/* Battle Result Display */}
         {winLoss && (
           <div className="mb-8 text-center">
-            <div
-              className={`inline-block px-12 py-6 rounded-lg text-4xl font-bold animate-pulse ${
-                winLoss === "WIN"
-                  ? "bg-green-900 text-green-300 border-4 border-green-500"
-                  : winLoss === "LOSE"
-                  ? "bg-red-900 text-red-300 border-4 border-red-500"
-                  : "bg-yellow-900 text-yellow-300 border-4 border-yellow-500"
-              }`}
+            <SciFiPanel
+              variant={winLoss === "WIN" ? "primary" : winLoss === "LOSE" ? "secondary" : "accent"}
+              chiseled={true}
             >
-              {winLoss === "WIN" && "★ MISSION COMPLETE ★"}
-              {winLoss === "LOSE" && "✕ MISSION FAILED ✕"}
-              {winLoss === "DRAW" && "- DRAW -"}
-            </div>
+              <div className="px-12 py-6 text-4xl font-bold animate-pulse">
+                {winLoss === "WIN" && "★ MISSION COMPLETE ★"}
+                {winLoss === "LOSE" && "✕ MISSION FAILED ✕"}
+                {winLoss === "DRAW" && "- DRAW -"}
+              </div>
+            </SciFiPanel>
           </div>
         )}
 
         {/* Rewards Display */}
         {rewards && (
-          <div className="mb-8 bg-gradient-to-r from-yellow-900/30 to-green-900/30 p-6 rounded-lg border-2 border-yellow-500/50">
-            <h2 className="text-2xl font-bold mb-4 text-yellow-400 border-l-4 border-yellow-500 pl-2">
-              獲得報酬
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-gray-800/70 p-4 rounded border border-green-700">
-                <p className="text-sm text-gray-400 mb-2">経験値</p>
-                <p className="text-3xl font-bold text-green-400">+{rewards.exp_gained}</p>
-                <p className="text-xs text-gray-500 mt-2">
-                  累積: {rewards.total_exp} EXP
-                </p>
+          <SciFiPanel variant="secondary" className="mb-8">
+            <div className="p-6">
+              <SciFiHeading level={2} variant="secondary" className="mb-4">
+                獲得報酬
+              </SciFiHeading>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-[#0a0a0a]/70 p-4 border-2 border-[#00ff41]/30">
+                  <p className="text-sm text-[#00ff41]/60 mb-2">経験値</p>
+                  <p className="text-3xl font-bold text-[#00ff41]">+{rewards.exp_gained}</p>
+                  <p className="text-xs text-[#00ff41]/50 mt-2">
+                    累積: {rewards.total_exp} EXP
+                  </p>
+                </div>
+                <div className="bg-[#0a0a0a]/70 p-4 border-2 border-[#ffb000]/30">
+                  <p className="text-sm text-[#ffb000]/60 mb-2">クレジット</p>
+                  <p className="text-3xl font-bold text-[#ffb000]">+{rewards.credits_gained.toLocaleString()}</p>
+                  <p className="text-xs text-[#ffb000]/50 mt-2">
+                    所持金: {rewards.total_credits.toLocaleString()} CR
+                  </p>
+                </div>
               </div>
-              <div className="bg-gray-800/70 p-4 rounded border border-green-700">
-                <p className="text-sm text-gray-400 mb-2">クレジット</p>
-                <p className="text-3xl font-bold text-yellow-400">+{rewards.credits_gained.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 mt-2">
-                  所持金: {rewards.total_credits.toLocaleString()} CR
-                </p>
-              </div>
+              {rewards.level_after > rewards.level_before && (
+                <div className="mt-4 p-4 bg-[#ffb000]/20 border-2 border-[#ffb000] animate-pulse">
+                  <p className="text-center text-xl font-bold text-[#ffb000]">
+                    🎉 LEVEL UP! Lv.{rewards.level_before} → Lv.{rewards.level_after} 🎉
+                  </p>
+                </div>
+              )}
             </div>
-            {rewards.level_after > rewards.level_before && (
-              <div className="mt-4 p-4 bg-yellow-500/20 rounded border-2 border-yellow-400 animate-pulse">
-                <p className="text-center text-xl font-bold text-yellow-300">
-                  🎉 LEVEL UP! Lv.{rewards.level_before} → Lv.{rewards.level_after} 🎉
-                </p>
-              </div>
-            )}
-          </div>
+          </SciFiPanel>
         )}
 
         {/* 3D Viewer Area: ログがある時だけ表示 */}
         {logs.length > 0 && playerData && enemiesData.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-xl font-bold mb-2 border-l-4 border-green-500 pl-2">
+            <SciFiHeading level={2} className="mb-4" variant="accent">
               Tactical Monitor - {currentEnvironment}
-            </h2>
+            </SciFiHeading>
 
             {/* 3D Canvas Component */}
             <BattleViewer
@@ -238,39 +238,43 @@ export default function Home() {
             />
 
             {/* Turn Controller */}
-            <div className="flex items-center gap-4 bg-gray-800 p-4 rounded border border-green-800 mt-2">
-              <button
-                onClick={() => setCurrentTurn(Math.max(0, currentTurn - 1))}
-                className="px-4 py-2 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors"
-                disabled={currentTurn <= 0}
-              >
-                &lt; PREV
-              </button>
+            <SciFiPanel variant="accent" className="mt-2">
+              <div className="flex items-center gap-4 p-4">
+                <SciFiButton
+                  onClick={() => setCurrentTurn(Math.max(0, currentTurn - 1))}
+                  disabled={currentTurn <= 0}
+                  variant="accent"
+                  size="sm"
+                >
+                  &lt; PREV
+                </SciFiButton>
 
-              <div className="flex-grow flex flex-col px-4">
-                <input
-                  type="range"
-                  min="0"
-                  max={maxTurn}
-                  value={currentTurn}
-                  onChange={(e) => setCurrentTurn(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
-                />
-                <div className="flex justify-between text-xs mt-1 text-gray-400">
-                  <span>Start</span>
-                  <span>Turn: {currentTurn} / {maxTurn}</span>
-                  <span>End</span>
+                <div className="flex-grow flex flex-col px-4">
+                  <input
+                    type="range"
+                    min="0"
+                    max={maxTurn}
+                    value={currentTurn}
+                    onChange={(e) => setCurrentTurn(Number(e.target.value))}
+                    className="w-full h-2 bg-[#0a0a0a] rounded-lg appearance-none cursor-pointer accent-[#00f0ff]"
+                  />
+                  <div className="flex justify-between text-xs mt-1 text-[#00f0ff]/60">
+                    <span>Start</span>
+                    <span>Turn: {currentTurn} / {maxTurn}</span>
+                    <span>End</span>
+                  </div>
                 </div>
-              </div>
 
-              <button
-                onClick={() => setCurrentTurn(Math.min(maxTurn, currentTurn + 1))}
-                className="px-4 py-2 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors"
-                disabled={currentTurn >= maxTurn}
-              >
-                NEXT &gt;
-              </button>
-            </div>
+                <SciFiButton
+                  onClick={() => setCurrentTurn(Math.min(maxTurn, currentTurn + 1))}
+                  disabled={currentTurn >= maxTurn}
+                  variant="accent"
+                  size="sm"
+                >
+                  NEXT &gt;
+                </SciFiButton>
+              </div>
+            </SciFiPanel>
           </div>
         )}
 
@@ -318,67 +322,68 @@ export default function Home() {
         )}
 
         {/* Mission Selection Panel */}
-        <div className="mb-8 bg-gray-800 p-6 rounded-lg border border-green-800">
-          <h2 className="text-2xl font-bold mb-4 border-l-4 border-green-500 pl-2">即時シミュレーション（テスト機能）</h2>
-          <p className="text-sm text-gray-400 mb-4">※ 開発用の即時バトルシミュレーション機能です</p>
+        <SciFiPanel variant="secondary" className="mb-8">
+          <div className="p-6">
+            <SciFiHeading level={2} className="mb-4" variant="secondary">
+              即時シミュレーション（テスト機能）
+            </SciFiHeading>
+            <p className="text-sm text-[#ffb000]/60 mb-4">※ 開発用の即時バトルシミュレーション機能です</p>
           
-          {missionsLoading ? (
-            <p className="text-gray-400">Loading missions...</p>
-          ) : missions && missions.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {missions.map((mission) => (
-                <button
-                  key={mission.id}
-                  onClick={() => setSelectedMissionId(mission.id)}
-                  className={`p-4 rounded-lg border-2 transition-all text-left ${
-                    selectedMissionId === mission.id
-                      ? "border-green-500 bg-green-900/30"
-                      : "border-gray-700 bg-gray-900 hover:border-green-700"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-lg">{mission.name}</span>
-                    <span className="text-xs px-2 py-1 rounded bg-yellow-900 text-yellow-300">
-                      難易度: {mission.difficulty}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-400">{mission.description}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <p className="text-xs text-gray-500">
-                      敵機: {mission.enemy_config?.enemies?.length || 0} 機
-                    </p>
-                    {mission.environment && (
-                      <span className="text-xs px-2 py-1 rounded bg-blue-900 text-blue-300">
-                        環境: {mission.environment}
+            {missionsLoading ? (
+              <p className="text-[#00ff41]/60">Loading missions...</p>
+            ) : missions && missions.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                {missions.map((mission) => (
+                  <button
+                    key={mission.id}
+                    onClick={() => setSelectedMissionId(mission.id)}
+                    className={`p-4 border-2 transition-all text-left ${
+                      selectedMissionId === mission.id
+                        ? "border-[#ffb000] bg-[#ffb000]/10 sf-border-glow-amber"
+                        : "border-[#ffb000]/30 bg-[#0a0a0a] hover:border-[#ffb000]/50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-lg text-[#ffb000]">{mission.name}</span>
+                      <span className="text-xs px-2 py-1 bg-[#ffb000]/20 text-[#ffb000] border border-[#ffb000]/50">
+                        難易度: {mission.difficulty}
                       </span>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-red-400 mb-4">ミッションが見つかりません。Backendでシードスクリプトを実行してください。</p>
-          )}
+                    </div>
+                    <p className="text-sm text-[#00ff41]/60">{mission.description}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-xs text-[#00ff41]/50">
+                        敵機: {mission.enemy_config?.enemies?.length || 0} 機
+                      </p>
+                      {mission.environment && (
+                        <span className="text-xs px-2 py-1 bg-[#00f0ff]/20 text-[#00f0ff] border border-[#00f0ff]/50">
+                          環境: {mission.environment}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-red-400 mb-4">ミッションが見つかりません。Backendでシードスクリプトを実行してください。</p>
+            )}
 
-          {/* Control Panel */}
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="font-bold text-blue-400">PLAYER: {playerData ? playerData.name : "Waiting for Data..."}</p>
-              <p className="font-bold text-red-400">ENEMIES: {enemiesData.length > 0 ? `${enemiesData.length} units` : "Waiting for Data..."}</p>
+            {/* Control Panel */}
+            <div className="flex justify-between items-center">
+              <div className="space-y-1">
+                <p className="font-bold text-[#00f0ff]">PLAYER: {playerData ? playerData.name : "Waiting for Data..."}</p>
+                <p className="font-bold text-[#ffb000]">ENEMIES: {enemiesData.length > 0 ? `${enemiesData.length} units` : "Waiting for Data..."}</p>
+              </div>
+              <SciFiButton
+                onClick={() => startBattle(selectedMissionId)}
+                disabled={isLoading || !missions || missions.length === 0}
+                variant="secondary"
+                size="lg"
+              >
+                {isLoading ? "CALCULATING..." : "即時シミュレーション実行"}
+              </SciFiButton>
             </div>
-            <button
-              onClick={() => startBattle(selectedMissionId)}
-              disabled={isLoading || !missions || missions.length === 0}
-              className={`px-8 py-3 rounded font-bold text-black transition-colors shadow-lg ${
-                isLoading || !missions || missions.length === 0
-                  ? "bg-gray-500 cursor-not-allowed"
-                  : "bg-yellow-500 hover:bg-yellow-400 hover:shadow-yellow-500/50"
-              }`}
-            >
-              {isLoading ? "CALCULATING..." : "即時シミュレーション実行"}
-            </button>
           </div>
-        </div>
+        </SciFiPanel>
 
         {/* Text Log Area */}
         <div className="bg-black p-4 rounded border border-green-900 min-h-[400px] max-h-[600px] overflow-y-auto shadow-inner font-mono text-sm">
