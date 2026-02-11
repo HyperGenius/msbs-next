@@ -1,6 +1,6 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest } from "@/types/battle";
 
 // Backend API Base URL
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -279,6 +279,75 @@ export async function purchaseMobileSuit(itemId: string): Promise<PurchaseRespon
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.detail || `Failed to purchase: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * 武器ショップ商品一覧を取得するSWRフック
+ */
+export function useWeaponListings() {
+  const { data, error, isLoading } = useSWR<WeaponListing[]>(
+    `${API_BASE_URL}/api/shop/weapons`,
+    fetcher
+  );
+
+  return {
+    weaponListings: data,
+    isLoading,
+    isError: error,
+  };
+}
+
+/**
+ * 武器を購入する関数
+ */
+export async function purchaseWeapon(weaponId: string): Promise<WeaponPurchaseResponse> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${API_BASE_URL}/api/shop/purchase/weapon/${weaponId}`, {
+    method: "POST",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to purchase weapon: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * 機体に武器を装備する関数
+ */
+export async function equipWeapon(mobileSuitId: string, request: EquipWeaponRequest): Promise<MobileSuit> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${API_BASE_URL}/api/mobile_suits/${mobileSuitId}/equip`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to equip weapon: ${res.status} ${res.statusText}`);
   }
 
   return res.json();
