@@ -65,8 +65,8 @@ async def equip_weapon(
     # 1. 機体を取得（UUIDに変換）
     try:
         ms_uuid = uuid.UUID(ms_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="無効な機体IDです")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="無効な機体IDです") from e
 
     mobile_suit = session.get(MobileSuit, ms_uuid)
     if not mobile_suit:

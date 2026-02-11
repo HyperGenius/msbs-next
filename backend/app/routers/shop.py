@@ -15,7 +15,7 @@ from app.core.gamedata import (
     get_weapon_listing_by_id,
 )
 from app.db import get_session
-from app.models.models import MobileSuit, Pilot
+from app.models.models import MobileSuit, Pilot, Weapon
 
 router = APIRouter(prefix="/api/shop", tags=["shop"])
 
@@ -165,6 +165,7 @@ async def get_weapon_listings() -> list[WeaponListingResponse]:
     for item in WEAPON_SHOP_LISTINGS:
         # 型チェックのためのキャスト
         item = cast(dict[str, Any], item)
+        weapon = cast(Weapon, item["weapon"])
 
         listings.append(
             WeaponListingResponse(
@@ -172,7 +173,7 @@ async def get_weapon_listings() -> list[WeaponListingResponse]:
                 name=cast(str, item["name"]),
                 price=cast(int, item["price"]),
                 description=cast(str, item["description"]),
-                weapon=item["weapon"].model_dump(),
+                weapon=weapon.model_dump(),
             )
         )
 
