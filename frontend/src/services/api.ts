@@ -1,6 +1,6 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile } from "@/types/battle";
 
 // Backend API Base URL
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -447,3 +447,37 @@ export async function unlockSkill(skillId: string): Promise<SkillUnlockResponse>
 
   return res.json();
 }
+
+/**
+ * 現在のランキングを取得するSWRフック
+ */
+export function useRankings(limit: number = 100) {
+  const { data, error, isLoading, mutate } = useSWR<LeaderboardEntry[]>(
+    `${API_BASE_URL}/api/rankings/current?limit=${limit}`,
+    fetcher
+  );
+  
+  return {
+    rankings: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * プレイヤープロフィールを取得するSWRフック
+ */
+export function usePlayerProfile(userId: string | null) {
+  const { data, error, isLoading } = useSWR<PlayerProfile>(
+    userId ? `${API_BASE_URL}/api/rankings/pilot/${userId}/profile` : null,
+    fetcher
+  );
+  
+  return {
+    profile: data,
+    isLoading,
+    isError: error,
+  };
+}
+
