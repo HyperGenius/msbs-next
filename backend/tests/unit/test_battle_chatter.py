@@ -114,12 +114,17 @@ def test_different_personalities_have_different_chatter():
     
     # Verify that personalities have some unique chatter
     # (Not all chatter needs to be unique, but there should be some distinction)
-    aggressive_unique = chatter_by_personality["AGGRESSIVE"] - chatter_by_personality["CAUTIOUS"] - chatter_by_personality["SNIPER"]
-    cautious_unique = chatter_by_personality["CAUTIOUS"] - chatter_by_personality["AGGRESSIVE"] - chatter_by_personality["SNIPER"]
-    sniper_unique = chatter_by_personality["SNIPER"] - chatter_by_personality["AGGRESSIVE"] - chatter_by_personality["CAUTIOUS"]
+    unique_counts = {}
+    for personality in personalities:
+        # Calculate unique chatter for this personality
+        other_personalities = [p for p in personalities if p != personality]
+        unique_chatter = chatter_by_personality[personality].copy()
+        for other in other_personalities:
+            unique_chatter -= chatter_by_personality[other]
+        unique_counts[personality] = len(unique_chatter)
     
     # At least one personality should have unique chatter
-    assert len(aggressive_unique) > 0 or len(cautious_unique) > 0 or len(sniper_unique) > 0
+    assert sum(unique_counts.values()) > 0, "No personality has unique chatter"
 
 
 def test_battle_log_includes_chatter():

@@ -33,9 +33,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove NPC personality and ace pilot fields from mobile_suits table."""
-    op.drop_column('mobile_suits', 'bounty_credits')
-    op.drop_column('mobile_suits', 'bounty_exp')
-    op.drop_column('mobile_suits', 'pilot_name')
-    op.drop_column('mobile_suits', 'ace_id')
-    op.drop_column('mobile_suits', 'is_ace')
     op.drop_column('mobile_suits', 'personality')
+    op.drop_column('mobile_suits', 'is_ace')
+    op.drop_column('mobile_suits', 'ace_id')
+    op.drop_column('mobile_suits', 'pilot_name')
+    op.drop_column('mobile_suits', 'bounty_exp')
+    op.drop_column('mobile_suits', 'bounty_credits')
