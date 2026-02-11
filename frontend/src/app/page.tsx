@@ -10,6 +10,7 @@ import Header from "@/components/Header";
 import CountdownTimer from "@/components/Dashboard/CountdownTimer";
 import EntryDashboard from "@/components/Dashboard/EntryDashboard";
 import BattleResultModal from "@/components/Dashboard/BattleResultModal";
+import EntrySelectionModal from "@/components/Dashboard/EntrySelectionModal";
 import OnboardingOverlay from "@/components/Tutorial/OnboardingOverlay";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiSelect } from "@/components/ui";
 
@@ -42,6 +43,7 @@ export default function Home() {
     rewards: BattleRewards | null;
   } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showEntryModal, setShowEntryModal] = useState(false);
 
   // オンボーディングの表示判定
   useEffect(() => {
@@ -158,22 +160,32 @@ export default function Home() {
     }
   };
 
-  const handleEntry = async () => {
+  const handleEntry = () => {
     if (!mobileSuits || mobileSuits.length === 0) {
       alert("機体がありません。ガレージで機体を作成してください。");
       return;
     }
 
+    // 機体が1機のみの場合は即座にエントリー
+    if (mobileSuits.length === 1) {
+      executeEntry(mobileSuits[0].id);
+    } else {
+      // 複数機体がある場合はモーダルを表示
+      setShowEntryModal(true);
+    }
+  };
+
+  const executeEntry = async (mobileSuitId: string) => {
     setEntryLoading(true);
     try {
-      // 最初の機体でエントリー
-      // TODO: 将来的にユーザーが機体を選択できるようにする
-      await entryBattle(mobileSuits[0].id);
+      await entryBattle(mobileSuitId);
       // エントリー状況を再取得
       await mutateEntryStatus();
       // エントリー数を再取得
       await mutateEntryCount();
       alert("エントリーが完了しました！");
+      // モーダルを閉じる
+      setShowEntryModal(false);
     } catch (error) {
       console.error("Error creating entry:", error);
       alert(`エントリーに失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -373,6 +385,16 @@ export default function Home() {
             winLoss={modalResult.winLoss}
             rewards={modalResult.rewards}
             onClose={() => setShowResultModal(false)}
+          />
+        )}
+
+        {/* Entry Selection Modal */}
+        {showEntryModal && mobileSuits && (
+          <EntrySelectionModal
+            mobileSuits={mobileSuits}
+            onSelect={executeEntry}
+            onCancel={() => setShowEntryModal(false)}
+            isLoading={entryLoading}
           />
         )}
 
