@@ -1,7 +1,5 @@
 """武器ショップ機能のテスト."""
 
-import uuid
-
 from fastapi import status
 
 from app.core.auth import get_current_user

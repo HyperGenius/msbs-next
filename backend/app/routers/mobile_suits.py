@@ -74,7 +74,9 @@ async def equip_weapon(
 
     # 2. 機体の所有者チェック
     if mobile_suit.user_id != user_id:
-        raise HTTPException(status_code=403, detail="この機体を編集する権限がありません")
+        raise HTTPException(
+            status_code=403, detail="この機体を編集する権限がありません"
+        )
 
     # 3. 武器データを取得
     weapon_listing = get_weapon_listing_by_id(equip_request.weapon_id)
@@ -91,9 +93,10 @@ async def equip_weapon(
     if pilot.inventory is None:
         pilot.inventory = {}
 
-    if equip_request.weapon_id not in pilot.inventory or pilot.inventory[
-        equip_request.weapon_id
-    ] < 1:
+    if (
+        equip_request.weapon_id not in pilot.inventory
+        or pilot.inventory[equip_request.weapon_id] < 1
+    ):
         raise HTTPException(status_code=400, detail="この武器を所持していません")
 
     # 6. 武器を装備（スロットインデックスに応じて）
