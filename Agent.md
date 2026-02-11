@@ -229,6 +229,7 @@ AI AgentがIssueに取り組む際は、以下の手順を遵守してくださ�
 2. **Backend Impl**: `Service` クラスの実装 → `Router` の実装 → `Unit Test` の作成・パス。
 3. **Frontend Impl**: `Service` (API Client) の実装 → UIコンポーネントの実装 → ページへの組み込み。
 4. **Integration**: `E2E Test` を実行し、一連のフローが動作することを確認する（現在準備中）。
+5. **Report**: `docs/reports` ディレクトリに `*_REPORT` または `*_SUMMARY` などのプレフィックス付きMarkdownファイルを作成し、実装内容、テスト結果、使用方法を記載する。
 
 ---
 
