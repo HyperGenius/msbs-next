@@ -17,7 +17,7 @@ os.environ["NEON_DATABASE_URL"] = "sqlite:///:memory:"
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -27,10 +27,10 @@ def test_scheduled_at_timezone():
     print("Testing scheduled_at timezone fix...")
 
     # Import models here to avoid early db connection
-    from app.models.models import BattleRoom
-
     # Create in-memory database for testing
     import json as json_lib
+
+    from app.models.models import BattleRoom
 
     def json_serializer(obj):
         return json_lib.dumps(obj, ensure_ascii=False)
@@ -53,50 +53,53 @@ def test_scheduled_at_timezone():
         session.add(room)
         session.commit()
         session.refresh(room)
-        print(f"   ✓ Room created with naive scheduled_at")
+        print("   ✓ Room created with naive scheduled_at")
 
         # 2. Test timezone conversion (simulating what the API does)
         print("\n2. Testing timezone conversion in API response...")
-        
+
         # Simulate what the API does: get the scheduled_at and convert it
         scheduled_at = room.scheduled_at
         print(f"   - Original scheduled_at: {scheduled_at}")
         print(f"   - Original tzinfo: {scheduled_at.tzinfo}")
-        
+
         # Apply the fix
         if scheduled_at.tzinfo is None:
-            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
-        
+            scheduled_at = scheduled_at.replace(tzinfo=UTC)
+
         print(f"   - After fix scheduled_at: {scheduled_at}")
         print(f"   - After fix tzinfo: {scheduled_at.tzinfo}")
-        
+
         # Convert to ISO format
         iso_string = scheduled_at.isoformat()
         print(f"   - ISO format: {iso_string}")
-        
+
         # 3. Verify the ISO string includes timezone
         print("\n3. Verifying ISO format includes timezone...")
         assert "+00:00" in iso_string or iso_string.endswith("Z"), (
             f"ISO string should include timezone info. Got: {iso_string}"
         )
         print(f"   ✓ ISO string includes timezone: {iso_string}")
-        
+
         # 4. Verify the frontend can correctly parse it
         print("\n4. Verifying frontend can parse it correctly...")
         parsed_datetime = datetime.fromisoformat(iso_string)
         print(f"   - Parsed datetime: {parsed_datetime}")
         print(f"   - Parsed tzinfo: {parsed_datetime.tzinfo}")
-        assert parsed_datetime.tzinfo is not None, "Parsed datetime should have timezone"
-        
+        assert parsed_datetime.tzinfo is not None, (
+            "Parsed datetime should have timezone"
+        )
+
         # Convert to JST (UTC+9) to verify the expected time
         print("\n5. Verifying time interpretation...")
         from datetime import timedelta
+
         jst_offset = timedelta(hours=9)
         jst_time = parsed_datetime + jst_offset
         print(f"   - JST time: {jst_time}")
         print(f"   - Expected hour: 21, Got: {jst_time.hour}")
         assert jst_time.hour == 21, "Should be 21:00 in JST"
-        
+
         print("   ✓ Frontend can correctly interpret 12:00 UTC as 21:00 JST!")
 
         print("\n" + "=" * 60)

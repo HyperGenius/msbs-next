@@ -1,7 +1,7 @@
 # backend/app/routers/entries.py
 """エントリー関連のAPIエンドポイント."""
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -117,7 +117,7 @@ async def create_entry(
         # Ensure scheduled_at has timezone info (UTC) before serializing
         scheduled_at = room.scheduled_at
         if scheduled_at.tzinfo is None:
-            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+            scheduled_at = scheduled_at.replace(tzinfo=UTC)
 
         return EntryResponse(
             id=str(existing_entry.id),
@@ -144,7 +144,7 @@ async def create_entry(
     # Ensure scheduled_at has timezone info (UTC) before serializing
     scheduled_at = room.scheduled_at
     if scheduled_at.tzinfo is None:
-        scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        scheduled_at = scheduled_at.replace(tzinfo=UTC)
 
     return EntryResponse(
         id=str(new_entry.id),
@@ -176,7 +176,7 @@ async def get_entry_status(
         # Ensure scheduled_at has timezone info (UTC) before serializing
         scheduled_at = room.scheduled_at
         if scheduled_at.tzinfo is None:
-            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+            scheduled_at = scheduled_at.replace(tzinfo=UTC)
 
         return EntryStatusResponse(
             is_entered=True,
@@ -198,7 +198,7 @@ async def get_entry_status(
     # Ensure scheduled_at has timezone info (UTC) before serializing
     scheduled_at = room.scheduled_at
     if scheduled_at.tzinfo is None:
-        scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        scheduled_at = scheduled_at.replace(tzinfo=UTC)
 
     return EntryStatusResponse(
         is_entered=False,
