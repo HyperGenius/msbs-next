@@ -199,7 +199,6 @@ def test_create_rooms_with_no_entries_past_schedule(in_memory_session):
     assert room_scheduled_at > datetime.now(UTC)
 
 
-
 def test_create_rooms_fills_to_capacity(in_memory_session):
     """Test that create_rooms fills room to exact capacity."""
     # Create a test room
