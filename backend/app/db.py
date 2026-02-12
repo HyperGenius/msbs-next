@@ -46,15 +46,24 @@ def json_serializer(obj: Any) -> str:
 # pool_recycle: 接続を定期的にリサイクル（3600秒 = 1時間）
 # pool_size: プールに保持する接続数
 # max_overflow: プールサイズを超えて作成できる追加接続数
-engine = create_engine(
-    url,
-    echo=True,
-    json_serializer=json_serializer,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-    pool_size=5,
-    max_overflow=10,
-)
+
+# SQLiteの場合は pool_size と max_overflow を使用しない
+engine_args = {
+    "echo": True,
+    "json_serializer": json_serializer,
+}
+
+if not url.startswith("sqlite"):
+    engine_args.update(
+        {
+            "pool_pre_ping": True,
+            "pool_recycle": 3600,
+            "pool_size": 5,
+            "max_overflow": 10,
+        }
+    )
+
+engine = create_engine(url, **engine_args)
 
 
 def get_session() -> Generator[Session, None, None]:
