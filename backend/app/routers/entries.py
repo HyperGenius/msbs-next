@@ -45,6 +45,20 @@ class EntryRequest(BaseModel):
 # --- Helper Functions ---
 
 
+def ensure_utc_timezone(dt: datetime) -> datetime:
+    """Ensure datetime has UTC timezone info.
+
+    Args:
+        dt: datetime object that may or may not have timezone info
+
+    Returns:
+        datetime object with UTC timezone info
+    """
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
+
+
 def get_or_create_open_room(session: Session) -> BattleRoom:
     """現在募集中のルームを取得、なければ作成する."""
     # 既存のOPENなルームを探す
@@ -115,9 +129,7 @@ async def create_entry(
         session.refresh(existing_entry)
 
         # Ensure scheduled_at has timezone info (UTC) before serializing
-        scheduled_at = room.scheduled_at
-        if scheduled_at.tzinfo is None:
-            scheduled_at = scheduled_at.replace(tzinfo=UTC)
+        scheduled_at = ensure_utc_timezone(room.scheduled_at)
 
         return EntryResponse(
             id=str(existing_entry.id),
@@ -142,9 +154,7 @@ async def create_entry(
     session.refresh(new_entry)
 
     # Ensure scheduled_at has timezone info (UTC) before serializing
-    scheduled_at = room.scheduled_at
-    if scheduled_at.tzinfo is None:
-        scheduled_at = scheduled_at.replace(tzinfo=UTC)
+    scheduled_at = ensure_utc_timezone(room.scheduled_at)
 
     return EntryResponse(
         id=str(new_entry.id),
@@ -174,9 +184,7 @@ async def get_entry_status(
 
     if entry:
         # Ensure scheduled_at has timezone info (UTC) before serializing
-        scheduled_at = room.scheduled_at
-        if scheduled_at.tzinfo is None:
-            scheduled_at = scheduled_at.replace(tzinfo=UTC)
+        scheduled_at = ensure_utc_timezone(room.scheduled_at)
 
         return EntryStatusResponse(
             is_entered=True,
@@ -196,9 +204,7 @@ async def get_entry_status(
 
     # エントリーしていない
     # Ensure scheduled_at has timezone info (UTC) before serializing
-    scheduled_at = room.scheduled_at
-    if scheduled_at.tzinfo is None:
-        scheduled_at = scheduled_at.replace(tzinfo=UTC)
+    scheduled_at = ensure_utc_timezone(room.scheduled_at)
 
     return EntryStatusResponse(
         is_entered=False,
