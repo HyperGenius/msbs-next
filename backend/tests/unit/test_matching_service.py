@@ -158,6 +158,48 @@ def test_create_rooms_with_no_entries(in_memory_session):
     assert room.status == "OPEN"
 
 
+def test_create_rooms_with_no_entries_past_schedule(in_memory_session):
+    """Test create_rooms when room has no entries and scheduled_at is in the past."""
+    # Create a test room without entries and scheduled_at in the past
+    past_time = datetime.now(UTC) - timedelta(hours=2)
+    room = BattleRoom(
+        status="OPEN",
+        scheduled_at=past_time,
+    )
+    in_memory_session.add(room)
+    in_memory_session.commit()
+    in_memory_session.refresh(room)
+
+    original_scheduled_at = room.scheduled_at
+
+    # Run matching
+    service = MatchingService(in_memory_session)
+    rooms = service.create_rooms()
+
+    # Room should not be processed but scheduled_at should be updated
+    assert len(rooms) == 0
+    
+    # Refresh the room to get updated data
+    in_memory_session.refresh(room)
+    
+    # Room status should still be OPEN
+    assert room.status == "OPEN"
+    
+    # scheduled_at should be updated to next day (24 hours later)
+    # Handle timezone-naive datetime from database
+    expected_scheduled_at = original_scheduled_at + timedelta(days=1)
+    if expected_scheduled_at.tzinfo is None:
+        expected_scheduled_at = expected_scheduled_at.replace(tzinfo=UTC)
+    
+    room_scheduled_at = room.scheduled_at
+    if room_scheduled_at.tzinfo is None:
+        room_scheduled_at = room_scheduled_at.replace(tzinfo=UTC)
+    
+    assert room_scheduled_at == expected_scheduled_at
+    assert room_scheduled_at > datetime.now(UTC)
+
+
+
 def test_create_rooms_fills_to_capacity(in_memory_session):
     """Test that create_rooms fills room to exact capacity."""
     # Create a test room

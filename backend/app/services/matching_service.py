@@ -3,6 +3,7 @@
 
 import random
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from sqlmodel import Session, select
@@ -51,6 +52,18 @@ class MatchingService:
 
             if not entries:
                 print(f"ルーム {room.id} にエントリーがありません")
+                # scheduled_atが過去の場合、翌日の同時刻に更新する
+                now = datetime.now(UTC)
+                scheduled_at = room.scheduled_at
+                # Ensure scheduled_at is timezone-aware for comparison
+                if scheduled_at.tzinfo is None:
+                    scheduled_at = scheduled_at.replace(tzinfo=UTC)
+                if scheduled_at < now:
+                    # 翌日の同時刻に更新
+                    new_scheduled_at = scheduled_at + timedelta(days=1)
+                    room.scheduled_at = new_scheduled_at
+                    self.session.add(room)
+                    print(f"  エントリーがないため、スケジュールを延期しました: {new_scheduled_at}")
                 continue
 
             print(f"ルーム {room.id}: {len(entries)} 件のエントリーを処理中...")
