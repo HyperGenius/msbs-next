@@ -63,7 +63,9 @@ class MatchingService:
                     new_scheduled_at = scheduled_at + timedelta(days=1)
                     room.scheduled_at = new_scheduled_at
                     self.session.add(room)
-                    print(f"  エントリーがないため、スケジュールを延期しました: {new_scheduled_at}")
+                    print(
+                        f"  エントリーがないため、スケジュールを延期しました: {new_scheduled_at}"
+                    )
                 continue
 
             print(f"ルーム {room.id}: {len(entries)} 件のエントリーを処理中...")
