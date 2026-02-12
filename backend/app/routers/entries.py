@@ -1,7 +1,7 @@
 # backend/app/routers/entries.py
 """エントリー関連のAPIエンドポイント."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -114,11 +114,16 @@ async def create_entry(
         session.commit()
         session.refresh(existing_entry)
 
+        # Ensure scheduled_at has timezone info (UTC) before serializing
+        scheduled_at = room.scheduled_at
+        if scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+
         return EntryResponse(
             id=str(existing_entry.id),
             room_id=str(existing_entry.room_id),
             mobile_suit_id=str(existing_entry.mobile_suit_id),
-            scheduled_at=room.scheduled_at.isoformat(),
+            scheduled_at=scheduled_at.isoformat(),
             created_at=existing_entry.created_at.isoformat(),
         )
 
@@ -136,11 +141,16 @@ async def create_entry(
     session.commit()
     session.refresh(new_entry)
 
+    # Ensure scheduled_at has timezone info (UTC) before serializing
+    scheduled_at = room.scheduled_at
+    if scheduled_at.tzinfo is None:
+        scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+
     return EntryResponse(
         id=str(new_entry.id),
         room_id=str(new_entry.room_id),
         mobile_suit_id=str(new_entry.mobile_suit_id),
-        scheduled_at=room.scheduled_at.isoformat(),
+        scheduled_at=scheduled_at.isoformat(),
         created_at=new_entry.created_at.isoformat(),
     )
 
@@ -163,30 +173,40 @@ async def get_entry_status(
     entry = session.exec(entry_statement).first()
 
     if entry:
+        # Ensure scheduled_at has timezone info (UTC) before serializing
+        scheduled_at = room.scheduled_at
+        if scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+
         return EntryStatusResponse(
             is_entered=True,
             entry=EntryResponse(
                 id=str(entry.id),
                 room_id=str(entry.room_id),
                 mobile_suit_id=str(entry.mobile_suit_id),
-                scheduled_at=room.scheduled_at.isoformat(),
+                scheduled_at=scheduled_at.isoformat(),
                 created_at=entry.created_at.isoformat(),
             ),
             next_room={
                 "id": str(room.id),
                 "status": room.status,
-                "scheduled_at": room.scheduled_at.isoformat(),
+                "scheduled_at": scheduled_at.isoformat(),
             },
         )
 
     # エントリーしていない
+    # Ensure scheduled_at has timezone info (UTC) before serializing
+    scheduled_at = room.scheduled_at
+    if scheduled_at.tzinfo is None:
+        scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+
     return EntryStatusResponse(
         is_entered=False,
         entry=None,
         next_room={
             "id": str(room.id),
             "status": room.status,
-            "scheduled_at": room.scheduled_at.isoformat(),
+            "scheduled_at": scheduled_at.isoformat(),
         },
     )
 
