@@ -42,7 +42,19 @@ def json_serializer(obj: Any) -> str:
 
 # エンジンの作成
 # json_serializer を指定して、Pydanticモデルをそのまま保存できるようにする
-engine = create_engine(url, echo=True, json_serializer=json_serializer)
+# pool_pre_ping: 接続使用前に有効性をチェック（古い接続を自動再接続）
+# pool_recycle: 接続を定期的にリサイクル（3600秒 = 1時間）
+# pool_size: プールに保持する接続数
+# max_overflow: プールサイズを超えて作成できる追加接続数
+engine = create_engine(
+    url,
+    echo=True,
+    json_serializer=json_serializer,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    pool_size=5,
+    max_overflow=10,
+)
 
 
 def get_session() -> Generator[Session, None, None]:
