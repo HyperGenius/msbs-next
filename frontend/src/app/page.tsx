@@ -16,6 +16,8 @@ import { SciFiPanel, SciFiButton, SciFiHeading, SciFiSelect } from "@/components
 
 const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
 
+type OnboardingState = "NOT_STARTED" | "BATTLE_STARTED" | "BATTLE_FINISHED" | "COMPLETED";
+
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
   const { missions, isLoading: missionsLoading } = useMissions();
@@ -44,7 +46,7 @@ export default function Home() {
   } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showEntryModal, setShowEntryModal] = useState(false);
-  const [onboardingState, setOnboardingState] = useState<"NOT_STARTED" | "BATTLE_STARTED" | "BATTLE_FINISHED" | "COMPLETED">("NOT_STARTED");
+  const [onboardingState, setOnboardingState] = useState<OnboardingState>("NOT_STARTED");
 
   // オンボーディングの表示判定
   useEffect(() => {
@@ -399,6 +401,7 @@ export default function Home() {
             onClose={() => {
               setShowResultModal(false);
               // 初回バトル終了後、オンボーディングを再開
+              // onboardingState が BATTLE_STARTED の場合のみ再開（これは初回チュートリアル中のみ）
               if (onboardingState === "BATTLE_STARTED") {
                 setOnboardingState("BATTLE_FINISHED");
                 setShowOnboarding(true);
