@@ -13,6 +13,7 @@ interface OnboardingStep {
 interface OnboardingOverlayProps {
   show: boolean;
   onComplete: () => void;
+  startStep?: number; // Add option to start from a specific step
 }
 
 const ONBOARDING_STEPS: OnboardingStep[] = [
@@ -43,20 +44,35 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     targetSelector: "button[data-action='start-simulation']",
     position: "top",
   },
+  {
+    title: "ステップ 4: 報酬の獲得",
+    message:
+      "お疲れ様でした！報酬を獲得しました。獲得したクレジットと経験値で機体を強化できます。",
+    position: "center",
+  },
+  {
+    title: "ステップ 5: Engineering へ",
+    message:
+      "画面上部のメニューから [Engineering] を開いて、機体の強化やカスタマイズを行いましょう。装備の購入や機体性能の向上が可能です。",
+    targetSelector: "a[href='/garage/engineering']",
+    position: "bottom",
+  },
 ];
 
 export default function OnboardingOverlay({
   show,
   onComplete,
+  startStep = 0,
 }: OnboardingOverlayProps) {
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(startStep);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     if (show) {
       setIsVisible(true);
+      setCurrentStep(startStep); // Reset to the specified start step when showing
     }
-  }, [show]);
+  }, [show, startStep]);
 
   if (!show || !isVisible) return null;
 

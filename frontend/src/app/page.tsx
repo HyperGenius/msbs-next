@@ -15,6 +15,7 @@ import OnboardingOverlay from "@/components/Tutorial/OnboardingOverlay";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiSelect } from "@/components/ui";
 
 const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
+const ONBOARDING_BATTLE_DONE_KEY = "msbs_onboarding_battle_done";
 
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
@@ -44,6 +45,7 @@ export default function Home() {
   } | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showEntryModal, setShowEntryModal] = useState(false);
+  const [onboardingState, setOnboardingState] = useState<"NOT_STARTED" | "BATTLE_STARTED" | "BATTLE_FINISHED" | "COMPLETED">("NOT_STARTED");
 
   // オンボーディングの表示判定
   useEffect(() => {
@@ -63,13 +65,24 @@ export default function Home() {
 
     if (isFirstTimeUser && !onboardingCompleted) {
       setShowOnboarding(true);
+      setOnboardingState("NOT_STARTED");
+    } else if (onboardingCompleted) {
+      setOnboardingState("COMPLETED");
     }
   }, [isSignedIn, mobileSuits, mobileSuitsLoading, battles, battlesLoading]);
 
   const handleOnboardingComplete = () => {
-    setShowOnboarding(false);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
+    if (onboardingState === "NOT_STARTED") {
+      // 最初のチュートリアル（バトル開始まで）が完了
+      setShowOnboarding(false);
+      setOnboardingState("BATTLE_STARTED");
+    } else if (onboardingState === "BATTLE_FINISHED") {
+      // バトル後のチュートリアル完了
+      setShowOnboarding(false);
+      setOnboardingState("COMPLETED");
+      if (typeof window !== "undefined") {
+        localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
+      }
     }
   };
 
@@ -384,7 +397,14 @@ export default function Home() {
           <BattleResultModal
             winLoss={modalResult.winLoss}
             rewards={modalResult.rewards}
-            onClose={() => setShowResultModal(false)}
+            onClose={() => {
+              setShowResultModal(false);
+              // 初回バトル終了後、オンボーディングを再開
+              if (onboardingState === "BATTLE_STARTED") {
+                setOnboardingState("BATTLE_FINISHED");
+                setShowOnboarding(true);
+              }
+            }}
           />
         )}
 
@@ -402,6 +422,7 @@ export default function Home() {
         <OnboardingOverlay
           show={showOnboarding}
           onComplete={handleOnboardingComplete}
+          startStep={onboardingState === "BATTLE_FINISHED" ? 4 : 0}
         />
 
         {/* Mission Selection Panel */}
