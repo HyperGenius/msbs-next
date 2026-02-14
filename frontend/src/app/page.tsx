@@ -15,7 +15,6 @@ import OnboardingOverlay from "@/components/Tutorial/OnboardingOverlay";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiSelect } from "@/components/ui";
 
 const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
-const ONBOARDING_BATTLE_DONE_KEY = "msbs_onboarding_battle_done";
 
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
