@@ -8,9 +8,13 @@ class MobileSuitService:
     """機体データを操作するサービス."""
 
     @staticmethod
-    def get_all_mobile_suits(session: Session) -> list[MobileSuit]:
-        """全機体データを取得する."""
-        statement = select(MobileSuit).order_by(MobileSuit.name)
+    def get_all_mobile_suits(session: Session, user_id: str) -> list[MobileSuit]:
+        """指定ユーザーが所有する機体データを取得する."""
+        statement = (
+            select(MobileSuit)
+            .where(MobileSuit.user_id == user_id)
+            .order_by(MobileSuit.name)
+        )
         results = session.exec(statement).all()
         return list(results)
 

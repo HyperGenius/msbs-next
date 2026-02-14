@@ -22,9 +22,12 @@ class EquipWeaponRequest(BaseModel):
 
 
 @router.get("/", response_model=list[MobileSuit])
-def get_mobile_suits(session: Session = Depends(get_session)) -> list[MobileSuit]:
+def get_mobile_suits(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> list[MobileSuit]:
     """機体一覧取得."""
-    return MobileSuitService.get_all_mobile_suits(session)
+    return MobileSuitService.get_all_mobile_suits(session, user_id)
 
 
 @router.put("/{ms_id}", response_model=MobileSuit)
