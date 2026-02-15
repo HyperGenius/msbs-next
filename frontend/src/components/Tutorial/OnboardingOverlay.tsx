@@ -67,6 +67,41 @@ export default function OnboardingOverlay({
     }
   }, [show, startStep]);
 
+  // Highlight target element based on current step
+  useEffect(() => {
+    if (!show || !isVisible) return;
+
+    const step = ONBOARDING_STEPS[currentStep];
+    if (!step.targetSelector) return;
+
+    // Wait for element to be rendered
+    const timeoutId = setTimeout(() => {
+      const targetElement = document.querySelector(step.targetSelector!);
+      if (targetElement) {
+        targetElement.classList.add("tutorial-highlight");
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      // Remove highlight from any previously highlighted element
+      const highlightedElements = document.querySelectorAll(".tutorial-highlight");
+      highlightedElements.forEach((el) => {
+        el.classList.remove("tutorial-highlight");
+      });
+    };
+  }, [show, isVisible, currentStep]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      const highlightedElements = document.querySelectorAll(".tutorial-highlight");
+      highlightedElements.forEach((el) => {
+        el.classList.remove("tutorial-highlight");
+      });
+    };
+  }, []);
+
   if (!show || !isVisible) return null;
 
   const step = ONBOARDING_STEPS[currentStep];
