@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -22,8 +23,6 @@ from app.routers import engineering, entries, mobile_suits, pilots, rankings, sh
 app = FastAPI(title="MSBS-Next API")
 
 # --- CORS設定 ---
-import os
-
 # ローカル環境と本番環境のオリジンを設定
 origins = [
     "http://localhost:3000",
