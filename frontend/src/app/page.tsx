@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { BattleLog, MobileSuit, BattleRewards } from "@/types/battle";
-import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory } from "@/services/api";
+import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory, createPilot } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
 import Header from "@/components/Header";
 import CountdownTimer from "@/components/Dashboard/CountdownTimer";
@@ -12,6 +12,7 @@ import EntryDashboard from "@/components/Dashboard/EntryDashboard";
 import BattleResultModal from "@/components/Dashboard/BattleResultModal";
 import EntrySelectionModal from "@/components/Dashboard/EntrySelectionModal";
 import OnboardingOverlay from "@/components/Tutorial/OnboardingOverlay";
+import StarterSelectionModal from "@/components/Tutorial/StarterSelectionModal";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiSelect } from "@/components/ui";
 
 const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
@@ -21,10 +22,10 @@ type OnboardingState = "NOT_STARTED" | "BATTLE_STARTED" | "BATTLE_FINISHED" | "C
 export default function Home() {
   const { getToken, isSignedIn } = useAuth();
   const { missions, isLoading: missionsLoading } = useMissions();
-  const { mobileSuits, isLoading: mobileSuitsLoading } = useMobileSuits();
+  const { mobileSuits, isLoading: mobileSuitsLoading, mutate: mutateMobileSuits } = useMobileSuits();
   const { entryStatus, isLoading: entryStatusLoading, mutate: mutateEntryStatus } = useEntryStatus();
   const { entryCount, mutate: mutateEntryCount } = useEntryCount();
-  const { mutate: mutatePilot } = usePilot();
+  const { pilot, isLoading: pilotLoading, isError: pilotError, mutate: mutatePilot } = usePilot();
   const { battles, isLoading: battlesLoading } = useBattleHistory(1);
   const [logs, setLogs] = useState<BattleLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +48,21 @@ export default function Home() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [onboardingState, setOnboardingState] = useState<OnboardingState>("NOT_STARTED");
+  const [showStarterSelection, setShowStarterSelection] = useState(false);
+  const [starterSelectionLoading, setStarterSelectionLoading] = useState(false);
+
+  // スターター選択モーダルの表示判定
+  useEffect(() => {
+    if (!isSignedIn || pilotLoading) return;
+
+    // パイロットが存在しない場合のみスターター選択を表示
+    if (pilotError && !pilot) {
+      setShowStarterSelection(true);
+    } else if (pilot) {
+      // パイロットが存在する場合はモーダルを非表示
+      setShowStarterSelection(false);
+    }
+  }, [isSignedIn, pilot, pilotLoading, pilotError]);
 
   // オンボーディングの表示判定
   useEffect(() => {
@@ -84,6 +100,27 @@ export default function Home() {
       if (typeof window !== "undefined") {
         localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
       }
+    }
+  };
+
+  const handleStarterSelection = async (unitId: "zaku_ii" | "gm") => {
+    setStarterSelectionLoading(true);
+    try {
+      // パイロットを作成
+      await createPilot("New Pilot", unitId);
+      // パイロット情報と機体情報を再取得
+      await mutatePilot();
+      await mutateMobileSuits();
+      // スターター選択モーダルを閉じる
+      setShowStarterSelection(false);
+      // オンボーディングを開始
+      setShowOnboarding(true);
+      setOnboardingState("NOT_STARTED");
+    } catch (error) {
+      console.error("Error creating pilot:", error);
+      alert(`パイロット作成に失敗しました: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setStarterSelectionLoading(false);
     }
   };
 
@@ -417,6 +454,14 @@ export default function Home() {
             onSelect={executeEntry}
             onCancel={() => setShowEntryModal(false)}
             isLoading={entryLoading}
+          />
+        )}
+
+        {/* Starter Selection Modal */}
+        {showStarterSelection && (
+          <StarterSelectionModal
+            onSelect={handleStarterSelection}
+            isLoading={starterSelectionLoading}
           />
         )}
 

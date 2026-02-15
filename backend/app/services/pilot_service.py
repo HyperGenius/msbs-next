@@ -57,27 +57,44 @@ class PilotService:
             self.session.commit()
             self.session.refresh(pilot)
 
-            # 新規パイロットにスターター機体を付与
-            self._create_starter_mobile_suit(user_id)
+            # 新規パイロットにスターター機体を付与（デフォルトはzaku_ii）
+            self._create_starter_mobile_suit(user_id, "zaku_ii")
 
         return pilot
 
-    def _create_starter_mobile_suit(self, user_id: str) -> MobileSuit:
-        """新規パイロットにスターター機体を作成して付与する.
+    def create_starter_mobile_suit(
+        self, user_id: str, unit_id: str = "zaku_ii"
+    ) -> MobileSuit:
+        """新規パイロットにスターター機体を作成して付与する（公開メソッド）.
 
         Args:
             user_id: Clerk User ID
+            unit_id: 機体ID (デフォルト: "zaku_ii")
 
         Returns:
             MobileSuit: 作成された機体
         """
-        # Zaku II をスターター機体として使用
-        starter_template = get_shop_listing_by_id("zaku_ii")
+        return self._create_starter_mobile_suit(user_id, unit_id)
+
+    def _create_starter_mobile_suit(
+        self, user_id: str, unit_id: str = "zaku_ii"
+    ) -> MobileSuit:
+        """新規パイロットにスターター機体を作成して付与する.
+
+        Args:
+            user_id: Clerk User ID
+            unit_id: 機体ID (デフォルト: "zaku_ii")
+
+        Returns:
+            MobileSuit: 作成された機体
+        """
+        # 指定された機体をスターター機体として使用
+        starter_template = get_shop_listing_by_id(unit_id)
         if not starter_template:
             # フォールバック: テンプレートが見つからない場合はエラー
             raise ValueError(
-                "Starter mobile suit template 'zaku_ii' not found in gamedata. "
-                "Check SHOP_LISTINGS in app.core.gamedata to ensure 'zaku_ii' is defined."
+                f"Starter mobile suit template '{unit_id}' not found in gamedata. "
+                f"Check SHOP_LISTINGS in app.core.gamedata to ensure '{unit_id}' is defined."
             )
 
         specs = starter_template["specs"]
