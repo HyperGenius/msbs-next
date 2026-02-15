@@ -31,27 +31,20 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     position: "bottom",
   },
   {
-    title: "ステップ 2: ミッション選択",
+    title: "ステップ 2: バトルエントリー",
     message:
-      "準備ができたら、この画面の下部にある [即時シミュレーション] セクションから難易度1のミッションを選んでください。",
+      "準備ができたらダッシュボードからバトルにエントリーしましょう。バトルは毎日21時に開催されます。",
     targetSelector: ".mission-selection-panel",
     position: "top",
   },
   {
-    title: "ステップ 3: バトル開始",
+    title: "ステップ 3: 報酬の獲得",
     message:
-      "[即時シミュレーション実行] ボタンを押してシミュレーションを開始します。あなたの初陣を楽しんでください！",
-    targetSelector: "button[data-action='start-simulation']",
-    position: "top",
-  },
-  {
-    title: "ステップ 4: 報酬の獲得",
-    message:
-      "お疲れ様でした！報酬を獲得しました。獲得したクレジットと経験値で機体を強化できます。",
+      "バトルが完了すると報酬を獲得できます。獲得したクレジットと経験値で機体を強化できます。",
     position: "center",
   },
   {
-    title: "ステップ 5: Engineering へ",
+    title: "ステップ 4: Engineering へ",
     message:
       "画面上部のメニューから [Engineering] を開いて、機体の強化やカスタマイズを行いましょう。装備の購入や機体性能の向上が可能です。",
     targetSelector: "a[href='/garage/engineering']",
@@ -111,13 +104,13 @@ export default function OnboardingOverlay({
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-[#00ff41]/60">
-                  ステップ {currentStep + 1} / {ONBOARDING_STEPS.length}
+                  STEP {currentStep + 1} / {ONBOARDING_STEPS.length}
                 </span>
                 <button
                   onClick={handleSkip}
                   className="text-xs text-[#00ff41]/60 hover:text-[#00ff41] transition-colors"
                 >
-                  スキップ
+                  SKIP
                 </button>
               </div>
               <div className="h-2 bg-[#0a0a0a] rounded-full overflow-hidden border border-[#00ff41]/30">
@@ -151,7 +144,7 @@ export default function OnboardingOverlay({
                   size="md"
                   className="flex-1"
                 >
-                  &lt; 戻る
+                  &lt; BACK
                 </SciFiButton>
               )}
               <SciFiButton
@@ -160,7 +153,7 @@ export default function OnboardingOverlay({
                 size="md"
                 className="flex-1"
               >
-                {isLastStep ? "チュートリアル完了" : "次へ &gt;"}
+                {isLastStep ? "FINISH" : "NEXT >"}
               </SciFiButton>
             </div>
 
