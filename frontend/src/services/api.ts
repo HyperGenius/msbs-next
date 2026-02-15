@@ -243,6 +243,41 @@ export function usePilot() {
 }
 
 /**
+ * 新規パイロットを作成する関数
+ */
+export async function createPilot(
+  name: string,
+  starterUnitId: "zaku_ii" | "gm"
+): Promise<Pilot> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${API_BASE_URL}/api/pilots/create`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      name,
+      starter_unit_id: starterUnitId,
+    }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `Failed to create pilot: ${res.status} ${res.statusText}`
+    );
+  }
+
+  return res.json();
+}
+
+/**
  * ショップ商品一覧を取得するSWRフック
  */
 export function useShopListings() {
