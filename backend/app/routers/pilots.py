@@ -69,7 +69,7 @@ async def create_pilot(
 
     # スターター機体を付与
     pilot_service = PilotService(session)
-    pilot_service._create_starter_mobile_suit(user_id, request.starter_unit_id)
+    pilot_service.create_starter_mobile_suit(user_id, request.starter_unit_id)
 
     return pilot
 

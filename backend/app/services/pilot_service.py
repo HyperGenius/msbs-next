@@ -62,6 +62,20 @@ class PilotService:
 
         return pilot
 
+    def create_starter_mobile_suit(
+        self, user_id: str, unit_id: str = "zaku_ii"
+    ) -> MobileSuit:
+        """新規パイロットにスターター機体を作成して付与する（公開メソッド）.
+
+        Args:
+            user_id: Clerk User ID
+            unit_id: 機体ID (デフォルト: "zaku_ii")
+
+        Returns:
+            MobileSuit: 作成された機体
+        """
+        return self._create_starter_mobile_suit(user_id, unit_id)
+
     def _create_starter_mobile_suit(
         self, user_id: str, unit_id: str = "zaku_ii"
     ) -> MobileSuit:

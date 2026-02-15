@@ -87,7 +87,7 @@ export default function StarterSelectionModal({
                 className={`text-left transition-all ${
                   selectedUnit === unit.id
                     ? "scale-105"
-                    : "hover:scale-102"
+                    : "hover:scale-[1.02]"
                 }`}
               >
                 <SciFiCard
