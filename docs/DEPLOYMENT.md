@@ -8,10 +8,41 @@
 - Vercel アカウント
 - Neon PostgreSQL（本番用データベース）
 - Clerk アカウント（認証設定）
+- Terraform >= 1.0（推奨）
 
 ## 1. バックエンド（Cloud Run）のデプロイ
 
-### 1.1. Dockerイメージのビルドとプッシュ
+### オプションA: Terraform を使用（推奨）
+
+Infrastructure as Code による再現可能なデプロイ。詳細は [`infra/cloud-run/README.md`](../infra/cloud-run/README.md) を参照。
+
+```bash
+cd infra/cloud-run
+
+# 変数ファイルの準備
+cp terraform.tfvars.example terraform.tfvars
+# terraform.tfvars を編集して必要な値を設定
+
+# リソースの作成
+terraform init
+terraform plan
+terraform apply
+
+# Docker イメージをビルドしてプッシュ
+cd ../../backend
+REPO_URL=$(cd ../infra/cloud-run && terraform output -raw artifact_registry_repository)
+gcloud builds submit --tag ${REPO_URL}/msbs-next-api:latest
+
+# サービスURLを確認
+cd ../infra/cloud-run
+terraform output service_url
+```
+
+### オプションB: gcloud CLI を使用
+
+手動デプロイの場合は以下の手順を実行。
+
+#### 1.1. Dockerイメージのビルドとプッシュ
 
 ```bash
 cd backend
@@ -31,7 +62,7 @@ gcloud artifacts repositories create msbs-next \
 gcloud builds submit --tag ${REGION}-docker.pkg.dev/${PROJECT_ID}/msbs-next/${SERVICE_NAME}
 ```
 
-### 1.2. Cloud Run へデプロイ
+#### 1.2. Cloud Run へデプロイ
 
 ```bash
 gcloud run deploy ${SERVICE_NAME} \
@@ -47,7 +78,7 @@ gcloud run deploy ${SERVICE_NAME} \
 
 デプロイ後、Cloud Run のサービスURLが表示されます（例: `https://msbs-next-api-xxxxx.run.app`）
 
-### 1.3. 環境変数の更新（必要に応じて）
+#### 1.3. 環境変数の更新（必要に応じて）
 
 ```bash
 gcloud run services update ${SERVICE_NAME} \
