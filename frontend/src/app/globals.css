@@ -156,7 +156,7 @@ a:not(.no-min-size),
 
 /* Tutorial Highlight Effect */
 .tutorial-highlight {
-  position: relative !important;
+  position: relative;
   z-index: 60 !important;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.8) !important;
   border-radius: 4px;

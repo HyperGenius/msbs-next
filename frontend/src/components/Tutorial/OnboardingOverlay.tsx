@@ -96,13 +96,6 @@ export default function OnboardingOverlay({
     };
   }, [show, isVisible, currentStep]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      removeAllHighlights();
-    };
-  }, []);
-
   if (!show || !isVisible) return null;
 
   const step = ONBOARDING_STEPS[currentStep];
