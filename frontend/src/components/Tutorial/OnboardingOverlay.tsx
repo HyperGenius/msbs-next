@@ -52,6 +52,14 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
 ];
 
+// Helper function to remove all highlight classes
+const removeAllHighlights = () => {
+  const highlightedElements = document.querySelectorAll(".tutorial-highlight");
+  highlightedElements.forEach((el) => {
+    el.classList.remove("tutorial-highlight");
+  });
+};
+
 export default function OnboardingOverlay({
   show,
   onComplete,
@@ -66,6 +74,27 @@ export default function OnboardingOverlay({
       setCurrentStep(startStep); // Reset to the specified start step when showing
     }
   }, [show, startStep]);
+
+  // Highlight target element based on current step
+  useEffect(() => {
+    if (!show || !isVisible) return;
+
+    const step = ONBOARDING_STEPS[currentStep];
+    if (!step.targetSelector) return;
+
+    // Wait for element to be rendered
+    const timeoutId = setTimeout(() => {
+      const targetElement = document.querySelector(step.targetSelector!);
+      if (targetElement) {
+        targetElement.classList.add("tutorial-highlight");
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      removeAllHighlights();
+    };
+  }, [show, isVisible, currentStep]);
 
   if (!show || !isVisible) return null;
 

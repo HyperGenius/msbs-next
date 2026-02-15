@@ -153,3 +153,38 @@ a:not(.no-min-size),
     inset 0 0 10px rgba(255, 176, 0, 0.2),
     0 0 5px rgba(255, 176, 0, 0.3);
 }
+
+/* Tutorial Highlight Effect */
+.tutorial-highlight {
+  position: relative;
+  z-index: 60 !important;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.8) !important;
+  border-radius: 4px;
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+/* Tutorial Highlight with Neon Glow */
+.tutorial-highlight::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--sf-neon-green);
+  border-radius: 6px;
+  box-shadow: 
+    0 0 10px rgba(0, 255, 65, 0.6),
+    0 0 20px rgba(0, 255, 65, 0.4),
+    inset 0 0 10px rgba(0, 255, 65, 0.2);
+  pointer-events: none;
+  animation: tutorial-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tutorial-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
