@@ -150,7 +150,7 @@ def test_get_or_create_pilot_creates_new_pilot_with_starter_suit() -> None:
     assert isinstance(pilot_add_call, Pilot)
     assert pilot_add_call.user_id == "test_user_123"
 
-    # 2回目の呼び出しは MobileSuit
+    # 2回目の呼び出しは MobileSuit (デフォルトは zaku_ii)
     mobile_suit_add_call = add_calls[1][0][0]
     assert isinstance(mobile_suit_add_call, MobileSuit)
 
@@ -158,6 +158,25 @@ def test_get_or_create_pilot_creates_new_pilot_with_starter_suit() -> None:
     assert "Starter" in mobile_suit_add_call.name
     assert mobile_suit_add_call.user_id == "test_user_123"
     assert mobile_suit_add_call.side == "PLAYER"
+
+
+def test_create_starter_mobile_suit_with_custom_unit() -> None:
+    """カスタムユニットIDでスターター機体を作成できることをテスト."""
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    # GM機体を作成
+    starter_suit = service._create_starter_mobile_suit("test_user_456", "gm")
+
+    # 作成された機体を確認
+    assert starter_suit.user_id == "test_user_456"
+    assert "GM" in starter_suit.name or "Starter" in starter_suit.name
+    assert starter_suit.side == "PLAYER"
+    assert starter_suit.max_hp == 750  # GM の HP
+
+    # session.add が呼ばれることを確認
+    session.add.assert_called_once()
+    session.commit.assert_called_once()
 
 
 def test_get_or_create_pilot_returns_existing_pilot() -> None:
