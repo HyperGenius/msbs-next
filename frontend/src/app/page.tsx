@@ -55,9 +55,12 @@ export default function Home() {
   useEffect(() => {
     if (!isSignedIn || pilotLoading) return;
 
-    // パイロットが存在しない場合はスターター選択を表示
-    if (pilotError) {
+    // パイロットが存在しない場合のみスターター選択を表示
+    if (pilotError && !pilot) {
       setShowStarterSelection(true);
+    } else if (pilot) {
+      // パイロットが存在する場合はモーダルを非表示
+      setShowStarterSelection(false);
     }
   }, [isSignedIn, pilot, pilotLoading, pilotError]);
 
