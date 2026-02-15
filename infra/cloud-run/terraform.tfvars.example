@@ -1,0 +1,25 @@
+# GCP プロジェクト設定
+project_id = "your-gcp-project-id"
+region     = "asia-northeast1"
+
+# Cloud Run サービス設定
+service_name = "msbs-next-api"
+image_tag    = "latest"
+
+# データベース設定（Neon）
+# terraform output -state=../neon/terraform.tfstate database_url で取得可能
+database_url = "postgresql://user:password@host/database?sslmode=require"
+
+# Clerk 認証設定
+clerk_secret_key = "sk_test_..."
+clerk_jwks_url   = "https://your-clerk-domain.clerk.accounts.dev/.well-known/jwks.json"
+
+# CORS設定（Vercelドメイン）
+allowed_origins = "https://your-app.vercel.app,https://your-app-preview.vercel.app"
+
+# リソース設定（オプション）
+container_concurrency = 80
+min_instances         = 0
+max_instances         = 10
+cpu_limit             = "1"
+memory_limit          = "512Mi"
