@@ -3,7 +3,9 @@ import useSWR from "swr";
 import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile } from "@/types/battle";
 
 // Backend API Base URL
-const API_BASE_URL = "http://127.0.0.1:8000";
+// 本番環境では環境変数NEXT_PUBLIC_API_URLを使用
+// ローカル開発では localhost:8000 にフォールバック
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 /**
  * Get auth token from Clerk (client-side only)
