@@ -31,6 +31,32 @@ SHOP_LISTINGS = [
         },
     },
     {
+        "id": "gm",
+        "name": "RGM-79 GM",
+        "price": 500,
+        "description": "連邦軍の量産型モビルスーツ。ビーム兵器を装備したバランス型。",
+        "specs": {
+            "max_hp": 750,
+            "armor": 45,
+            "mobility": 1.1,
+            "sensor_range": 520.0,
+            "beam_resistance": 0.1,
+            "physical_resistance": 0.15,
+            "weapons": [
+                Weapon(
+                    id="beam_spray_gun",
+                    name="Beam Spray Gun",
+                    power=120,
+                    range=450,
+                    accuracy=65,
+                    type="BEAM",
+                    optimal_range=320.0,
+                    decay_rate=0.09,
+                )
+            ],
+        },
+    },
+    {
         "id": "dom",
         "name": "Dom",
         "price": 1200,
