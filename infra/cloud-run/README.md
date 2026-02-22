@@ -2,6 +2,14 @@
 
 このディレクトリには、MSBS-Next バックエンド API を Google Cloud Run にデプロイするための Terraform 設定が含まれています。
 
+## デプロイメントの流れ
+
+Cloud Run サービスは Docker イメージを必要とするため、以下の順序でデプロイを行います：
+
+1. **基盤リソースの作成**: Artifact Registry、Secret Manager、Service Account などを作成
+2. **Docker イメージのビルドとプッシュ**: バックエンドアプリケーションをコンテナ化して Artifact Registry にプッシュ
+3. **Cloud Run サービスの作成**: プッシュされたイメージを使用して Cloud Run サービスをデプロイ
+
 ## 構成リソース
 
 - **Artifact Registry**: Docker イメージの保存
@@ -31,6 +39,8 @@
 ```bash
 # GCP にログイン
 gcloud auth application-default login
+
+# タグの設定等を必要に応じて行う
 
 # プロジェクトを設定
 gcloud config set project YOUR_PROJECT_ID
@@ -62,37 +72,82 @@ terraform init
 terraform plan
 ```
 
-### 5. リソースの作成
+### 5. 基盤リソースの作成（Artifact Registry、Secret Manager など）
+
+Cloud Run サービスを作成する前に、まず Artifact Registry とシークレット関連のリソースを作成します：
 
 ```bash
-terraform apply
+terraform apply -target=google_artifact_registry_repository.msbs_next \
+  -target=google_secret_manager_secret.database_url \
+  -target=google_secret_manager_secret_version.database_url \
+  -target=google_secret_manager_secret.clerk_secret_key \
+  -target=google_secret_manager_secret_version.clerk_secret_key \
+  -target=google_service_account.cloud_run \
+  -target=google_secret_manager_secret_iam_member.database_url_access \
+  -target=google_secret_manager_secret_iam_member.clerk_secret_key_access
 ```
 
 ### 6. Docker イメージのビルドとプッシュ
+
+基盤リソースが作成されたら、Docker イメージをビルドして Artifact Registry にプッシュします：
 
 ```bash
 # Artifact Registry にログイン
 gcloud auth configure-docker asia-northeast1-docker.pkg.dev
 
-# リポジトリURLを取得
-REPO_URL=$(terraform output -raw artifact_registry_repository)
+PROJECT_ID=msbs-next
 
 # Docker イメージをビルド
 cd ../../backend
-docker build -t ${REPO_URL}/msbs-next-api:latest .
+
+# Apple Silicon (M1/M2/M3) Mac の場合
+docker build --platform linux/amd64 -t asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest .
+
+# Intel Mac / Linux の場合
+# docker build -t asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest .
 
 # イメージをプッシュ
-docker push ${REPO_URL}/msbs-next-api:latest
+docker push asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest
 ```
 
-または、Cloud Build を使用:
+**重要**: Apple Silicon Mac では `--platform linux/amd64` オプションが必須です。Cloud Run は AMD64 アーキテクチャで動作するため、ARM64 イメージは使用できません。
+
+または、Cloud Build を使用（推奨: アーキテクチャを気にせず自動でビルド）:
 
 ```bash
 cd ../../backend
-gcloud builds submit --tag ${REPO_URL}/msbs-next-api:latest
+PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
+
+# サービスアカウントに Cloud Build の権限を付与
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+    --role="roles/storage.objectViewer" \
+    --role="roles/artifactregistry.writer"
+
+# Cloud Build を使用してビルドとプッシュ
+gcloud builds submit --tag asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest
 ```
 
-### 7. サービスURLの確認
+**Cloud Runを公開アクセス可能にする**
+Cloud Run サービスを公開アクセス可能にするには、以下のコマンドを実行して全員に Cloud Run Invoker ロールを付与します：
+
+```bash
+gcloud run services add-iam-policy-binding msbs-next-api \
+  --member="allUsers" \
+  --role="roles/run.invoker" \
+  --region=asia-northeast1
+```
+
+### 7. Cloud Run サービスの作成
+
+Docker イメージがプッシュされた後、残りのリソース（Cloud Run サービス）を作成します：
+
+```bash
+cd ../../infra/cloud-run
+terraform apply
+```
+
+### 8. サービスURLの確認
 
 ```bash
 terraform output service_url
@@ -119,14 +174,37 @@ terraform destroy
 
 ## トラブルシューティング
 
-### イメージがデプロイされない
+### Cloud Run サービス作成時に「イメージが見つからない」エラー
 
-Artifact Registry にイメージがプッシュされているか確認:
+Docker イメージを Artifact Registry にプッシュする前に Cloud Run サービスを作成しようとすると、このエラーが発生します。上記の手順 5 → 6 → 7 の順序で実行してください。
+
+イメージが正しくプッシュされているか確認:
 
 ```bash
 gcloud artifacts docker images list \
-  $(terraform output -raw artifact_registry_repository)
+  asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/msbs-next
 ```
+
+### Artifact Registry のイメージを削除したい
+
+誤ったアーキテクチャでビルドした場合など、プッシュ済みのイメージを削除する場合：
+
+```bash
+# イメージ一覧を確認
+gcloud artifacts docker images list \
+  asia-northeast1-docker.pkg.dev/msbs-next/msbs-next
+
+# 特定のタグを削除
+gcloud artifacts docker images delete \
+  asia-northeast1-docker.pkg.dev/msbs-next/msbs-next/msbs-next-api:latest \
+  --quiet
+
+# または、確認しながら削除（--quiet なし）
+gcloud artifacts docker images delete \
+  asia-northeast1-docker.pkg.dev/msbs-next/msbs-next/msbs-next-api:latest
+```
+
+**Apple Silicon Mac で誤ってビルドした場合**: `--platform linux/amd64` オプションなしでビルドした場合は、上記コマンドで削除してから正しくビルドし直してください。
 
 ### サービスがヘルスチェックに失敗する
 
@@ -158,13 +236,18 @@ GitHub Actions での自動デプロイ例:
 
 - name: Build and Push Docker Image
   run: |
-    gcloud builds submit --tag ${ARTIFACT_REGISTRY_URL}/msbs-next-api:${{ github.sha }}
+    gcloud auth configure-docker asia-northeast1-docker.pkg.dev
+    docker build -t asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-api:${{ github.sha }} backend/
+    docker push asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-api:${{ github.sha }}
 
 - name: Deploy to Cloud Run
   run: |
     cd infra/cloud-run
+    terraform init
     terraform apply -auto-approve -var="image_tag=${{ github.sha }}"
 ```
+
+**注意**: 初回デプロイ時は、手順 5 で基盤リソースを先に作成してから CI/CD を実行してください。
 
 ## 参考リンク
 
