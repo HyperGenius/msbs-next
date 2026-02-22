@@ -1,7 +1,7 @@
 /* frontend/src/app/page.tsx */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { BattleLog, MobileSuit, BattleRewards } from "@/types/battle";
 import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory, createPilot } from "@/services/api";
@@ -20,7 +20,7 @@ const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
 type OnboardingState = "NOT_STARTED" | "BATTLE_STARTED" | "BATTLE_FINISHED" | "COMPLETED";
 
 export default function Home() {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken, isSignedIn, isLoaded } = useAuth();
   const { missions, isLoading: missionsLoading } = useMissions();
   const { mobileSuits, isLoading: mobileSuitsLoading, mutate: mutateMobileSuits } = useMobileSuits();
   const { entryStatus, isLoading: entryStatusLoading, mutate: mutateEntryStatus } = useEntryStatus();
@@ -53,7 +53,7 @@ export default function Home() {
 
   // スターター選択モーダルの表示判定
   useEffect(() => {
-    if (!isSignedIn || pilotLoading) return;
+    if (!isLoaded || !isSignedIn || pilotLoading) return;
 
     // パイロットが存在しない場合のみスターター選択を表示
     if (pilotError && !pilot) {
@@ -62,11 +62,21 @@ export default function Home() {
       // パイロットが存在する場合はモーダルを非表示
       setShowStarterSelection(false);
     }
-  }, [isSignedIn, pilot, pilotLoading, pilotError]);
+  }, [isLoaded, isSignedIn, pilot, pilotLoading, pilotError]);
+
+  // ログイン成功時にSWRキャッシュを強制更新
+  const prevIsSignedInRef = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (isLoaded && isSignedIn && prevIsSignedInRef.current !== true) {
+      mutateMobileSuits();
+      mutatePilot();
+    }
+    prevIsSignedInRef.current = isSignedIn;
+  }, [isLoaded, isSignedIn, mutateMobileSuits, mutatePilot]);
 
   // オンボーディングの表示判定
   useEffect(() => {
-    if (!isSignedIn || mobileSuitsLoading || battlesLoading) return;
+    if (!isLoaded || !isSignedIn || mobileSuitsLoading || battlesLoading || pilotLoading) return;
 
     // localStorage からオンボーディング完了状態を確認
     const onboardingCompleted =
@@ -86,7 +96,7 @@ export default function Home() {
     } else if (onboardingCompleted) {
       setOnboardingState("COMPLETED");
     }
-  }, [isSignedIn, mobileSuits, mobileSuitsLoading, battles, battlesLoading]);
+  }, [isLoaded, isSignedIn, mobileSuits, mobileSuitsLoading, battles, battlesLoading, pilotLoading]);
 
   const handleOnboardingComplete = () => {
     if (onboardingState === "NOT_STARTED") {
