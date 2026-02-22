@@ -6,7 +6,14 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.db import json_serializer
-from app.models.models import BattleEntry, BattleRoom, MobileSuit, Pilot, Vector3, Weapon
+from app.models.models import (
+    BattleEntry,
+    BattleRoom,
+    MobileSuit,
+    Pilot,
+    Vector3,
+    Weapon,
+)
 from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
 
@@ -20,7 +27,9 @@ def in_memory_session():
         yield session
 
 
-def create_test_mobile_suit(name: str = "Test Suit", user_id: str = "test_user") -> MobileSuit:
+def create_test_mobile_suit(
+    name: str = "Test Suit", user_id: str = "test_user"
+) -> MobileSuit:
     """Create a test mobile suit."""
     return MobileSuit(
         name=name,
@@ -315,9 +324,7 @@ def test_create_rooms_reuses_persistent_npcs(in_memory_session):
     in_memory_session.commit()
 
     # 100% 永続化NPC を使うよう設定
-    service = MatchingService(
-        in_memory_session, room_size=2, npc_persistence_rate=1.0
-    )
+    service = MatchingService(in_memory_session, room_size=2, npc_persistence_rate=1.0)
     service.create_rooms()
 
     npc_entries = in_memory_session.exec(

@@ -9,7 +9,14 @@ from typing import Any, cast
 from sqlmodel import Session, select
 
 from app.core.npc_data import ACE_PILOTS, PERSONALITY_TYPES
-from app.models.models import BattleEntry, BattleRoom, MobileSuit, Pilot, Vector3, Weapon
+from app.models.models import (
+    BattleEntry,
+    BattleRoom,
+    MobileSuit,
+    Pilot,
+    Vector3,
+    Weapon,
+)
 from app.services.pilot_service import PilotService
 
 

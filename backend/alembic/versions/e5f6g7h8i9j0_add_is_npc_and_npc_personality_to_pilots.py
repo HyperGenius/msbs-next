@@ -23,9 +23,7 @@ def upgrade() -> None:
     """Add is_npc and npc_personality fields to pilots table."""
     op.add_column(
         "pilots",
-        sa.Column(
-            "is_npc", sa.Boolean(), nullable=False, server_default="false"
-        ),
+        sa.Column("is_npc", sa.Boolean(), nullable=False, server_default="false"),
     )
     op.create_index("ix_pilots_is_npc", "pilots", ["is_npc"])
     op.add_column(

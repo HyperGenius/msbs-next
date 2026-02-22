@@ -246,9 +246,7 @@ def _save_battle_results(
                     npc_pilot, reward_logs = pilot_service.add_rewards(
                         npc_pilot, exp_gained, credits_gained
                     )
-                    print(
-                        f"  NPC成長 ({npc_pilot.name}): {', '.join(reward_logs)}"
-                    )
+                    print(f"  NPC成長 ({npc_pilot.name}): {', '.join(reward_logs)}")
             except Exception as e:
                 print(f"  警告: NPC成長エラー ({npc_entry.user_id}): {e}")
                 traceback.print_exc()
