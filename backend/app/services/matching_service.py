@@ -17,8 +17,11 @@ class MatchingService:
     """マッチング処理サービス."""
 
     def __init__(
-        self, session: Session, room_size: int = 8, ace_spawn_rate: float = 0.05,
-        npc_persistence_rate: float = 0.5
+        self,
+        session: Session,
+        room_size: int = 8,
+        ace_spawn_rate: float = 0.05,
+        npc_persistence_rate: float = 0.5,
     ):
         """初期化.
 
