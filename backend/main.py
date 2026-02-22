@@ -33,7 +33,9 @@ origins = [
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 if allowed_origins_env:
     # カンマ区切りで複数のオリジンを追加可能
-    origins.extend([origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()])
+    origins.extend(
+        [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+    )
 
 app.add_middleware(
     CORSMiddleware,
