@@ -56,6 +56,10 @@ export interface MobileSuit {
     max_en?: number;
     en_recovery?: number;
     max_propellant?: number;
+    /** NPC の場合のパイロットレベル（スナップショットから）*/
+    npc_pilot_level?: number;
+    /** NPC フラグ（スナップショットから）*/
+    is_npc?: boolean;
 }
 
 /**

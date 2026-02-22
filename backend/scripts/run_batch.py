@@ -105,7 +105,10 @@ def _convert_snapshot_to_mobile_suit(snapshot: dict) -> MobileSuit:
         snapshot["weapons"] = [
             Weapon(**w) if isinstance(w, dict) else w for w in snapshot["weapons"]
         ]
-    return MobileSuit(**snapshot)
+    # MobileSuit モデルにないスナップショット固有のキーを除去
+    ms_fields = set(MobileSuit.model_fields.keys())
+    filtered = {k: v for k, v in snapshot.items() if k in ms_fields}
+    return MobileSuit(**filtered)
 
 
 def _prepare_battle_units(
@@ -172,6 +175,7 @@ def _save_battle_results(
     session: Session,
     room: BattleRoom,
     player_entries: list[BattleEntry],
+    npc_entries: list[BattleEntry],
     simulator: BattleSimulator,
     primary_player_win: bool,
     kills: int,
@@ -182,6 +186,7 @@ def _save_battle_results(
         session: データベースセッション
         room: ルーム
         player_entries: プレイヤーエントリーリスト
+        npc_entries: NPCエントリーリスト
         simulator: シミュレーター
         primary_player_win: 勝利フラグ
         kills: 撃墜数
@@ -224,6 +229,26 @@ def _save_battle_results(
 
             except Exception as e:
                 print(f"  警告: 報酬付与エラー ({entry.user_id}): {e}")
+                traceback.print_exc()
+
+    # NPC の成長処理
+    for npc_entry in npc_entries:
+        if npc_entry.user_id:
+            try:
+                npc_pilot = pilot_service.get_npc_pilot(npc_entry.user_id)
+                if npc_pilot:
+                    # NPC はプレイヤーが勝てば敗北、プレイヤーが負ければ勝利
+                    npc_win = not primary_player_win
+                    exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
+                        win=npc_win,
+                        kills=0,
+                    )
+                    npc_pilot, reward_logs = pilot_service.add_rewards(
+                        npc_pilot, exp_gained, credits_gained
+                    )
+                    print(f"  NPC成長 ({npc_pilot.name}): {', '.join(reward_logs)}")
+            except Exception as e:
+                print(f"  警告: NPC成長エラー ({npc_entry.user_id}): {e}")
                 traceback.print_exc()
 
     room.status = "COMPLETED"
@@ -272,7 +297,7 @@ def _process_room(session: Session, room: BattleRoom) -> None:
 
     # 結果保存
     _save_battle_results(
-        session, room, player_entries, simulator, primary_player_win, kills
+        session, room, player_entries, npc_entries, simulator, primary_player_win, kills
     )
 
     print("  結果を保存しました")

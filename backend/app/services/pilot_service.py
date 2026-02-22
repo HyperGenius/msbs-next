@@ -1,5 +1,6 @@
 """パイロット関連のビジネスロジック."""
 
+import uuid
 from datetime import UTC, datetime
 
 from sqlmodel import Session, select
@@ -31,6 +32,43 @@ class PilotService:
             次のレベルに必要な経験値
         """
         return level * 100
+
+    def create_npc_pilot(self, name: str, personality: str) -> Pilot:
+        """NPC パイロットを新規作成する.
+
+        Args:
+            name: NPC パイロット名
+            personality: NPC の性格 (AGGRESSIVE/CAUTIOUS/SNIPER)
+
+        Returns:
+            Pilot: 作成された NPC パイロット
+        """
+        npc_user_id = f"npc-{uuid.uuid4().hex}"
+        pilot = Pilot(
+            user_id=npc_user_id,
+            name=name,
+            is_npc=True,
+            npc_personality=personality,
+            level=1,
+            exp=0,
+            credits=0,
+        )
+        self.session.add(pilot)
+        self.session.commit()
+        self.session.refresh(pilot)
+        return pilot
+
+    def get_npc_pilot(self, user_id: str) -> Pilot | None:
+        """NPC パイロットを user_id で取得する.
+
+        Args:
+            user_id: NPC の合成 user_id (npc-{uuid} 形式)
+
+        Returns:
+            Pilot | None: NPC パイロット。見つからない場合は None
+        """
+        statement = select(Pilot).where(Pilot.user_id == user_id, Pilot.is_npc == True)  # noqa: E712
+        return self.session.exec(statement).first()
 
     def get_or_create_pilot(self, user_id: str, name: str) -> Pilot:
         """パイロットを取得または作成する.

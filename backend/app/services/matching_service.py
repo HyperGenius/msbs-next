@@ -9,14 +9,26 @@ from typing import Any, cast
 from sqlmodel import Session, select
 
 from app.core.npc_data import ACE_PILOTS, PERSONALITY_TYPES
-from app.models.models import BattleEntry, BattleRoom, MobileSuit, Vector3, Weapon
+from app.models.models import (
+    BattleEntry,
+    BattleRoom,
+    MobileSuit,
+    Pilot,
+    Vector3,
+    Weapon,
+)
+from app.services.pilot_service import PilotService
 
 
 class MatchingService:
     """マッチング処理サービス."""
 
     def __init__(
-        self, session: Session, room_size: int = 8, ace_spawn_rate: float = 0.05
+        self,
+        session: Session,
+        room_size: int = 8,
+        ace_spawn_rate: float = 0.05,
+        npc_persistence_rate: float = 0.5,
     ):
         """初期化.
 
@@ -24,10 +36,12 @@ class MatchingService:
             session: データベースセッション
             room_size: 1ルームあたりの定員（デフォルト: 8機）
             ace_spawn_rate: エースパイロットの出現確率（デフォルト: 5%）
+            npc_persistence_rate: 既存の永続化NPCを再利用する割合（デフォルト: 50%）
         """
         self.session = session
         self.room_size = room_size
         self.ace_spawn_rate = ace_spawn_rate
+        self.npc_persistence_rate = npc_persistence_rate
 
     def create_rooms(self) -> list[BattleRoom]:
         """未処理のエントリーを取得し、ルームを作成する.
@@ -99,18 +113,65 @@ class MatchingService:
                     )
                     npc_count -= 1
 
-                # 残りは通常NPCで埋める
-                for _ in range(npc_count):
+                # 既存の永続化NPCを一定割合で取得
+                persist_count = round(npc_count * self.npc_persistence_rate)
+                persistent_npcs = self.select_npcs_for_room(persist_count)
+                # 実際に取得できた数に応じて新規生成数を調整
+                new_count = npc_count - len(persistent_npcs)
+
+                for npc_suit, npc_pilot in persistent_npcs:
+                    # 位置をリセット
+                    npc_suit.position = Vector3(
+                        x=random.uniform(-500, 500),
+                        y=random.uniform(-500, 500),
+                        z=random.uniform(0, 500),
+                    )
+                    npc_suit.current_hp = npc_suit.max_hp
+                    self.session.add(npc_suit)
+                    self.session.flush()
+
+                    snapshot = npc_suit.model_dump()
+                    snapshot["npc_pilot_level"] = npc_pilot.level
+
+                    npc_entry = BattleEntry(
+                        user_id=npc_pilot.user_id,
+                        room_id=room.id,
+                        mobile_suit_id=npc_suit.id,
+                        mobile_suit_snapshot=snapshot,
+                        is_npc=True,
+                    )
+                    self.session.add(npc_entry)
+                    entries.append(npc_entry)
+                    print(
+                        f"  ♻ 既存NPC再利用: {npc_suit.pilot_name or npc_suit.name} (Lv.{npc_pilot.level})"
+                    )
+
+                # 残りは新規NPCで埋める
+                pilot_service = PilotService(self.session)
+                for _ in range(new_count):
                     npc_suit = self._create_npc_mobile_suit()
                     self.session.add(npc_suit)
                     self.session.flush()  # IDを取得するためにflush
 
+                    # 新規NPC用のパイロットレコードを作成
+                    pilot_name = npc_suit.pilot_name or npc_suit.name
+                    personality = npc_suit.personality or "AGGRESSIVE"
+                    npc_pilot = pilot_service.create_npc_pilot(pilot_name, personality)
+
+                    # 機体を NPC パイロットの user_id に紐付ける
+                    npc_suit.user_id = npc_pilot.user_id
+                    self.session.add(npc_suit)
+                    self.session.flush()
+
+                    snapshot = npc_suit.model_dump()
+                    snapshot["npc_pilot_level"] = npc_pilot.level
+
                     # NPCエントリーを作成
                     npc_entry = BattleEntry(
-                        user_id=None,
+                        user_id=npc_pilot.user_id,
                         room_id=room.id,
                         mobile_suit_id=npc_suit.id,
-                        mobile_suit_snapshot=npc_suit.model_dump(),
+                        mobile_suit_snapshot=snapshot,
                         is_npc=True,
                     )
                     self.session.add(npc_entry)
@@ -130,6 +191,42 @@ class MatchingService:
 
         print(f"\nマッチング完了: {len(created_rooms)} ルーム")
         return created_rooms
+
+    def select_npcs_for_room(self, count: int) -> list[tuple[MobileSuit, Pilot]]:
+        """DBから既存の永続化NPCをランダムに選択する.
+
+        Args:
+            count: 取得するNPC数
+
+        Returns:
+            (MobileSuit, Pilot) のタプルのリスト
+        """
+        if count <= 0:
+            return []
+
+        # is_npc=True のパイロットを取得
+        pilot_statement = select(Pilot).where(Pilot.is_npc == True)  # noqa: E712
+        npc_pilots = list(self.session.exec(pilot_statement).all())
+
+        if not npc_pilots:
+            return []
+
+        # ランダムにシャッフルして必要数を選択
+        selected_pilots = random.sample(npc_pilots, min(count, len(npc_pilots)))
+
+        result = []
+        for pilot in selected_pilots:
+            # このパイロットの user_id に紐づく機体を取得
+            suit_statement = (
+                select(MobileSuit)
+                .where(MobileSuit.user_id == pilot.user_id)
+                .where(MobileSuit.side == "ENEMY")
+            )
+            suit = self.session.exec(suit_statement).first()
+            if suit:
+                result.append((suit, pilot))
+
+        return result
 
     def _create_npc_mobile_suit(self) -> MobileSuit:
         """NPCのモビルスーツを生成する.
