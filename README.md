@@ -71,7 +71,7 @@ MSBS-Next は、モビルスーツ（MS）をカスタマイズし、戦術を�
 | **Simulation** | NumPy (ベクトル計算), Pure Python Logic |
 | **Database** | Neon (PostgreSQL), Alembic |
 | **Auth** | Clerk (JWT/JWKS) |
-| **Infrastructure** | Terraform (Neon), Vercel (予定), Render (予定) |
+| **Infrastructure** | Vercel (Frontend), Cloud Run (Backend), Terraform (Neon) |
 
 ## 🚀 セットアップ
 
@@ -141,6 +141,10 @@ cd frontend
 npm run dev
 ```
 → http://localhost:3000
+
+### 5. 本番環境へのデプロイ
+
+本番環境（Vercel + Cloud Run）へのデプロイ手順については、[デプロイガイド](docs/DEPLOYMENT.md)を参照してください。
 
 ## 📁 プロジェクト構造
 

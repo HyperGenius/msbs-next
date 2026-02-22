@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -22,10 +23,19 @@ from app.routers import engineering, entries, mobile_suits, pilots, rankings, sh
 app = FastAPI(title="MSBS-Next API")
 
 # --- CORS設定 ---
+# ローカル環境と本番環境のオリジンを設定
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+
+# 本番環境のVercelドメインを追加
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    # カンマ区切りで複数のオリジンを追加可能
+    origins.extend(
+        [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+    )
 
 app.add_middleware(
     CORSMiddleware,
