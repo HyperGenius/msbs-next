@@ -243,8 +243,10 @@ class Pilot(SQLModel, table=True):
     __tablename__ = "pilots"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: str = Field(unique=True, index=True, description="Clerk User ID")
+    user_id: str = Field(unique=True, index=True, description="Clerk User ID (NPC の場合は npc-{uuid} 形式)")
     name: str = Field(description="パイロット名（ユーザー名）")
+    is_npc: bool = Field(default=False, index=True, description="NPC パイロットかどうか")
+    npc_personality: str | None = Field(default=None, description="NPC の性格 (AGGRESSIVE/CAUTIOUS/SNIPER)")
     level: int = Field(default=1, description="現在のレベル")
     exp: int = Field(default=0, description="累積経験値")
     credits: int = Field(default=1000, description="所持金")
