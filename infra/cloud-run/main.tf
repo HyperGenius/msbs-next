@@ -102,7 +102,7 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
 
       # 環境変数（Secret Managerから取得）
       env {
-        name = "DATABASE_URL"
+        name = "NEON_DATABASE_URL"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.database_url.secret_id
@@ -156,7 +156,7 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
       }
     }
 
-    container_concurrency = var.container_concurrency
+    max_instance_request_concurrency = var.container_concurrency
   }
 
   traffic {
@@ -173,9 +173,9 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
 }
 
 # Cloud Run サービスへの一般公開アクセスを許可
-resource "google_cloud_run_v2_service_iam_member" "public_access" {
-  name     = google_cloud_run_v2_service.msbs_next_api.name
-  location = google_cloud_run_v2_service.msbs_next_api.location
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
+#resource "google_cloud_run_v2_service_iam_member" "public_access" {
+#  name     = google_cloud_run_v2_service.msbs_next_api.name
+#  location = google_cloud_run_v2_service.msbs_next_api.location
+#  role     = "roles/run.invoker"
+#  member   = "allUsers"
+#}
