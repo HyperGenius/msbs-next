@@ -1,6 +1,6 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile, Friend, Team, TeamEntryRequest, TeamEntryResponse } from "@/types/battle";
 
 // Backend API Base URL
 // 本番環境では環境変数NEXT_PUBLIC_API_URLを使用
@@ -516,5 +516,290 @@ export function usePlayerProfile(userId: string | null) {
     isLoading,
     isError: error,
   };
+}
+
+// ===== フレンド機能 =====
+
+/**
+ * フレンド一覧を取得するSWRフック
+ */
+export function useFriends() {
+  const { data, error, isLoading, mutate } = useSWR<Friend[]>(
+    `${API_BASE_URL}/api/friends/`,
+    fetcher
+  );
+
+  return {
+    friends: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * 受信中のフレンドリクエスト一覧を取得するSWRフック
+ */
+export function useFriendRequests() {
+  const { data, error, isLoading, mutate } = useSWR<Friend[]>(
+    `${API_BASE_URL}/api/friends/requests`,
+    fetcher,
+    { refreshInterval: 30000 }
+  );
+
+  return {
+    requests: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * フレンドリクエストを送信する関数
+ */
+export async function sendFriendRequest(friendUserId: string): Promise<Friend> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/friends/request`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ friend_user_id: friendUserId }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to send friend request: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * フレンドリクエストを承認する関数
+ */
+export async function acceptFriendRequest(friendUserId: string): Promise<Friend> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/friends/accept`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ friend_user_id: friendUserId }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to accept friend request: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * フレンドリクエストを拒否する関数
+ */
+export async function rejectFriendRequest(friendUserId: string): Promise<void> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/friends/reject`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ friend_user_id: friendUserId }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to reject friend request: ${res.status}`);
+  }
+}
+
+/**
+ * フレンドを解除する関数
+ */
+export async function removeFriend(friendUserId: string): Promise<void> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/friends/${friendUserId}`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to remove friend: ${res.status}`);
+  }
+}
+
+// ===== チーム機能 =====
+
+/**
+ * 現在のチーム情報を取得するSWRフック
+ */
+export function useCurrentTeam() {
+  const { data, error, isLoading, mutate } = useSWR<Team | null>(
+    `${API_BASE_URL}/api/teams/current`,
+    fetcher,
+    { refreshInterval: 5000 }
+  );
+
+  return {
+    team: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * チームを作成する関数
+ */
+export async function createTeam(name: string): Promise<Team> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/teams/create`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ name }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to create team: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * チームにメンバーを招待する関数
+ */
+export async function inviteTeamMember(teamId: string, userId: string): Promise<Team> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/invite`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ user_id: userId }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to invite member: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Ready状態をトグルする関数
+ */
+export async function toggleTeamReady(teamId: string): Promise<Team> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/ready`, {
+    method: "POST",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to toggle ready: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * チームから離脱する関数
+ */
+export async function leaveTeam(teamId: string): Promise<void> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/teams/${teamId}/leave`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to leave team: ${res.status}`);
+  }
+}
+
+/**
+ * チーム単位でバトルにエントリーする関数
+ */
+export async function teamEntry(request: TeamEntryRequest): Promise<TeamEntryResponse> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/teams/entry`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to team entry: ${res.status}`);
+  }
+
+  return res.json();
 }
 

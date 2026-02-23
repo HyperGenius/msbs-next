@@ -315,3 +315,63 @@ class Leaderboard(SQLModel, table=True):
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="更新日時"
     )
+
+
+class Friendship(SQLModel, table=True):
+    """フレンド関係テーブル."""
+
+    __tablename__ = "friendships"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: str = Field(index=True, description="リクエスト送信者の Clerk User ID")
+    friend_user_id: str = Field(
+        index=True, description="リクエスト受信者の Clerk User ID"
+    )
+    status: str = Field(
+        default="PENDING",
+        index=True,
+        description="ステータス (PENDING/ACCEPTED/BLOCKED)",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
+
+
+class Team(SQLModel, table=True):
+    """チームテーブル."""
+
+    __tablename__ = "teams"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    owner_user_id: str = Field(index=True, description="チームオーナーの Clerk User ID")
+    name: str = Field(description="チーム名")
+    status: str = Field(
+        default="FORMING",
+        index=True,
+        description="ステータス (FORMING/READY/DISBANDED)",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
+
+
+class TeamMember(SQLModel, table=True):
+    """チームメンバーテーブル."""
+
+    __tablename__ = "team_members"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    team_id: uuid.UUID = Field(
+        foreign_key="teams.id", index=True, description="チームID"
+    )
+    user_id: str = Field(index=True, description="メンバーの Clerk User ID")
+    is_ready: bool = Field(default=False, description="準備完了フラグ")
+    joined_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="参加日時"
+    )

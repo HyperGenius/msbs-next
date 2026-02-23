@@ -18,7 +18,16 @@ from app.models.models import (
     Vector3,
     Weapon,
 )
-from app.routers import engineering, entries, mobile_suits, pilots, rankings, shop
+from app.routers import (
+    engineering,
+    entries,
+    friends,
+    mobile_suits,
+    pilots,
+    rankings,
+    shop,
+    teams,
+)
 
 app = FastAPI(title="MSBS-Next API")
 
@@ -52,6 +61,8 @@ app.include_router(pilots.router)
 app.include_router(shop.router)
 app.include_router(engineering.router)
 app.include_router(rankings.router)
+app.include_router(friends.router)
+app.include_router(teams.router)
 
 # --- Response Schemas ---
 # models.py にあるクラスを使用する形でも良いですが、

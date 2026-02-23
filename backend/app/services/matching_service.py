@@ -14,6 +14,8 @@ from app.models.models import (
     BattleRoom,
     MobileSuit,
     Pilot,
+    Team,
+    TeamMember,
     Vector3,
     Weapon,
 )
@@ -83,6 +85,10 @@ class MatchingService:
                 continue
 
             print(f"ルーム {room.id}: {len(entries)} 件のエントリーを処理中...")
+
+            # チームメンバーの検証: 同じルームに入っているチームメンバーは
+            # 全員 PLAYER サイドに配置されることを保証する
+            self._apply_team_grouping(entries)
 
             # 不足分をNPCで埋める
             player_entries = [e for e in entries if not e.is_npc]
@@ -227,6 +233,55 @@ class MatchingService:
                 result.append((suit, pilot))
 
         return result
+
+    def _apply_team_grouping(self, entries: list[BattleEntry]) -> None:
+        """チームメンバーのエントリーに対して味方グループ情報を付与する.
+
+        同じチームに所属するプレイヤーのスナップショットに team_id を追加し、
+        シミュレーション時に味方として扱えるようにする。
+
+        Args:
+            entries: ルーム内の全エントリーのリスト
+        """
+        player_user_ids = [e.user_id for e in entries if e.user_id and not e.is_npc]
+        if not player_user_ids:
+            return
+
+        # アクティブなチームメンバーシップを取得
+        memberships = list(
+            self.session.exec(
+                select(TeamMember)
+                .join(Team)
+                .where(
+                    TeamMember.user_id.in_(player_user_ids),  # type: ignore[attr-defined]
+                    Team.status != "DISBANDED",
+                )
+            ).all()
+        )
+
+        if not memberships:
+            return
+
+        # team_id → [user_id] のマッピングを構築
+        team_map: dict[str, list[str]] = {}
+        for m in memberships:
+            tid = str(m.team_id)
+            team_map.setdefault(tid, []).append(m.user_id)
+
+        # エントリーのスナップショットに team_id を書き込む
+        for entry in entries:
+            if entry.is_npc or not entry.user_id:
+                continue
+            for tid, member_ids in team_map.items():
+                if entry.user_id in member_ids and len(member_ids) >= 2:
+                    snapshot = dict(entry.mobile_suit_snapshot)
+                    snapshot["team_id"] = tid
+                    snapshot["side"] = "PLAYER"
+                    entry.mobile_suit_snapshot = snapshot
+                    self.session.add(entry)
+                    print(
+                        f"  ★ チーム {tid[:8]}... メンバー {entry.user_id} を味方配置"
+                    )
 
     def _create_npc_mobile_suit(self) -> MobileSuit:
         """NPCのモビルスーツを生成する.
