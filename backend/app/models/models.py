@@ -197,6 +197,20 @@ class BattleResult(SQLModel, table=True):
     logs: list[BattleLog] = Field(
         default_factory=list, sa_column=Column(JSON), description="バトルログ"
     )
+    environment: str = Field(
+        default="SPACE",
+        description="戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)",
+    )
+    player_info: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="プレイヤー機体スナップショット",
+    )
+    enemies_info: list[dict] | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="敵機体スナップショットリスト",
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
