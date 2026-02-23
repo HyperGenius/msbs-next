@@ -5,7 +5,6 @@ import { useState } from "react";
 import { useShopListings, purchaseMobileSuit, usePilot, useWeaponListings, purchaseWeapon } from "@/services/api";
 import { ShopListing, WeaponListing } from "@/types/battle";
 import Link from "next/link";
-import Header from "@/components/Header";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
 
 type TabType = "mobile_suits" | "weapons";
@@ -126,8 +125,6 @@ export default function ShopPage() {
   return (
     <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <Header />
 
         {/* Page Title */}
         <div className="mb-4 sm:mb-8 border-b-2 border-[#ffb000]/30 pb-4">

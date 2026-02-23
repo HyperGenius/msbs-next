@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { useMobileSuits, usePilot, upgradeMobileSuit, getUpgradePreview } from "@/services/api";
-import Header from "@/components/Header";
 import type { MobileSuit, UpgradePreview } from "@/types/battle";
 
 type StatType = "hp" | "armor" | "mobility" | "weapon_power";
@@ -112,7 +111,6 @@ export default function EngineeringPage() {
 
   return (
     <div className="min-h-screen bg-black text-green-400 p-8 font-mono">
-      <Header />
 
       <SignedOut>
         <div className="text-center py-20">

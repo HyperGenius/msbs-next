@@ -2,7 +2,6 @@
 "use client";
 
 import Link from "next/link";
-import Header from "@/components/Header";
 import { SciFiButton, SciFiHeading, SciFiPanel } from "@/components/ui";
 import { useGarageEditor } from "./hooks/useGarageEditor";
 import MobileSuitList from "./components/MobileSuitList";
@@ -50,8 +49,6 @@ export default function GaragePage() {
   return (
     <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <Header />
         <div className="mb-4 sm:mb-8 border-b-2 border-[#00ff41]/30 pb-4">
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
             <div>
