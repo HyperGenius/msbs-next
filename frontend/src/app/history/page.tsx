@@ -184,7 +184,7 @@ export default function HistoryPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded">
+                    <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded" role="alert">
                       <p className="text-yellow-400 text-sm">
                         ⚠ このバトルログにはリプレイに必要な機体データが含まれていません
                       </p>
