@@ -196,12 +196,15 @@ async def simulate_battle(
         winner_id = "ENEMY"
         win_loss = "LOSE"
 
-    # 7. バトル結果をDBに保存
+    # 7. バトル結果をDBに保存（リプレイ用スナップショット含む）
     battle_result = BattleResult(
         user_id=user_id,
         mission_id=mission_id,
         win_loss=win_loss,
         logs=sim.logs,
+        environment=mission.environment,
+        player_info=player.model_dump(),
+        enemies_info=[e.model_dump() for e in enemies],
         created_at=datetime.now(UTC),
     )
     session.add(battle_result)

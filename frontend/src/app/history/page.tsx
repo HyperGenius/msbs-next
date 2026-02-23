@@ -3,19 +3,36 @@
 
 import { useState } from "react";
 import { useBattleHistory, useMissions } from "@/services/api";
-import { BattleResult } from "@/types/battle";
+import { BattleResult, MobileSuit } from "@/types/battle";
+import BattleViewer from "@/components/BattleViewer";
 import Link from "next/link";
 
 export default function HistoryPage() {
   const { battles, isLoading, isError } = useBattleHistory(50);
   const { missions } = useMissions();
   const [selectedBattle, setSelectedBattle] = useState<BattleResult | null>(null);
+  const [currentTurn, setCurrentTurn] = useState(0);
 
   const getMissionName = (missionId: number | null): string => {
     if (!missionId || !missions) return "Unknown Mission";
     const mission = missions.find((m) => m.id === missionId);
     return mission?.name || `Mission ${missionId}`;
   };
+
+  const handleSelectBattle = (battle: BattleResult) => {
+    setSelectedBattle(battle);
+    setCurrentTurn(0);
+  };
+
+  const maxTurn = selectedBattle?.logs.length
+    ? selectedBattle.logs[selectedBattle.logs.length - 1].turn
+    : 0;
+
+  const hasReplayData = !!(
+    selectedBattle?.player_info &&
+    selectedBattle?.enemies_info &&
+    selectedBattle.enemies_info.length > 0
+  );
 
   return (
     <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
@@ -59,7 +76,7 @@ export default function HistoryPage() {
                 {battles.map((battle) => (
                   <button
                     key={battle.id}
-                    onClick={() => setSelectedBattle(battle)}
+                    onClick={() => handleSelectBattle(battle)}
                     className={`w-full text-left p-4 rounded border-2 transition-all ${
                       selectedBattle?.id === battle.id
                         ? "border-green-500 bg-green-900/30"
@@ -119,6 +136,60 @@ export default function HistoryPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* 3D Replay Viewer */}
+                  {hasReplayData ? (
+                    <div className="mb-4">
+                      <BattleViewer
+                        logs={selectedBattle.logs}
+                        player={selectedBattle.player_info as MobileSuit}
+                        enemies={selectedBattle.enemies_info as MobileSuit[]}
+                        currentTurn={currentTurn}
+                        environment={selectedBattle.environment || "SPACE"}
+                      />
+
+                      {/* Turn Controller */}
+                      <div className="mt-2 p-3 bg-gray-900 border border-green-800 rounded">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setCurrentTurn(Math.max(0, currentTurn - 1))}
+                            disabled={currentTurn <= 0}
+                            className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
+                          >
+                            &lt; PREV
+                          </button>
+                          <div className="flex-grow flex flex-col">
+                            <input
+                              type="range"
+                              min="0"
+                              max={maxTurn}
+                              value={currentTurn}
+                              onChange={(e) => setCurrentTurn(Number(e.target.value))}
+                              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                            />
+                            <div className="flex justify-between text-xs mt-1 text-green-600/60">
+                              <span>Start</span>
+                              <span>Turn: {currentTurn} / {maxTurn}</span>
+                              <span>End</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setCurrentTurn(Math.min(maxTurn, currentTurn + 1))}
+                            disabled={currentTurn >= maxTurn}
+                            className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
+                          >
+                            NEXT &gt;
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded" role="alert">
+                      <p className="text-yellow-400 text-sm">
+                        ⚠ このバトルログにはリプレイに必要な機体データが含まれていません
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-1 text-sm font-mono">
                     {selectedBattle.logs.map((log, index) => (

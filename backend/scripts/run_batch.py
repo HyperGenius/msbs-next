@@ -179,6 +179,8 @@ def _save_battle_results(
     simulator: BattleSimulator,
     primary_player_win: bool,
     kills: int,
+    player_unit: MobileSuit,
+    enemy_units: list[MobileSuit],
 ) -> None:
     """戦闘結果を保存し報酬を付与.
 
@@ -190,6 +192,8 @@ def _save_battle_results(
         simulator: シミュレーター
         primary_player_win: 勝利フラグ
         kills: 撃墜数
+        player_unit: プレイヤーユニット（スナップショット保存用）
+        enemy_units: 敵ユニットリスト（スナップショット保存用）
     """
     pilot_service = PilotService(session)
 
@@ -207,6 +211,8 @@ def _save_battle_results(
             room_id=room.id,
             win_loss=individual_win_loss,
             logs=[log.model_dump() for log in simulator.logs],
+            player_info=player_unit.model_dump(),
+            enemies_info=[e.model_dump() for e in enemy_units],
         )
         session.add(battle_result)
 
@@ -297,7 +303,15 @@ def _process_room(session: Session, room: BattleRoom) -> None:
 
     # 結果保存
     _save_battle_results(
-        session, room, player_entries, npc_entries, simulator, primary_player_win, kills
+        session,
+        room,
+        player_entries,
+        npc_entries,
+        simulator,
+        primary_player_win,
+        kills,
+        player_unit,
+        enemy_units,
     )
 
     print("  結果を保存しました")

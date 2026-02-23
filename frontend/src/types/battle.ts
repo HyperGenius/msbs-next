@@ -141,6 +141,9 @@ export interface BattleResult {
     mission_id: number | null;
     win_loss: "WIN" | "LOSE" | "DRAW";
     logs: BattleLog[];
+    environment?: string;
+    player_info?: MobileSuit;
+    enemies_info?: MobileSuit[];
     created_at: string;
 }
 
