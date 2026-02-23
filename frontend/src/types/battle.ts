@@ -118,6 +118,7 @@ export interface Mission {
     difficulty: number;
     description: string;
     environment?: string;
+    special_effects?: string[];
     enemy_config: {
         enemies: Array<{
             name: string;

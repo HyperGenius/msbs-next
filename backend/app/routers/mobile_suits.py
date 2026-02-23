@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app.core.auth import get_current_user
 from app.core.gamedata import get_weapon_listing_by_id
 from app.db import get_session
+from app.engine.constants import MAX_WEAPON_SLOTS
 from app.models.models import MobileSuit, MobileSuitUpdate, Pilot
 from app.services.mobile_suit_service import MobileSuitService
 
@@ -86,13 +87,20 @@ async def equip_weapon(
     if not weapon_listing:
         raise HTTPException(status_code=404, detail="武器が見つかりません")
 
-    # 4. パイロット情報を取得して所持チェック
+    # 4. スロットインデックスの範囲チェック (0: メイン武器, 1: サブ武器)
+    if equip_request.slot_index < 0 or equip_request.slot_index >= MAX_WEAPON_SLOTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"スロットインデックスが範囲外です (有効: 0=メイン武器, 1=サブ武器)",
+        )
+
+    # 5. パイロット情報を取得して所持チェック
     statement = select(Pilot).where(Pilot.user_id == user_id)
     pilot = session.exec(statement).first()
     if not pilot:
         raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
 
-    # 5. 武器の所持チェック
+    # 6. 武器の所持チェック
     if pilot.inventory is None:
         pilot.inventory = {}
 
@@ -102,7 +110,7 @@ async def equip_weapon(
     ):
         raise HTTPException(status_code=400, detail="この武器を所持していません")
 
-    # 6. 武器を装備（スロットインデックスに応じて）
+    # 7. 武器を装備（スロットインデックスに応じて）
     weapon_obj = weapon_listing["weapon"]
 
     # 武器リストを初期化（もしなければ）

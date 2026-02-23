@@ -170,6 +170,11 @@ class Mission(SQLModel, table=True):
     environment: str = Field(
         default="SPACE", description="戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)"
     )
+    special_effects: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSON),
+        description="特殊環境効果 (MINOVSKY/GRAVITY_WELL/OBSTACLE)",
+    )
     enemy_config: dict = Field(
         default_factory=dict, sa_column=Column(JSON), description="敵機の構成情報"
     )
