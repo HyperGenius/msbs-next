@@ -4,7 +4,6 @@
 import { useState } from "react";
 import { useBattleHistory, useMissions } from "@/services/api";
 import { BattleResult } from "@/types/battle";
-import Header from "@/components/Header";
 import Link from "next/link";
 
 export default function HistoryPage() {
@@ -21,7 +20,6 @@ export default function HistoryPage() {
   return (
     <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
       <div className="max-w-6xl mx-auto">
-        <Header />
 
         <div className="mb-6 flex justify-between items-center">
           <h1 className="text-3xl font-bold border-l-4 border-green-500 pl-2">Battle History</h1>

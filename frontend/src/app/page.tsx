@@ -6,7 +6,6 @@ import { useAuth } from "@clerk/nextjs";
 import { BattleLog, MobileSuit, BattleRewards } from "@/types/battle";
 import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory, createPilot } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
-import Header from "@/components/Header";
 import CountdownTimer from "@/components/Dashboard/CountdownTimer";
 import EntryDashboard from "@/components/Dashboard/EntryDashboard";
 import BattleResultModal from "@/components/Dashboard/BattleResultModal";
@@ -275,7 +274,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-4xl mx-auto">
-        <Header />
 
         {/* Battle Result Display */}
         {winLoss && (

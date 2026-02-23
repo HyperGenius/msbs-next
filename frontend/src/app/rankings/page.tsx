@@ -4,7 +4,6 @@
 import { useState } from "react";
 import { useRankings } from "@/services/api";
 import { useUser } from "@clerk/nextjs";
-import Header from "@/components/Header";
 import Link from "next/link";
 import PlayerProfileModal from "@/components/Social/PlayerProfileModal";
 
@@ -16,7 +15,6 @@ export default function RankingsPage() {
   return (
     <main className="min-h-screen bg-gray-900 text-green-400 p-4 sm:p-8 font-mono">
       <div className="max-w-6xl mx-auto">
-        <Header />
 
         <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
           <h1 className="text-2xl sm:text-3xl font-bold border-l-4 border-green-500 pl-2">

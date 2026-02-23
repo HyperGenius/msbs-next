@@ -3,7 +3,6 @@
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import Header from "@/components/Header";
 import {
   useTeamStatus,
   useFriends,
@@ -164,7 +163,6 @@ export default function TeamPage() {
   return (
     <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-3xl mx-auto">
-        <Header />
 
         <SciFiHeading level={1} className="mb-6 text-2xl">
           SQUAD FORMATION — Team Console
