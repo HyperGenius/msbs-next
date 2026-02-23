@@ -677,6 +677,25 @@ export function useCurrentTeam() {
 }
 
 /**
+ * チームステータスをリアルタイムに近い間隔でポーリングするSWRフック
+ * メンバーの参加・Ready状態を画面に反映させる
+ */
+export function useTeamStatus() {
+  const { data, error, isLoading, mutate } = useSWR<Team | null>(
+    `${API_BASE_URL}/api/teams/current`,
+    fetcher,
+    { refreshInterval: 5000 }
+  );
+
+  return {
+    team: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
  * チームを作成する関数
  */
 export async function createTeam(name: string): Promise<Team> {
