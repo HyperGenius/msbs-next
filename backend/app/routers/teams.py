@@ -108,7 +108,8 @@ async def create_team(
     ).first()
     if existing_membership:
         raise HTTPException(
-            status_code=400, detail="既にチームに所属しています。先に現在のチームを離脱してください"
+            status_code=400,
+            detail="既にチームに所属しています。先に現在のチームを離脱してください",
         )
 
     team = Team(owner_user_id=user_id, name=body.name)
@@ -157,7 +158,9 @@ async def invite_member(
         .where(TeamMember.user_id == body.user_id, Team.status != "DISBANDED")
     ).first()
     if other_membership:
-        raise HTTPException(status_code=400, detail="対象プレイヤーは既に別のチームに所属しています")
+        raise HTTPException(
+            status_code=400, detail="対象プレイヤーは既に別のチームに所属しています"
+        )
 
     new_member = TeamMember(team_id=team.id, user_id=body.user_id, is_ready=False)
     session.add(new_member)
@@ -293,9 +296,13 @@ async def team_entry(
     if not team or team.status == "DISBANDED":
         raise HTTPException(status_code=404, detail="チームが見つかりません")
     if team.owner_user_id != user_id:
-        raise HTTPException(status_code=403, detail="チームオーナーのみエントリーできます")
+        raise HTTPException(
+            status_code=403, detail="チームオーナーのみエントリーできます"
+        )
     if team.status != "READY":
-        raise HTTPException(status_code=400, detail="全メンバーの準備が完了していません")
+        raise HTTPException(
+            status_code=400, detail="全メンバーの準備が完了していません"
+        )
 
     # 現在募集中のルームを取得
     room = session.exec(select(BattleRoom).where(BattleRoom.status == "OPEN")).first()

@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, patch
 
 from app.models.models import BattleRoom, MobileSuit, Team, TeamMember, Weapon
 
-
 # --- Tests ---
 
 
@@ -12,7 +11,6 @@ from app.models.models import BattleRoom, MobileSuit, Team, TeamMember, Weapon
 def test_create_team(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """チームを作成できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     app.dependency_overrides[get_current_user] = lambda: "user_a"
@@ -33,7 +31,6 @@ def test_create_team(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG
 def test_invite_member(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """チームにメンバーを招待できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     # チームを作成
@@ -61,7 +58,6 @@ def test_invite_member(mock_verify, client, session):  # noqa: ANN001, ANN201, A
 def test_invite_limit(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """チームの上限（3人）を超える招待はエラーになる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     team = Team(owner_user_id="user_a", name="Full Team")
@@ -87,7 +83,6 @@ def test_invite_limit(mock_verify, client, session):  # noqa: ANN001, ANN201, AR
 def test_set_ready_toggle(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """Ready 状態をトグルできる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     team = Team(owner_user_id="user_a", name="Ready Team")
@@ -116,7 +111,6 @@ def test_set_ready_toggle(mock_verify, client, session):  # noqa: ANN001, ANN201
 def test_all_ready_updates_team_status(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """全員 Ready でチームステータスが READY になる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     team = Team(owner_user_id="user_a", name="All Ready Team")
@@ -143,7 +137,6 @@ def test_all_ready_updates_team_status(mock_verify, client, session):  # noqa: A
 def test_leave_team(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """チームを離脱できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     team = Team(owner_user_id="user_a", name="Leave Team")
@@ -169,7 +162,6 @@ def test_leave_team(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG0
 def test_owner_leave_disbands_team(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """オーナーが離脱するとチームが解散される."""
     from app.core.auth import get_current_user
-
     from main import app
 
     team = Team(owner_user_id="user_a", name="Disband Team")
@@ -198,7 +190,6 @@ def test_owner_leave_disbands_team(mock_verify, client, session):  # noqa: ANN00
 def test_get_current_team(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """現在のチームを取得できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     team = Team(owner_user_id="user_a", name="Current Team")
@@ -222,7 +213,6 @@ def test_get_current_team(mock_verify, client, session):  # noqa: ANN001, ANN201
 def test_get_current_team_none(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """チーム未所属の場合 null が返る."""
     from app.core.auth import get_current_user
-
     from main import app
 
     app.dependency_overrides[get_current_user] = lambda: "user_a"
@@ -240,7 +230,6 @@ def test_team_entry(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG0
     from datetime import UTC, datetime, timedelta
 
     from app.core.auth import get_current_user
-
     from main import app
 
     # ルームを作成
@@ -267,9 +256,7 @@ def test_team_entry(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG0
         current_hp=1000,
         armor=50,
         mobility=1.0,
-        weapons=[
-            Weapon(id="w1", name="Beam Rifle", power=100, range=500, accuracy=80)
-        ],
+        weapons=[Weapon(id="w1", name="Beam Rifle", power=100, range=500, accuracy=80)],
     )
     ms_b = MobileSuit(
         user_id="user_b",
@@ -279,9 +266,7 @@ def test_team_entry(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG0
         armor=40,
         mobility=1.2,
         side="PLAYER",
-        weapons=[
-            Weapon(id="w2", name="Machine Gun", power=60, range=400, accuracy=70)
-        ],
+        weapons=[Weapon(id="w2", name="Machine Gun", power=60, range=400, accuracy=70)],
     )
     session.add(ms_a)
     session.add(ms_b)
@@ -305,7 +290,6 @@ def test_team_entry(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG0
 def test_cannot_create_team_if_already_in_one(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """既にチームに所属している場合は新しいチームを作成できない."""
     from app.core.auth import get_current_user
-
     from main import app
 
     team = Team(owner_user_id="user_a", name="Existing Team")

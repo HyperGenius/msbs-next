@@ -346,9 +346,7 @@ class Team(SQLModel, table=True):
     __tablename__ = "teams"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    owner_user_id: str = Field(
-        index=True, description="チームオーナーの Clerk User ID"
-    )
+    owner_user_id: str = Field(index=True, description="チームオーナーの Clerk User ID")
     name: str = Field(description="チーム名")
     status: str = Field(
         default="FORMING",

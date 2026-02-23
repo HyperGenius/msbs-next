@@ -253,7 +253,7 @@ class MatchingService:
                 select(TeamMember)
                 .join(Team)
                 .where(
-                    TeamMember.user_id.in_(player_user_ids),  # type: ignore[union-attr]
+                    TeamMember.user_id.in_(player_user_ids),  # type: ignore[attr-defined]
                     Team.status != "DISBANDED",
                 )
             ).all()

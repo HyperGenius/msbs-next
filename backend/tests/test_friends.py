@@ -4,14 +4,12 @@ from unittest.mock import AsyncMock, patch
 
 from app.models.models import Friendship, Pilot
 
-
 # --- Helper ---
 
 
 def _override_auth(client, user_id: str):  # noqa: ANN001, ANN202
     """テスト用に認証をオーバーライドする."""
     from app.core.auth import get_current_user
-
     from main import app
 
     app.dependency_overrides[get_current_user] = lambda: user_id
@@ -25,7 +23,6 @@ def _override_auth(client, user_id: str):  # noqa: ANN001, ANN202
 def test_send_friend_request(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """フレンドリクエストを送信できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     app.dependency_overrides[get_current_user] = lambda: "user_a"
@@ -47,7 +44,6 @@ def test_send_friend_request(mock_verify, client, session):  # noqa: ANN001, ANN
 def test_accept_friend_request(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """フレンドリクエストを承認できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     # まずリクエストを作成
@@ -77,7 +73,6 @@ def test_accept_friend_request(mock_verify, client, session):  # noqa: ANN001, A
 def test_reject_friend_request(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """フレンドリクエストを拒否できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     friendship = Friendship(
@@ -110,7 +105,6 @@ def test_reject_friend_request(mock_verify, client, session):  # noqa: ANN001, A
 def test_list_friends(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """フレンド一覧を取得できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     # ACCEPTED なフレンドを作成
@@ -137,7 +131,6 @@ def test_list_friends(mock_verify, client, session):  # noqa: ANN001, ANN201, AR
 def test_remove_friend(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """フレンドを解除できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     friendship = Friendship(
@@ -161,7 +154,6 @@ def test_remove_friend(mock_verify, client, session):  # noqa: ANN001, ANN201, A
 def test_list_pending_requests(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """受信中のフレンドリクエスト一覧を取得できる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     f1 = Friendship(user_id="user_c", friend_user_id="user_a", status="PENDING")
@@ -184,7 +176,6 @@ def test_list_pending_requests(mock_verify, client, session):  # noqa: ANN001, A
 def test_cannot_friend_self(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """自分自身にフレンドリクエストは送れない."""
     from app.core.auth import get_current_user
-
     from main import app
 
     app.dependency_overrides[get_current_user] = lambda: "user_a"
@@ -202,7 +193,6 @@ def test_cannot_friend_self(mock_verify, client, session):  # noqa: ANN001, ANN2
 def test_duplicate_friend_request(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """既にリクエスト済みの場合はエラーになる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     friendship = Friendship(
@@ -228,7 +218,6 @@ def test_duplicate_friend_request(mock_verify, client, session):  # noqa: ANN001
 def test_friend_response_includes_pilot_name(mock_verify, client, session):  # noqa: ANN001, ANN201, ARG001
     """フレンド情報にパイロット名が含まれる."""
     from app.core.auth import get_current_user
-
     from main import app
 
     # パイロットを作成
