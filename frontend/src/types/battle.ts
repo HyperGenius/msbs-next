@@ -337,3 +337,53 @@ export interface PlayerProfile {
     mobile_suit: MobileSuit | null;
     skills: Record<string, number>;
 }
+
+/**
+ * フレンド関係
+ */
+export interface Friend {
+    id: string;
+    user_id: string;
+    friend_user_id: string;
+    status: "PENDING" | "ACCEPTED" | "BLOCKED";
+    pilot_name: string | null;
+    created_at: string;
+}
+
+/**
+ * チームメンバー
+ */
+export interface TeamMember {
+    user_id: string;
+    is_ready: boolean;
+    joined_at: string;
+}
+
+/**
+ * チーム
+ */
+export interface Team {
+    id: string;
+    owner_user_id: string;
+    name: string;
+    status: "FORMING" | "READY" | "DISBANDED";
+    members: TeamMember[];
+    created_at: string;
+}
+
+/**
+ * チームエントリーリクエスト
+ */
+export interface TeamEntryRequest {
+    team_id: string;
+    mobile_suit_id: string;
+}
+
+/**
+ * チームエントリーレスポンス
+ */
+export interface TeamEntryResponse {
+    message: string;
+    entry_ids: string[];
+    room_id: string;
+}
