@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.engine.constants import SPECIAL_ENVIRONMENT_EFFECTS, MAX_WEAPON_SLOTS
+from app.engine.constants import MAX_WEAPON_SLOTS, SPECIAL_ENVIRONMENT_EFFECTS
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 
@@ -168,7 +168,10 @@ def test_gravity_well_reduces_movement() -> None:
     player_gravity = create_test_player()
     enemy_gravity = create_test_enemy("Enemy", enemy_pos)
     sim_gravity = BattleSimulator(
-        player_gravity, [enemy_gravity], environment="GROUND", special_effects=["GRAVITY_WELL"]
+        player_gravity,
+        [enemy_gravity],
+        environment="GROUND",
+        special_effects=["GRAVITY_WELL"],
     )
     sim_gravity._detection_phase()
     sim_gravity.process_turn()
@@ -212,7 +215,9 @@ def test_obstacle_reduces_hit_chance() -> None:
     )
 
     hit_normal, _ = sim_normal._calculate_hit_chance(player, enemy, weapon, distance)
-    hit_obstacle, _ = sim_obstacle._calculate_hit_chance(player, enemy, weapon, distance)
+    hit_obstacle, _ = sim_obstacle._calculate_hit_chance(
+        player, enemy, weapon, distance
+    )
 
     # 障害物下では命中率が低くなる
     assert hit_obstacle < hit_normal

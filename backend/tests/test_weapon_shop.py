@@ -283,6 +283,7 @@ def test_equip_weapon_sub_slot(client, session):
 
     # 機体を作成（メイン武器を持つ）
     from app.core.gamedata import get_weapon_listing_by_id
+
     main_weapon_data = get_weapon_listing_by_id("zaku_mg")
     main_weapon = main_weapon_data["weapon"]
 
@@ -314,7 +315,7 @@ def test_equip_weapon_sub_slot(client, session):
 
         data = response.json()
         assert len(data["weapons"]) == 2
-        assert data["weapons"][0]["id"] == "zaku_mg"   # メイン武器
+        assert data["weapons"][0]["id"] == "zaku_mg"  # メイン武器
         assert data["weapons"][1]["id"] == "beam_saber"  # サブ武器
     finally:
         # クリーンアップ

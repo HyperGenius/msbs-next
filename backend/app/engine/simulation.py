@@ -226,7 +226,9 @@ class BattleSimulator:
 
                     # 発見ログを追加
                     minovsky_msg = (
-                        " [ミノフスキー粒子影響下]" if "MINOVSKY" in self.special_effects else ""
+                        " [ミノフスキー粒子影響下]"
+                        if "MINOVSKY" in self.special_effects
+                        else ""
                     )
                     self.logs.append(
                         BattleLog(
