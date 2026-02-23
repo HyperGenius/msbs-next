@@ -192,11 +192,6 @@ async def set_ready(
     session.add(member)
 
     # 全員 Ready ならチームステータスを READY にする
-    members = _get_team_members(session, team.id)
-    if all(m.is_ready or m.user_id == user_id and not member.is_ready for m in members):
-        # re-check after toggle
-        pass
-    # Re-fetch to reflect the toggle
     session.flush()
     members = _get_team_members(session, team.id)
     if len(members) >= 2 and all(m.is_ready for m in members):

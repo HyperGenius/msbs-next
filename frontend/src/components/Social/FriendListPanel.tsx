@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useUser } from "@clerk/nextjs";
 import {
   useFriends,
   useFriendRequests,
@@ -15,6 +16,8 @@ interface FriendListPanelProps {
 }
 
 export default function FriendListPanel({ onClose }: FriendListPanelProps) {
+  const { user } = useUser();
+  const myUserId = user?.id ?? "";
   const { friends, isLoading, mutate: mutateFriends } = useFriends();
   const {
     requests,
@@ -153,15 +156,15 @@ export default function FriendListPanel({ onClose }: FriendListPanelProps) {
                       {friend.pilot_name || "Unknown Pilot"}
                     </p>
                     <p className="text-gray-500 text-xs">
-                      ID: {friend.friend_user_id === friend.user_id ? friend.friend_user_id : friend.friend_user_id}
+                      ID: {friend.user_id === myUserId ? friend.friend_user_id : friend.user_id}
                     </p>
                   </div>
                   <button
                     onClick={() => {
                       const otherId =
-                        friend.user_id === friend.friend_user_id
-                          ? friend.user_id
-                          : friend.friend_user_id;
+                        friend.user_id === myUserId
+                          ? friend.friend_user_id
+                          : friend.user_id;
                       handleRemove(otherId);
                     }}
                     className="px-3 py-1 bg-red-900/50 hover:bg-red-800 text-red-300 rounded text-sm transition-colors"
