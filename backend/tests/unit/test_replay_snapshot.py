@@ -1,7 +1,5 @@
 """Test BattleResult replay snapshot fields."""
 
-import uuid
-
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
@@ -42,8 +40,11 @@ def test_battle_result_with_snapshot(session: Session):
         position=Vector3(x=0, y=0, z=0),
         weapons=[
             Weapon(
-                id="beam_rifle", name="Beam Rifle",
-                power=300, range=600, accuracy=85,
+                id="beam_rifle",
+                name="Beam Rifle",
+                power=300,
+                range=600,
+                accuracy=85,
             )
         ],
         side="PLAYER",
@@ -59,8 +60,11 @@ def test_battle_result_with_snapshot(session: Session):
         position=Vector3(x=500, y=0, z=0),
         weapons=[
             Weapon(
-                id="zaku_mg", name="Zaku Machine Gun",
-                power=100, range=400, accuracy=70,
+                id="zaku_mg",
+                name="Zaku Machine Gun",
+                power=100,
+                range=400,
+                accuracy=70,
             )
         ],
         side="ENEMY",

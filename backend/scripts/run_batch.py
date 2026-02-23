@@ -303,8 +303,15 @@ def _process_room(session: Session, room: BattleRoom) -> None:
 
     # 結果保存
     _save_battle_results(
-        session, room, player_entries, npc_entries, simulator, primary_player_win, kills,
-        player_unit, enemy_units,
+        session,
+        room,
+        player_entries,
+        npc_entries,
+        simulator,
+        primary_player_win,
+        kills,
+        player_unit,
+        enemy_units,
     )
 
     print("  結果を保存しました")
