@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePilot } from "@/services/api";
@@ -18,6 +18,18 @@ const navLinks = [
 export default function Header() {
   const { pilot } = usePilot();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Close mobile menu on Escape key
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") setIsOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [isOpen, handleKeyDown]);
 
   return (
     <header className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 mb-8 border-b-2 border-[#00ff41]/30 pb-4 sf-scanline font-mono">
