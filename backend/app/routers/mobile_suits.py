@@ -9,7 +9,7 @@ from app.core.auth import get_current_user
 from app.core.gamedata import get_weapon_listing_by_id
 from app.db import get_session
 from app.engine.constants import MAX_WEAPON_SLOTS
-from app.models.models import MobileSuit, MobileSuitUpdate, Pilot
+from app.models.models import MobileSuit, MobileSuitUpdate, Pilot, Weapon
 from app.services.mobile_suit_service import MobileSuitService
 
 router = APIRouter(prefix="/api/mobile_suits", tags=["mobile_suits"])
@@ -45,6 +45,59 @@ async def update_mobile_suit(
     return updated_ms
 
 
+def _get_validated_mobile_suit(
+    session: Session, ms_id: str, user_id: str
+) -> MobileSuit:
+    """機体を取得して所有者を検証する."""
+    try:
+        ms_uuid = uuid.UUID(ms_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="無効な機体IDです") from e
+
+    mobile_suit = session.get(MobileSuit, ms_uuid)
+    if not mobile_suit:
+        raise HTTPException(status_code=404, detail="機体が見つかりません")
+
+    if mobile_suit.user_id != user_id:
+        raise HTTPException(
+            status_code=403, detail="この機体を編集する権限がありません"
+        )
+    return mobile_suit
+
+
+def _validate_weapon_slot(slot_index: int) -> None:
+    """武器スロットインデックスを検証する."""
+    if slot_index < 0 or slot_index >= MAX_WEAPON_SLOTS:
+        raise HTTPException(
+            status_code=400,
+            detail="スロットインデックスが範囲外です (有効: 0=メイン武器, 1=サブ武器)",
+        )
+
+
+def _validate_pilot_has_weapon(session: Session, user_id: str, weapon_id: str) -> None:
+    """パイロットが指定の武器を所持しているか検証する."""
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    pilot = session.exec(statement).first()
+    if not pilot:
+        raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
+
+    inventory = pilot.inventory or {}
+    if inventory.get(weapon_id, 0) < 1:
+        raise HTTPException(status_code=400, detail="この武器を所持していません")
+
+
+def _set_weapon_in_slot(
+    mobile_suit: MobileSuit, slot_index: int, weapon_obj: Weapon
+) -> None:
+    """機体の指定スロットに武器をセットする."""
+    new_weapons = list(mobile_suit.weapons or [])
+    if slot_index >= len(new_weapons):
+        new_weapons.append(weapon_obj)
+    else:
+        new_weapons[slot_index] = weapon_obj
+    mobile_suit.weapons = new_weapons
+
+
 @router.put("/{ms_id}/equip", response_model=MobileSuit)
 async def equip_weapon(
     ms_id: str,
@@ -66,67 +119,16 @@ async def equip_weapon(
     Raises:
         HTTPException: 機体が存在しない、武器を所持していないなどのエラー
     """
-    # 1. 機体を取得（UUIDに変換）
-    try:
-        ms_uuid = uuid.UUID(ms_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail="無効な機体IDです") from e
+    mobile_suit = _get_validated_mobile_suit(session, ms_id, user_id)
 
-    mobile_suit = session.get(MobileSuit, ms_uuid)
-    if not mobile_suit:
-        raise HTTPException(status_code=404, detail="機体が見つかりません")
-
-    # 2. 機体の所有者チェック
-    if mobile_suit.user_id != user_id:
-        raise HTTPException(
-            status_code=403, detail="この機体を編集する権限がありません"
-        )
-
-    # 3. 武器データを取得
     weapon_listing = get_weapon_listing_by_id(equip_request.weapon_id)
     if not weapon_listing:
         raise HTTPException(status_code=404, detail="武器が見つかりません")
 
-    # 4. スロットインデックスの範囲チェック (0: メイン武器, 1: サブ武器)
-    if equip_request.slot_index < 0 or equip_request.slot_index >= MAX_WEAPON_SLOTS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"スロットインデックスが範囲外です (有効: 0=メイン武器, 1=サブ武器)",
-        )
+    _validate_weapon_slot(equip_request.slot_index)
+    _validate_pilot_has_weapon(session, user_id, equip_request.weapon_id)
 
-    # 5. パイロット情報を取得して所持チェック
-    statement = select(Pilot).where(Pilot.user_id == user_id)
-    pilot = session.exec(statement).first()
-    if not pilot:
-        raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
-
-    # 6. 武器の所持チェック
-    if pilot.inventory is None:
-        pilot.inventory = {}
-
-    if (
-        equip_request.weapon_id not in pilot.inventory
-        or pilot.inventory[equip_request.weapon_id] < 1
-    ):
-        raise HTTPException(status_code=400, detail="この武器を所持していません")
-
-    # 7. 武器を装備（スロットインデックスに応じて）
-    weapon_obj = weapon_listing["weapon"]
-
-    # 武器リストを初期化（もしなければ）
-    if mobile_suit.weapons is None:
-        mobile_suit.weapons = []
-
-    # 新しいリストを作成（SQLModelのJSON変更検知のため）
-    new_weapons = list(mobile_suit.weapons)
-
-    # スロットインデックスが範囲外の場合は追加
-    if equip_request.slot_index >= len(new_weapons):
-        new_weapons.append(weapon_obj)
-    else:
-        new_weapons[equip_request.slot_index] = weapon_obj
-
-    mobile_suit.weapons = new_weapons
+    _set_weapon_in_slot(mobile_suit, equip_request.slot_index, weapon_listing["weapon"])
 
     session.add(mobile_suit)
     session.commit()
