@@ -219,3 +219,103 @@ def test_equip_weapon_not_owned(client, session):
     finally:
         # クリーンアップ
         app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_equip_weapon_invalid_slot_index(client, session):
+    """無効なスロットインデックスでエラーになることをテスト."""
+    # パイロットを作成
+    test_user_id = "test_user_equip_slot_789"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        inventory={"zaku_mg": 1},
+    )
+    session.add(pilot)
+
+    # 機体を作成
+    mobile_suit = MobileSuit(
+        user_id=test_user_id,
+        name="Test Zaku",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],
+        side="PLAYER",
+    )
+    session.add(mobile_suit)
+    session.commit()
+    session.refresh(mobile_suit)
+
+    # 認証の依存関係をオーバーライド
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        # MAX_WEAPON_SLOTS (2) を超えるスロットインデックスを指定
+        response = client.put(
+            f"/api/mobile_suits/{mobile_suit.id}/equip",
+            json={"weapon_id": "zaku_mg", "slot_index": 5},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "スロットインデックスが範囲外です" in response.json()["detail"]
+    finally:
+        # クリーンアップ
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_equip_weapon_sub_slot(client, session):
+    """サブ武器スロット (slot_index=1) への装備が成功することをテスト."""
+    # パイロットを作成
+    test_user_id = "test_user_equip_sub_789"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        inventory={"zaku_mg": 2, "beam_saber": 1},
+    )
+    session.add(pilot)
+
+    # 機体を作成（メイン武器を持つ）
+    from app.core.gamedata import get_weapon_listing_by_id
+    main_weapon_data = get_weapon_listing_by_id("zaku_mg")
+    main_weapon = main_weapon_data["weapon"]
+
+    mobile_suit = MobileSuit(
+        user_id=test_user_id,
+        name="Test Zaku",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[main_weapon],
+        side="PLAYER",
+    )
+    session.add(mobile_suit)
+    session.commit()
+    session.refresh(mobile_suit)
+
+    # 認証の依存関係をオーバーライド
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        # サブスロット (slot_index=1) に beam_saber を装備
+        response = client.put(
+            f"/api/mobile_suits/{mobile_suit.id}/equip",
+            json={"weapon_id": "beam_saber", "slot_index": 1},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+        assert len(data["weapons"]) == 2
+        assert data["weapons"][0]["id"] == "zaku_mg"   # メイン武器
+        assert data["weapons"][1]["id"] == "beam_saber"  # サブ武器
+    finally:
+        # クリーンアップ
+        app.dependency_overrides.pop(get_current_user, None)

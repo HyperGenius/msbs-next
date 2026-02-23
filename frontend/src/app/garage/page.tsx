@@ -8,6 +8,39 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiInput, SciFiCard, SciFiSelect } from "@/components/ui";
 
+// 武器スロット定義
+const WEAPON_SLOTS = [
+  { index: 0, label: "Main Weapon", labelJa: "メイン武器" },
+  { index: 1, label: "Sub Weapon", labelJa: "サブ武器" },
+] as const;
+
+// 武器パラメータの差分を計算する
+function calcWeaponDiff(current: Weapon | undefined, candidate: Weapon): {
+  power: number;
+  range: number;
+  accuracy: number;
+} {
+  return {
+    power: candidate.power - (current?.power ?? 0),
+    range: candidate.range - (current?.range ?? 0),
+    accuracy: candidate.accuracy - (current?.accuracy ?? 0),
+  };
+}
+
+// 差分値の色クラスを返す
+function diffColor(val: number): string {
+  if (val > 0) return "text-green-400";
+  if (val < 0) return "text-red-400";
+  return "text-gray-400";
+}
+
+// 差分値の表示文字列を返す
+function diffText(val: number): string {
+  if (val > 0) return `+${val}`;
+  if (val < 0) return `${val}`;
+  return "±0";
+}
+
 export default function GaragePage() {
   const { mobileSuits, isLoading, isError, mutate } = useMobileSuits();
   const { pilot } = usePilot();
@@ -17,6 +50,8 @@ export default function GaragePage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showWeaponModal, setShowWeaponModal] = useState(false);
   const [selectedWeaponSlot, setSelectedWeaponSlot] = useState(0);
+  // プレビュー中の武器 (武器変更モーダル内でホバー/フォーカスした武器)
+  const [previewWeaponId, setPreviewWeaponId] = useState<string | null>(null);
 
   // フォーム用のstate
   const [formData, setFormData] = useState({
@@ -74,6 +109,7 @@ export default function GaragePage() {
   // 武器変更モーダルを開く
   const handleOpenWeaponModal = (slotIndex: number) => {
     setSelectedWeaponSlot(slotIndex);
+    setPreviewWeaponId(null);
     setShowWeaponModal(true);
   };
 
@@ -90,6 +126,7 @@ export default function GaragePage() {
       
       setSuccessMessage("武器を装備しました");
       setShowWeaponModal(false);
+      setPreviewWeaponId(null);
       
       // SWRのキャッシュを更新
       mutate();
@@ -347,83 +384,86 @@ export default function GaragePage() {
                       </p>
                     </div>
 
-                    {/* Weapons Display */}
-                    {selectedMs.weapons && selectedMs.weapons.length > 0 && (
-                      <div className="p-3 bg-gray-900 rounded">
-                        <div className="flex justify-between items-center mb-2">
-                          <h4 className="text-sm font-bold text-green-500">
-                            装備武器
-                          </h4>
-                          <SciFiButton
-                            variant="primary"
-                            size="sm"
-                            onClick={() => handleOpenWeaponModal(0)}
-                          >
-                            変更
-                          </SciFiButton>
-                        </div>
-                        {selectedMs.weapons.map((weapon, idx) => (
-                          <div key={idx} className="mb-3 text-sm border-b border-green-800 pb-2 last:border-b-0">
-                            <div className="font-bold">{weapon.name}</div>
-                            <div className="grid grid-cols-2 gap-2 text-xs mt-1">
-                              <div>
-                                <span className="text-gray-400">属性:</span>
-                                <span className={`ml-2 font-bold ${
-                                  weapon.type === "BEAM" ? "text-blue-400" : "text-yellow-400"
-                                }`}>
-                                  {weapon.type || "PHYSICAL"}
-                                </span>
+                    {/* Loadout: Main / Sub Weapon Slots */}
+                    <div className="p-3 bg-gray-900 rounded border border-green-800">
+                      <h4 className="text-sm font-bold mb-3 text-green-500">
+                        装備換装 (Loadout)
+                      </h4>
+                      <div className="space-y-3">
+                        {WEAPON_SLOTS.map((slot) => {
+                          const equippedWeapon = selectedMs.weapons?.[slot.index];
+                          return (
+                            <div key={slot.index} className="p-2 bg-gray-800 rounded">
+                              <div className="flex justify-between items-center mb-2">
+                                <div>
+                                  <span className="text-xs font-bold text-green-400 uppercase">
+                                    [{slot.index === 0 ? "MAIN" : "SUB"}]
+                                  </span>
+                                  <span className="ml-2 text-xs text-gray-400">
+                                    {slot.labelJa}
+                                  </span>
+                                </div>
+                                <SciFiButton
+                                  variant="primary"
+                                  size="sm"
+                                  onClick={() => handleOpenWeaponModal(slot.index)}
+                                >
+                                  変更
+                                </SciFiButton>
                               </div>
-                              <div>
-                                <span className="text-gray-400">威力:</span>
-                                <span className="ml-2 font-bold">{weapon.power}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">射程:</span>
-                                <span className="ml-2 font-bold">{weapon.range}m</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">最適射程:</span>
-                                <span className="ml-2 font-bold text-green-400">
-                                  {weapon.optimal_range || 300}m
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">命中率:</span>
-                                <span className="ml-2 font-bold">{weapon.accuracy}%</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">減衰率:</span>
-                                <span className="ml-2 font-bold">
-                                  {((weapon.decay_rate || 0.05) * 100).toFixed(1)}%/100m
-                                </span>
-                              </div>
-                              {/* Resource Info */}
-                              <div>
-                                <span className="text-gray-400">弾数:</span>
-                                <span className="ml-2 font-bold text-orange-400">
-                                  {weapon.max_ammo !== null && weapon.max_ammo !== undefined 
-                                    ? weapon.max_ammo 
-                                    : "∞"}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">EN消費:</span>
-                                <span className="ml-2 font-bold text-cyan-400">
-                                  {weapon.en_cost || 0}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-400">クールタイム:</span>
-                                <span className="ml-2 font-bold text-pink-400">
-                                  {weapon.cool_down_turn || 0}ターン
-                                </span>
-                              </div>
+                              {equippedWeapon ? (
+                                <div className="text-xs space-y-1">
+                                  <div className="font-bold text-green-300">
+                                    {equippedWeapon.name}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                      <span className={`px-1 py-0.5 text-xs font-bold rounded ${
+                                        equippedWeapon.type === "BEAM"
+                                          ? "bg-blue-500/20 text-blue-400"
+                                          : "bg-yellow-500/20 text-yellow-400"
+                                      }`}>
+                                        {equippedWeapon.type || "PHYSICAL"}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-400">威力:</span>
+                                      <span className="ml-1 font-bold">{equippedWeapon.power}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-400">射程:</span>
+                                      <span className="ml-1 font-bold">{equippedWeapon.range}m</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-400">命中:</span>
+                                      <span className="ml-1 font-bold">{equippedWeapon.accuracy}%</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-400">最適:</span>
+                                      <span className="ml-1 font-bold text-green-400">
+                                        {equippedWeapon.optimal_range || 300}m
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-400">弾数:</span>
+                                      <span className="ml-1 font-bold text-orange-400">
+                                        {equippedWeapon.max_ammo != null
+                                          ? equippedWeapon.max_ammo
+                                          : "∞"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-500 py-2 text-center">
+                                  — 未装備 —
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
-                    )}
+                    </div>
                   </div>
 
                   {/* Tactics Section */}
@@ -519,13 +559,59 @@ export default function GaragePage() {
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
             <SciFiPanel variant="accent" chiseled={true}>
               <div className="p-8 max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
-                <SciFiHeading level={3} className="mb-4" variant="accent">
+                <SciFiHeading level={3} className="mb-1" variant="accent">
                   武器変更
                 </SciFiHeading>
-                
+                <p className="mb-1 text-xs text-green-600">
+                  スロット: {selectedWeaponSlot === 0 ? "【MAIN】メイン武器" : "【SUB】サブ武器"}
+                </p>
                 <p className="mb-4 text-sm text-green-400">
                   所持している武器から選択してください
                 </p>
+
+                {/* Current weapon for diff comparison */}
+                {(() => {
+                  const currentWeapon = selectedMs.weapons?.[selectedWeaponSlot];
+                  const previewListing = previewWeaponId
+                    ? weaponListings?.find((w) => w.id === previewWeaponId)
+                    : null;
+
+                  return previewListing ? (
+                    <div className="mb-4 p-3 bg-gray-900 rounded border border-green-700">
+                      <p className="text-xs font-bold text-green-400 mb-2">
+                        ▶ 装備変更プレビュー: {previewListing.weapon.name}
+                      </p>
+                      {(() => {
+                        const diff = calcWeaponDiff(currentWeapon, previewListing.weapon);
+                        return (
+                          <div className="grid grid-cols-3 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-400">威力:</span>
+                              <span className="ml-1 font-bold">{previewListing.weapon.power}</span>
+                              <span className={`ml-1 ${diffColor(diff.power)}`}>
+                                ({diffText(diff.power)})
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">射程:</span>
+                              <span className="ml-1 font-bold">{previewListing.weapon.range}m</span>
+                              <span className={`ml-1 ${diffColor(diff.range)}`}>
+                                ({diffText(diff.range)})
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">命中:</span>
+                              <span className="ml-1 font-bold">{previewListing.weapon.accuracy}%</span>
+                              <span className={`ml-1 ${diffColor(diff.accuracy)}`}>
+                                ({diffText(diff.accuracy)})
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : null;
+                })()}
 
                 {/* Available Weapons List */}
                 <div className="space-y-3 mb-6">
@@ -538,9 +624,15 @@ export default function GaragePage() {
                     )
                     .map((weaponListing) => {
                       const weapon = weaponListing.weapon;
+                      const currentWeapon = selectedMs.weapons?.[selectedWeaponSlot];
+                      const diff = calcWeaponDiff(currentWeapon, weapon);
                       return (
-                        <SciFiCard
+                        <div
                           key={weaponListing.id}
+                          onMouseEnter={() => setPreviewWeaponId(weaponListing.id)}
+                          onMouseLeave={() => setPreviewWeaponId(null)}
+                        >
+                        <SciFiCard
                           variant="accent"
                           className="cursor-pointer hover:border-green-400 transition-colors"
                           onClick={() => handleEquipWeapon(weaponListing.id)}
@@ -570,22 +662,38 @@ export default function GaragePage() {
                                 <span className="ml-1 font-bold text-green-400">
                                   {weapon.power}
                                 </span>
+                                {currentWeapon && (
+                                  <span className={`ml-1 text-xs ${diffColor(diff.power)}`}>
+                                    ({diffText(diff.power)})
+                                  </span>
+                                )}
                               </div>
                               <div>
                                 <span className="text-gray-400">射程:</span>
                                 <span className="ml-1 font-bold text-green-400">
                                   {weapon.range}m
                                 </span>
+                                {currentWeapon && (
+                                  <span className={`ml-1 text-xs ${diffColor(diff.range)}`}>
+                                    ({diffText(diff.range)})
+                                  </span>
+                                )}
                               </div>
                               <div>
                                 <span className="text-gray-400">命中:</span>
                                 <span className="ml-1 font-bold text-green-400">
                                   {weapon.accuracy}%
                                 </span>
+                                {currentWeapon && (
+                                  <span className={`ml-1 text-xs ${diffColor(diff.accuracy)}`}>
+                                    ({diffText(diff.accuracy)})
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
                         </SciFiCard>
+                        </div>
                       );
                     })}
                   
@@ -606,7 +714,10 @@ export default function GaragePage() {
 
                 <div className="flex gap-4">
                   <SciFiButton
-                    onClick={() => setShowWeaponModal(false)}
+                    onClick={() => {
+                      setShowWeaponModal(false);
+                      setPreviewWeaponId(null);
+                    }}
                     variant="danger"
                     size="md"
                     className="flex-1"
@@ -622,3 +733,4 @@ export default function GaragePage() {
     </main>
   );
 }
+

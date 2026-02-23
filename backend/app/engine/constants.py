@@ -16,3 +16,22 @@ DEFAULT_TERRAIN_ADAPTABILITY = {
     "COLONY": "A",
     "UNDERWATER": "C",
 }
+
+# 特殊環境効果の定義
+SPECIAL_ENVIRONMENT_EFFECTS: dict[str, dict] = {
+    "MINOVSKY": {
+        "description": "ミノフスキー粒子: 索敵範囲が半減する",
+        "sensor_range_multiplier": 0.5,
+    },
+    "GRAVITY_WELL": {
+        "description": "重力井戸: 機動性が低下する",
+        "mobility_multiplier": 0.6,
+    },
+    "OBSTACLE": {
+        "description": "障害物: 命中率が低下する",
+        "accuracy_penalty": 10.0,
+    },
+}
+
+# 武器スロットの最大数
+MAX_WEAPON_SLOTS = 2

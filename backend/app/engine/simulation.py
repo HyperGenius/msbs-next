@@ -5,6 +5,7 @@ import numpy as np
 
 from app.core.npc_data import BATTLE_CHATTER
 from app.engine.constants import (
+    SPECIAL_ENVIRONMENT_EFFECTS,
     TERRAIN_ADAPTABILITY_MODIFIERS,
 )
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
@@ -19,6 +20,7 @@ class BattleSimulator:
         enemies: list[MobileSuit],
         player_skills: dict[str, int] | None = None,
         environment: str = "SPACE",
+        special_effects: list[str] | None = None,
     ):
         """初期化.
 
@@ -27,6 +29,7 @@ class BattleSimulator:
             enemies: 敵機体リスト
             player_skills: プレイヤーのスキル (skill_id: level)
             environment: 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)
+            special_effects: 特殊環境効果リスト (MINOVSKY/GRAVITY_WELL/OBSTACLE)
         """
         self.player = player
         self.enemies = enemies
@@ -36,6 +39,7 @@ class BattleSimulator:
         self.is_finished = False
         self.player_skills = player_skills or {}
         self.environment = environment
+        self.special_effects: list[str] = special_effects or []
 
         # 索敵状態管理 (チーム単位で共有)
         self.team_detected_units: dict[str, set] = {
@@ -188,6 +192,12 @@ class BattleSimulator:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
         alive_units = [u for u in self.units if u.current_hp > 0]
 
+        # ミノフスキー粒子効果: 索敵範囲を半減
+        sensor_multiplier = 1.0
+        if "MINOVSKY" in self.special_effects:
+            minovsky = SPECIAL_ENVIRONMENT_EFFECTS["MINOVSKY"]
+            sensor_multiplier = minovsky["sensor_range_multiplier"]
+
         for unit in alive_units:
             # 敵対勢力を特定
             if unit.side == "PLAYER":
@@ -198,6 +208,7 @@ class BattleSimulator:
                 potential_targets = [self.player] if self.player.current_hp > 0 else []
 
             pos_unit = unit.position.to_numpy()
+            effective_sensor_range = unit.sensor_range * sensor_multiplier
 
             # 索敵範囲内の敵をチェック
             for target in potential_targets:
@@ -208,19 +219,22 @@ class BattleSimulator:
                 pos_target = target.position.to_numpy()
                 distance = float(np.linalg.norm(pos_target - pos_unit))
 
-                # 索敵判定 (ミノフスキー粒子の影響は今回は簡易実装でスキップ)
-                if distance <= unit.sensor_range:
+                # 索敵判定（ミノフスキー粒子による索敵範囲低下を適用）
+                if distance <= effective_sensor_range:
                     # 発見！
                     self.team_detected_units[unit.side].add(target.id)
 
                     # 発見ログを追加
+                    minovsky_msg = (
+                        " [ミノフスキー粒子影響下]" if "MINOVSKY" in self.special_effects else ""
+                    )
                     self.logs.append(
                         BattleLog(
                             turn=self.turn,
                             actor_id=unit.id,
                             action_type="DETECTION",
                             target_id=target.id,
-                            message=f"{unit.name}が{target.name}を発見！ (距離: {int(distance)}m)",
+                            message=f"{unit.name}が{target.name}を発見！ (距離: {int(distance)}m){minovsky_msg}",
                             position_snapshot=unit.position,
                         )
                     )
@@ -406,6 +420,11 @@ class BattleSimulator:
         if target.side == "PLAYER":
             evasion_skill_level = self.player_skills.get("evasion_up", 0)
             hit_chance -= evasion_skill_level * 2.0  # 敵の命中率を -2% / Lv
+
+        # 障害物効果: 命中率をペナルティ
+        if "OBSTACLE" in self.special_effects:
+            obstacle = SPECIAL_ENVIRONMENT_EFFECTS["OBSTACLE"]
+            hit_chance -= obstacle["accuracy_penalty"]
 
         hit_chance = max(0, min(100, hit_chance))
         return hit_chance, distance_from_optimal
@@ -728,7 +747,14 @@ class BattleSimulator:
         adaptability_grade = terrain_adaptability.get(self.environment, "A")
 
         # 補正係数を返す
-        return TERRAIN_ADAPTABILITY_MODIFIERS.get(adaptability_grade, 1.0)
+        modifier = TERRAIN_ADAPTABILITY_MODIFIERS.get(adaptability_grade, 1.0)
+
+        # 重力井戸効果: 機動性をさらに低下
+        if "GRAVITY_WELL" in self.special_effects:
+            gravity = SPECIAL_ENVIRONMENT_EFFECTS["GRAVITY_WELL"]
+            modifier *= gravity["mobility_multiplier"]
+
+        return modifier
 
     def _search_movement(self, actor: MobileSuit) -> None:
         """索敵移動: 未発見の敵を探すための移動."""
