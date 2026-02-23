@@ -5,7 +5,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlmodel import Session, create_engine
 
-from app.models.models import BattleEntry, BattleRoom, MobileSuit, Vector3, Weapon
+from app.models.models import (
+    BattleEntry,
+    BattleRoom,
+    MobileSuit,
+    Team,
+    TeamMember,
+    Vector3,
+    Weapon,
+)
 from app.services.matching_service import MatchingService
 
 
@@ -268,3 +276,74 @@ def test_npc_has_valid_attributes(in_memory_session):
     # Check tactics
     assert npc.tactics["priority"] in ["CLOSEST", "WEAKEST", "RANDOM"]
     assert npc.tactics["range"] in ["MELEE", "RANGED", "BALANCED"]
+
+
+def test_apply_team_grouping_marks_members(in_memory_session):
+    """Test that _apply_team_grouping adds team_id to snapshot for team members."""
+    # Create a team with two players
+    team = Team(owner_user_id="user_a", name="Alpha Squad")
+    in_memory_session.add(team)
+    in_memory_session.flush()
+
+    member_a = TeamMember(team_id=team.id, user_id="user_a", is_ready=True)
+    member_b = TeamMember(team_id=team.id, user_id="user_b", is_ready=True)
+    in_memory_session.add(member_a)
+    in_memory_session.add(member_b)
+    in_memory_session.commit()
+
+    # Create mobile suits and entries for both team members
+    suit_a = create_test_mobile_suit("Suit A")
+    suit_a.user_id = "user_a"
+    suit_b = create_test_mobile_suit("Suit B")
+    suit_b.user_id = "user_b"
+    in_memory_session.add(suit_a)
+    in_memory_session.add(suit_b)
+    in_memory_session.commit()
+
+    entry_a = BattleEntry(
+        user_id="user_a",
+        room_id=team.id,  # room_id doesn't matter for grouping test
+        mobile_suit_id=suit_a.id,
+        mobile_suit_snapshot=suit_a.model_dump(),
+        is_npc=False,
+    )
+    entry_b = BattleEntry(
+        user_id="user_b",
+        room_id=team.id,
+        mobile_suit_id=suit_b.id,
+        mobile_suit_snapshot=suit_b.model_dump(),
+        is_npc=False,
+    )
+
+    entries = [entry_a, entry_b]
+    service = MatchingService(in_memory_session)
+    service._apply_team_grouping(entries)
+
+    # Both entries should have team_id in their snapshot
+    tid = str(team.id)
+    assert entry_a.mobile_suit_snapshot.get("team_id") == tid
+    assert entry_b.mobile_suit_snapshot.get("team_id") == tid
+    assert entry_a.mobile_suit_snapshot.get("side") == "PLAYER"
+    assert entry_b.mobile_suit_snapshot.get("side") == "PLAYER"
+
+
+def test_apply_team_grouping_skips_solo_players(in_memory_session):
+    """Test that _apply_team_grouping does not mark entries with no team."""
+    suit = create_test_mobile_suit("Solo Suit")
+    suit.user_id = "solo_user"
+    in_memory_session.add(suit)
+    in_memory_session.commit()
+
+    entry = BattleEntry(
+        user_id="solo_user",
+        room_id=suit.id,
+        mobile_suit_id=suit.id,
+        mobile_suit_snapshot=suit.model_dump(),
+        is_npc=False,
+    )
+    entries = [entry]
+    service = MatchingService(in_memory_session)
+    service._apply_team_grouping(entries)
+
+    # Solo player should not have team_id set
+    assert "team_id" not in entry.mobile_suit_snapshot

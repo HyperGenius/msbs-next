@@ -41,6 +41,9 @@ export default function Header() {
               </Link>
             )}
           </SignedIn>
+          <Link href="/team">
+            <SciFiButton variant="accent" size="sm">Team</SciFiButton>
+          </Link>
           <Link href="/history">
             <SciFiButton variant="secondary" size="sm">History</SciFiButton>
           </Link>
