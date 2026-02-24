@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePilot } from "@/services/api";
 import { SciFiButton, SciFiHeading } from "@/components/ui";
@@ -72,9 +72,9 @@ export default function Header() {
             </Link>
           ))}
           <SignedOut>
-            <SignInButton mode="modal">
+            <Link href="/sign-in">
               <SciFiButton variant="accent" size="sm">Sign In</SciFiButton>
-            </SignInButton>
+            </Link>
           </SignedOut>
           <SignedIn>
             <UserButton 
@@ -90,9 +90,9 @@ export default function Header() {
         {/* Mobile Menu Button */}
         <div className="flex items-center gap-3 md:hidden">
           <SignedOut>
-            <SignInButton mode="modal">
+            <Link href="/sign-in">
               <SciFiButton variant="accent" size="sm">Sign In</SciFiButton>
-            </SignInButton>
+            </Link>
           </SignedOut>
           <SignedIn>
             <UserButton 
