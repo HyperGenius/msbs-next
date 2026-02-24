@@ -2,7 +2,7 @@
 
 ブラウザベースの定期更新型MSバトルシミュレーションゲーム
 
-[![Phase](https://img.shields.io/badge/Phase-2.6_UI%2FUX強化-brightgreen)](docs/roadmap.md)
+[![Phase](https://img.shields.io/badge/Phase-3_β版_Community%26Content-blue)](docs/roadmaps/roadmap.md)
 [![Backend](https://img.shields.io/badge/Backend-Python%20%2F%20FastAPI-blue)](backend/)
 [![Frontend](https://img.shields.io/badge/Frontend-Next.js%2015-black)](frontend/)
 
@@ -31,7 +31,7 @@ MSBS-Next は、モビルスーツ（MS）をカスタマイズし、戦術を�
 
 ## ✨ 主要機能
 
-### 実装済み（Phase 2.6完了）
+### 実装済み（〜Phase 3 進行中）
 
 - ✅ **3Dバトルシミュレーション** - NumPyベースの3D空間計算
 - ✅ **高度な戦闘システム** 
@@ -52,11 +52,15 @@ MSBS-Next は、モビルスーツ（MS）をカスタマイズし、戦術を�
   - リアルタイムリソース表示（ENゲージ、弾薬）
   - ダメージフラッシュエフェクト
 - ✅ **ダッシュボードUI** - カウントダウンタイマー、エントリー管理、結果モーダル
+- ✅ **ランキングシステム** - シーズン制リーダーボード（Top 100）、バッチ自動更新
+- ✅ **プレイヤー視察機能** - 他プレイヤーの機体・装備・戦術を確認
+- ✅ **エースパイロット（ネームドNPC）** - 5体の固有名NPC、レア出現（5%）、特別報酬
+- ✅ **NPC性格システム** - AGGRESSIVE/CAUTIOUS/SNIPERの3タイプ、戦闘中のセリフ表示
 
-### 開発予定（Phase 3 - β版）
+### 開発予定（Phase 3 - β版 残タスク）
 
-- ⏳ ランキング & 統計
 - ⏳ NPC永続化 & 自律成長
+- ⏳ 個人戦績 & バトル統計
 - ⏳ 勢力システム
 - ⏳ コンテンツ拡充（機体、武器、ミッション）
 - ⏳ ソーシャル機能（フレンド、チーム戦、ギルド）
@@ -173,8 +177,10 @@ msbs-next/
 │       └── types/         # TypeScript型定義
 │
 ├── docs/                  # プロジェクトドキュメント
-│   ├── roadmap.md        # 開発ロードマップ ⭐
-│   ├── battle_simulation_roadmap.md  # シミュレーション仕様
+│   ├── roadmaps/         # ロードマップ類
+│   │   └── roadmap.md   # 開発ロードマップ ⭐
+│   ├── reports/          # 実装レポート
+│   ├── NEXT_STEPS.md     # 開発優先度ガイド
 │   └── ...               # 各種実装ガイド
 │
 └── infra/                # Infrastructure as Code
@@ -185,9 +191,10 @@ msbs-next/
 
 ### 主要ドキュメント
 
-- **[開発ロードマップ](docs/roadmap.md)** - プロジェクト全体像と進捗状況
+- **[開発ロードマップ](docs/roadmaps/roadmap.md)** - プロジェクト全体像と進捗状況
 - **[Agent Guidelines](Agent.md)** - AI Agent/開発者向けガイドライン
-- **[バトルシミュレーション仕様](docs/battle_simulation_roadmap.md)** - エンジンの詳細
+- **[次のステップ](docs/NEXT_STEPS.md)** - 開発優先度ガイド
+- **[バトルシミュレーション仕様](docs/roadmaps/battle_simulation_roadmap.md)** - エンジンの詳細
 - **[バッチシステム](docs/BATCH_SYSTEM.md)** - 定期更新処理の仕様
 - **[パイロットシステム](docs/PILOT_SYSTEM.md)** - 成長・スキルシステム
 
@@ -196,6 +203,17 @@ msbs-next/
 - [Clerk認証セットアップ](docs/CLERK_SETUP.md)
 - [Neonマイグレーション](docs/neon_migration.md)
 - [戦術システム](docs/TACTICS_IMPLEMENTATION.md)
+- [デプロイガイド](docs/DEPLOYMENT.md)
+
+### 実装レポート（`docs/reports/`）
+
+- [ランキング・視察機能](docs/reports/RANKING_IMPLEMENTATION_SUMMARY.md)
+- [エースパイロット・NPC性格](docs/reports/ACE_PILOT_IMPLEMENTATION_SUMMARY.md)
+- [Phase 2.5 UI実装完了](docs/reports/PHASE_2_5_COMPLETION_REPORT.md)
+- [バトルビューア強化](docs/reports/IMPLEMENTATION_SUMMARY_BATTLE_VIEWER.md)
+- [ダッシュボード改善](docs/reports/DASHBOARD_IMPLEMENTATION_REPORT.md)
+- [高度な戦闘ロジック](docs/reports/ADVANCED_BATTLE_LOGIC_REPORT.md)
+- [スキルシステム](docs/reports/SKILL_IMPLEMENTATION_REPORT.md)
 
 ## 🧪 テスト
 
