@@ -86,6 +86,18 @@ def run_simulation_phase(session: Session) -> None:
             continue
 
 
+def _resolve_team_id(unit: MobileSuit) -> str:
+    """ユニットのteam_idを解決する（未設定の場合はユニットIDを使用）.
+
+    Args:
+        unit: 対象ユニット
+
+    Returns:
+        解決されたteam_id
+    """
+    return unit.team_id or str(unit.id)
+
+
 def _convert_snapshot_to_mobile_suit(snapshot: dict) -> MobileSuit:
     """スナップショットをMobileSuitオブジェクトに変換.
 
@@ -210,8 +222,7 @@ def _save_battle_results(
     for entry in player_entries:
         # 各プレイヤーの勝敗を判定 (team_idが生存チームに含まれているか)
         entry_unit = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
-        # team_idが未設定の場合はユニットIDをteam_idとして使用
-        entry_team_id = entry_unit.team_id or str(entry_unit.id)
+        entry_team_id = _resolve_team_id(entry_unit)
         individual_win_loss = "WIN" if entry_team_id in alive_team_ids else "LOSE"
         individual_kills = kills if individual_win_loss == "WIN" else 0
 
@@ -256,7 +267,7 @@ def _save_battle_results(
                     npc_unit = _convert_snapshot_to_mobile_suit(
                         npc_entry.mobile_suit_snapshot
                     )
-                    npc_team_id = npc_unit.team_id or str(npc_unit.id)
+                    npc_team_id = _resolve_team_id(npc_unit)
                     npc_win = npc_team_id in alive_team_ids
                     exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
                         win=npc_win,

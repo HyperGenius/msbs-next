@@ -30,6 +30,9 @@ class BattleSimulator:
             player_skills: プレイヤーのスキル (skill_id: level)
             environment: 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)
             special_effects: 特殊環境効果リスト (MINOVSKY/GRAVITY_WELL/OBSTACLE)
+
+        Note:
+            team_id が未設定のユニットは in-place で team_id が自動付与されます。
         """
         self.player = player
         self.enemies = enemies
