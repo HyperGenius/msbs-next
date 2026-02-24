@@ -5,8 +5,8 @@ on:
   workflow_dispatch:
   
   # スケジュール実行（毎日 JST 21:00 = UTC 12:00）
-  # schedule:
-  #   - cron: '0 12 * * *'
+  schedule:
+    - cron: '0 12 * * *'
 
 jobs:
   run-batch:
