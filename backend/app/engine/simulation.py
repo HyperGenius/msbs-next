@@ -51,7 +51,7 @@ class BattleSimulator:
 
         # 索敵状態管理 (チーム単位で共有)
         self.team_detected_units: dict[str, set] = {
-            unit.team_id: set() for unit in self.units
+            unit.team_id: set() for unit in self.units if unit.team_id is not None
         }
 
         # リソース状態管理（戦闘中の一時ステータス）
@@ -206,10 +206,10 @@ class BattleSimulator:
             sensor_multiplier = minovsky["sensor_range_multiplier"]
 
         for unit in alive_units:
+            if unit.team_id is None:
+                continue
             # 敵対勢力を特定 (team_idが異なるユニットが敵)
-            potential_targets = [
-                t for t in alive_units if t.team_id != unit.team_id
-            ]
+            potential_targets = [t for t in alive_units if t.team_id != unit.team_id]
 
             pos_unit = unit.position.to_numpy()
             effective_sensor_range = unit.sensor_range * sensor_multiplier
@@ -304,13 +304,15 @@ class BattleSimulator:
         """ターゲットを選択する（戦術と索敵状態に基づく）."""
         # ターゲット選択: team_idが異なる生存ユニットをリストアップ
         potential_targets = [
-            u for u in self.units
-            if u.current_hp > 0 and u.team_id != actor.team_id
+            u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id
         ]
 
         # 索敵済みの敵のみをターゲット候補とする
+        if actor.team_id is None:
+            return None
         detected_targets = [
-            t for t in potential_targets
+            t
+            for t in potential_targets
             if t.id in self.team_detected_units[actor.team_id]
         ]
 
@@ -766,8 +768,7 @@ class BattleSimulator:
         """索敵移動: 未発見の敵を探すための移動."""
         # 敵対勢力を特定 (team_idが異なるユニットが敵)
         potential_targets = [
-            u for u in self.units
-            if u.current_hp > 0 and u.team_id != actor.team_id
+            u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id
         ]
 
         if not potential_targets:

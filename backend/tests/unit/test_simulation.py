@@ -551,7 +551,7 @@ def test_solo_participants_auto_team_id() -> None:
         team_id=None,  # 明示的にNone
     )
 
-    sim = BattleSimulator(player, [enemy])
+    BattleSimulator(player, [enemy])
 
     # team_idが自動的にユニットIDに設定される
     assert player.team_id == str(player.id)
@@ -569,9 +569,7 @@ def test_battle_royale_three_solo_units() -> None:
         mobility=1.5,
         position=Vector3(x=0, y=0, z=0),
         weapons=[
-            Weapon(
-                id="rifle_a", name="Rifle A", power=50, range=500, accuracy=90
-            )
+            Weapon(id="rifle_a", name="Rifle A", power=50, range=500, accuracy=90)
         ],
         side="PLAYER",
         team_id=None,
@@ -585,9 +583,7 @@ def test_battle_royale_three_solo_units() -> None:
         mobility=1.5,
         position=Vector3(x=200, y=0, z=0),
         weapons=[
-            Weapon(
-                id="rifle_b", name="Rifle B", power=50, range=500, accuracy=90
-            )
+            Weapon(id="rifle_b", name="Rifle B", power=50, range=500, accuracy=90)
         ],
         side="ENEMY",
         team_id=None,
@@ -601,9 +597,7 @@ def test_battle_royale_three_solo_units() -> None:
         mobility=1.5,
         position=Vector3(x=100, y=200, z=0),
         weapons=[
-            Weapon(
-                id="rifle_c", name="Rifle C", power=50, range=500, accuracy=90
-            )
+            Weapon(id="rifle_c", name="Rifle C", power=50, range=500, accuracy=90)
         ],
         side="ENEMY",
         team_id=None,
@@ -715,11 +709,7 @@ def test_detection_shared_within_team() -> None:
         mobility=1.0,
         sensor_range=500.0,
         position=Vector3(x=0, y=0, z=0),
-        weapons=[
-            Weapon(
-                id="w1", name="Weapon", power=10, range=400, accuracy=70
-            )
-        ],
+        weapons=[Weapon(id="w1", name="Weapon", power=10, range=400, accuracy=70)],
         side="PLAYER",
         team_id="TEAM_A",
     )
@@ -732,11 +722,7 @@ def test_detection_shared_within_team() -> None:
         mobility=1.0,
         sensor_range=100.0,  # 短い索敵範囲
         position=Vector3(x=-500, y=0, z=0),  # 遠くにいる
-        weapons=[
-            Weapon(
-                id="w2", name="Weapon", power=10, range=400, accuracy=70
-            )
-        ],
+        weapons=[Weapon(id="w2", name="Weapon", power=10, range=400, accuracy=70)],
         side="PLAYER",
         team_id="TEAM_A",
     )
@@ -748,11 +734,7 @@ def test_detection_shared_within_team() -> None:
         armor=5,
         mobility=1.0,
         position=Vector3(x=300, y=0, z=0),  # Scoutの索敵範囲内
-        weapons=[
-            Weapon(
-                id="w3", name="Weapon", power=10, range=400, accuracy=70
-            )
-        ],
+        weapons=[Weapon(id="w3", name="Weapon", power=10, range=400, accuracy=70)],
         side="ENEMY",
         team_id="TEAM_B",
     )
