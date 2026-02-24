@@ -1,8 +1,8 @@
 /* frontend/src/app/history/page.tsx */
 "use client";
 
-import { useState } from "react";
-import { useBattleHistory, useMissions } from "@/services/api";
+import { useMemo, useState } from "react";
+import { useBattleHistory, useMissions, useMobileSuits } from "@/services/api";
 import { BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 import Link from "next/link";
@@ -10,13 +10,31 @@ import Link from "next/link";
 export default function HistoryPage() {
   const { battles, isLoading, isError } = useBattleHistory(50);
   const { missions } = useMissions();
+  const { mobileSuits } = useMobileSuits();
   const [selectedBattle, setSelectedBattle] = useState<BattleResult | null>(null);
   const [currentTurn, setCurrentTurn] = useState(0);
 
-  const getMissionName = (missionId: number | null): string => {
-    if (!missionId || !missions) return "Unknown Mission";
-    const mission = missions.find((m) => m.id === missionId);
-    return mission?.name || `Mission ${missionId}`;
+  const ownedMobileSuitIds = useMemo(
+    () => new Set(mobileSuits?.map((ms) => ms.id) ?? []),
+    [mobileSuits]
+  );
+
+  const getMissionName = (missionId: number | null, createdAt?: string): string => {
+    if (missionId && missions) {
+      const mission = missions.find((m) => m.id === missionId);
+      return mission?.name || `Mission ${missionId}`;
+    }
+    if (!missionId) {
+      if (createdAt) {
+        const d = new Date(createdAt);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}${mm}${dd} デイリーバトルロイヤル`;
+      }
+      return "デイリーバトルロイヤル";
+    }
+    return "Unknown Mission";
   };
 
   const handleSelectBattle = (battle: BattleResult) => {
@@ -84,7 +102,7 @@ export default function HistoryPage() {
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span className="font-bold">{getMissionName(battle.mission_id)}</span>
+                      <span className="font-bold">{getMissionName(battle.mission_id, battle.created_at)}</span>
                       <span
                         className={`px-2 py-1 rounded text-xs font-bold ${
                           battle.win_loss === "WIN"
@@ -118,7 +136,7 @@ export default function HistoryPage() {
               ) : (
                 <div>
                   <div className="mb-4 pb-4 border-b border-gray-700">
-                    <h3 className="font-bold text-lg mb-2">{getMissionName(selectedBattle.mission_id)}</h3>
+                    <h3 className="font-bold text-lg mb-2">{getMissionName(selectedBattle.mission_id, selectedBattle.created_at)}</h3>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">
                         {new Date(selectedBattle.created_at).toLocaleString("ja-JP")}
@@ -192,15 +210,22 @@ export default function HistoryPage() {
                   )}
 
                   <div className="space-y-1 text-sm font-mono">
-                    {selectedBattle.logs.map((log, index) => (
-                      <div
-                        key={index}
-                        className="border-l-2 border-green-900 pl-2 py-1 text-green-600"
-                      >
-                        <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
-                        <span>{log.message}</span>
-                      </div>
-                    ))}
+                    {selectedBattle.logs.map((log, index) => {
+                      const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
+                      return (
+                        <div
+                          key={index}
+                          className={`border-l-2 pl-2 py-1 ${
+                            isOwnUnit
+                              ? "border-blue-500 bg-blue-900/30 text-blue-300"
+                              : "border-green-900 text-green-600"
+                          }`}
+                        >
+                          <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
+                          <span>{log.message}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
