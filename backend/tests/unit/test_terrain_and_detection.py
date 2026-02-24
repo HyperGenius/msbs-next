@@ -34,6 +34,7 @@ def create_test_player(
             )
         ],
         side="PLAYER",
+        team_id="PLAYER_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
     )
 
@@ -73,6 +74,7 @@ def create_test_enemy(
             )
         ],
         side="ENEMY",
+        team_id="ENEMY_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
     )
 
@@ -186,15 +188,15 @@ def test_detection_phase_basic() -> None:
     sim = BattleSimulator(player, [enemy_close, enemy_far], environment="SPACE")
 
     # Before detection phase, no enemies detected
-    assert len(sim.team_detected_units["PLAYER"]) == 0
+    assert len(sim.team_detected_units["PLAYER_TEAM"]) == 0
 
     # Run detection phase
     sim._detection_phase()
 
     # Close enemy should be detected
-    assert enemy_close.id in sim.team_detected_units["PLAYER"]
+    assert enemy_close.id in sim.team_detected_units["PLAYER_TEAM"]
     # Far enemy should not be detected
-    assert enemy_far.id not in sim.team_detected_units["PLAYER"]
+    assert enemy_far.id not in sim.team_detected_units["PLAYER_TEAM"]
 
 
 def test_detection_logs_generated() -> None:
@@ -231,17 +233,14 @@ def test_detection_shared_among_team() -> None:
     # Enemy is close to player but far from ally
     enemy = create_test_enemy("Enemy", Vector3(x=400, y=0, z=0))
 
-    sim = BattleSimulator(player, [enemy], environment="SPACE")
-
-    # Manually add ally to units (for this test)
-    sim.units.append(ally)
+    sim = BattleSimulator(player, [ally, enemy], environment="SPACE")
 
     # Run detection phase
     sim._detection_phase()
 
-    # Enemy should be in PLAYER team's detected units
-    # (both player and ally are on PLAYER team)
-    assert enemy.id in sim.team_detected_units["PLAYER"]
+    # Enemy should be in PLAYER_TEAM's detected units
+    # (both player and ally are on PLAYER_TEAM)
+    assert enemy.id in sim.team_detected_units["PLAYER_TEAM"]
 
 
 def test_target_selection_requires_detection() -> None:
@@ -264,7 +263,7 @@ def test_target_selection_requires_detection() -> None:
     assert target is None
 
     # Manually add enemy to detected units
-    sim.team_detected_units["PLAYER"].add(enemy.id)
+    sim.team_detected_units["PLAYER_TEAM"].add(enemy.id)
 
     # Now target selection should work
     target = sim._select_target(player)
@@ -282,13 +281,13 @@ def test_enemy_detection_of_player() -> None:
     sim = BattleSimulator(player, [enemy], environment="SPACE")
 
     # Before detection phase, enemy hasn't detected player
-    assert len(sim.team_detected_units["ENEMY"]) == 0
+    assert len(sim.team_detected_units["ENEMY_TEAM"]) == 0
 
     # Run detection phase
     sim._detection_phase()
 
     # Enemy should have detected player
-    assert player.id in sim.team_detected_units["ENEMY"]
+    assert player.id in sim.team_detected_units["ENEMY_TEAM"]
 
 
 def test_detection_log_shows_distance() -> None:
