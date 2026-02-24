@@ -546,37 +546,7 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
     * 武器ごとに `cool_down_turn` が設定され、発射後は指定ターン数待機が必要。
     * 毎ターン開始時に残りクールダウンが1減少。
 
-* **Performance:**
-    * [ ] キャッシング戦略（Redis）
-    * [ ] クエリ最適化
-    * [ ] CDN活用
-    * [ ] 負荷テスト & チューニング
-
 ---
-
-## 4. シミュレーション仕様 (実装済)
-
-物理エンジンは使用せず、数学的な計算のみで処理する。
-| beam_resistance | Float | 対ビーム防御力 (0.0~1.0) |
-| physical_resistance | Float | 対実弾防御力 (0.0~1.0) |
-| terrain_adaptability | JSON | 地形適正 (環境: S/A/B/C/D) |
-| max_en | Integer | 最大エネルギー容量 |
-| en_recovery | Integer | ターン毎のEN回復量 |
-| max_propellant | Integer | 最大推進剤容量 |
-
-* **フィールド:**
-    * 境界なしの3D空間 (現状)。
-  environment | String | 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER) |
-|   * 障害物は未実装。
-* **移動:**
-    * 慣性は考慮せず、毎ターン `mobility × 基本速度` 分だけターゲット方向へベクトル移動。
-    * 移動速度: `max(5.0, mobility * 50)`
-* **判定:**
-    * **ターゲット選択:** 最も近い敵対勢力ユニットを選択。
-    * **攻撃:** 射程内であれば攻撃、そうでなければ移動。
-    * **命中率:** `base_accuracy - (distance/100)*2 - (target.mobility * 10)`
-    * **ダメージ:** `max(1, weapon.power - target.armor) * variance(0.9~1.1)`
-    * **クリティカル:** 5%確率で `power * 1.2` (装甲無視)
 
 ## 5. データモデル (実装済)
 
@@ -654,17 +624,9 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 
 ---
 
-### 今後追加予定 (Phase 3)
+### 実装済み (Phase 3)
 
-#### factions テーブル
-| カラム | 型 | 説明 |
-|--------|-----|------|
-| id | UUID | Primary Key |
-| name | String | 勢力名 |
-| bonus_type | String | ボーナス種別 |
-| bonus_value | Float | ボーナス値 |
-
-#### seasons テーブル
+#### seasons テーブル ✅
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | id | UUID | Primary Key |
@@ -673,7 +635,7 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 | end_date | Date | 終了日 |
 | is_active | Boolean | アクティブフラグ |
 
-#### leaderboards テーブル
+#### leaderboards テーブル ✅
 | カラム | 型 | 説明 |
 |--------|-----|------|
 | id | UUID | Primary Key |
@@ -683,6 +645,10 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 | total_battles | Integer | 総戦闘数 |
 | total_wins | Integer | 勝利数 |
 | total_kills | Integer | 総撃墜数 |
+
+### 今後追加予定 (Phase 3以降)
+
+#### factions テーブル
 
 ---
 
@@ -723,6 +689,11 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
     * `backend/tests/test_entry_feature.py` - エントリー機能テスト
     * `backend/tests/test_entry_snapshot.py` - エントリースナップショットテスト
     * `backend/tests/test_shop.py` - ショップテスト
+    * `backend/tests/test_ranking_system.py` - ランキングシステムテスト
+
+* **NPC Tests:**
+    * `backend/tests/unit/test_npc_personality_and_ace.py` - NPC性格 & エースパイロットテスト
+    * `backend/tests/unit/test_battle_chatter.py` - 戦闘セリフテスト
 
 ---
 
@@ -754,6 +725,8 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 * [バトルビューア視覚表現強化](../IMPLEMENTATION_SUMMARY_BATTLE_VIEWER.md)
 * [ダッシュボード改善レポート](../DASHBOARD_IMPLEMENTATION_REPORT.md)
 * [バトルビューアー強化詳細](../BATTLE_VIEWER_ENHANCEMENTS.md)
+* [ランキング・視察機能](./reports/RANKING_IMPLEMENTATION_SUMMARY.md)
+* [エースパイロット・NPC性格](./reports/ACE_PILOT_IMPLEMENTATION_SUMMARY.md)
 
 ### UI/UX ガイド
 * [UI Mockups](../UI_MOCKUPS.md)
