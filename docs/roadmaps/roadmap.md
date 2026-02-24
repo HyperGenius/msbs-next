@@ -649,6 +649,12 @@ MSBSのプレイ感を現代的なクラウドネイティブ技術で再現・�
 ### 今後追加予定 (Phase 3以降)
 
 #### factions テーブル
+| カラム | 型 | 説明 |
+|--------|-----|------|
+| id | UUID | Primary Key |
+| name | String | 勢力名 |
+| bonus_type | String | ボーナス種別 |
+| bonus_value | Float | ボーナス値 |
 
 ---
 
