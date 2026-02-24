@@ -27,6 +27,7 @@ def create_test_player(sensor_range: float = 600.0) -> MobileSuit:
             )
         ],
         side="PLAYER",
+        team_id="PLAYER_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
     )
 
@@ -51,6 +52,7 @@ def create_test_enemy(name: str, position: Vector3) -> MobileSuit:
             )
         ],
         side="ENEMY",
+        team_id="ENEMY_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
     )
 
@@ -93,7 +95,7 @@ def test_minovsky_reduces_sensor_range() -> None:
 
     # ミノフスキー粒子下では 600 * 0.5 = 300m が実効範囲
     # 299m なので検出されるはず
-    assert enemy.id in sim_minovsky.team_detected_units["PLAYER"]
+    assert enemy.id in sim_minovsky.team_detected_units["PLAYER_TEAM"]
 
 
 def test_minovsky_blocks_long_range_detection() -> None:
@@ -106,7 +108,7 @@ def test_minovsky_blocks_long_range_detection() -> None:
     # 通常環境
     sim_normal = BattleSimulator(player, [enemy], environment="SPACE")
     sim_normal._detection_phase()
-    assert enemy.id in sim_normal.team_detected_units["PLAYER"]
+    assert enemy.id in sim_normal.team_detected_units["PLAYER_TEAM"]
 
     # ミノフスキー粒子下 (同じ敵、新しいシミュレーター)
     player2 = create_test_player(sensor_range=600.0)
@@ -116,7 +118,7 @@ def test_minovsky_blocks_long_range_detection() -> None:
     )
     sim_minovsky._detection_phase()
     # 400m > 300m (実効索敵範囲) なので検出できないはず
-    assert enemy2.id not in sim_minovsky.team_detected_units["PLAYER"]
+    assert enemy2.id not in sim_minovsky.team_detected_units["PLAYER_TEAM"]
 
 
 def test_minovsky_detection_log_includes_message() -> None:
@@ -243,7 +245,7 @@ def test_multiple_special_effects() -> None:
 
     # ミノフスキー粒子: 400m > 300m (実効範囲) なので検出不可
     sim._detection_phase()
-    assert enemy.id not in sim.team_detected_units["PLAYER"]
+    assert enemy.id not in sim.team_detected_units["PLAYER_TEAM"]
 
     # 重力井戸: terrain_modifierが低下
     modifier = sim._get_terrain_modifier(player)

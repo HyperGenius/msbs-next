@@ -86,6 +86,18 @@ def run_simulation_phase(session: Session) -> None:
             continue
 
 
+def _resolve_team_id(unit: MobileSuit) -> str:
+    """ユニットのteam_idを解決する（未設定の場合はユニットIDを使用）.
+
+    Args:
+        unit: 対象ユニット
+
+    Returns:
+        解決されたteam_id
+    """
+    return unit.team_id or str(unit.id)
+
+
 def _convert_snapshot_to_mobile_suit(snapshot: dict) -> MobileSuit:
     """スナップショットをMobileSuitオブジェクトに変換.
 
@@ -139,6 +151,12 @@ def _prepare_battle_units(
         enemy_units.append(enemy_unit)
         unit_to_entry_map[enemy_unit.id] = entry
 
+    # team_id が未設定のユニットにはソロ参加用のIDを自動付与
+    all_units = [player_unit] + enemy_units
+    for unit in all_units:
+        if unit.team_id is None:
+            unit.team_id = str(unit.id)
+
     return player_unit, enemy_units, unit_to_entry_map
 
 
@@ -164,8 +182,9 @@ def _run_simulation(
 
     print(f"  戦闘終了: {turn_count} ターン")
 
-    # 勝敗判定
-    primary_player_win = player_unit.current_hp > 0
+    # 勝敗判定 (team_idベース: プレイヤーのteam_idが生存していれば勝利)
+    alive_team_ids = {u.team_id for u in simulator.units if u.current_hp > 0}
+    primary_player_win = player_unit.team_id in alive_team_ids
     kills = sum(1 for e in enemy_units if e.current_hp <= 0)
 
     return simulator, primary_player_win, kills
@@ -197,14 +216,15 @@ def _save_battle_results(
     """
     pilot_service = PilotService(session)
 
+    # 生存しているteam_idを取得
+    alive_team_ids = {u.team_id for u in simulator.units if u.current_hp > 0}
+
     for entry in player_entries:
-        # 各プレイヤーの勝敗を判定
-        if entry.id == player_entries[0].id:
-            individual_win_loss = "WIN" if primary_player_win else "LOSE"
-            individual_kills = kills
-        else:
-            individual_win_loss = "LOSE"
-            individual_kills = 0
+        # 各プレイヤーの勝敗を判定 (team_idが生存チームに含まれているか)
+        entry_unit = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
+        entry_team_id = _resolve_team_id(entry_unit)
+        individual_win_loss = "WIN" if entry_team_id in alive_team_ids else "LOSE"
+        individual_kills = kills if individual_win_loss == "WIN" else 0
 
         battle_result = BattleResult(
             user_id=entry.user_id,
@@ -243,8 +263,12 @@ def _save_battle_results(
             try:
                 npc_pilot = pilot_service.get_npc_pilot(npc_entry.user_id)
                 if npc_pilot:
-                    # NPC はプレイヤーが勝てば敗北、プレイヤーが負ければ勝利
-                    npc_win = not primary_player_win
+                    # NPC の勝敗も team_id ベースで判定
+                    npc_unit = _convert_snapshot_to_mobile_suit(
+                        npc_entry.mobile_suit_snapshot
+                    )
+                    npc_team_id = _resolve_team_id(npc_unit)
+                    npc_win = npc_team_id in alive_team_ids
                     exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
                         win=npc_win,
                         kills=0,

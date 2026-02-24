@@ -23,6 +23,7 @@ def create_test_player() -> MobileSuit:
             )
         ],
         side="PLAYER",
+        team_id="PLAYER_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
     )
 
@@ -46,6 +47,7 @@ def create_test_enemy(name: str, position: Vector3) -> MobileSuit:
             )
         ],
         side="ENEMY",
+        team_id="ENEMY_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
     )
 
@@ -450,3 +452,301 @@ def test_target_selection_with_multiple_tactics() -> None:
     target = sim._select_target(player)
     assert target is not None
     assert target.name == "Far Gundam"
+
+
+# === team_id 関連のテスト ===
+
+
+def test_same_team_id_no_attack() -> None:
+    """同じteam_idの機体同士は攻撃しないこと."""
+    player = create_test_player()
+    player.team_id = "TEAM_A"
+
+    # 敵も同じteam_idに設定
+    ally = create_test_enemy("Ally Zaku", Vector3(x=100, y=0, z=0))
+    ally.team_id = "TEAM_A"
+
+    sim = BattleSimulator(player, [ally])
+    sim._detection_phase()
+
+    # プレイヤーのターゲット選択 → 同チームなので None
+    target = sim._select_target(player)
+    assert target is None
+
+
+def test_different_team_id_attack() -> None:
+    """異なるteam_idの機体同士は攻撃対象になること."""
+    player = create_test_player()
+    player.team_id = "TEAM_A"
+
+    enemy = create_test_enemy("Enemy Zaku", Vector3(x=100, y=0, z=0))
+    enemy.team_id = "TEAM_B"
+
+    sim = BattleSimulator(player, [enemy])
+    sim._detection_phase()
+
+    target = sim._select_target(player)
+    assert target is not None
+    assert target.name == "Enemy Zaku"
+
+
+def test_mixed_side_same_team_no_attack() -> None:
+    """sideが異なっても同じteam_idなら攻撃しないこと."""
+    player = create_test_player()
+    player.side = "PLAYER"
+    player.team_id = "ALLIANCE"
+
+    # sideはENEMYだがteam_idが同じ
+    ally = create_test_enemy("NPC Ally", Vector3(x=100, y=0, z=0))
+    ally.side = "ENEMY"
+    ally.team_id = "ALLIANCE"
+
+    sim = BattleSimulator(player, [ally])
+    sim._detection_phase()
+
+    # 同チームなので攻撃対象にならない
+    target = sim._select_target(player)
+    assert target is None
+
+
+def test_solo_participants_auto_team_id() -> None:
+    """team_id未設定のユニットにはユニットIDが自動付与されること."""
+    player = MobileSuit(
+        name="Solo Player",
+        max_hp=100,
+        current_hp=100,
+        armor=10,
+        mobility=2.0,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[
+            Weapon(
+                id="beam_rifle",
+                name="Beam Rifle",
+                power=30,
+                range=500,
+                accuracy=85,
+            )
+        ],
+        side="PLAYER",
+        team_id=None,  # 明示的にNone
+    )
+
+    enemy = MobileSuit(
+        name="Solo Enemy",
+        max_hp=80,
+        current_hp=80,
+        armor=5,
+        mobility=1.2,
+        position=Vector3(x=100, y=0, z=0),
+        weapons=[
+            Weapon(
+                id="zaku_mg",
+                name="Zaku Machine Gun",
+                power=15,
+                range=400,
+                accuracy=70,
+            )
+        ],
+        side="ENEMY",
+        team_id=None,  # 明示的にNone
+    )
+
+    BattleSimulator(player, [enemy])
+
+    # team_idが自動的にユニットIDに設定される
+    assert player.team_id == str(player.id)
+    assert enemy.team_id == str(enemy.id)
+    assert player.team_id != enemy.team_id
+
+
+def test_battle_royale_three_solo_units() -> None:
+    """3機のソロ参加者によるバトルロイヤルが成立すること."""
+    unit_a = MobileSuit(
+        name="Unit A",
+        max_hp=100,
+        current_hp=100,
+        armor=5,
+        mobility=1.5,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[
+            Weapon(id="rifle_a", name="Rifle A", power=50, range=500, accuracy=90)
+        ],
+        side="PLAYER",
+        team_id=None,
+    )
+
+    unit_b = MobileSuit(
+        name="Unit B",
+        max_hp=100,
+        current_hp=100,
+        armor=5,
+        mobility=1.5,
+        position=Vector3(x=200, y=0, z=0),
+        weapons=[
+            Weapon(id="rifle_b", name="Rifle B", power=50, range=500, accuracy=90)
+        ],
+        side="ENEMY",
+        team_id=None,
+    )
+
+    unit_c = MobileSuit(
+        name="Unit C",
+        max_hp=100,
+        current_hp=100,
+        armor=5,
+        mobility=1.5,
+        position=Vector3(x=100, y=200, z=0),
+        weapons=[
+            Weapon(id="rifle_c", name="Rifle C", power=50, range=500, accuracy=90)
+        ],
+        side="ENEMY",
+        team_id=None,
+    )
+
+    sim = BattleSimulator(unit_a, [unit_b, unit_c])
+
+    # 各ユニットのteam_idはそれぞれ異なるはず
+    assert len({unit_a.team_id, unit_b.team_id, unit_c.team_id}) == 3
+
+    # バトルを実行
+    max_turns = 100
+    while not sim.is_finished and sim.turn < max_turns:
+        sim.process_turn()
+
+    # 戦闘が正常に終了すること
+    assert sim.is_finished
+    # 生存者のteam_idは1種類以下
+    alive_teams = {u.team_id for u in sim.units if u.current_hp > 0}
+    assert len(alive_teams) <= 1
+
+
+def test_team_battle_finishes_correctly() -> None:
+    """2チーム対抗戦が正しく終了すること."""
+    # チームA: 2機
+    team_a_1 = MobileSuit(
+        name="Team A Leader",
+        max_hp=100,
+        current_hp=100,
+        armor=10,
+        mobility=2.0,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[
+            Weapon(
+                id="beam_rifle",
+                name="Beam Rifle",
+                power=200,
+                range=500,
+                accuracy=100,
+            )
+        ],
+        side="PLAYER",
+        team_id="TEAM_A",
+    )
+
+    team_a_2 = MobileSuit(
+        name="Team A Sub",
+        max_hp=100,
+        current_hp=100,
+        armor=10,
+        mobility=2.0,
+        position=Vector3(x=50, y=0, z=0),
+        weapons=[
+            Weapon(
+                id="beam_rifle",
+                name="Beam Rifle",
+                power=200,
+                range=500,
+                accuracy=100,
+            )
+        ],
+        side="PLAYER",
+        team_id="TEAM_A",
+    )
+
+    # チームB: 1機 (弱い)
+    team_b_1 = MobileSuit(
+        name="Team B Unit",
+        max_hp=50,
+        current_hp=50,
+        armor=0,
+        mobility=1.0,
+        position=Vector3(x=200, y=0, z=0),
+        weapons=[
+            Weapon(
+                id="zaku_mg",
+                name="Zaku MG",
+                power=10,
+                range=400,
+                accuracy=60,
+            )
+        ],
+        side="ENEMY",
+        team_id="TEAM_B",
+    )
+
+    sim = BattleSimulator(team_a_1, [team_a_2, team_b_1])
+
+    max_turns = 50
+    while not sim.is_finished and sim.turn < max_turns:
+        sim.process_turn()
+
+    # 戦闘が終了すること
+    assert sim.is_finished
+    # チームAが生存しているはず (圧倒的火力差)
+    alive_teams = {u.team_id for u in sim.units if u.current_hp > 0}
+    assert "TEAM_A" in alive_teams
+    assert "TEAM_B" not in alive_teams
+
+
+def test_detection_shared_within_team() -> None:
+    """同チーム内で索敵情報が共有されること."""
+    # チームA: 2機 (1機は敵の近く)
+    scout = MobileSuit(
+        name="Scout",
+        max_hp=100,
+        current_hp=100,
+        armor=5,
+        mobility=1.0,
+        sensor_range=500.0,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[Weapon(id="w1", name="Weapon", power=10, range=400, accuracy=70)],
+        side="PLAYER",
+        team_id="TEAM_A",
+    )
+
+    rear_guard = MobileSuit(
+        name="Rear Guard",
+        max_hp=100,
+        current_hp=100,
+        armor=5,
+        mobility=1.0,
+        sensor_range=100.0,  # 短い索敵範囲
+        position=Vector3(x=-500, y=0, z=0),  # 遠くにいる
+        weapons=[Weapon(id="w2", name="Weapon", power=10, range=400, accuracy=70)],
+        side="PLAYER",
+        team_id="TEAM_A",
+    )
+
+    enemy = MobileSuit(
+        name="Enemy",
+        max_hp=80,
+        current_hp=80,
+        armor=5,
+        mobility=1.0,
+        position=Vector3(x=300, y=0, z=0),  # Scoutの索敵範囲内
+        weapons=[Weapon(id="w3", name="Weapon", power=10, range=400, accuracy=70)],
+        side="ENEMY",
+        team_id="TEAM_B",
+    )
+
+    sim = BattleSimulator(scout, [rear_guard, enemy])
+    sim.turn = 1
+    sim._detection_phase()
+
+    # Scoutが敵を発見 → TEAM_Aの索敵情報に共有される
+    assert enemy.id in sim.team_detected_units["TEAM_A"]
+
+    # Rear GuardもTEAM_Aなので同じ索敵情報を使える
+    target = sim._select_target(rear_guard)
+    assert target is not None
+    assert target.name == "Enemy"

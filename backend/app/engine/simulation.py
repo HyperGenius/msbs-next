@@ -30,6 +30,9 @@ class BattleSimulator:
             player_skills: プレイヤーのスキル (skill_id: level)
             environment: 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)
             special_effects: 特殊環境効果リスト (MINOVSKY/GRAVITY_WELL/OBSTACLE)
+
+        Note:
+            team_id が未設定のユニットは in-place で team_id が自動付与されます。
         """
         self.player = player
         self.enemies = enemies
@@ -41,10 +44,14 @@ class BattleSimulator:
         self.environment = environment
         self.special_effects: list[str] = special_effects or []
 
+        # team_id が未設定のユニットにはソロ参加用のIDを自動付与
+        for unit in self.units:
+            if unit.team_id is None:
+                unit.team_id = str(unit.id)
+
         # 索敵状態管理 (チーム単位で共有)
         self.team_detected_units: dict[str, set] = {
-            "PLAYER": set(),
-            "ENEMY": set(),
+            unit.team_id: set() for unit in self.units if unit.team_id is not None
         }
 
         # リソース状態管理（戦闘中の一時ステータス）
@@ -199,20 +206,17 @@ class BattleSimulator:
             sensor_multiplier = minovsky["sensor_range_multiplier"]
 
         for unit in alive_units:
-            # 敵対勢力を特定
-            if unit.side == "PLAYER":
-                # enemy_team = "ENEMY"
-                potential_targets = [e for e in self.enemies if e.current_hp > 0]
-            else:
-                # enemy_team = "PLAYER"
-                potential_targets = [self.player] if self.player.current_hp > 0 else []
+            if unit.team_id is None:
+                continue
+            # 敵対勢力を特定 (team_idが異なるユニットが敵)
+            potential_targets = [t for t in alive_units if t.team_id != unit.team_id]
 
             pos_unit = unit.position.to_numpy()
             effective_sensor_range = unit.sensor_range * sensor_multiplier
 
             # 索敵範囲内の敵をチェック
             for target in potential_targets:
-                if target.id in self.team_detected_units[unit.side]:
+                if target.id in self.team_detected_units[unit.team_id]:
                     # 既に発見済み
                     continue
 
@@ -222,7 +226,7 @@ class BattleSimulator:
                 # 索敵判定（ミノフスキー粒子による索敵範囲低下を適用）
                 if distance <= effective_sensor_range:
                     # 発見！
-                    self.team_detected_units[unit.side].add(target.id)
+                    self.team_detected_units[unit.team_id].add(target.id)
 
                     # 発見ログを追加
                     minovsky_msg = (
@@ -298,15 +302,18 @@ class BattleSimulator:
 
     def _select_target(self, actor: MobileSuit) -> MobileSuit | None:
         """ターゲットを選択する（戦術と索敵状態に基づく）."""
-        # ターゲット選択: 敵対勢力のユニットをリストアップ
-        if actor.side == "PLAYER":
-            potential_targets = [e for e in self.enemies if e.current_hp > 0]
-        else:  # actor.side == "ENEMY"
-            potential_targets = [self.player] if self.player.current_hp > 0 else []
+        # ターゲット選択: team_idが異なる生存ユニットをリストアップ
+        potential_targets = [
+            u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id
+        ]
 
         # 索敵済みの敵のみをターゲット候補とする
+        if actor.team_id is None:
+            return None
         detected_targets = [
-            t for t in potential_targets if t.id in self.team_detected_units[actor.side]
+            t
+            for t in potential_targets
+            if t.id in self.team_detected_units[actor.team_id]
         ]
 
         # ターゲットが存在しない場合はNoneを返す
@@ -632,10 +639,9 @@ class BattleSimulator:
                 chatter=destroyed_chatter,
             )
         )
-        # 勝利判定
-        if target.side == "PLAYER":
-            self.is_finished = True
-        elif all(e.current_hp <= 0 for e in self.enemies):
+        # 勝利判定 (生存ユニットのteam_idの種類が1つ以下なら戦闘終了)
+        alive_teams = {u.team_id for u in self.units if u.current_hp > 0}
+        if len(alive_teams) <= 1:
             self.is_finished = True
 
     def _process_movement(
@@ -760,11 +766,10 @@ class BattleSimulator:
 
     def _search_movement(self, actor: MobileSuit) -> None:
         """索敵移動: 未発見の敵を探すための移動."""
-        # 敵対勢力を特定
-        if actor.side == "PLAYER":
-            potential_targets = [e for e in self.enemies if e.current_hp > 0]
-        else:
-            potential_targets = [self.player] if self.player.current_hp > 0 else []
+        # 敵対勢力を特定 (team_idが異なるユニットが敵)
+        potential_targets = [
+            u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id
+        ]
 
         if not potential_targets:
             return

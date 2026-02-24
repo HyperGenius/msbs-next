@@ -65,6 +65,9 @@ class MobileSuit(SQLModel, table=True):
     mobility: float = Field(default=1.0, description="機動性(回避・移動速度係数)")
     sensor_range: float = Field(default=500.0, description="索敵範囲")
     side: str = Field(default="PLAYER", description="陣営 (PLAYER/ENEMY)")
+    team_id: str | None = Field(
+        default=None, description="戦闘チームID (戦闘時のみ使用、Noneの場合はソロ参加)"
+    )
     beam_resistance: float = Field(default=0.0, description="対ビーム防御力 (0.0~1.0)")
     physical_resistance: float = Field(
         default=0.0, description="対実弾防御力 (0.0~1.0)"

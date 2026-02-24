@@ -346,4 +346,4 @@ def test_apply_team_grouping_skips_solo_players(in_memory_session):
     service._apply_team_grouping(entries)
 
     # Solo player should not have team_id set
-    assert "team_id" not in entry.mobile_suit_snapshot
+    assert entry.mobile_suit_snapshot.get("team_id") is None
