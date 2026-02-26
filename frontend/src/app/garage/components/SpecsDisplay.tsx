@@ -43,6 +43,60 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
         機体スペック (詳細)
       </h3>
 
+      {/* Combat Aptitude */}
+      <div className="mb-4 p-3 bg-gray-900 rounded">
+        <h4 className="text-sm font-bold mb-2 text-red-400">
+          戦闘適性
+        </h4>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <span className="text-gray-400">格闘適性:</span>
+            <span className="ml-2 font-bold text-red-400">
+              ×{(selectedMs.melee_aptitude ?? 1.0).toFixed(1)}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-400">射撃適性:</span>
+            <span className="ml-2 font-bold text-blue-400">
+              ×{(selectedMs.shooting_aptitude ?? 1.0).toFixed(1)}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-400">命中補正:</span>
+            <span className="ml-2 font-bold text-green-400">
+              {(selectedMs.accuracy_bonus ?? 0.0) >= 0 ? "+" : ""}{(selectedMs.accuracy_bonus ?? 0.0).toFixed(1)}%
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-400">回避補正:</span>
+            <span className="ml-2 font-bold text-yellow-400">
+              {(selectedMs.evasion_bonus ?? 0.0) >= 0 ? "+" : ""}{(selectedMs.evasion_bonus ?? 0.0).toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobility Detail */}
+      <div className="mb-4 p-3 bg-gray-900 rounded">
+        <h4 className="text-sm font-bold mb-2 text-purple-400">
+          機動性詳細
+        </h4>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <span className="text-gray-400">加速性能:</span>
+            <span className="ml-2 font-bold text-purple-400">
+              ×{(selectedMs.acceleration_bonus ?? 1.0).toFixed(1)}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-400">旋回性能:</span>
+            <span className="ml-2 font-bold text-purple-400">
+              ×{(selectedMs.turning_bonus ?? 1.0).toFixed(1)}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Energy & Propellant */}
       <div className="mb-4 p-3 bg-gray-900 rounded">
         <h4 className="text-sm font-bold mb-2 text-cyan-400">

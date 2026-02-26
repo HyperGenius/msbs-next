@@ -38,6 +38,7 @@ class Weapon(SQLModel):
     type: str = Field(default="PHYSICAL", description="武器属性 (BEAM/PHYSICAL)")
     optimal_range: float = Field(default=300.0, description="最適射程距離")
     decay_rate: float = Field(default=0.05, description="距離による命中率減衰係数")
+    is_melee: bool = Field(default=False, description="近接武器かどうか")
     max_ammo: int | None = Field(
         default=None, description="最大弾数 (Noneまたは0の場合は無限/EN兵器)"
     )
@@ -72,6 +73,19 @@ class MobileSuit(SQLModel, table=True):
     physical_resistance: float = Field(
         default=0.0, description="対実弾防御力 (0.0~1.0)"
     )
+
+    # Detailed Parameters (詳細パラメータ)
+    melee_aptitude: float = Field(default=1.0, description="格闘適性 (基準値: 1.0)")
+    shooting_aptitude: float = Field(default=1.0, description="射撃適性 (基準値: 1.0)")
+    accuracy_bonus: float = Field(default=0.0, description="命中補正 (基準値: 0.0)")
+    evasion_bonus: float = Field(default=0.0, description="回避補正 (基準値: 0.0)")
+    acceleration_bonus: float = Field(
+        default=1.0, description="加速補正 (基準値: 1.0, 将来の慣性移動用)"
+    )
+    turning_bonus: float = Field(
+        default=1.0, description="旋回補正 (基準値: 1.0, 将来の向き・旋回速度用)"
+    )
+
     terrain_adaptability: dict[str, str] = Field(
         default_factory=lambda: {
             "SPACE": "A",
@@ -142,6 +156,12 @@ class MobileSuitUpdate(SQLModel):
     armor: int | None = None
     mobility: float | None = None
     tactics: dict | None = None
+    melee_aptitude: float | None = None
+    shooting_aptitude: float | None = None
+    accuracy_bonus: float | None = None
+    evasion_bonus: float | None = None
+    acceleration_bonus: float | None = None
+    turning_bonus: float | None = None
 
 
 # --- Response Models (APIレスポンス用) ---

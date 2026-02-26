@@ -420,6 +420,10 @@ class BattleSimulator:
         evasion_bonus = target.mobility * 10
         hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
 
+        # 機体パラメータ補正: 命中補正と回避補正を適用
+        hit_chance += getattr(actor, "accuracy_bonus", 0.0)
+        hit_chance -= getattr(target, "evasion_bonus", 0.0)
+
         # プレイヤーの攻撃時はスキル補正を適用
         if actor.side == "PLAYER":
             accuracy_skill_level = self.player_skills.get("accuracy_up", 0)
@@ -551,6 +555,14 @@ class BattleSimulator:
             damage_skill_level = self.player_skills.get("damage_up", 0)
             damage_multiplier = 1.0 + (damage_skill_level * 3.0) / 100.0  # +3% / Lv
             base_damage = int(base_damage * damage_multiplier)
+
+        # 機体パラメータ補正: 格闘/射撃適性をダメージに乗算
+        is_melee = getattr(weapon, "is_melee", False)
+        if is_melee:
+            aptitude = getattr(actor, "melee_aptitude", 1.0)
+        else:
+            aptitude = getattr(actor, "shooting_aptitude", 1.0)
+        base_damage = int(base_damage * aptitude)
 
         # 武器タイプに応じた耐性を適用
         weapon_type = getattr(weapon, "type", "PHYSICAL")

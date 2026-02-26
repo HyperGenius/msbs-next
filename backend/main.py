@@ -100,6 +100,15 @@ def health() -> dict[str, str]:
     return {"status": "ok", "message": "MSBS-Next API is running"}
 
 
+@app.post("/api/admin/reload-master")
+async def reload_master() -> dict:
+    """マスターデータをリロードする（管理者用）."""
+    from app.core.gamedata import reload_master_data
+
+    result = reload_master_data()
+    return {"status": "ok", "reloaded": result}
+
+
 @app.post("/api/battle/simulate", response_model=BattleResponse)
 async def simulate_battle(
     mission_id: int = 1,

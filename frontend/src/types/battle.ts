@@ -24,6 +24,7 @@ export interface Weapon {
     max_ammo?: number | null;
     en_cost?: number;
     cool_down_turn?: number;
+    is_melee?: boolean;
 }
 
 /**
@@ -52,6 +53,12 @@ export interface MobileSuit {
     tactics: Tactics;
     beam_resistance?: number;
     physical_resistance?: number;
+    melee_aptitude?: number;
+    shooting_aptitude?: number;
+    accuracy_bonus?: number;
+    evasion_bonus?: number;
+    acceleration_bonus?: number;
+    turning_bonus?: number;
     terrain_adaptability?: Record<string, string>;
     max_en?: number;
     en_recovery?: number;
@@ -107,6 +114,12 @@ export interface MobileSuitUpdate {
     armor?: number;
     mobility?: number;
     tactics?: Tactics;
+    melee_aptitude?: number;
+    shooting_aptitude?: number;
+    accuracy_bonus?: number;
+    evasion_bonus?: number;
+    acceleration_bonus?: number;
+    turning_bonus?: number;
 }
 
 /**
@@ -235,6 +248,12 @@ export interface ShopItemSpecs {
     weapons: Weapon[];
     beam_resistance?: number;
     physical_resistance?: number;
+    melee_aptitude?: number;
+    shooting_aptitude?: number;
+    accuracy_bonus?: number;
+    evasion_bonus?: number;
+    acceleration_bonus?: number;
+    turning_bonus?: number;
 }
 
 /**
