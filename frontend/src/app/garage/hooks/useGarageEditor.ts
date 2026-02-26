@@ -16,10 +16,11 @@ import { MobileSuit } from "@/types/battle";
  */
 export function useGarageEditor() {
   const { mobileSuits, isLoading, isError, mutate } = useMobileSuits();
-  const { pilot } = usePilot();
+  const { pilot, mutate: mutatePilot } = usePilot();
   const { weaponListings } = useWeaponListings();
 
   const [selectedMs, setSelectedMs] = useState<MobileSuit | null>(null);
+  const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showWeaponModal, setShowWeaponModal] = useState(false);
@@ -42,7 +43,7 @@ export function useGarageEditor() {
     },
   });
 
-  // 機体選択時の処理
+  // 機体選択時の処理（モーダルを開く）
   const handleSelectMs = (ms: MobileSuit) => {
     setSelectedMs(ms);
     setFormData({
@@ -56,6 +57,20 @@ export function useGarageEditor() {
       },
     });
     setSuccessMessage(null);
+    setShowCustomizationModal(true);
+  };
+
+  // カスタマイズモーダルを閉じる
+  const handleCloseCustomizationModal = () => {
+    setShowCustomizationModal(false);
+    setSuccessMessage(null);
+  };
+
+  // Engineering強化完了時の処理
+  const handleUpgraded = (updatedMs: MobileSuit) => {
+    setSelectedMs(updatedMs);
+    mutate();
+    mutatePilot();
   };
 
   // フォーム送信処理
@@ -125,6 +140,7 @@ export function useGarageEditor() {
     pilot,
     weaponListings,
     selectedMs,
+    showCustomizationModal,
     isSaving,
     successMessage,
     showWeaponModal,
@@ -136,6 +152,8 @@ export function useGarageEditor() {
     setPreviewWeaponId,
     // handlers
     handleSelectMs,
+    handleCloseCustomizationModal,
+    handleUpgraded,
     handleSubmit,
     handleOpenWeaponModal,
     handleCloseWeaponModal,

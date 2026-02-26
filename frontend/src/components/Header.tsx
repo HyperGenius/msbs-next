@@ -11,7 +11,6 @@ const navLinks = [
   { href: "/history", label: "History", variant: "secondary" as const },
   { href: "/rankings", label: "Rankings", variant: "secondary" as const },
   { href: "/shop", label: "Shop", variant: "accent" as const },
-  { href: "/garage/engineering", label: "Engineering", variant: "accent" as const },
   { href: "/garage", label: "Open Hangar", variant: "primary" as const },
 ];
 
