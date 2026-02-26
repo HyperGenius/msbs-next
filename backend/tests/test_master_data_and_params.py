@@ -1,10 +1,5 @@
 """マスターデータのJSON外部化および新パラメータのテスト."""
 
-import json
-import os
-import tempfile
-from pathlib import Path
-
 from fastapi import status
 
 from app.core.gamedata import (
@@ -16,8 +11,6 @@ from app.core.gamedata import (
 )
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
-from main import app
-
 
 # === マスターデータ読み込みテスト ===
 
@@ -178,8 +171,10 @@ def test_accuracy_bonus_increases_hit_chance():
     attacker_base = _create_suit_with_params(accuracy_bonus=0.0)
     attacker_bonus = _create_suit_with_params(accuracy_bonus=10.0)
     target = _create_suit_with_params(
-        name="Target", position=Vector3(x=300, y=0, z=0),
-        side="ENEMY", team_id="TEAM_B",
+        name="Target",
+        position=Vector3(x=300, y=0, z=0),
+        side="ENEMY",
+        team_id="TEAM_B",
     )
     weapon = attacker_base.weapons[0]
 
@@ -198,12 +193,18 @@ def test_evasion_bonus_decreases_hit_chance():
     """evasion_bonusが命中率を低下させること."""
     attacker = _create_suit_with_params()
     target_base = _create_suit_with_params(
-        name="Target Base", position=Vector3(x=300, y=0, z=0),
-        side="ENEMY", team_id="TEAM_B", evasion_bonus=0.0,
+        name="Target Base",
+        position=Vector3(x=300, y=0, z=0),
+        side="ENEMY",
+        team_id="TEAM_B",
+        evasion_bonus=0.0,
     )
     target_evasive = _create_suit_with_params(
-        name="Target Evasive", position=Vector3(x=300, y=0, z=0),
-        side="ENEMY", team_id="TEAM_B", evasion_bonus=10.0,
+        name="Target Evasive",
+        position=Vector3(x=300, y=0, z=0),
+        side="ENEMY",
+        team_id="TEAM_B",
+        evasion_bonus=10.0,
     )
     weapon = attacker.weapons[0]
 
@@ -233,16 +234,20 @@ def test_melee_aptitude_affects_melee_damage():
     )
     # 格闘適性が高い機体
     attacker_high = _create_suit_with_params(
-        melee_aptitude=1.5, weapons=[melee_weapon],
+        melee_aptitude=1.5,
+        weapons=[melee_weapon],
     )
     # 格闘適性が基準値の機体
     attacker_base = _create_suit_with_params(
-        melee_aptitude=1.0, weapons=[melee_weapon],
+        melee_aptitude=1.0,
+        weapons=[melee_weapon],
     )
 
-    target = _create_suit_with_params(
-        name="Target", position=Vector3(x=100, y=0, z=0),
-        side="ENEMY", team_id="TEAM_B",
+    _create_suit_with_params(
+        name="Target",
+        position=Vector3(x=100, y=0, z=0),
+        side="ENEMY",
+        team_id="TEAM_B",
     )
 
     # _process_hit はランダム要素があるので、直接適性値の計算をテスト
@@ -265,10 +270,12 @@ def test_shooting_aptitude_affects_ranged_damage():
         is_melee=False,
     )
     attacker_high = _create_suit_with_params(
-        shooting_aptitude=1.3, weapons=[ranged_weapon],
+        shooting_aptitude=1.3,
+        weapons=[ranged_weapon],
     )
     attacker_base = _create_suit_with_params(
-        shooting_aptitude=1.0, weapons=[ranged_weapon],
+        shooting_aptitude=1.0,
+        weapons=[ranged_weapon],
     )
 
     assert attacker_high.shooting_aptitude == 1.3

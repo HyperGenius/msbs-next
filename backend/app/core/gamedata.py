@@ -6,15 +6,19 @@ JSONファイルからマスターデータを読み込み、インメモリキ�
 
 import json
 import os
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 from app.models.models import Weapon
 
 # マスターデータディレクトリのパス
-_DATA_DIR = Path(os.environ.get(
-    "MASTER_DATA_DIR",
-    str(Path(__file__).resolve().parent.parent.parent / "data" / "master"),
-))
+_DATA_DIR = Path(
+    os.environ.get(
+        "MASTER_DATA_DIR",
+        str(Path(__file__).resolve().parent.parent.parent / "data" / "master"),
+    )
+)
 
 # インメモリキャッシュ
 _shop_listings_cache: list[dict] | None = None
@@ -32,13 +36,15 @@ def _load_mobile_suits_json() -> list[dict]:
         specs = item["specs"]
         weapons = [Weapon(**w) for w in specs["weapons"]]
         specs_copy = {**specs, "weapons": weapons}
-        listings.append({
-            "id": item["id"],
-            "name": item["name"],
-            "price": item["price"],
-            "description": item["description"],
-            "specs": specs_copy,
-        })
+        listings.append(
+            {
+                "id": item["id"],
+                "name": item["name"],
+                "price": item["price"],
+                "description": item["description"],
+                "specs": specs_copy,
+            }
+        )
     return listings
 
 
@@ -51,13 +57,15 @@ def _load_weapons_json() -> list[dict]:
     listings = []
     for item in raw_data:
         weapon = Weapon(**item["weapon"])
-        listings.append({
-            "id": item["id"],
-            "name": item["name"],
-            "price": item["price"],
-            "description": item["description"],
-            "weapon": weapon,
-        })
+        listings.append(
+            {
+                "id": item["id"],
+                "name": item["name"],
+                "price": item["price"],
+                "description": item["description"],
+                "weapon": weapon,
+            }
+        )
     return listings
 
 
@@ -97,16 +105,16 @@ def reload_master_data() -> dict[str, int]:
 class _LazyListProxy:
     """遅延読み込みリストプロキシ."""
 
-    def __init__(self, getter):
+    def __init__(self, getter: Callable[[], list[dict[str, Any]]]) -> None:
         self._getter = getter
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[dict[str, Any]]:
         return iter(self._getter())
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._getter())
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> dict[str, Any]:
         return self._getter()[index]
 
 
