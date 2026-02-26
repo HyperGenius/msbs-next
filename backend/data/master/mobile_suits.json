@@ -1,0 +1,200 @@
+[
+  {
+    "id": "zaku_ii",
+    "name": "Zaku II",
+    "price": 500,
+    "description": "量産型モビルスーツ。バランスの取れた性能で扱いやすい。",
+    "specs": {
+      "max_hp": 800,
+      "armor": 50,
+      "mobility": 1.0,
+      "sensor_range": 500.0,
+      "beam_resistance": 0.05,
+      "physical_resistance": 0.2,
+      "melee_aptitude": 1.0,
+      "shooting_aptitude": 1.0,
+      "accuracy_bonus": 0.0,
+      "evasion_bonus": 0.0,
+      "acceleration_bonus": 1.0,
+      "turning_bonus": 1.0,
+      "weapons": [
+        {
+          "id": "zaku_mg",
+          "name": "Zaku Machine Gun",
+          "power": 100,
+          "range": 400,
+          "accuracy": 60,
+          "type": "PHYSICAL",
+          "optimal_range": 300.0,
+          "decay_rate": 0.08,
+          "is_melee": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "gm",
+    "name": "RGM-79 GM",
+    "price": 500,
+    "description": "連邦軍の量産型モビルスーツ。ビーム兵器を装備したバランス型。",
+    "specs": {
+      "max_hp": 750,
+      "armor": 45,
+      "mobility": 1.1,
+      "sensor_range": 520.0,
+      "beam_resistance": 0.1,
+      "physical_resistance": 0.15,
+      "melee_aptitude": 0.9,
+      "shooting_aptitude": 1.1,
+      "accuracy_bonus": 2.0,
+      "evasion_bonus": 0.0,
+      "acceleration_bonus": 1.0,
+      "turning_bonus": 1.0,
+      "weapons": [
+        {
+          "id": "beam_spray_gun",
+          "name": "Beam Spray Gun",
+          "power": 120,
+          "range": 450,
+          "accuracy": 65,
+          "type": "BEAM",
+          "optimal_range": 320.0,
+          "decay_rate": 0.09,
+          "is_melee": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "dom",
+    "name": "Dom",
+    "price": 1200,
+    "description": "重装甲型モビルスーツ。高い装甲と火力を持つが機動性は低い。",
+    "specs": {
+      "max_hp": 1000,
+      "armor": 80,
+      "mobility": 0.8,
+      "sensor_range": 500.0,
+      "beam_resistance": 0.1,
+      "physical_resistance": 0.25,
+      "melee_aptitude": 1.0,
+      "shooting_aptitude": 1.1,
+      "accuracy_bonus": 0.0,
+      "evasion_bonus": -2.0,
+      "acceleration_bonus": 0.8,
+      "turning_bonus": 0.8,
+      "weapons": [
+        {
+          "id": "giant_bazooka",
+          "name": "Giant Bazooka",
+          "power": 180,
+          "range": 450,
+          "accuracy": 55,
+          "type": "PHYSICAL",
+          "optimal_range": 350.0,
+          "decay_rate": 0.1,
+          "is_melee": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "gouf",
+    "name": "Gouf",
+    "price": 1000,
+    "description": "白兵戦特化型モビルスーツ。高い機動性と近接戦闘能力を持つ。",
+    "specs": {
+      "max_hp": 850,
+      "armor": 60,
+      "mobility": 1.3,
+      "sensor_range": 500.0,
+      "beam_resistance": 0.08,
+      "physical_resistance": 0.15,
+      "melee_aptitude": 1.3,
+      "shooting_aptitude": 0.8,
+      "accuracy_bonus": 0.0,
+      "evasion_bonus": 3.0,
+      "acceleration_bonus": 1.2,
+      "turning_bonus": 1.2,
+      "weapons": [
+        {
+          "id": "heat_rod",
+          "name": "Heat Rod",
+          "power": 140,
+          "range": 300,
+          "accuracy": 70,
+          "type": "PHYSICAL",
+          "optimal_range": 200.0,
+          "decay_rate": 0.12,
+          "is_melee": true
+        }
+      ]
+    }
+  },
+  {
+    "id": "gundam",
+    "name": "Gundam",
+    "price": 5000,
+    "description": "連邦軍の最新鋭モビルスーツ。全ての性能が高水準。",
+    "specs": {
+      "max_hp": 1200,
+      "armor": 100,
+      "mobility": 1.5,
+      "sensor_range": 600.0,
+      "beam_resistance": 0.2,
+      "physical_resistance": 0.1,
+      "melee_aptitude": 1.2,
+      "shooting_aptitude": 1.3,
+      "accuracy_bonus": 5.0,
+      "evasion_bonus": 3.0,
+      "acceleration_bonus": 1.3,
+      "turning_bonus": 1.2,
+      "weapons": [
+        {
+          "id": "beam_rifle",
+          "name": "Beam Rifle",
+          "power": 300,
+          "range": 600,
+          "accuracy": 80,
+          "type": "BEAM",
+          "optimal_range": 400.0,
+          "decay_rate": 0.05,
+          "is_melee": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "gelgoog",
+    "name": "Gelgoog",
+    "price": 2500,
+    "description": "ジオン軍の高性能機。ガンダムに匹敵する性能を持つ。",
+    "specs": {
+      "max_hp": 1100,
+      "armor": 85,
+      "mobility": 1.4,
+      "sensor_range": 550.0,
+      "beam_resistance": 0.15,
+      "physical_resistance": 0.12,
+      "melee_aptitude": 1.1,
+      "shooting_aptitude": 1.2,
+      "accuracy_bonus": 3.0,
+      "evasion_bonus": 2.0,
+      "acceleration_bonus": 1.1,
+      "turning_bonus": 1.1,
+      "weapons": [
+        {
+          "id": "beam_rifle_gelgoog",
+          "name": "Beam Rifle",
+          "power": 280,
+          "range": 580,
+          "accuracy": 75,
+          "type": "BEAM",
+          "optimal_range": 400.0,
+          "decay_rate": 0.06,
+          "is_melee": false
+        }
+      ]
+    }
+  }
+]

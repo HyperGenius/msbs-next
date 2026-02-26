@@ -138,6 +138,12 @@ async def purchase_mobile_suit(
         sensor_range=specs["sensor_range"],
         beam_resistance=specs.get("beam_resistance", 0.0),
         physical_resistance=specs.get("physical_resistance", 0.0),
+        melee_aptitude=specs.get("melee_aptitude", 1.0),
+        shooting_aptitude=specs.get("shooting_aptitude", 1.0),
+        accuracy_bonus=specs.get("accuracy_bonus", 0.0),
+        evasion_bonus=specs.get("evasion_bonus", 0.0),
+        acceleration_bonus=specs.get("acceleration_bonus", 1.0),
+        turning_bonus=specs.get("turning_bonus", 1.0),
         weapons=specs["weapons"],
         side="PLAYER",
     )

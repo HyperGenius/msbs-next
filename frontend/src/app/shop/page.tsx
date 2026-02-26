@@ -247,6 +247,48 @@ export default function ShopPage() {
                         </div>
                       </div>
 
+                      {/* Combat Aptitude */}
+                      <div className="border-t-2 border-[#ffb000]/30 pt-2 mb-2">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-[#00ff41]/60">格闘適性:</span>
+                            <span className="ml-1 font-bold text-red-400">
+                              ×{(item.specs.melee_aptitude ?? 1.0).toFixed(1)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[#00ff41]/60">射撃適性:</span>
+                            <span className="ml-1 font-bold text-[#00f0ff]">
+                              ×{(item.specs.shooting_aptitude ?? 1.0).toFixed(1)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[#00ff41]/60">命中補正:</span>
+                            <span className="ml-1 font-bold text-green-400">
+                              {(item.specs.accuracy_bonus ?? 0) >= 0 ? "+" : ""}{(item.specs.accuracy_bonus ?? 0).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[#00ff41]/60">回避補正:</span>
+                            <span className="ml-1 font-bold text-yellow-400">
+                              {(item.specs.evasion_bonus ?? 0) >= 0 ? "+" : ""}{(item.specs.evasion_bonus ?? 0).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[#00ff41]/60">加速性能:</span>
+                            <span className="ml-1 font-bold text-purple-400">
+                              ×{(item.specs.acceleration_bonus ?? 1.0).toFixed(1)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[#00ff41]/60">旋回性能:</span>
+                            <span className="ml-1 font-bold text-purple-400">
+                              ×{(item.specs.turning_bonus ?? 1.0).toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Weapon Details */}
                       {item.specs.weapons && item.specs.weapons.length > 0 && (
                         <div className="border-t-2 border-[#ffb000]/30 pt-2">

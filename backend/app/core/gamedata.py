@@ -1,286 +1,117 @@
-"""ゲームデータ定義（ショップマスターデータなど）."""
+"""ゲームデータ定義（ショップマスターデータなど）.
+
+JSONファイルからマスターデータを読み込み、インメモリキャッシュとして保持する。
+管理者用リロードAPIにより、サーバー再起動なしでデータを更新可能。
+"""
+
+import json
+import os
+from pathlib import Path
 
 from app.models.models import Weapon
 
-# ショップで販売する機体のテンプレート定義
-SHOP_LISTINGS = [
-    {
-        "id": "zaku_ii",
-        "name": "Zaku II",
-        "price": 500,
-        "description": "量産型モビルスーツ。バランスの取れた性能で扱いやすい。",
-        "specs": {
-            "max_hp": 800,
-            "armor": 50,
-            "mobility": 1.0,
-            "sensor_range": 500.0,
-            "beam_resistance": 0.05,
-            "physical_resistance": 0.2,
-            "weapons": [
-                Weapon(
-                    id="zaku_mg",
-                    name="Zaku Machine Gun",
-                    power=100,
-                    range=400,
-                    accuracy=60,
-                    type="PHYSICAL",
-                    optimal_range=300.0,
-                    decay_rate=0.08,
-                )
-            ],
-        },
-    },
-    {
-        "id": "gm",
-        "name": "RGM-79 GM",
-        "price": 500,
-        "description": "連邦軍の量産型モビルスーツ。ビーム兵器を装備したバランス型。",
-        "specs": {
-            "max_hp": 750,
-            "armor": 45,
-            "mobility": 1.1,
-            "sensor_range": 520.0,
-            "beam_resistance": 0.1,
-            "physical_resistance": 0.15,
-            "weapons": [
-                Weapon(
-                    id="beam_spray_gun",
-                    name="Beam Spray Gun",
-                    power=120,
-                    range=450,
-                    accuracy=65,
-                    type="BEAM",
-                    optimal_range=320.0,
-                    decay_rate=0.09,
-                )
-            ],
-        },
-    },
-    {
-        "id": "dom",
-        "name": "Dom",
-        "price": 1200,
-        "description": "重装甲型モビルスーツ。高い装甲と火力を持つが機動性は低い。",
-        "specs": {
-            "max_hp": 1000,
-            "armor": 80,
-            "mobility": 0.8,
-            "sensor_range": 500.0,
-            "beam_resistance": 0.1,
-            "physical_resistance": 0.25,
-            "weapons": [
-                Weapon(
-                    id="giant_bazooka",
-                    name="Giant Bazooka",
-                    power=180,
-                    range=450,
-                    accuracy=55,
-                    type="PHYSICAL",
-                    optimal_range=350.0,
-                    decay_rate=0.1,
-                )
-            ],
-        },
-    },
-    {
-        "id": "gouf",
-        "name": "Gouf",
-        "price": 1000,
-        "description": "白兵戦特化型モビルスーツ。高い機動性と近接戦闘能力を持つ。",
-        "specs": {
-            "max_hp": 850,
-            "armor": 60,
-            "mobility": 1.3,
-            "sensor_range": 500.0,
-            "beam_resistance": 0.08,
-            "physical_resistance": 0.15,
-            "weapons": [
-                Weapon(
-                    id="heat_rod",
-                    name="Heat Rod",
-                    power=140,
-                    range=300,
-                    accuracy=70,
-                    type="PHYSICAL",
-                    optimal_range=200.0,
-                    decay_rate=0.12,
-                )
-            ],
-        },
-    },
-    {
-        "id": "gundam",
-        "name": "Gundam",
-        "price": 5000,
-        "description": "連邦軍の最新鋭モビルスーツ。全ての性能が高水準。",
-        "specs": {
-            "max_hp": 1200,
-            "armor": 100,
-            "mobility": 1.5,
-            "sensor_range": 600.0,
-            "beam_resistance": 0.2,
-            "physical_resistance": 0.1,
-            "weapons": [
-                Weapon(
-                    id="beam_rifle",
-                    name="Beam Rifle",
-                    power=300,
-                    range=600,
-                    accuracy=80,
-                    type="BEAM",
-                    optimal_range=400.0,
-                    decay_rate=0.05,
-                )
-            ],
-        },
-    },
-    {
-        "id": "gelgoog",
-        "name": "Gelgoog",
-        "price": 2500,
-        "description": "ジオン軍の高性能機。ガンダムに匹敵する性能を持つ。",
-        "specs": {
-            "max_hp": 1100,
-            "armor": 85,
-            "mobility": 1.4,
-            "sensor_range": 550.0,
-            "beam_resistance": 0.15,
-            "physical_resistance": 0.12,
-            "weapons": [
-                Weapon(
-                    id="beam_rifle_gelgoog",
-                    name="Beam Rifle",
-                    power=280,
-                    range=580,
-                    accuracy=75,
-                    type="BEAM",
-                    optimal_range=400.0,
-                    decay_rate=0.06,
-                )
-            ],
-        },
-    },
-]
+# マスターデータディレクトリのパス
+_DATA_DIR = Path(os.environ.get(
+    "MASTER_DATA_DIR",
+    str(Path(__file__).resolve().parent.parent.parent / "data" / "master"),
+))
+
+# インメモリキャッシュ
+_shop_listings_cache: list[dict] | None = None
+_weapon_shop_listings_cache: list[dict] | None = None
 
 
-# 武器ショップで販売する武器のマスターデータ
-WEAPON_SHOP_LISTINGS = [
-    {
-        "id": "zaku_mg",
-        "name": "Zaku Machine Gun",
-        "price": 200,
-        "description": "ザク用マシンガン。連射性能に優れた実弾兵器。",
-        "weapon": Weapon(
-            id="zaku_mg",
-            name="Zaku Machine Gun",
-            power=100,
-            range=400,
-            accuracy=60,
-            type="PHYSICAL",
-            optimal_range=300.0,
-            decay_rate=0.08,
-        ),
-    },
-    {
-        "id": "giant_bazooka",
-        "name": "Giant Bazooka",
-        "price": 400,
-        "description": "高火力バズーカ。装甲貫通力に優れる。",
-        "weapon": Weapon(
-            id="giant_bazooka",
-            name="Giant Bazooka",
-            power=180,
-            range=450,
-            accuracy=55,
-            type="PHYSICAL",
-            optimal_range=350.0,
-            decay_rate=0.1,
-        ),
-    },
-    {
-        "id": "heat_rod",
-        "name": "Heat Rod",
-        "price": 350,
-        "description": "ヒートロッド。近距離戦闘に特化した武器。",
-        "weapon": Weapon(
-            id="heat_rod",
-            name="Heat Rod",
-            power=140,
-            range=300,
-            accuracy=70,
-            type="PHYSICAL",
-            optimal_range=200.0,
-            decay_rate=0.12,
-        ),
-    },
-    {
-        "id": "beam_rifle",
-        "name": "Beam Rifle",
-        "price": 800,
-        "description": "ガンダム用ビームライフル。高威力・高精度のビーム兵器。",
-        "weapon": Weapon(
-            id="beam_rifle",
-            name="Beam Rifle",
-            power=300,
-            range=600,
-            accuracy=80,
-            type="BEAM",
-            optimal_range=400.0,
-            decay_rate=0.05,
-        ),
-    },
-    {
-        "id": "beam_rifle_gelgoog",
-        "name": "Beam Rifle (Gelgoog)",
-        "price": 700,
-        "description": "ゲルググ用ビームライフル。バランスの取れたビーム兵器。",
-        "weapon": Weapon(
-            id="beam_rifle_gelgoog",
-            name="Beam Rifle",
-            power=280,
-            range=580,
-            accuracy=75,
-            type="BEAM",
-            optimal_range=400.0,
-            decay_rate=0.06,
-        ),
-    },
-    {
-        "id": "hyper_bazooka",
-        "name": "Hyper Bazooka",
-        "price": 600,
-        "description": "超高火力バズーカ。単発威力に優れる重武装。",
-        "weapon": Weapon(
-            id="hyper_bazooka",
-            name="Hyper Bazooka",
-            power=250,
-            range=500,
-            accuracy=50,
-            type="PHYSICAL",
-            optimal_range=350.0,
-            decay_rate=0.12,
-            max_ammo=8,
-            cool_down_turn=1,
-        ),
-    },
-    {
-        "id": "beam_saber",
-        "name": "Beam Saber",
-        "price": 450,
-        "description": "ビームサーベル。近接戦闘用の高出力ビーム兵器。",
-        "weapon": Weapon(
-            id="beam_saber",
-            name="Beam Saber",
-            power=200,
-            range=150,
-            accuracy=85,
-            type="BEAM",
-            optimal_range=100.0,
-            decay_rate=0.15,
-            en_cost=50,
-        ),
-    },
-]
+def _load_mobile_suits_json() -> list[dict]:
+    """JSONファイルから機体マスターデータを読み込む."""
+    json_path = _DATA_DIR / "mobile_suits.json"
+    with open(json_path, encoding="utf-8") as f:
+        raw_data = json.load(f)
+
+    listings = []
+    for item in raw_data:
+        specs = item["specs"]
+        weapons = [Weapon(**w) for w in specs["weapons"]]
+        specs_copy = {**specs, "weapons": weapons}
+        listings.append({
+            "id": item["id"],
+            "name": item["name"],
+            "price": item["price"],
+            "description": item["description"],
+            "specs": specs_copy,
+        })
+    return listings
+
+
+def _load_weapons_json() -> list[dict]:
+    """JSONファイルから武器マスターデータを読み込む."""
+    json_path = _DATA_DIR / "weapons.json"
+    with open(json_path, encoding="utf-8") as f:
+        raw_data = json.load(f)
+
+    listings = []
+    for item in raw_data:
+        weapon = Weapon(**item["weapon"])
+        listings.append({
+            "id": item["id"],
+            "name": item["name"],
+            "price": item["price"],
+            "description": item["description"],
+            "weapon": weapon,
+        })
+    return listings
+
+
+def _get_shop_listings() -> list[dict]:
+    """キャッシュ済みのショップリストを取得（未ロード時は自動ロード）."""
+    global _shop_listings_cache
+    if _shop_listings_cache is None:
+        _shop_listings_cache = _load_mobile_suits_json()
+    return _shop_listings_cache
+
+
+def _get_weapon_shop_listings() -> list[dict]:
+    """キャッシュ済みの武器ショップリストを取得（未ロード時は自動ロード）."""
+    global _weapon_shop_listings_cache
+    if _weapon_shop_listings_cache is None:
+        _weapon_shop_listings_cache = _load_weapons_json()
+    return _weapon_shop_listings_cache
+
+
+def reload_master_data() -> dict[str, int]:
+    """マスターデータのキャッシュをリロードする.
+
+    Returns:
+        dict[str, int]: リロードされたデータの件数
+    """
+    global _shop_listings_cache, _weapon_shop_listings_cache
+    _shop_listings_cache = _load_mobile_suits_json()
+    _weapon_shop_listings_cache = _load_weapons_json()
+    return {
+        "mobile_suits": len(_shop_listings_cache),
+        "weapons": len(_weapon_shop_listings_cache),
+    }
+
+
+# 後方互換: モジュールレベルの変数としてアクセス可能なプロパティ
+# 既存コードで SHOP_LISTINGS / WEAPON_SHOP_LISTINGS を直接参照している箇所に対応
+class _LazyListProxy:
+    """遅延読み込みリストプロキシ."""
+
+    def __init__(self, getter):
+        self._getter = getter
+
+    def __iter__(self):
+        return iter(self._getter())
+
+    def __len__(self):
+        return len(self._getter())
+
+    def __getitem__(self, index):
+        return self._getter()[index]
+
+
+SHOP_LISTINGS = _LazyListProxy(_get_shop_listings)
+WEAPON_SHOP_LISTINGS = _LazyListProxy(_get_weapon_shop_listings)
 
 
 def get_shop_listing_by_id(item_id: str) -> dict | None:
@@ -292,7 +123,7 @@ def get_shop_listing_by_id(item_id: str) -> dict | None:
     Returns:
         dict | None: 商品データ。見つからない場合はNone
     """
-    for listing in SHOP_LISTINGS:
+    for listing in _get_shop_listings():
         if listing["id"] == item_id:
             return listing
     return None
@@ -307,7 +138,7 @@ def get_weapon_listing_by_id(weapon_id: str) -> dict | None:
     Returns:
         dict | None: 武器商品データ。見つからない場合はNone
     """
-    for listing in WEAPON_SHOP_LISTINGS:
+    for listing in _get_weapon_shop_listings():
         if listing["id"] == weapon_id:
             return listing
     return None
