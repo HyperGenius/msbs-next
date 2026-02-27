@@ -118,11 +118,7 @@ def _validate_weapon_availability(
     ms_statement = select(MobileSuit).where(MobileSuit.user_id == user_id)
     all_mobile_suits = session.exec(ms_statement).all()
     total_equipped = sum(
-        sum(
-            1
-            for w in (ms.weapons or [])
-            if _get_weapon_id(w) == weapon_id
-        )
+        sum(1 for w in (ms.weapons or []) if _get_weapon_id(w) == weapon_id)
         for ms in all_mobile_suits
     )
 
@@ -136,7 +132,9 @@ def _validate_weapon_availability(
 
     available = total_owned - total_equipped
     if available < 1:
-        raise HTTPException(status_code=400, detail="この武器の利用可能数が不足しています")
+        raise HTTPException(
+            status_code=400, detail="この武器の利用可能数が不足しています"
+        )
 
 
 def _set_weapon_in_slot(
