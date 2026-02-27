@@ -320,3 +320,110 @@ def test_equip_weapon_sub_slot(client, session):
     finally:
         # クリーンアップ
         app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_equip_same_weapon_to_two_slots_fails(client, session):
+    """1つしか所持していない武器を同一機体のMAIN/SUBスロット両方に装備しようとすると400になることをテスト."""
+    test_user_id = "test_user_dup_slot"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        inventory={"zaku_mg": 1},  # 1つだけ所持
+    )
+    session.add(pilot)
+
+    from app.core.gamedata import get_weapon_listing_by_id
+
+    main_weapon_data = get_weapon_listing_by_id("zaku_mg")
+    main_weapon = main_weapon_data["weapon"]
+
+    mobile_suit = MobileSuit(
+        user_id=test_user_id,
+        name="Test Zaku",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[main_weapon],  # スロット0にzaku_mgを装備済み
+        side="PLAYER",
+    )
+    session.add(mobile_suit)
+    session.commit()
+    session.refresh(mobile_suit)
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        # スロット1（SUB）にも同じ武器を装備しようとする → 400 になるはず
+        response = client.put(
+            f"/api/mobile_suits/{mobile_suit.id}/equip",
+            json={"weapon_id": "zaku_mg", "slot_index": 1},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "利用可能数が不足" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_equip_same_weapon_to_two_mobile_suits_fails(client, session):
+    """1つしか所持していない武器を2つの機体に装備しようとすると400になることをテスト."""
+    test_user_id = "test_user_dup_ms"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        inventory={"zaku_mg": 1},  # 1つだけ所持
+    )
+    session.add(pilot)
+
+    from app.core.gamedata import get_weapon_listing_by_id
+
+    main_weapon_data = get_weapon_listing_by_id("zaku_mg")
+    main_weapon = main_weapon_data["weapon"]
+
+    # 1つ目の機体：既にzaku_mgを装備
+    ms1 = MobileSuit(
+        user_id=test_user_id,
+        name="Zaku 1",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[main_weapon],
+        side="PLAYER",
+    )
+    # 2つ目の機体：武器なし
+    ms2 = MobileSuit(
+        user_id=test_user_id,
+        name="Zaku 2",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],
+        side="PLAYER",
+    )
+    session.add(ms1)
+    session.add(ms2)
+    session.commit()
+    session.refresh(ms2)
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        # 2つ目の機体にも同じ武器を装備しようとする → 400 になるはず
+        response = client.put(
+            f"/api/mobile_suits/{ms2.id}/equip",
+            json={"weapon_id": "zaku_mg", "slot_index": 0},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "利用可能数が不足" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)

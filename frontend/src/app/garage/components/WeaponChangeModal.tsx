@@ -10,6 +10,7 @@ interface WeaponChangeModalProps {
   selectedWeaponSlot: number;
   weaponListings: WeaponListing[] | undefined;
   pilot: Pilot | undefined;
+  ownedMobileSuits: MobileSuit[];
   previewWeaponId: string | null;
   onSetPreviewWeaponId: (id: string | null) => void;
   onEquipWeapon: (weaponId: string) => void;
@@ -21,6 +22,7 @@ export default function WeaponChangeModal({
   selectedWeaponSlot,
   weaponListings,
   pilot,
+  ownedMobileSuits,
   previewWeaponId,
   onSetPreviewWeaponId,
   onEquipWeapon,
@@ -43,6 +45,22 @@ export default function WeaponChangeModal({
     weaponListings?.some(
       (w) => pilot.inventory?.[w.id] && pilot.inventory[w.id] > 0
     );
+
+  /**
+   * 全機体の装備から weapon_id の装備数を算出する。
+   * ただし装備対象スロットに既に同じ武器が入っている場合はカウントから除外する
+   * （付け替えのため、そのスロットは "空き" 扱いにする）。
+   */
+  const calcAvailableCount = (weaponId: string): number => {
+    const totalOwned = pilot?.inventory?.[weaponId] || 0;
+    const totalEquipped = ownedMobileSuits.reduce((sum, ms) => {
+      return sum + (ms.weapons || []).filter((w) => w.id === weaponId).length;
+    }, 0);
+    // 対象スロットに同じ武器が既にある場合は付け替えなので 1 戻す
+    const alreadyInSlot =
+      selectedMs.weapons?.[selectedWeaponSlot]?.id === weaponId ? 1 : 0;
+    return totalOwned - totalEquipped + alreadyInSlot;
+  };
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
@@ -101,16 +119,23 @@ export default function WeaponChangeModal({
             {ownedListings?.map((weaponListing) => {
               const weapon = weaponListing.weapon;
               const diff = calcWeaponDiff(currentWeapon, weapon);
+              const totalCount = pilot?.inventory?.[weaponListing.id] || 0;
+              const availableCount = calcAvailableCount(weaponListing.id);
+              const isDisabled = availableCount <= 0;
               return (
                 <div
                   key={weaponListing.id}
-                  onMouseEnter={() => onSetPreviewWeaponId(weaponListing.id)}
+                  onMouseEnter={() => !isDisabled && onSetPreviewWeaponId(weaponListing.id)}
                   onMouseLeave={() => onSetPreviewWeaponId(null)}
                 >
                   <SciFiCard
                     variant="accent"
-                    className="cursor-pointer hover:border-green-400 transition-colors"
-                    onClick={() => onEquipWeapon(weaponListing.id)}
+                    className={
+                      isDisabled
+                        ? "opacity-40 cursor-not-allowed"
+                        : "cursor-pointer hover:border-green-400 transition-colors"
+                    }
+                    onClick={() => !isDisabled && onEquipWeapon(weaponListing.id)}
                   >
                     <div className="p-4">
                       <div className="flex justify-between items-start mb-2">
@@ -119,7 +144,7 @@ export default function WeaponChangeModal({
                             {weapon.name}
                           </h4>
                           <p className="text-xs text-green-600">
-                            所持数: {pilot?.inventory?.[weaponListing.id] || 0}
+                            利用可能: {availableCount} / 所持: {totalCount}
                           </p>
                         </div>
                         <span

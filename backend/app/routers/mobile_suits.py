@@ -86,6 +86,59 @@ def _validate_pilot_has_weapon(session: Session, user_id: str, weapon_id: str) -
         raise HTTPException(status_code=400, detail="この武器を所持していません")
 
 
+def _get_weapon_id(weapon: object) -> str | None:
+    """武器オブジェクト（またはdict）からIDを取得する."""
+    if hasattr(weapon, "id"):
+        return weapon.id  # type: ignore[union-attr]
+    if isinstance(weapon, dict):
+        return weapon.get("id")
+    return None
+
+
+def _validate_weapon_availability(
+    session: Session,
+    user_id: str,
+    weapon_id: str,
+    target_ms_id: uuid.UUID,
+    slot_index: int,
+) -> None:
+    """武器の利用可能数を検証する.
+
+    全機体の装備数を合計し、装備対象スロットに同じ武器が既にセットされている場合は
+    1つ差し引いて（付け替えのため）、総所持数と比較する。
+    """
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    pilot = session.exec(statement).first()
+    if not pilot:
+        raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
+
+    total_owned = (pilot.inventory or {}).get(weapon_id, 0)
+
+    # 全機体の装備数を集計（JSON保存のためweaponはdictで返る場合がある）
+    ms_statement = select(MobileSuit).where(MobileSuit.user_id == user_id)
+    all_mobile_suits = session.exec(ms_statement).all()
+    total_equipped = sum(
+        sum(
+            1
+            for w in (ms.weapons or [])
+            if _get_weapon_id(w) == weapon_id
+        )
+        for ms in all_mobile_suits
+    )
+
+    # 装備対象スロットに既に同じ武器が入っている場合は付け替えなので1つ引く
+    target_ms = session.get(MobileSuit, target_ms_id)
+    if target_ms:
+        current_weapons = target_ms.weapons or []
+        if slot_index < len(current_weapons):
+            if _get_weapon_id(current_weapons[slot_index]) == weapon_id:
+                total_equipped -= 1
+
+    available = total_owned - total_equipped
+    if available < 1:
+        raise HTTPException(status_code=400, detail="この武器の利用可能数が不足しています")
+
+
 def _set_weapon_in_slot(
     mobile_suit: MobileSuit, slot_index: int, weapon_obj: Weapon
 ) -> None:
@@ -127,6 +180,13 @@ async def equip_weapon(
 
     _validate_weapon_slot(equip_request.slot_index)
     _validate_pilot_has_weapon(session, user_id, equip_request.weapon_id)
+    _validate_weapon_availability(
+        session,
+        user_id,
+        equip_request.weapon_id,
+        mobile_suit.id,
+        equip_request.slot_index,
+    )
 
     _set_weapon_in_slot(mobile_suit, equip_request.slot_index, weapon_listing["weapon"])
 
