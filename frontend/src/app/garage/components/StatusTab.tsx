@@ -5,7 +5,7 @@ import { MobileSuit, Pilot, UpgradePreview } from "@/types/battle";
 import { upgradeMobileSuit, getUpgradePreview } from "@/services/api";
 import { SciFiButton, SciFiPanel } from "@/components/ui";
 
-type StatType = "hp" | "armor" | "mobility" | "weapon_power";
+type StatType = "hp" | "armor" | "mobility" | "weapon_power" | "melee_aptitude" | "shooting_aptitude" | "accuracy_bonus" | "evasion_bonus" | "acceleration_bonus" | "turning_bonus";
 
 interface StatInfo {
   label: string;
@@ -42,6 +42,42 @@ const STAT_TYPES: StatInfo[] = [
     },
     format: (val) => val.toFixed(0),
   },
+  {
+    label: "格闘適性",
+    key: "melee_aptitude",
+    getValue: (ms) => ms.melee_aptitude ?? 1.0,
+    format: (val) => `×${val.toFixed(2)}`,
+  },
+  {
+    label: "射撃適性",
+    key: "shooting_aptitude",
+    getValue: (ms) => ms.shooting_aptitude ?? 1.0,
+    format: (val) => `×${val.toFixed(2)}`,
+  },
+  {
+    label: "命中補正",
+    key: "accuracy_bonus",
+    getValue: (ms) => ms.accuracy_bonus ?? 0.0,
+    format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}%`,
+  },
+  {
+    label: "回避補正",
+    key: "evasion_bonus",
+    getValue: (ms) => ms.evasion_bonus ?? 0.0,
+    format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}%`,
+  },
+  {
+    label: "加速補正",
+    key: "acceleration_bonus",
+    getValue: (ms) => ms.acceleration_bonus ?? 0.0,
+    format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(2)}`,
+  },
+  {
+    label: "旋回補正",
+    key: "turning_bonus",
+    getValue: (ms) => ms.turning_bonus ?? 0.0,
+    format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(2)}`,
+  },
 ];
 
 interface StatusTabProps {
@@ -70,7 +106,9 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
     };
 
     fetchPreviews();
-  }, [mobileSuit.id, mobileSuit.max_hp, mobileSuit.armor, mobileSuit.mobility]);
+  }, [mobileSuit.id, mobileSuit.max_hp, mobileSuit.armor, mobileSuit.mobility,
+      mobileSuit.melee_aptitude, mobileSuit.shooting_aptitude, mobileSuit.accuracy_bonus,
+      mobileSuit.evasion_bonus, mobileSuit.acceleration_bonus, mobileSuit.turning_bonus]);
 
   const handleUpgrade = async (statType: StatType) => {
     if (!pilot) return;

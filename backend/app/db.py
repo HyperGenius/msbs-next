@@ -49,7 +49,7 @@ def json_serializer(obj: Any) -> str:
 
 # SQLiteの場合は pool_size と max_overflow を使用しない
 engine_args = {
-    "echo": True,
+    "echo": os.environ.get("SQL_ECHO", "false").lower() == "true",
     "json_serializer": json_serializer,
 }
 

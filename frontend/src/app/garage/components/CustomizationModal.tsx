@@ -62,7 +62,7 @@ export default function CustomizationModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-4xl mx-4 h-[90vh] flex flex-col">
         <SciFiPanel variant="accent" chiseled={true}>
           <div className="flex flex-col max-h-[90vh]">
             {/* Header */}
