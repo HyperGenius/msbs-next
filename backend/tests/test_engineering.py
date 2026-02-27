@@ -230,3 +230,197 @@ def test_get_upgrade_preview_at_cap(
     assert preview["at_max_cap"] is True
     assert preview["current_value"] == EngineeringService.MAX_HP_CAP
     assert preview["new_value"] == EngineeringService.MAX_HP_CAP
+
+
+def test_upgrade_melee_aptitude(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrading melee aptitude."""
+    service = EngineeringService(session)
+    initial_credits = pilot.credits
+    initial_value = mobile_suit.melee_aptitude
+
+    updated_ms, updated_pilot, cost = service.upgrade_stat(
+        str(mobile_suit.id), "melee_aptitude", pilot
+    )
+
+    assert updated_ms.melee_aptitude == pytest.approx(
+        initial_value + EngineeringService.MELEE_APTITUDE_INCREASE
+    )
+    assert updated_pilot.credits == initial_credits - cost
+    assert cost > 0
+
+
+def test_upgrade_shooting_aptitude(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrading shooting aptitude."""
+    service = EngineeringService(session)
+    initial_credits = pilot.credits
+    initial_value = mobile_suit.shooting_aptitude
+
+    updated_ms, updated_pilot, cost = service.upgrade_stat(
+        str(mobile_suit.id), "shooting_aptitude", pilot
+    )
+
+    assert updated_ms.shooting_aptitude == pytest.approx(
+        initial_value + EngineeringService.SHOOTING_APTITUDE_INCREASE
+    )
+    assert updated_pilot.credits == initial_credits - cost
+    assert cost > 0
+
+
+def test_upgrade_accuracy_bonus(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrading accuracy bonus."""
+    service = EngineeringService(session)
+    initial_credits = pilot.credits
+    initial_value = mobile_suit.accuracy_bonus
+
+    updated_ms, updated_pilot, cost = service.upgrade_stat(
+        str(mobile_suit.id), "accuracy_bonus", pilot
+    )
+
+    assert updated_ms.accuracy_bonus == pytest.approx(
+        initial_value + EngineeringService.ACCURACY_BONUS_INCREASE
+    )
+    assert updated_pilot.credits == initial_credits - cost
+    assert cost > 0
+
+
+def test_upgrade_evasion_bonus(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrading evasion bonus."""
+    service = EngineeringService(session)
+    initial_credits = pilot.credits
+    initial_value = mobile_suit.evasion_bonus
+
+    updated_ms, updated_pilot, cost = service.upgrade_stat(
+        str(mobile_suit.id), "evasion_bonus", pilot
+    )
+
+    assert updated_ms.evasion_bonus == pytest.approx(
+        initial_value + EngineeringService.EVASION_BONUS_INCREASE
+    )
+    assert updated_pilot.credits == initial_credits - cost
+    assert cost > 0
+
+
+def test_upgrade_acceleration_bonus(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrading acceleration bonus."""
+    service = EngineeringService(session)
+    initial_credits = pilot.credits
+    initial_value = mobile_suit.acceleration_bonus
+
+    updated_ms, updated_pilot, cost = service.upgrade_stat(
+        str(mobile_suit.id), "acceleration_bonus", pilot
+    )
+
+    assert updated_ms.acceleration_bonus == pytest.approx(
+        initial_value + EngineeringService.ACCELERATION_BONUS_INCREASE
+    )
+    assert updated_pilot.credits == initial_credits - cost
+    assert cost > 0
+
+
+def test_upgrade_turning_bonus(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrading turning bonus."""
+    service = EngineeringService(session)
+    initial_credits = pilot.credits
+    initial_value = mobile_suit.turning_bonus
+
+    updated_ms, updated_pilot, cost = service.upgrade_stat(
+        str(mobile_suit.id), "turning_bonus", pilot
+    )
+
+    assert updated_ms.turning_bonus == pytest.approx(
+        initial_value + EngineeringService.TURNING_BONUS_INCREASE
+    )
+    assert updated_pilot.credits == initial_credits - cost
+    assert cost > 0
+
+
+def test_upgrade_melee_aptitude_at_max_cap(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrade fails when melee aptitude is at max cap."""
+    mobile_suit.melee_aptitude = EngineeringService.MAX_MELEE_APTITUDE_CAP
+    session.add(mobile_suit)
+    session.commit()
+
+    service = EngineeringService(session)
+
+    with pytest.raises(ValueError, match="already at maximum"):
+        service.upgrade_stat(str(mobile_suit.id), "melee_aptitude", pilot)
+
+
+def test_upgrade_shooting_aptitude_at_max_cap(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrade fails when shooting aptitude is at max cap."""
+    mobile_suit.shooting_aptitude = EngineeringService.MAX_SHOOTING_APTITUDE_CAP
+    session.add(mobile_suit)
+    session.commit()
+
+    service = EngineeringService(session)
+
+    with pytest.raises(ValueError, match="already at maximum"):
+        service.upgrade_stat(str(mobile_suit.id), "shooting_aptitude", pilot)
+
+
+def test_upgrade_accuracy_bonus_at_max_cap(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrade fails when accuracy bonus is at max cap."""
+    mobile_suit.accuracy_bonus = EngineeringService.MAX_ACCURACY_BONUS_CAP
+    session.add(mobile_suit)
+    session.commit()
+
+    service = EngineeringService(session)
+
+    with pytest.raises(ValueError, match="already at maximum"):
+        service.upgrade_stat(str(mobile_suit.id), "accuracy_bonus", pilot)
+
+
+def test_upgrade_preview_melee_aptitude(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test getting upgrade preview for melee aptitude."""
+    service = EngineeringService(session)
+
+    preview = service.get_upgrade_preview(str(mobile_suit.id), "melee_aptitude")
+
+    assert preview["current_value"] == pytest.approx(mobile_suit.melee_aptitude)
+    assert preview["new_value"] == pytest.approx(
+        mobile_suit.melee_aptitude + EngineeringService.MELEE_APTITUDE_INCREASE
+    )
+    assert preview["cost"] > 0
+    assert preview["at_max_cap"] is False
+
+
+def test_upgrade_preview_evasion_bonus_at_cap(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrade preview when evasion bonus is at max cap."""
+    mobile_suit.evasion_bonus = EngineeringService.MAX_EVASION_BONUS_CAP
+    session.add(mobile_suit)
+    session.commit()
+
+    service = EngineeringService(session)
+
+    preview = service.get_upgrade_preview(str(mobile_suit.id), "evasion_bonus")
+
+    assert preview["at_max_cap"] is True
+    assert preview["current_value"] == pytest.approx(
+        EngineeringService.MAX_EVASION_BONUS_CAP
+    )
+    assert preview["new_value"] == pytest.approx(
+        EngineeringService.MAX_EVASION_BONUS_CAP
+    )
+
