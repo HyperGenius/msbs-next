@@ -106,6 +106,7 @@ export default function GaragePage() {
             selectedWeaponSlot={selectedWeaponSlot}
             weaponListings={weaponListings}
             pilot={pilot}
+            ownedMobileSuits={mobileSuits || []}
             previewWeaponId={previewWeaponId}
             onSetPreviewWeaponId={setPreviewWeaponId}
             onEquipWeapon={handleEquipWeapon}
