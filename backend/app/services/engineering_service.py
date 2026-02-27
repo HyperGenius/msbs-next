@@ -208,9 +208,7 @@ class EngineeringService:
             cfg = self._FLOAT_STAT_CONFIGS[stat_type]
             current_value = getattr(ms, cfg.attr)
             if current_value >= cfg.cap:
-                raise ValueError(
-                    f"{cfg.label} is already at maximum ({cfg.cap})"
-                )
+                raise ValueError(f"{cfg.label} is already at maximum ({cfg.cap})")
         else:
             raise ValueError(
                 f"Invalid stat type: {stat_type}. "

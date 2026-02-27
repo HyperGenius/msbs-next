@@ -423,4 +423,3 @@ def test_upgrade_preview_evasion_bonus_at_cap(
     assert preview["new_value"] == pytest.approx(
         EngineeringService.MAX_EVASION_BONUS_CAP
     )
-
