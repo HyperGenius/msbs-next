@@ -5,7 +5,7 @@ import Link from "next/link";
 import { SciFiButton, SciFiHeading, SciFiPanel } from "@/components/ui";
 import { useGarageEditor } from "./hooks/useGarageEditor";
 import MobileSuitList from "./components/MobileSuitList";
-import MobileSuitEditor from "./components/MobileSuitEditor";
+import CustomizationModal from "./components/CustomizationModal";
 import WeaponChangeModal from "./components/WeaponChangeModal";
 
 export default function GaragePage() {
@@ -16,6 +16,7 @@ export default function GaragePage() {
     pilot,
     weaponListings,
     selectedMs,
+    showCustomizationModal,
     isSaving,
     successMessage,
     showWeaponModal,
@@ -25,6 +26,8 @@ export default function GaragePage() {
     setFormData,
     setPreviewWeaponId,
     handleSelectMs,
+    handleCloseCustomizationModal,
+    handleUpgraded,
     handleSubmit,
     handleOpenWeaponModal,
     handleCloseWeaponModal,
@@ -53,7 +56,7 @@ export default function GaragePage() {
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
             <div>
               <SciFiHeading level={2} className="text-xl sm:text-2xl">GARAGE - Mobile Suit Hangar</SciFiHeading>
-              <p className="text-xs sm:text-sm text-[#00ff41]/60 ml-0 sm:ml-5">機体管理システム</p>
+              <p className="text-xs sm:text-sm text-[#00ff41]/60 ml-0 sm:ml-5">機体管理システム — 機体をクリックしてカスタマイズ</p>
             </div>
             <Link href="/" className="w-full sm:w-auto">
               <SciFiButton variant="primary" size="sm" className="w-full sm:w-auto">&lt; Back to Simulator</SciFiButton>
@@ -70,25 +73,30 @@ export default function GaragePage() {
             </SciFiPanel>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {/* Left Pane: 機体リスト */}
+          <div className="max-w-3xl mx-auto">
+            {/* 機体リスト（全幅表示） */}
             <MobileSuitList
               mobileSuits={mobileSuits}
               selectedMs={selectedMs}
               onSelect={handleSelectMs}
             />
-
-            {/* Right Pane: ステータス編集フォーム */}
-            <MobileSuitEditor
-              selectedMs={selectedMs}
-              formData={formData}
-              isSaving={isSaving}
-              successMessage={successMessage}
-              onFormDataChange={setFormData}
-              onSubmit={handleSubmit}
-              onOpenWeaponModal={handleOpenWeaponModal}
-            />
           </div>
+        )}
+
+        {/* Customization Modal */}
+        {showCustomizationModal && selectedMs && (
+          <CustomizationModal
+            mobileSuit={selectedMs}
+            pilot={pilot}
+            formData={formData}
+            isSaving={isSaving}
+            successMessage={successMessage}
+            onFormDataChange={setFormData}
+            onSubmit={handleSubmit}
+            onOpenWeaponModal={handleOpenWeaponModal}
+            onUpgraded={handleUpgraded}
+            onClose={handleCloseCustomizationModal}
+          />
         )}
 
         {/* Weapon Change Modal */}
