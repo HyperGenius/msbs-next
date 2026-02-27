@@ -106,9 +106,10 @@ export function BattleScene({
             )}
             {enemyEvents.map(({ id, event }) => {
                 const enemyData = enemyStates.find(e => e.enemy.id === id);
-                return event && enemyData ? (
+                if (!event || !enemyData || enemyData.state.hp <= 0 || event.type === 'damage') return null;
+                return (
                     <BattleEventDisplay key={id} position={enemyData.state.pos} event={event} />
-                ) : null;
+                );
             })}
         </Canvas>
     );

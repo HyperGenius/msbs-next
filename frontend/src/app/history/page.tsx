@@ -86,7 +86,7 @@ export default function HistoryPage() {
         )}
 
         {battles && battles.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="max-w-2xl mx-auto">
             {/* Battle List */}
             <div className="bg-gray-800 border border-green-800 rounded-lg p-4 max-h-[800px] overflow-y-auto">
               <h2 className="text-xl font-bold mb-4 sticky top-0 bg-gray-800 pb-2">Records</h2>
@@ -95,11 +95,7 @@ export default function HistoryPage() {
                   <button
                     key={battle.id}
                     onClick={() => handleSelectBattle(battle)}
-                    className={`w-full text-left p-4 rounded border-2 transition-all ${
-                      selectedBattle?.id === battle.id
-                        ? "border-green-500 bg-green-900/30"
-                        : "border-gray-700 hover:border-green-700"
-                    }`}
+                    className="w-full text-left p-4 rounded border-2 border-gray-700 hover:border-green-700 transition-all"
                   >
                     <div className="flex justify-between items-start mb-2">
                       <span className="font-bold">{getMissionName(battle.mission_id, battle.created_at)}</span>
@@ -125,110 +121,124 @@ export default function HistoryPage() {
                 ))}
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Battle Detail */}
-            <div className="bg-gray-800 border border-green-800 rounded-lg p-4 max-h-[800px] overflow-y-auto">
-              <h2 className="text-xl font-bold mb-4 sticky top-0 bg-gray-800 pb-2">Battle Log</h2>
-              {!selectedBattle ? (
-                <div className="text-center py-12 text-gray-400">
-                  <p>Select a battle to view details</p>
-                </div>
-              ) : (
+        {/* Battle Detail Modal */}
+        {selectedBattle && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in"
+            onClick={() => setSelectedBattle(null)}
+          >
+            <div
+              className="bg-gray-800 border border-green-800 rounded-lg w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between p-4 border-b border-gray-700">
                 <div>
-                  <div className="mb-4 pb-4 border-b border-gray-700">
-                    <h3 className="font-bold text-lg mb-2">{getMissionName(selectedBattle.mission_id, selectedBattle.created_at)}</h3>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">
-                        {new Date(selectedBattle.created_at).toLocaleString("ja-JP")}
-                      </span>
-                      <span
-                        className={`px-3 py-1 rounded font-bold ${
-                          selectedBattle.win_loss === "WIN"
-                            ? "bg-green-900 text-green-300"
-                            : selectedBattle.win_loss === "LOSE"
-                            ? "bg-red-900 text-red-300"
-                            : "bg-yellow-900 text-yellow-300"
-                        }`}
-                      >
-                        {selectedBattle.win_loss}
-                      </span>
-                    </div>
+                  <h3 className="font-bold text-lg">{getMissionName(selectedBattle.mission_id, selectedBattle.created_at)}</h3>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-gray-400 text-sm">
+                      {new Date(selectedBattle.created_at).toLocaleString("ja-JP")}
+                    </span>
+                    <span
+                      className={`px-3 py-1 rounded font-bold text-sm ${
+                        selectedBattle.win_loss === "WIN"
+                          ? "bg-green-900 text-green-300"
+                          : selectedBattle.win_loss === "LOSE"
+                          ? "bg-red-900 text-red-300"
+                          : "bg-yellow-900 text-yellow-300"
+                      }`}
+                    >
+                      {selectedBattle.win_loss}
+                    </span>
                   </div>
+                </div>
+                <button
+                  onClick={() => setSelectedBattle(null)}
+                  className="text-gray-400 hover:text-white text-2xl leading-none ml-4 transition-colors"
+                  aria-label="閉じる"
+                >
+                  ✕
+                </button>
+              </div>
 
-                  {/* 3D Replay Viewer */}
-                  {hasReplayData ? (
-                    <div className="mb-4">
-                      <BattleViewer
-                        logs={selectedBattle.logs}
-                        player={selectedBattle.player_info as MobileSuit}
-                        enemies={selectedBattle.enemies_info as MobileSuit[]}
-                        currentTurn={currentTurn}
-                        environment={selectedBattle.environment || "SPACE"}
-                      />
+              {/* Modal Body */}
+              <div className="overflow-y-auto flex-1 p-4">
+                {/* 3D Replay Viewer */}
+                {hasReplayData ? (
+                  <div className="mb-4">
+                    <BattleViewer
+                      logs={selectedBattle.logs}
+                      player={selectedBattle.player_info as MobileSuit}
+                      enemies={selectedBattle.enemies_info as MobileSuit[]}
+                      currentTurn={currentTurn}
+                      environment={selectedBattle.environment || "SPACE"}
+                    />
 
-                      {/* Turn Controller */}
-                      <div className="mt-2 p-3 bg-gray-900 border border-green-800 rounded">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => setCurrentTurn(Math.max(0, currentTurn - 1))}
-                            disabled={currentTurn <= 0}
-                            className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
-                          >
-                            &lt; PREV
-                          </button>
-                          <div className="flex-grow flex flex-col">
-                            <input
-                              type="range"
-                              min="0"
-                              max={maxTurn}
-                              value={currentTurn}
-                              onChange={(e) => setCurrentTurn(Number(e.target.value))}
-                              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
-                            />
-                            <div className="flex justify-between text-xs mt-1 text-green-600/60">
-                              <span>Start</span>
-                              <span>Turn: {currentTurn} / {maxTurn}</span>
-                              <span>End</span>
-                            </div>
+                    {/* Turn Controller */}
+                    <div className="mt-2 p-3 bg-gray-900 border border-green-800 rounded">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setCurrentTurn(Math.max(0, currentTurn - 1))}
+                          disabled={currentTurn <= 0}
+                          className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
+                        >
+                          &lt; PREV
+                        </button>
+                        <div className="flex-grow flex flex-col">
+                          <input
+                            type="range"
+                            min="0"
+                            max={maxTurn}
+                            value={currentTurn}
+                            onChange={(e) => setCurrentTurn(Number(e.target.value))}
+                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                          />
+                          <div className="flex justify-between text-xs mt-1 text-green-600/60">
+                            <span>Start</span>
+                            <span>Turn: {currentTurn} / {maxTurn}</span>
+                            <span>End</span>
                           </div>
-                          <button
-                            onClick={() => setCurrentTurn(Math.min(maxTurn, currentTurn + 1))}
-                            disabled={currentTurn >= maxTurn}
-                            className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
-                          >
-                            NEXT &gt;
-                          </button>
                         </div>
+                        <button
+                          onClick={() => setCurrentTurn(Math.min(maxTurn, currentTurn + 1))}
+                          disabled={currentTurn >= maxTurn}
+                          className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
+                        >
+                          NEXT &gt;
+                        </button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded" role="alert">
-                      <p className="text-yellow-400 text-sm">
-                        ⚠ このバトルログにはリプレイに必要な機体データが含まれていません
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="space-y-1 text-sm font-mono">
-                    {selectedBattle.logs.map((log, index) => {
-                      const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
-                      return (
-                        <div
-                          key={index}
-                          className={`border-l-2 pl-2 py-1 ${
-                            isOwnUnit
-                              ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                              : "border-green-900 text-green-600"
-                          }`}
-                        >
-                          <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
-                          <span>{log.message}</span>
-                        </div>
-                      );
-                    })}
                   </div>
+                ) : (
+                  <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded" role="alert">
+                    <p className="text-yellow-400 text-sm">
+                      ⚠ このバトルログにはリプレイに必要な機体データが含まれていません
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-1 text-sm font-mono">
+                  {selectedBattle.logs.map((log, index) => {
+                    const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
+                    return (
+                      <div
+                        key={index}
+                        className={`border-l-2 pl-2 py-1 ${
+                          isOwnUnit
+                            ? "border-blue-500 bg-blue-900/30 text-blue-300"
+                            : "border-green-900 text-green-600"
+                        }`}
+                      >
+                        <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
+                        <span>{log.message}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}

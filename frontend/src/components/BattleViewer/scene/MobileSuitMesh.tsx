@@ -29,6 +29,21 @@ export function MobileSuitMesh({
     const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
     const color = getHpColor(currentHp, maxHp);
 
+    if (currentHp <= 0) {
+        return (
+            <group position={vec}>
+                <Html center>
+                    <div
+                        className="animate-pulse pointer-events-none select-none text-4xl"
+                        style={{ filter: "drop-shadow(0 0 8px #ff4400) drop-shadow(0 0 16px #ff8800)" }}
+                    >
+                        💥
+                    </div>
+                </Html>
+            </group>
+        );
+    }
+
     // 警告アイコンのマッピング
     const warningIcons: Record<WarningType, { icon: string; color: string; label: string }> = {
         ammo: { icon: '⚠️', color: '#ff9800', label: '弾切れ' },

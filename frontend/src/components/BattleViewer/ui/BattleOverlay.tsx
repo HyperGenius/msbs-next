@@ -69,16 +69,13 @@ export function BattleOverlay({
                         </div>
                     )}
                 </div>
-                {enemyStates.map(({ enemy, state }) => (
+                {enemyStates.filter(({ state }) => state.hp > 0).map(({ enemy, state }) => (
                     <div key={enemy.id} className="mt-1 sm:mt-2">
                         <span className="font-bold text-red-400 block truncate text-[10px] sm:text-xs">
                             {enemy.npc_pilot_level !== undefined && enemy.npc_pilot_level !== null && (
                                 <span className="text-yellow-400 mr-1">Lv.{enemy.npc_pilot_level}</span>
                             )}
                             {enemy.name}
-                        </span>
-                        <span className="text-[9px] sm:text-xs">
-                            HP: {state.hp} / {enemy.max_hp}
                         </span>
                         <HpBar 
                             current={state.hp} 
