@@ -7,6 +7,11 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "gcs" {
+    # bucket は terraform init -backend-config="bucket=<BUCKET_NAME>" で渡す
+    prefix = "terraform/cloud-run"
+  }
 }
 
 provider "google" {

@@ -60,10 +60,38 @@ cp terraform.tfvars.example terraform.tfvars
 - `clerk_jwks_url`: Clerk JWKS URL
 - `allowed_origins`: Vercel ドメイン（カンマ区切り）
 
-### 3. Terraform の初期化
+### 3. GCS リモートバックエンドのセットアップ（初回のみ）
+
+Terraform の state を GitHub Actions と共有するため、GCS バケットをリモートバックエンドとして使用します。
+
+#### 3-1. GCS バケットの作成
 
 ```bash
-terraform init
+PROJECT_ID=<YOUR_PROJECT_ID>
+BUCKET_NAME="${PROJECT_ID}-tfstate"
+
+gsutil mb -p ${PROJECT_ID} -l asia-northeast1 gs://${BUCKET_NAME}
+
+# バージョニングを有効化（誤削除対策）
+gsutil versioning set on gs://${BUCKET_NAME}
+```
+
+#### 3-2. ローカル state を GCS へ移行（既にローカル state がある場合）
+
+```bash
+terraform init -backend-config="bucket=${BUCKET_NAME}" -migrate-state
+```
+
+確認プロンプトに `yes` と入力します。移行後、ローカルの `terraform.tfstate` / `terraform.tfstate.backup` は削除して問題ありません。
+
+#### 3-3. GitHub Actions にシークレットを追加
+
+`GCP_TF_STATE_BUCKET` に上記で作成したバケット名を登録してください。
+
+新規環境では通常の初期化コマンドを使用します:
+
+```bash
+terraform init -backend-config="bucket=${BUCKET_NAME}"
 ```
 
 ### 4. プランの確認
