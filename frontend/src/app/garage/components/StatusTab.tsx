@@ -306,17 +306,15 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                 <span className="text-xs font-bold text-[#00ff41] uppercase tracking-wider">
                   {stat.label}
                 </span>
-                {steps > 0 && (
-                  <span className="text-xs text-[#ffb000]">
-                    {stepsCost.toLocaleString()} CR
-                  </span>
-                )}
+                <span className={`text-xs text-[#ffb000] ${steps > 0 ? "visible" : "invisible"}`}>
+                  {stepsCost > 0 ? `${stepsCost.toLocaleString()} CR` : "0 CR"}
+                </span>
               </div>
 
               {/* ランク + ブロックインジケーター + ボタン行 */}
               <div className="flex items-center gap-2 flex-wrap">
                 {/* ランクバッジ */}
-                <div className="flex items-center gap-1.5 min-w-[3.5rem]">
+                <div className="flex items-center gap-1.5 w-[6.5rem] shrink-0">
                   <span
                     className={`text-base font-bold font-mono border px-1.5 py-0.5 ${
                       isRankUp
@@ -326,11 +324,13 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                   >
                     {isRankUp ? previewRank : currentRank}
                   </span>
-                  {isRankUp && (
-                    <span className="text-[#00f0ff] text-xs font-bold animate-pulse whitespace-nowrap">
-                      ✨RANK UP!
-                    </span>
-                  )}
+                  <span
+                    className={`text-[#00f0ff] text-xs font-bold animate-pulse whitespace-nowrap ${
+                      isRankUp ? "visible" : "invisible"
+                    }`}
+                  >
+                    ✨RANK UP!
+                  </span>
                 </div>
 
                 {/* ブロックインジケーター */}
