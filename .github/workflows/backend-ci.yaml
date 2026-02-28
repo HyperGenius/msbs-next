@@ -17,8 +17,10 @@ concurrency:
   cancel-in-progress: true
 
 # デフォルト権限を最小限に設定
+# backend-deploy.yaml の Workload Identity Federation に必要な権限を付与
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   test:
