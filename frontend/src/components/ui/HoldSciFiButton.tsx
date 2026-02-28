@@ -104,7 +104,7 @@ export default function HoldSciFiButton({
     : isFull
     ? "border-[#00f0ff]"
     : "border-[#00ff41]";
-  const textColor = loading || disabled ? "text-gray-500" : "text-black";
+  const textColor = loading || disabled ? "text-gray-500" : "text-[#00ff41]";
 
   return (
     <button
