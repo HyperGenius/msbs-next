@@ -25,11 +25,15 @@ export default function BattleViewer({
     environment = "SPACE" 
 }: BattleViewerProps) {
     // 状態計算（純粋関数として抽出）
-    const playerState = getBattleSnapshot(player.id, player, logs, currentTurn);
-    const enemyStates = enemies.map(enemy => ({
-        enemy,
-        state: getBattleSnapshot(enemy.id, enemy, logs, currentTurn)
-    }));
+    const playerSnapshot = getBattleSnapshot(player.id, player, logs, currentTurn);
+    const playerPrevSnapshot = getBattleSnapshot(player.id, player, logs, currentTurn - 1);
+    const playerState = { ...playerSnapshot, prevHp: playerPrevSnapshot.hp };
+
+    const enemyStates = enemies.map(enemy => {
+        const snapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTurn);
+        const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTurn - 1);
+        return { enemy, state: { ...snapshot, prevHp: prevSnapshot.hp } };
+    });
     
     // バトルイベントの取得
     const battleEventMap = useBattleEvents(logs, currentTurn);

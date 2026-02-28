@@ -13,6 +13,7 @@ import { BattleEventEffect, WarningType } from "../types";
 interface UnitState {
     pos: { x: number; y: number; z: number };
     hp: number;
+    prevHp: number;
     en: number;
     ammo: Record<string, number>;
     warnings: WarningType[];
@@ -80,6 +81,7 @@ export function BattleScene({
                 position={playerState.pos}
                 maxHp={player.max_hp}
                 currentHp={playerState.hp}
+                prevHp={playerState.prevHp}
                 name={player.name}
                 sensorRange={player.sensor_range}
                 showSensorRange={true}
@@ -93,6 +95,7 @@ export function BattleScene({
                     position={state.pos}
                     maxHp={enemy.max_hp}
                     currentHp={state.hp}
+                    prevHp={state.prevHp}
                     name={enemy.name}
                     sensorRange={enemy.sensor_range}
                     showSensorRange={false}
