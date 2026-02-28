@@ -39,11 +39,11 @@ export default function SciFiProgress({
           style={{ width: `${clampedValue}%` }}
         />
       </div>
-      {isRankUp && (
-        <p className="text-[10px] text-[#00f0ff] mt-0.5 font-bold uppercase tracking-widest animate-pulse">
-          RANK UP!
-        </p>
-      )}
+      <p
+        className={`text-[10px] text-[#00f0ff] mt-0.5 font-bold uppercase tracking-widest animate-pulse ${isRankUp ? "visible" : "invisible"}`}
+      >
+        RANK UP!
+      </p>
     </div>
   );
 }
