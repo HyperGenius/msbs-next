@@ -17,6 +17,7 @@ class UpgradeRequest(BaseModel):
 
     mobile_suit_id: str
     target_stat: str  # "hp", "armor", "mobility", "weapon_power"
+    steps: int = 1
 
 
 class UpgradeResponse(BaseModel):
@@ -71,7 +72,7 @@ async def upgrade_mobile_suit(
     try:
         # Perform upgrade
         updated_ms, updated_pilot, cost = service.upgrade_stat(
-            request.mobile_suit_id, request.target_stat, pilot
+            request.mobile_suit_id, request.target_stat, pilot, request.steps
         )
 
         return UpgradeResponse(
