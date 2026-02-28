@@ -1,0 +1,26 @@
+{
+  "hp": [
+    { "rank": "S", "min": 2000 },
+    { "rank": "A", "min": 1500 },
+    { "rank": "B", "min": 1000 },
+    { "rank": "C", "min": 700 },
+    { "rank": "D", "min": 400 },
+    { "rank": "E", "min": 0 }
+  ],
+  "armor": [
+    { "rank": "S", "min": 100 },
+    { "rank": "A", "min": 80 },
+    { "rank": "B", "min": 60 },
+    { "rank": "C", "min": 40 },
+    { "rank": "D", "min": 20 },
+    { "rank": "E", "min": 0 }
+  ],
+  "mobility": [
+    { "rank": "S", "min": 2.0 },
+    { "rank": "A", "min": 1.5 },
+    { "rank": "B", "min": 1.2 },
+    { "rank": "C", "min": 0.9 },
+    { "rank": "D", "min": 0.6 },
+    { "rank": "E", "min": 0.0 }
+  ]
+}

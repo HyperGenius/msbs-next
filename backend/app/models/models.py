@@ -167,6 +167,93 @@ class MobileSuitUpdate(SQLModel):
 # --- Response Models (APIレスポンス用) ---
 
 
+class MobileSuitResponse(SQLModel):
+    """機体APIレスポンスモデル (ランクフィールド付き)."""
+
+    id: uuid.UUID
+    user_id: str | None = None
+    name: str
+    max_hp: int
+    current_hp: int
+    armor: int
+    mobility: float
+    sensor_range: float = 500.0
+    side: str = "PLAYER"
+    team_id: str | None = None
+    beam_resistance: float = 0.0
+    physical_resistance: float = 0.0
+    melee_aptitude: float = 1.0
+    shooting_aptitude: float = 1.0
+    accuracy_bonus: float = 0.0
+    evasion_bonus: float = 0.0
+    acceleration_bonus: float = 1.0
+    turning_bonus: float = 1.0
+    terrain_adaptability: dict[str, str] = {}
+    max_en: int = 1000
+    en_recovery: int = 100
+    max_propellant: int = 1000
+    position: "Vector3" = None  # type: ignore[assignment]
+    velocity: "Vector3" = None  # type: ignore[assignment]
+    weapons: list["Weapon"] = []
+    tactics: dict = {}
+    active_weapon_index: int = 0
+    personality: str | None = None
+    is_ace: bool = False
+    ace_id: str | None = None
+    pilot_name: str | None = None
+    bounty_exp: int = 0
+    bounty_credits: int = 0
+
+    # Rank fields (computed from raw values)
+    hp_rank: str = "C"
+    armor_rank: str = "C"
+    mobility_rank: str = "C"
+
+    @classmethod
+    def from_mobile_suit(cls, ms: "MobileSuit") -> "MobileSuitResponse":
+        """MobileSuitインスタンスからMobileSuitResponseを生成する."""
+        from app.core.rank_utils import get_rank
+
+        return cls(
+            id=ms.id,
+            user_id=ms.user_id,
+            name=ms.name,
+            max_hp=ms.max_hp,
+            current_hp=ms.current_hp,
+            armor=ms.armor,
+            mobility=ms.mobility,
+            sensor_range=ms.sensor_range,
+            side=ms.side,
+            team_id=ms.team_id,
+            beam_resistance=ms.beam_resistance,
+            physical_resistance=ms.physical_resistance,
+            melee_aptitude=ms.melee_aptitude,
+            shooting_aptitude=ms.shooting_aptitude,
+            accuracy_bonus=ms.accuracy_bonus,
+            evasion_bonus=ms.evasion_bonus,
+            acceleration_bonus=ms.acceleration_bonus,
+            turning_bonus=ms.turning_bonus,
+            terrain_adaptability=ms.terrain_adaptability,
+            max_en=ms.max_en,
+            en_recovery=ms.en_recovery,
+            max_propellant=ms.max_propellant,
+            position=ms.position,
+            velocity=ms.velocity,
+            weapons=ms.weapons,
+            tactics=ms.tactics,
+            active_weapon_index=ms.active_weapon_index,
+            personality=ms.personality,
+            is_ace=ms.is_ace,
+            ace_id=ms.ace_id,
+            pilot_name=ms.pilot_name,
+            bounty_exp=ms.bounty_exp,
+            bounty_credits=ms.bounty_credits,
+            hp_rank=get_rank("hp", ms.max_hp),
+            armor_rank=get_rank("armor", ms.armor),
+            mobility_rank=get_rank("mobility", ms.mobility),
+        )
+
+
 class BattleLog(SQLModel):
     """戦闘ログ1行分."""
 

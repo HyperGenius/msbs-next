@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 from app.core.auth import get_current_user
 from app.db import get_session
-from app.models.models import MobileSuit, Pilot
+from app.models.models import MobileSuitResponse, Pilot
 from app.services.engineering_service import EngineeringService
 
 router = APIRouter(prefix="/api/engineering", tags=["engineering"])
@@ -23,7 +23,7 @@ class UpgradeResponse(BaseModel):
     """Response from upgrade operation."""
 
     message: str
-    mobile_suit: MobileSuit
+    mobile_suit: MobileSuitResponse
     remaining_credits: int
     cost_paid: int
 
@@ -76,7 +76,7 @@ async def upgrade_mobile_suit(
 
         return UpgradeResponse(
             message=f"{request.target_stat.upper()} を強化しました！",
-            mobile_suit=updated_ms,
+            mobile_suit=MobileSuitResponse.from_mobile_suit(updated_ms),
             remaining_credits=updated_pilot.credits,
             cost_paid=cost,
         )
