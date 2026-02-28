@@ -10,7 +10,7 @@ on:
         required: false
         default: ""
     secrets:
-      GCP_SA_KEY:
+      GCP_WORKLOAD_IDENTITY_PROVIDER:
         required: true
       GCP_PROJECT_ID:
         required: true
@@ -18,6 +18,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write  # Workload Identity Federation に必要
 
     steps:
       - name: Checkout
@@ -35,7 +39,8 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: 'github-actions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
