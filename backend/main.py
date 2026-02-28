@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, desc, select
 
 # DB関連
-from app.core.auth import get_current_user_optional
+from app.core.auth import get_current_user, get_current_user_optional
 from app.db import get_session
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -205,22 +205,11 @@ async def simulate_battle(
         winner_id = "ENEMY"
         win_loss = "LOSE"
 
-    # 7. バトル結果をDBに保存（リプレイ用スナップショット含む）
-    battle_result = BattleResult(
-        user_id=user_id,
-        mission_id=mission_id,
-        win_loss=win_loss,
-        logs=sim.logs,
-        environment=mission.environment,
-        player_info=player.model_dump(),
-        enemies_info=[e.model_dump() for e in enemies],
-        created_at=datetime.now(UTC),
-    )
-    session.add(battle_result)
-    session.commit()
-
-    # 8. 報酬の計算と付与（ユーザーがログインしている場合）
+    # 7. 報酬の計算と付与（ユーザーがログインしている場合）
     rewards = None
+    exp_gained = 0
+    credits_gained = 0
+    level_up = False
     if user_id:
         from app.services.pilot_service import PilotService
 
@@ -241,6 +230,8 @@ async def simulate_battle(
             pilot, exp_gained, credits_gained
         )
 
+        level_up = pilot.level > level_before
+
         rewards = BattleRewards(
             exp_gained=exp_gained,
             credits_gained=credits_gained,
@@ -249,6 +240,28 @@ async def simulate_battle(
             total_exp=pilot.exp,
             total_credits=pilot.credits,
         )
+
+    # 8. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
+    battle_result = BattleResult(
+        user_id=user_id,
+        mission_id=mission_id,
+        win_loss=win_loss,
+        logs=sim.logs,
+        environment=mission.environment,
+        player_info=player.model_dump(),
+        enemies_info=[e.model_dump() for e in enemies],
+        ms_snapshot=player.model_dump(),
+        kills=kills,
+        exp_gained=exp_gained,
+        credits_gained=credits_gained,
+        level_before=rewards.level_before if rewards else 0,
+        level_after=rewards.level_after if rewards else 0,
+        level_up=level_up,
+        is_read=False,
+        created_at=datetime.now(UTC),
+    )
+    session.add(battle_result)
+    session.commit()
 
     return BattleResponse(
         winner_id=winner_id,
@@ -286,6 +299,50 @@ async def get_battle_history(
 
     battles = session.exec(statement).all()
     return list(battles)
+
+
+@app.get("/api/battles/unread", response_model=list[BattleResult])
+async def get_unread_battles(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> list[BattleResult]:
+    """ログインユーザーの未読バトル結果を取得する（最新順）."""
+    statement = (
+        select(BattleResult)
+        .where(BattleResult.user_id == user_id)
+        .where(BattleResult.is_read == False)  # noqa: E712
+        .order_by(desc(BattleResult.created_at))
+    )
+    battles = session.exec(statement).all()
+    return list(battles)
+
+
+@app.post("/api/battles/{battle_id}/read")
+async def mark_battle_as_read(
+    battle_id: str,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> dict[str, str]:
+    """バトル結果を既読にする."""
+    import uuid as _uuid
+
+    try:
+        battle_uuid = _uuid.UUID(battle_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid battle ID format") from e
+
+    battle = session.get(BattleResult, battle_uuid)
+    if not battle:
+        raise HTTPException(status_code=404, detail="Battle not found")
+
+    if battle.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    battle.is_read = True
+    session.add(battle)
+    session.commit()
+
+    return {"message": "Battle marked as read"}
 
 
 @app.get("/api/battles/{battle_id}", response_model=BattleResult)

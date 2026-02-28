@@ -321,6 +321,18 @@ class BattleResult(SQLModel, table=True):
         sa_column=Column(JSON, nullable=True),
         description="敵機体スナップショットリスト",
     )
+    ms_snapshot: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="参加時の機体データスナップショット（エントリー時点）",
+    )
+    kills: int = Field(default=0, description="撃墜数")
+    exp_gained: int = Field(default=0, description="獲得経験値")
+    credits_gained: int = Field(default=0, description="獲得クレジット")
+    level_before: int = Field(default=0, description="バトル前のレベル")
+    level_after: int = Field(default=0, description="バトル後のレベル")
+    level_up: bool = Field(default=False, description="レベルアップが発生したかどうか")
+    is_read: bool = Field(default=False, index=True, description="既読フラグ")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
