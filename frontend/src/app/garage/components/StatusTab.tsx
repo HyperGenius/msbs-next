@@ -1,51 +1,16 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { MobileSuit, Pilot } from "@/types/battle";
-import { upgradeMobileSuit } from "@/services/api";
-import { SciFiButton, SciFiPanel, SciFiProgress, HoldSciFiButton } from "@/components/ui";
+import { bulkUpgradeMobileSuit } from "@/services/api";
+import { SciFiBlockIndicator } from "@/components/ui";
+import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
 import { getRankColor, getRank } from "@/utils/rankUtils";
-
-/** ランク進捗計算用の閾値テーブル（rankUtils と同じ値） */
-const RANK_PROGRESS_THRESHOLDS: Record<string, { rank: string; min: number }[]> = {
-  hp: [
-    { rank: "S", min: 2000 },
-    { rank: "A", min: 1500 },
-    { rank: "B", min: 1000 },
-    { rank: "C", min: 700 },
-    { rank: "D", min: 400 },
-    { rank: "E", min: 0 },
-  ],
-  armor: [
-    { rank: "S", min: 100 },
-    { rank: "A", min: 80 },
-    { rank: "B", min: 60 },
-    { rank: "C", min: 40 },
-    { rank: "D", min: 20 },
-    { rank: "E", min: 0 },
-  ],
-  mobility: [
-    { rank: "S", min: 2.0 },
-    { rank: "A", min: 1.5 },
-    { rank: "B", min: 1.2 },
-    { rank: "C", min: 0.9 },
-    { rank: "D", min: 0.6 },
-    { rank: "E", min: 0.0 },
-  ],
-};
-
-/** ランクキー → 表示ラベルのマッピング */
-const RANK_KEY_LABELS: Record<string, string> = {
-  hp_rank: "HP",
-  armor_rank: "装甲",
-  mobility_rank: "機動性",
-};
 
 type StatType =
   | "hp"
   | "armor"
   | "mobility"
-  | "weapon_power"
   | "melee_aptitude"
   | "shooting_aptitude"
   | "accuracy_bonus"
@@ -62,13 +27,12 @@ interface StatInfo {
   cap: number;
   baseCost: number;
   costDivisor: number;
-  rankKey?: keyof Pick<MobileSuit, "hp_rank" | "armor_rank" | "mobility_rank">;
   rankStatName?: "hp" | "armor" | "mobility";
 }
 
 const STAT_TYPES: StatInfo[] = [
   {
-    label: "HP",
+    label: "耐久",
     key: "hp",
     getValue: (ms) => ms.max_hp,
     format: (val) => val.toFixed(0),
@@ -76,7 +40,6 @@ const STAT_TYPES: StatInfo[] = [
     cap: 500,
     baseCost: 50,
     costDivisor: 200,
-    rankKey: "hp_rank",
     rankStatName: "hp",
   },
   {
@@ -88,7 +51,6 @@ const STAT_TYPES: StatInfo[] = [
     cap: 50,
     baseCost: 100,
     costDivisor: 10,
-    rankKey: "armor_rank",
     rankStatName: "armor",
   },
   {
@@ -100,21 +62,7 @@ const STAT_TYPES: StatInfo[] = [
     cap: 3.0,
     baseCost: 150,
     costDivisor: 2,
-    rankKey: "mobility_rank",
     rankStatName: "mobility",
-  },
-  {
-    label: "武器威力",
-    key: "weapon_power",
-    getValue: (ms) => {
-      const weapon = ms.weapons && ms.weapons.length > 0 ? ms.weapons[0] : null;
-      return weapon ? weapon.power : 0;
-    },
-    format: (val) => val.toFixed(0),
-    increment: 2,
-    cap: 200,
-    baseCost: 80,
-    costDivisor: 50,
   },
   {
     label: "格闘適性",
@@ -218,28 +166,21 @@ function calcMaxAffordableSteps(
   return steps;
 }
 
-/** ランク内の進捗率 (0–100) を計算 */
-function calcRankProgress(
-  statName: "hp" | "armor" | "mobility",
-  value: number
-): number {
-  const table = RANK_PROGRESS_THRESHOLDS[statName];
-  if (!table) return 0;
-
-  // 現在のランク帯を特定
-  let currentIdx = table.length - 1;
-  for (let i = 0; i < table.length; i++) {
-    if (value >= table[i].min) {
-      currentIdx = i;
-      break;
-    }
+/**
+ * ランク文字列をすべてのステータスについて計算する。
+ * rankStatName がある場合は getRank() を使用し、
+ * ない場合はキャップ比率からランクを算出する。
+ */
+function getRankString(stat: StatInfo, value: number): string {
+  if (stat.rankStatName) {
+    return getRank(stat.rankStatName, value);
   }
-
-  const currentMin = table[currentIdx].min;
-  // 最高ランク(S)なら進捗 100%
-  if (currentIdx === 0) return 100;
-  const nextMin = table[currentIdx - 1].min;
-  return Math.min(100, ((value - currentMin) / (nextMin - currentMin)) * 100);
+  const pct = stat.cap > 0 ? value / stat.cap : 0;
+  if (pct >= 0.9) return "S";
+  if (pct >= 0.7) return "A";
+  if (pct >= 0.5) return "B";
+  if (pct >= 0.3) return "C";
+  return "D";
 }
 
 interface StatusTabProps {
@@ -250,7 +191,7 @@ interface StatusTabProps {
 
 export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabProps) {
   const [pendingSteps, setPendingSteps] = useState<Record<string, number>>({});
-  const [confirming, setConfirming] = useState<string | null>(null);
+  const [isApplying, setIsApplying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const getSteps = (key: string) => pendingSteps[key] ?? 0;
@@ -259,81 +200,70 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
     setPendingSteps((prev) => ({ ...prev, [key]: steps }));
   }, []);
 
-  // 全ステータスの合計確定コスト（クレジット表示用）
-  const totalPendingCost = STAT_TYPES.reduce((sum, stat) => {
-    const steps = getSteps(stat.key);
-    if (steps === 0) return sum;
-    const currentValue = stat.getValue(mobileSuit);
-    return sum + simulateSteps(stat, currentValue, steps).totalCost;
-  }, 0);
+  /** 全ステータスの合計確定コスト */
+  const totalPendingCost = useMemo(() => {
+    return STAT_TYPES.reduce((sum, stat) => {
+      const steps = pendingSteps[stat.key] ?? 0;
+      if (steps === 0) return sum;
+      const currentValue = stat.getValue(mobileSuit);
+      return sum + simulateSteps(stat, currentValue, steps).totalCost;
+    }, 0);
+  }, [pendingSteps, mobileSuit]);
 
-  const handleConfirm = async (stat: StatInfo) => {
-    const steps = getSteps(stat.key);
-    if (!pilot || steps === 0) return;
+  const hasPendingUpgrades = totalPendingCost > 0;
+  const canAffordAll = pilot ? pilot.credits >= totalPendingCost : false;
 
-    setConfirming(stat.key);
+  const handleApplyAll = async () => {
+    if (!pilot || !hasPendingUpgrades || !canAffordAll) return;
+
+    const upgrades: Record<string, number> = {};
+    for (const stat of STAT_TYPES) {
+      const steps = getSteps(stat.key);
+      if (steps > 0) upgrades[stat.key] = steps;
+    }
+
+    setIsApplying(true);
     setMessage(null);
 
     try {
-      const response = await upgradeMobileSuit({
+      const response = await bulkUpgradeMobileSuit({
         mobile_suit_id: mobileSuit.id,
-        target_stat: stat.key,
-        steps,
+        upgrades,
       });
 
       setMessage(
-        `✓ ${stat.label} を ${steps} 段階強化しました！ (コスト: ${response.cost_paid.toLocaleString()} Credits)`
+        `✓ 強化完了！ (合計コスト: ${response.total_cost_paid.toLocaleString()} Credits)`
       );
-      setSteps(stat.key, 0);
+      setPendingSteps({});
       onUpgraded(response.mobile_suit);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       setMessage(`✗ エラー: ${errorMessage}`);
     } finally {
-      setConfirming(null);
+      setIsApplying(false);
     }
   };
 
   return (
     <div className="space-y-4">
-      {/* 基本スペック表示（ランク表記） */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {(["hp_rank", "armor_rank", "mobility_rank"] as const).map((rankKey) => {
-          return (
-            <div
-              key={rankKey}
-              className="p-3 bg-[#0a0a0a] rounded border border-[#00ff41]/30 flex items-center gap-2"
-            >
-              <span className="text-xs text-[#00ff41]/60">{RANK_KEY_LABELS[rankKey]}</span>
-              <span
-                className={`text-lg font-bold ${getRankColor(
-                  mobileSuit[rankKey] ?? "C"
-                )}`}
-              >
-                {mobileSuit[rankKey] ?? "C"}
-              </span>
-            </div>
-          );
-        })}
-        <div className="p-3 bg-[#0a0a0a] rounded border border-[#00ff41]/30">
-          <div className="text-xs text-[#00ff41]/60">武器威力</div>
-          <div className="text-lg font-bold text-[#00ff41]">
-            {mobileSuit.weapons?.[0]?.power ?? 0}
-          </div>
-        </div>
-      </div>
-
-      {/* 所持金 */}
+      {/* 所持金（現在 ➔ 変更後） */}
       {pilot && (
-        <div className="p-3 bg-[#0a0a0a] rounded border border-[#ffb000]/30">
-          <span className="text-[#ffb000]/60 text-sm">所持金: </span>
+        <div className="p-3 bg-[#0a0a0a] rounded border border-[#ffb000]/30 text-sm">
+          <span className="text-[#ffb000]">💰 所持金: </span>
           <span className="text-[#ffb000] font-bold">
             {pilot.credits.toLocaleString()} Credits
           </span>
-          {totalPendingCost > 0 && (
-            <span className="ml-2 text-sm text-[#00f0ff]">
-              (確定後残高: {(pilot.credits - totalPendingCost).toLocaleString()})
-            </span>
+          {hasPendingUpgrades && (
+            <>
+              <span className="text-[#ffb000]/60"> ➔ </span>
+              <span
+                className={`font-bold ${
+                  canAffordAll ? "text-[#00f0ff]" : "text-red-400"
+                }`}
+              >
+                {(pilot.credits - totalPendingCost).toLocaleString()} Credits
+              </span>
+            </>
           )}
         </div>
       )}
@@ -352,11 +282,7 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
       )}
 
       {/* 強化パネル */}
-      <div className="space-y-3">
-        <h4 className="text-sm font-bold text-[#00f0ff] uppercase tracking-wider">
-          ステータス強化 (Engineering)
-        </h4>
-
+      <div className="divide-y divide-[#00ff41]/10">
         {STAT_TYPES.map((stat) => {
           const steps = getSteps(stat.key);
           const currentValue = stat.getValue(mobileSuit);
@@ -365,160 +291,109 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
             ? calcMaxAffordableSteps(stat, currentValue, pilot.credits)
             : 0;
 
-          const { totalCost, finalValue } = simulateSteps(stat, currentValue, steps);
+          const { totalCost: stepsCost, finalValue } = simulateSteps(stat, currentValue, steps);
 
-          const currentRank = stat.rankKey ? mobileSuit[stat.rankKey] : undefined;
-          const previewRank =
-            stat.rankStatName && steps > 0
-              ? getRank(stat.rankStatName, finalValue)
-              : undefined;
-          const isRankUp =
-            !!currentRank && !!previewRank && previewRank !== currentRank;
+          const currentRank = getRankString(stat, currentValue);
+          const previewRank = steps > 0 ? getRankString(stat, finalValue) : null;
+          const isRankUp = !!previewRank && previewRank !== currentRank;
 
-          // ランク内進捗バー
-          const rankProgress = stat.rankStatName
-            ? calcRankProgress(stat.rankStatName, currentValue)
-            : null;
-          const previewRankProgress =
-            stat.rankStatName && steps > 0
-              ? calcRankProgress(stat.rankStatName, finalValue)
-              : null;
-
-          const canAfford = pilot ? pilot.credits >= totalCost : false;
+          // 現在の1回分のコスト（[-]/[+]横に表示）
+          const nextStepCost = isMaxed ? 0 : calcStepCost(stat, currentValue + steps * stat.increment);
 
           return (
-            <div
-              key={stat.key}
-              className="p-4 bg-[#0a0a0a] rounded border border-[#00ff41]/20"
-            >
+            <div key={stat.key} className="py-4 first:pt-0">
               {/* ラベル行 */}
-              <h5 className="text-sm font-bold mb-2 text-[#00ff41]">{stat.label}</h5>
-
-              {/* 現在値 → 強化後値 */}
-              <div className="flex flex-wrap items-center gap-2 text-sm mb-2">
-                {currentRank ? (
-                  <span>
-                    現在:{" "}
-                    <span className={`font-bold ${getRankColor(currentRank)}`}>
-                      [{currentRank}]
-                    </span>
-                  </span>
-                ) : (
-                  <span>
-                    現在:{" "}
-                    <span className="text-[#ffb000] font-bold">
-                      {stat.format(currentValue)}
-                    </span>
-                  </span>
-                )}
-
-                {steps > 0 && (
-                  <>
-                    <span className="text-[#00ff41]/50">▶</span>
-                    {previewRank ? (
-                      <span>
-                        強化後:{" "}
-                        <span
-                          className={`font-bold ${getRankColor(previewRank)}`}
-                        >
-                          [{previewRank}]
-                        </span>
-                      </span>
-                    ) : (
-                      <span>
-                        強化後:{" "}
-                        <span className="text-[#00ff41] font-bold">
-                          {stat.format(finalValue)}
-                        </span>
-                      </span>
-                    )}
-                  </>
-                )}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-[#00ff41] uppercase tracking-wider">
+                  {stat.label}
+                </span>
+                <span className={`text-xs text-[#ffb000] ${steps > 0 ? "visible" : "invisible"}`}>
+                  {/* {stepsCost > 0 ? `${stepsCost.toLocaleString()} CR` : "0 CR"} */}
+                  Credits: {stepsCost.toLocaleString()} CR
+                </span>
               </div>
 
-              {/* ランク進捗バー */}
-              {rankProgress !== null && (
-                <SciFiProgress
-                  value={
-                    steps > 0 && previewRankProgress !== null
-                      ? previewRankProgress
-                      : rankProgress
-                  }
-                  isRankUp={isRankUp}
-                  className="mb-3"
+              {/* ランク + ブロックインジケーター + ボタン行 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* ランクバッジ */}
+                <div className="flex items-center gap-1.5 w-[6.5rem] shrink-0">
+                  <span
+                    className={`text-base font-bold font-mono border px-1.5 py-0.5 ${
+                      isRankUp
+                        ? `${getRankColor(previewRank!)} border-current`
+                        : `${getRankColor(currentRank)} border-current/40`
+                    }`}
+                  >
+                    {isRankUp ? previewRank : currentRank}
+                  </span>
+                  <span
+                    className={`text-[#00f0ff] text-xs font-bold animate-pulse whitespace-nowrap ${
+                      isRankUp ? "visible" : "invisible"
+                    }`}
+                  >
+                    ✨RANK UP!
+                  </span>
+                </div>
+
+                {/* ブロックインジケーター */}
+                <SciFiBlockIndicator
+                  currentValue={currentValue}
+                  cap={stat.cap}
+                  pendingSteps={steps}
+                  increment={stat.increment}
+                  className="flex-1"
                 />
-              )}
 
-              {isMaxed ? (
-                <SciFiButton variant="secondary" size="sm" disabled>
-                  最大値
-                </SciFiButton>
-              ) : (
-                <>
-                  {/* ステップ操作ボタン群（レスポンシブ） */}
-                  <div className="flex flex-col md:flex-row gap-2 md:items-center mb-2">
-                    <div className="flex gap-1">
-                      {/* << リセット */}
-                      <button
-                        onClick={() => setSteps(stat.key, 0)}
-                        disabled={steps === 0}
-                        className="touch-manipulation min-w-[44px] min-h-[44px] flex-1 md:flex-none md:w-11 font-mono font-bold text-xs border border-[#00ff41]/40 text-[#00ff41]/70 bg-[#050505] hover:bg-[#00ff41]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        aria-label={`${stat.label} ステップをリセット`}
-                      >
-                        {"<<"}
-                      </button>
-                      {/* < -1 */}
-                      <button
-                        onClick={() => setSteps(stat.key, Math.max(0, steps - 1))}
-                        disabled={steps === 0}
-                        className="touch-manipulation min-w-[44px] min-h-[44px] flex-1 md:flex-none md:w-11 font-mono font-bold text-xs border border-[#00ff41]/40 text-[#00ff41]/70 bg-[#050505] hover:bg-[#00ff41]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        aria-label={`${stat.label} ステップを1減らす`}
-                      >
-                        {"<"}
-                      </button>
-                      {/* > +1 */}
-                      <button
-                        onClick={() =>
-                          setSteps(
-                            stat.key,
-                            Math.min(maxAffordable, steps + 1)
-                          )
-                        }
-                        disabled={steps >= maxAffordable}
-                        className="touch-manipulation min-w-[44px] min-h-[44px] flex-1 md:flex-none md:w-11 font-mono font-bold text-xs border border-[#00ff41]/40 text-[#00ff41]/70 bg-[#050505] hover:bg-[#00ff41]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        aria-label={`${stat.label} ステップを1増やす`}
-                      >
-                        {">"}
-                      </button>
-                      {/* >> 最大 */}
-                      <button
-                        onClick={() => setSteps(stat.key, maxAffordable)}
-                        disabled={steps >= maxAffordable}
-                        className="touch-manipulation min-w-[44px] min-h-[44px] flex-1 md:flex-none md:w-11 font-mono font-bold text-xs border border-[#00ff41]/40 text-[#00ff41]/70 bg-[#050505] hover:bg-[#00ff41]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        aria-label={`${stat.label} ステップを最大にする`}
-                      >
-                        {">>"}
-                      </button>
-                    </div>
+                {/* [-] [+] ボタンと1ステップコスト */}
+                {isMaxed ? (
+                  <span className="text-xs text-[#00ff41]/40 font-mono">MAX</span>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setSteps(stat.key, Math.max(0, steps - 1))}
+                      disabled={steps === 0}
+                      className="touch-manipulation w-8 h-8 font-mono font-bold text-sm border border-[#00ff41]/40 text-[#00ff41] bg-[#050505] hover:bg-[#00ff41]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label={`${stat.label} ステップを1減らす`}
+                    >
+                      −
+                    </button>
+                    <span className="w-5 text-center text-xs font-mono text-[#00ff41]/70">
+                      {steps}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setSteps(stat.key, Math.min(maxAffordable, steps + 1))
+                      }
+                      disabled={steps >= maxAffordable}
+                      className="touch-manipulation w-8 h-8 font-mono font-bold text-sm border border-[#00ff41]/40 text-[#00ff41] bg-[#050505] hover:bg-[#00ff41]/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label={`${stat.label} ステップを1増やす`}
+                    >
+                      ＋
+                    </button>
+                    <span className={`text-xs text-[#00ff41]/40 font-mono ml-1 w-16 text-right`}>
+                      {nextStepCost > 0 ? `${nextStepCost} CR` : ""}
+                    </span>
                   </div>
-
-                  {/* 確定ボタン（長押しで発火） */}
-                  <HoldSciFiButton
-                    onHoldComplete={() => handleConfirm(stat)}
-                    disabled={steps === 0 || !canAfford}
-                    loading={confirming === stat.key}
-                    label={
-                      steps > 0
-                        ? `長押しで確定 (${totalCost.toLocaleString()} Credits)`
-                        : "長押しで確定"
-                    }
-                    loadingLabel="強化中..."
-                  />
-                </>
-              )}
+                )}
+              </div>
             </div>
           );
         })}
+      </div>
+
+      {/* 一括適用ボタン */}
+      <div className="pt-2 border-t border-[#00ff41]/20">
+        <HoldSciFiButton
+          onHoldComplete={handleApplyAll}
+          disabled={!hasPendingUpgrades || !canAffordAll}
+          loading={isApplying}
+          label={
+            hasPendingUpgrades
+              ? `長押しで確定 (合計: ${totalPendingCost.toLocaleString()} Credits)`
+              : "長押しで確定"
+          }
+          loadingLabel="強化中..."
+        />
       </div>
     </div>
   );

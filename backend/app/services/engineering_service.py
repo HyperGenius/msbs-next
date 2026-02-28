@@ -345,6 +345,66 @@ class EngineeringService:
 
         return ms, pilot, total_cost
 
+    def bulk_upgrade_stats(
+        self,
+        mobile_suit_id: str,
+        pilot: Pilot,
+        upgrades: dict[str, int],
+    ) -> tuple[MobileSuit, Pilot, int]:
+        """Bulk upgrade multiple stats of a mobile suit.
+
+        Each stat is upgraded the specified number of steps. Cost is calculated
+        server-side for each individual step, so client-supplied values are
+        never trusted.
+
+        Args:
+            mobile_suit_id: ID of the mobile suit to upgrade
+            pilot: Pilot who owns the mobile suit
+            upgrades: Mapping of stat_type to number of upgrade steps
+
+        Returns:
+            tuple[MobileSuit, Pilot, int]: Updated mobile suit, pilot, and total cost
+
+        Raises:
+            ValueError: If any stat is invalid, steps < 1, or mobile suit not found
+            RuntimeError: If insufficient credits
+        """
+        ms_id = (
+            uuid.UUID(mobile_suit_id)
+            if isinstance(mobile_suit_id, str)
+            else mobile_suit_id
+        )
+
+        ms = self.session.get(MobileSuit, ms_id)
+        if not ms:
+            raise ValueError("Mobile suit not found")
+
+        if ms.user_id != pilot.user_id:
+            raise ValueError("You don't own this mobile suit")
+
+        total_cost = 0
+        for stat_type, steps in upgrades.items():
+            if steps <= 0:
+                continue
+            for _ in range(steps):
+                _, cost = self._validate_and_get_cost(ms, stat_type)
+                if pilot.credits < cost:
+                    raise RuntimeError(
+                        f"Insufficient credits. Required: {cost}, "
+                        f"Available: {pilot.credits}"
+                    )
+                pilot.credits -= cost
+                total_cost += cost
+                self._apply_upgrade(ms, stat_type)
+
+        self.session.add(ms)
+        self.session.add(pilot)
+        self.session.commit()
+        self.session.refresh(ms)
+        self.session.refresh(pilot)
+
+        return ms, pilot, total_cost
+
     def get_upgrade_preview(self, mobile_suit_id: str, stat_type: str) -> dict:
         """Get preview of what an upgrade would do.
 
