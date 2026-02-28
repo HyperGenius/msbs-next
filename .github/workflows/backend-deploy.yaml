@@ -2,6 +2,13 @@
 name: Backend Deploy to Cloud Run
 
 on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker イメージタグ（デフォルト: github.sha）"
+        type: string
+        required: false
+        default: ""
   workflow_call:
     inputs:
       image_tag:
