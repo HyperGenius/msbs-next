@@ -323,10 +323,8 @@ def test_create_rooms_reuses_persistent_npcs(in_memory_session):
     in_memory_session.add(entry)
     in_memory_session.commit()
 
-    # 100% 永続化NPC を使うよう設定（ace_spawn_rate=0.0 でエース出現を無効化）
-    service = MatchingService(
-        in_memory_session, room_size=2, npc_persistence_rate=1.0, ace_spawn_rate=0.0
-    )
+    # 100% 永続化NPC を使うよう設定
+    service = MatchingService(in_memory_session, room_size=2, npc_persistence_rate=1.0)
     service.create_rooms()
 
     npc_entries = in_memory_session.exec(
