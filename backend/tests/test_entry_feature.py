@@ -51,7 +51,7 @@ def test_entry_api_endpoints():
 
     # Check required entry endpoints
     required_endpoints = [
-        "/api/entries/",
+        "/api/entries",
         "/api/entries/status",
     ]
 
