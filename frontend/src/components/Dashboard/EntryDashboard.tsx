@@ -1,6 +1,7 @@
 "use client";
 
 import { MobileSuit } from "@/types/battle";
+import MobileSuitRankBadges from "./MobileSuitRankBadges";
 
 interface EntryDashboardProps {
   isEntered: boolean;
@@ -42,15 +43,11 @@ export default function EntryDashboard({
           <div className="bg-gray-800/70 rounded-lg p-4 border border-green-700">
             <p className="text-xs text-gray-400 mb-2">使用機体</p>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xl font-bold text-white mb-1">
+              <div className="flex items-center gap-3 flex-wrap">
+                <p className="text-xl font-bold text-white">
                   {mobileSuit.name}
                 </p>
-                <div className="flex gap-4 text-sm text-gray-300">
-                  <span>HP: {mobileSuit.max_hp}</span>
-                  <span>装甲: {mobileSuit.armor}</span>
-                  <span>機動: {mobileSuit.mobility}</span>
-                </div>
+                <MobileSuitRankBadges mobileSuit={mobileSuit} />
               </div>
               <div className="w-16 h-16 bg-green-900/50 rounded border-2 border-green-500 flex items-center justify-center">
                 <span className="text-2xl">🤖</span>
