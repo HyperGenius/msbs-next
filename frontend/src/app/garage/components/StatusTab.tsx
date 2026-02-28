@@ -500,23 +500,6 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                         {">>"}
                       </button>
                     </div>
-
-                    {/* ステップ数・コスト表示 */}
-                    <div className="text-xs text-[#00ff41]/60 flex-1">
-                      {steps > 0 ? (
-                        <>
-                          <span className="text-[#00ff41] font-bold">
-                            {steps} 段階
-                          </span>
-                          {" / "}
-                          <span className={canAfford ? "text-[#ffb000]" : "text-red-400"}>
-                            {totalCost.toLocaleString()} Credits
-                          </span>
-                        </>
-                      ) : (
-                        <span>段階を選択してください</span>
-                      )}
-                    </div>
                   </div>
 
                   {/* 確定ボタン */}
