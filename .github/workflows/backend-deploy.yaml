@@ -1,0 +1,80 @@
+# .github/workflows/backend-deploy.yaml
+name: Backend Deploy to Cloud Run
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "Docker イメージタグ（デフォルト: github.sha）"
+        type: string
+        required: false
+        default: ""
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER:
+        required: true
+      GCP_PROJECT_ID:
+        required: true
+      NEON_DATABASE_URL:
+        required: true
+      CLERK_SECRET_KEY:
+        required: true
+      CLERK_JWKS_URL:
+        required: true
+      ALLOWED_ORIGINS:
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write  # Workload Identity Federation に必要
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ github.sha }}"
+          fi
+          echo "value=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: 'github-actions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            -t asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-api:${{ steps.tag.outputs.value }} \
+            backend/
+          docker push asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-api:${{ steps.tag.outputs.value }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Deploy to Cloud Run
+        run: |
+          cd infra/cloud-run
+          terraform init
+          terraform apply -auto-approve \
+            -var="image_tag=${{ steps.tag.outputs.value }}" \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="database_url=${{ secrets.NEON_DATABASE_URL }}" \
+            -var="clerk_secret_key=${{ secrets.CLERK_SECRET_KEY }}" \
+            -var="clerk_jwks_url=${{ secrets.CLERK_JWKS_URL }}" \
+            -var="allowed_origins=${{ secrets.ALLOWED_ORIGINS }}"
