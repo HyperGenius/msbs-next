@@ -1,9 +1,9 @@
 /* frontend/src/app/history/page.tsx */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBattleHistory, useMissions, useMobileSuits } from "@/services/api";
-import { BattleResult, MobileSuit } from "@/types/battle";
+import { BattleLog, BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 import Link from "next/link";
 
@@ -13,11 +13,58 @@ export default function HistoryPage() {
   const { mobileSuits } = useMobileSuits();
   const [selectedBattle, setSelectedBattle] = useState<BattleResult | null>(null);
   const [currentTurn, setCurrentTurn] = useState(0);
+  const [isFiltered, setIsFiltered] = useState(false);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   const ownedMobileSuitIds = useMemo(
     () => new Set(mobileSuits?.map((ms) => ms.id) ?? []),
     [mobileSuits]
   );
+
+  /** player_info から自機・僚機の ID セットを算出
+   * Note: enemies_info にはバッチ処理時の全非主要ユニットが含まれ、
+   * 同じ team_id を持つユニットは僚機として扱う */
+  const playerTeamIds = useMemo(() => {
+    if (!selectedBattle?.player_info) return new Set<string>();
+    const playerInfo = selectedBattle.player_info;
+    const teamId = playerInfo.team_id ?? playerInfo.id;
+    const ids = new Set<string>([playerInfo.id]);
+    // 同じ team_id を持つ僚機を追加
+    if (selectedBattle.enemies_info) {
+      for (const e of selectedBattle.enemies_info) {
+        if ((e.team_id ?? e.id) === teamId) {
+          ids.add(e.id);
+        }
+      }
+    }
+    return ids;
+  }, [selectedBattle]);
+
+  const playerId = selectedBattle?.player_info?.id ?? null;
+
+  /** ログフィルタリング: 自機/僚機のアクション or 自機がターゲット */
+  const filterRelevantLogs = useCallback(
+    (logs: BattleLog[]): BattleLog[] => {
+      if (!isFiltered || !playerId) return logs;
+      return logs.filter(
+        (log) =>
+          playerTeamIds.has(log.actor_id) ||
+          (log.target_id != null && log.target_id === playerId)
+      );
+    },
+    [isFiltered, playerId, playerTeamIds]
+  );
+
+  /** currentTurn 変更時に該当ターンのログへ自動スクロール */
+  useEffect(() => {
+    if (!logContainerRef.current || !selectedBattle) return;
+    const target = logContainerRef.current.querySelector(
+      `[data-turn-start="${currentTurn}"]`
+    );
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [currentTurn, selectedBattle]);
 
   const getMissionName = (missionId: number | null, createdAt?: string): string => {
     if (missionId && missions) {
@@ -164,79 +211,111 @@ export default function HistoryPage() {
                 </button>
               </div>
 
-              {/* Modal Body */}
-              <div className="overflow-y-auto flex-1 p-4">
-                {/* 3D Replay Viewer */}
-                {hasReplayData ? (
-                  <div className="mb-4">
-                    <BattleViewer
-                      logs={selectedBattle.logs}
-                      player={selectedBattle.player_info as MobileSuit}
-                      enemies={selectedBattle.enemies_info as MobileSuit[]}
-                      currentTurn={currentTurn}
-                      environment={selectedBattle.environment || "SPACE"}
-                    />
+              {/* Modal Body — BattleViewer は固定、ログのみスクロール */}
+              <div className="flex flex-col flex-1 min-h-0">
+                {/* 上部固定: 3D Replay Viewer + ターンコントローラー */}
+                <div className="flex-none p-4 border-b border-gray-700">
+                  {hasReplayData ? (
+                    <>
+                      <BattleViewer
+                        logs={selectedBattle.logs}
+                        player={selectedBattle.player_info as MobileSuit}
+                        enemies={selectedBattle.enemies_info as MobileSuit[]}
+                        currentTurn={currentTurn}
+                        environment={selectedBattle.environment || "SPACE"}
+                      />
 
-                    {/* Turn Controller */}
-                    <div className="mt-2 p-3 bg-gray-900 border border-green-800 rounded">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => setCurrentTurn(Math.max(0, currentTurn - 1))}
-                          disabled={currentTurn <= 0}
-                          className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
-                        >
-                          &lt; PREV
-                        </button>
-                        <div className="flex-grow flex flex-col">
-                          <input
-                            type="range"
-                            min="0"
-                            max={maxTurn}
-                            value={currentTurn}
-                            onChange={(e) => setCurrentTurn(Number(e.target.value))}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
-                          />
-                          <div className="flex justify-between text-xs mt-1 text-green-600/60">
-                            <span>Start</span>
-                            <span>Turn: {currentTurn} / {maxTurn}</span>
-                            <span>End</span>
+                      {/* Turn Controller */}
+                      <div className="mt-2 p-3 bg-gray-900 border border-green-800 rounded">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setCurrentTurn(Math.max(0, currentTurn - 1))}
+                            disabled={currentTurn <= 0}
+                            className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
+                          >
+                            &lt; PREV
+                          </button>
+                          <div className="flex-grow flex flex-col">
+                            <input
+                              type="range"
+                              min="0"
+                              max={maxTurn}
+                              value={currentTurn}
+                              onChange={(e) => setCurrentTurn(Number(e.target.value))}
+                              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                            />
+                            <div className="flex justify-between text-xs mt-1 text-green-600/60">
+                              <span>Start</span>
+                              <span>Turn: {currentTurn} / {maxTurn}</span>
+                              <span>End</span>
+                            </div>
                           </div>
+                          <button
+                            onClick={() => setCurrentTurn(Math.min(maxTurn, currentTurn + 1))}
+                            disabled={currentTurn >= maxTurn}
+                            className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
+                          >
+                            NEXT &gt;
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setCurrentTurn(Math.min(maxTurn, currentTurn + 1))}
-                          disabled={currentTurn >= maxTurn}
-                          className="px-3 py-1 bg-green-900 hover:bg-green-800 disabled:opacity-30 rounded text-sm font-bold transition-colors"
-                        >
-                          NEXT &gt;
-                        </button>
                       </div>
+                    </>
+                  ) : (
+                    <div className="p-3 bg-yellow-900/20 border border-yellow-700 rounded" role="alert">
+                      <p className="text-yellow-400 text-sm">
+                        ⚠ このバトルログにはリプレイに必要な機体データが含まれていません
+                      </p>
                     </div>
-                  </div>
-                ) : (
-                  <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded" role="alert">
-                    <p className="text-yellow-400 text-sm">
-                      ⚠ このバトルログにはリプレイに必要な機体データが含まれていません
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                <div className="space-y-1 text-sm font-mono">
-                  {selectedBattle.logs.map((log, index) => {
-                    const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
-                    return (
-                      <div
-                        key={index}
-                        className={`border-l-2 pl-2 py-1 ${
-                          isOwnUnit
-                            ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                            : "border-green-900 text-green-600"
+                {/* 下部スクロール: ログ一覧 */}
+                <div className="flex-1 overflow-y-auto p-4">
+                  {/* Log Filter Toggle */}
+                  {hasReplayData && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <button
+                        onClick={() => setIsFiltered((v) => !v)}
+                        aria-label={isFiltered ? "ログフィルター解除" : "自機関連ログのみ表示"}
+                        className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                          isFiltered
+                            ? "bg-blue-700 text-blue-100"
+                            : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                         }`}
                       >
-                        <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
-                        <span>{log.message}</span>
-                      </div>
-                    );
-                  })}
+                        {isFiltered ? "自機関連のみ表示中" : "ログフィルター: OFF"}
+                      </button>
+                    </div>
+                  )}
+
+                  <div ref={logContainerRef} className="space-y-1 text-sm font-mono">
+                    {(() => {
+                      const displayedLogs = filterRelevantLogs(selectedBattle.logs);
+                      const seenTurns = new Set<number>();
+                      return displayedLogs.map((log, index) => {
+                        const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
+                        const isActiveTurn = log.turn === currentTurn;
+                        const isFirstOfTurn = !seenTurns.has(log.turn);
+                        if (isFirstOfTurn) seenTurns.add(log.turn);
+                        return (
+                          <div
+                            key={index}
+                            data-turn-start={isFirstOfTurn ? log.turn : undefined}
+                            className={`border-l-2 pl-2 py-1 transition-colors ${
+                              isActiveTurn
+                                ? "border-green-400 bg-green-900/40 text-green-200 shadow-[0_0_8px_rgba(34,197,94,0.3)]"
+                                : isOwnUnit
+                                ? "border-blue-500 bg-blue-900/30 text-blue-300"
+                                : "border-green-900 text-green-600"
+                            }`}
+                          >
+                            <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
+                            <span>{log.message}</span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
