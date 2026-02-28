@@ -77,7 +77,7 @@ def test_get_mobile_suits_returns_only_user_suits(client, session):
     app.dependency_overrides[get_current_user] = lambda: user1_id
 
     try:
-        response = client.get("/api/mobile_suits/")
+        response = client.get("/api/mobile_suits")
         assert response.status_code == status.HTTP_200_OK
 
         mobile_suits = response.json()
@@ -138,7 +138,7 @@ def test_get_mobile_suits_excludes_npc_suits(client, session):
     app.dependency_overrides[get_current_user] = lambda: user_id
 
     try:
-        response = client.get("/api/mobile_suits/")
+        response = client.get("/api/mobile_suits")
         assert response.status_code == status.HTTP_200_OK
 
         mobile_suits = response.json()
@@ -151,7 +151,7 @@ def test_get_mobile_suits_excludes_npc_suits(client, session):
 
 def test_get_mobile_suits_requires_authentication(client, session):
     """認証なしでアクセスすると401エラーが返ることをテスト."""
-    response = client.get("/api/mobile_suits/")
+    response = client.get("/api/mobile_suits")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -172,7 +172,7 @@ def test_get_mobile_suits_returns_empty_list_for_no_suits(client, session):
     app.dependency_overrides[get_current_user] = lambda: user_id
 
     try:
-        response = client.get("/api/mobile_suits/")
+        response = client.get("/api/mobile_suits")
         assert response.status_code == status.HTTP_200_OK
 
         mobile_suits = response.json()
