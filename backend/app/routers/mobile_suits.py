@@ -28,7 +28,7 @@ class EquipWeaponRequest(BaseModel):
     slot_index: int = 0
 
 
-@router.get("/", response_model=list[MobileSuitResponse])
+@router.get("", response_model=list[MobileSuitResponse])
 def get_mobile_suits(
     session: Session = Depends(get_session),
     user_id: str = Depends(get_current_user),

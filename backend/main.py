@@ -29,7 +29,7 @@ from app.routers import (
     teams,
 )
 
-app = FastAPI(title="MSBS-Next API")
+app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 
 # --- CORS設定 ---
 # ローカル環境と本番環境のオリジンを設定

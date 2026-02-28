@@ -90,7 +90,7 @@ def get_or_create_open_room(session: Session) -> BattleRoom:
 # --- API Endpoints ---
 
 
-@router.post("/", response_model=EntryResponse)
+@router.post("", response_model=EntryResponse)
 async def create_entry(
     entry_request: EntryRequest,
     session: Session = Depends(get_session),
@@ -236,7 +236,7 @@ async def get_entry_count(
     return {"count": len(entries)}
 
 
-@router.delete("/")
+@router.delete("")
 async def cancel_entry(
     session: Session = Depends(get_session),
     user_id: str = Depends(get_current_user),
