@@ -302,16 +302,16 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
           return (
             <div
               key={rankKey}
-              className="p-3 bg-[#0a0a0a] rounded border border-[#00ff41]/30"
+              className="p-3 bg-[#0a0a0a] rounded border border-[#00ff41]/30 flex items-center gap-2"
             >
-              <div className="text-xs text-[#00ff41]/60">{RANK_KEY_LABELS[rankKey]}</div>
-              <div
+              <span className="text-xs text-[#00ff41]/60">{RANK_KEY_LABELS[rankKey]}</span>
+              <span
                 className={`text-lg font-bold ${getRankColor(
                   mobileSuit[rankKey] ?? "C"
                 )}`}
               >
                 {mobileSuit[rankKey] ?? "C"}
-              </div>
+              </span>
             </div>
           );
         })}
@@ -520,43 +520,6 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
           );
         })}
       </div>
-
-      {/* 詳細スペック */}
-      <SciFiPanel variant="primary" chiseled={false}>
-        <div className="p-4">
-          <h4 className="text-sm font-bold text-[#00ff41] mb-3 uppercase tracking-wider">
-            戦闘適性
-          </h4>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <span className="text-[#00ff41]/60">格闘適性:</span>
-              <span className="ml-2 font-bold text-red-400">
-                ×{(mobileSuit.melee_aptitude ?? 1.0).toFixed(1)}
-              </span>
-            </div>
-            <div>
-              <span className="text-[#00ff41]/60">射撃適性:</span>
-              <span className="ml-2 font-bold text-blue-400">
-                ×{(mobileSuit.shooting_aptitude ?? 1.0).toFixed(1)}
-              </span>
-            </div>
-            <div>
-              <span className="text-[#00ff41]/60">命中補正:</span>
-              <span className="ml-2 font-bold text-[#00ff41]">
-                {(mobileSuit.accuracy_bonus ?? 0.0) >= 0 ? "+" : ""}
-                {(mobileSuit.accuracy_bonus ?? 0.0).toFixed(1)}%
-              </span>
-            </div>
-            <div>
-              <span className="text-[#00ff41]/60">回避補正:</span>
-              <span className="ml-2 font-bold text-[#ffb000]">
-                {(mobileSuit.evasion_bonus ?? 0.0) >= 0 ? "+" : ""}
-                {(mobileSuit.evasion_bonus ?? 0.0).toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-      </SciFiPanel>
     </div>
   );
 }
