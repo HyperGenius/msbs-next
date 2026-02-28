@@ -3,7 +3,8 @@
 import { useState, useMemo, useCallback } from "react";
 import { MobileSuit, Pilot } from "@/types/battle";
 import { bulkUpgradeMobileSuit } from "@/services/api";
-import { SciFiButton, SciFiBlockIndicator } from "@/components/ui";
+import { SciFiBlockIndicator } from "@/components/ui";
+import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
 import { getRankColor, getRank } from "@/utils/rankUtils";
 
 type StatType =
@@ -31,7 +32,7 @@ interface StatInfo {
 
 const STAT_TYPES: StatInfo[] = [
   {
-    label: "HP",
+    label: "耐久",
     key: "hp",
     getValue: (ms) => ms.max_hp,
     format: (val) => val.toFixed(0),
@@ -307,7 +308,8 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                   {stat.label}
                 </span>
                 <span className={`text-xs text-[#ffb000] ${steps > 0 ? "visible" : "invisible"}`}>
-                  {stepsCost > 0 ? `${stepsCost.toLocaleString()} CR` : "0 CR"}
+                  {/* {stepsCost > 0 ? `${stepsCost.toLocaleString()} CR` : "0 CR"} */}
+                  Credits: {stepsCost.toLocaleString()} CR
                 </span>
               </div>
 
@@ -368,11 +370,9 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                     >
                       ＋
                     </button>
-                    {steps === 0 && (
-                      <span className="text-xs text-[#00ff41]/40 font-mono ml-1 w-16 text-right">
-                        {nextStepCost > 0 ? `${nextStepCost} CR` : ""}
-                      </span>
-                    )}
+                    <span className={`text-xs text-[#00ff41]/40 font-mono ml-1 w-16 text-right`}>
+                      {nextStepCost > 0 ? `${nextStepCost} CR` : ""}
+                    </span>
                   </div>
                 )}
               </div>
@@ -383,19 +383,17 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
 
       {/* 一括適用ボタン */}
       <div className="pt-2 border-t border-[#00ff41]/20">
-        <SciFiButton
-          variant="accent"
-          size="lg"
-          className="w-full"
-          disabled={!hasPendingUpgrades || !canAffordAll || isApplying}
-          onClick={handleApplyAll}
-        >
-          {isApplying
-            ? "強化中..."
-            : hasPendingUpgrades
-            ? `変更を適用する (合計: ${totalPendingCost.toLocaleString()} Credits)`
-            : "変更を適用する"}
-        </SciFiButton>
+        <HoldSciFiButton
+          onHoldComplete={handleApplyAll}
+          disabled={!hasPendingUpgrades || !canAffordAll}
+          loading={isApplying}
+          label={
+            hasPendingUpgrades
+              ? `長押しで確定 (合計: ${totalPendingCost.toLocaleString()} Credits)`
+              : "長押しで確定"
+          }
+          loadingLabel="強化中..."
+        />
       </div>
     </div>
   );
