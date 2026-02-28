@@ -13,6 +13,7 @@ export function MobileSuitMesh({
     position,
     maxHp,
     currentHp,
+    prevHp,
     sensorRange,
     showSensorRange,
     warnings,
@@ -20,6 +21,7 @@ export function MobileSuitMesh({
     position: { x: number; y: number; z: number };
     maxHp: number;
     currentHp: number;
+    prevHp?: number;
     name: string;
     sensorRange?: number;
     showSensorRange?: boolean;
@@ -28,6 +30,24 @@ export function MobileSuitMesh({
     const scale = 0.05;
     const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
     const color = getHpColor(currentHp, maxHp);
+
+    // 撃破されたターンのみ💥を表示（前のターンでHPが残っていた場合のみ）
+    if (currentHp <= 0) {
+        const wasJustDestroyed = prevHp === undefined || prevHp > 0;
+        if (!wasJustDestroyed) return null;
+        return (
+            <group position={vec}>
+                <Html center>
+                    <div
+                        className="animate-pulse pointer-events-none select-none text-4xl"
+                        style={{ filter: "drop-shadow(0 0 8px #ff4400) drop-shadow(0 0 16px #ff8800)" }}
+                    >
+                        💥
+                    </div>
+                </Html>
+            </group>
+        );
+    }
 
     // 警告アイコンのマッピング
     const warningIcons: Record<WarningType, { icon: string; color: string; label: string }> = {
