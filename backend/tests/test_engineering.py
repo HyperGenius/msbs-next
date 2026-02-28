@@ -503,3 +503,73 @@ def test_upgrade_steps_hits_cap(
     # Requesting 2 steps when only 1 is possible should raise on the 2nd step
     with pytest.raises(ValueError, match="already at maximum"):
         service.upgrade_stat(str(mobile_suit.id), "hp", pilot, steps=2)
+
+
+def test_bulk_upgrade_stats(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test bulk upgrading multiple stats at once."""
+    service = EngineeringService(session)
+    initial_credits = pilot.credits
+    initial_hp = mobile_suit.max_hp
+    initial_armor = mobile_suit.armor
+
+    updated_ms, updated_pilot, total_cost = service.bulk_upgrade_stats(
+        str(mobile_suit.id), pilot, {"hp": 2, "armor": 1}
+    )
+
+    assert updated_ms.max_hp == initial_hp + EngineeringService.HP_INCREASE * 2
+    assert updated_ms.armor == initial_armor + EngineeringService.ARMOR_INCREASE
+    assert updated_pilot.credits == initial_credits - total_cost
+    assert total_cost > 0
+
+
+def test_bulk_upgrade_stats_skip_zero_steps(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test that steps=0 entries are silently skipped."""
+    service = EngineeringService(session)
+    initial_hp = mobile_suit.max_hp
+
+    updated_ms, _, total_cost = service.bulk_upgrade_stats(
+        str(mobile_suit.id), pilot, {"hp": 1, "armor": 0}
+    )
+
+    assert updated_ms.max_hp == initial_hp + EngineeringService.HP_INCREASE
+    assert total_cost > 0
+
+
+def test_bulk_upgrade_stats_insufficient_credits(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test bulk upgrade fails with insufficient credits."""
+    pilot.credits = 10
+    session.add(pilot)
+    session.commit()
+
+    service = EngineeringService(session)
+
+    with pytest.raises(RuntimeError, match="Insufficient credits"):
+        service.bulk_upgrade_stats(str(mobile_suit.id), pilot, {"hp": 1})
+
+
+def test_bulk_upgrade_stats_not_owned(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test bulk upgrade fails when mobile suit is not owned by pilot."""
+    mobile_suit.user_id = "other_user"
+    session.add(mobile_suit)
+    session.commit()
+
+    service = EngineeringService(session)
+
+    with pytest.raises(ValueError, match="don't own"):
+        service.bulk_upgrade_stats(str(mobile_suit.id), pilot, {"hp": 1})
+
+
+def test_bulk_upgrade_stats_not_found(session: Session, pilot: Pilot) -> None:
+    """Test bulk upgrade fails when mobile suit does not exist."""
+    service = EngineeringService(session)
+
+    with pytest.raises(ValueError, match="not found"):
+        service.bulk_upgrade_stats(str(uuid.uuid4()), pilot, {"hp": 1})

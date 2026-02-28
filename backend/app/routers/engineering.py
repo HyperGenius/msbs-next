@@ -20,6 +20,22 @@ class UpgradeRequest(BaseModel):
     steps: int = 1
 
 
+class BulkUpgradeRequest(BaseModel):
+    """Request to bulk-upgrade multiple stats of a mobile suit."""
+
+    mobile_suit_id: str
+    upgrades: dict[str, int]  # e.g. {"hp": 2, "armor": 1}
+
+
+class BulkUpgradeResponse(BaseModel):
+    """Response from a bulk upgrade operation."""
+
+    message: str
+    mobile_suit: MobileSuitResponse
+    remaining_credits: int
+    total_cost_paid: int
+
+
 class UpgradeResponse(BaseModel):
     """Response from upgrade operation."""
 
@@ -126,4 +142,49 @@ async def get_upgrade_preview(
         )
 
     except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/bulk-upgrade", response_model=BulkUpgradeResponse)
+async def bulk_upgrade_mobile_suit(
+    request: BulkUpgradeRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> BulkUpgradeResponse:
+    """Bulk upgrade multiple stats of a mobile suit in a single request.
+
+    Args:
+        request: Bulk upgrade request with mobile suit ID and upgrades map
+        session: Database session
+        user_id: Current user ID from authentication
+
+    Returns:
+        BulkUpgradeResponse with updated mobile suit and remaining credits
+
+    Raises:
+        HTTPException: If upgrade fails
+    """
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    pilot = session.exec(statement).first()
+
+    if not pilot:
+        raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
+
+    service = EngineeringService(session)
+
+    try:
+        updated_ms, updated_pilot, total_cost = service.bulk_upgrade_stats(
+            request.mobile_suit_id, pilot, request.upgrades
+        )
+
+        return BulkUpgradeResponse(
+            message="一括強化が完了しました！",
+            mobile_suit=MobileSuitResponse.from_mobile_suit(updated_ms),
+            remaining_credits=updated_pilot.credits,
+            total_cost_paid=total_cost,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

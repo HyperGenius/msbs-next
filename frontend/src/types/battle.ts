@@ -315,6 +315,24 @@ export interface UpgradePreview {
 }
 
 /**
+ * 一括強化リクエスト
+ */
+export interface BulkUpgradeRequest {
+    mobile_suit_id: string;
+    upgrades: Record<string, number>;  // e.g. { "hp": 2, "armor": 1 }
+}
+
+/**
+ * 一括強化レスポンス
+ */
+export interface BulkUpgradeResponse {
+    message: string;
+    mobile_suit: MobileSuit;
+    remaining_credits: number;
+    total_cost_paid: number;
+}
+
+/**
  * 武器ショップ商品
  */
 export interface WeaponListing {
