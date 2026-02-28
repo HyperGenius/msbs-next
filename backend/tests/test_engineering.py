@@ -452,7 +452,9 @@ def test_upgrade_multiple_steps_cumulative_cost(
 
     # Calculate expected cost for each step
     expected_total = sum(
-        EngineeringService.calculate_upgrade_cost("hp", initial_hp + i * EngineeringService.HP_INCREASE)
+        EngineeringService.calculate_upgrade_cost(
+            "hp", initial_hp + i * EngineeringService.HP_INCREASE
+        )
         for i in range(3)
     )
 
