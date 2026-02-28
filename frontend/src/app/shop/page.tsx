@@ -6,6 +6,7 @@ import { useShopListings, purchaseMobileSuit, usePilot, useWeaponListings, purch
 import { ShopListing, WeaponListing } from "@/types/battle";
 import Link from "next/link";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
+import { getRankColor, getRank } from "@/utils/rankUtils";
 
 type TabType = "mobile_suits" | "weapons";
 
@@ -211,15 +212,21 @@ export default function ShopPage() {
                       <div className="grid grid-cols-2 gap-2 text-sm mb-3 text-[#00ff41]">
                         <div>
                           <span className="text-[#00ff41]/60">HP:</span>
-                          <span className="ml-2 font-bold">{item.specs.max_hp}</span>
+                          <span className={`ml-2 font-bold ${getRankColor(getRank("hp", item.specs.max_hp))}`}>
+                            {getRank("hp", item.specs.max_hp)}
+                          </span>
                         </div>
                         <div>
                           <span className="text-[#00ff41]/60">装甲:</span>
-                          <span className="ml-2 font-bold">{item.specs.armor}</span>
+                          <span className={`ml-2 font-bold ${getRankColor(getRank("armor", item.specs.armor))}`}>
+                            {getRank("armor", item.specs.armor)}
+                          </span>
                         </div>
                         <div>
                           <span className="text-[#00ff41]/60">機動性:</span>
-                          <span className="ml-2 font-bold">{item.specs.mobility}</span>
+                          <span className={`ml-2 font-bold ${getRankColor(getRank("mobility", item.specs.mobility))}`}>
+                            {getRank("mobility", item.specs.mobility)}
+                          </span>
                         </div>
                         <div>
                           <span className="text-[#00ff41]/60">武器:</span>

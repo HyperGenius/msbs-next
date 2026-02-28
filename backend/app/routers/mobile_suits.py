@@ -9,7 +9,13 @@ from app.core.auth import get_current_user
 from app.core.gamedata import get_weapon_listing_by_id
 from app.db import get_session
 from app.engine.constants import MAX_WEAPON_SLOTS
-from app.models.models import MobileSuit, MobileSuitUpdate, Pilot, Weapon
+from app.models.models import (
+    MobileSuit,
+    MobileSuitResponse,
+    MobileSuitUpdate,
+    Pilot,
+    Weapon,
+)
 from app.services.mobile_suit_service import MobileSuitService
 
 router = APIRouter(prefix="/api/mobile_suits", tags=["mobile_suits"])
@@ -22,27 +28,28 @@ class EquipWeaponRequest(BaseModel):
     slot_index: int = 0
 
 
-@router.get("/", response_model=list[MobileSuit])
+@router.get("/", response_model=list[MobileSuitResponse])
 def get_mobile_suits(
     session: Session = Depends(get_session),
     user_id: str = Depends(get_current_user),
-) -> list[MobileSuit]:
+) -> list[MobileSuitResponse]:
     """機体一覧取得."""
-    return MobileSuitService.get_all_mobile_suits(session, user_id)
+    suits = MobileSuitService.get_all_mobile_suits(session, user_id)
+    return [MobileSuitResponse.from_mobile_suit(ms) for ms in suits]
 
 
-@router.put("/{ms_id}", response_model=MobileSuit)
+@router.put("/{ms_id}", response_model=MobileSuitResponse)
 async def update_mobile_suit(
     ms_id: str,
     ms_data: MobileSuitUpdate,
     session: Session = Depends(get_session),
     user_id: str = Depends(get_current_user),
-) -> MobileSuit:
+) -> MobileSuitResponse:
     """機体更新."""
     updated_ms = MobileSuitService.update_mobile_suit(session, ms_id, ms_data)
     if not updated_ms:
         raise HTTPException(status_code=404, detail="Mobile Suit not found")
-    return updated_ms
+    return MobileSuitResponse.from_mobile_suit(updated_ms)
 
 
 def _get_validated_mobile_suit(
@@ -149,13 +156,13 @@ def _set_weapon_in_slot(
     mobile_suit.weapons = new_weapons
 
 
-@router.put("/{ms_id}/equip", response_model=MobileSuit)
+@router.put("/{ms_id}/equip", response_model=MobileSuitResponse)
 async def equip_weapon(
     ms_id: str,
     equip_request: EquipWeaponRequest,
     session: Session = Depends(get_session),
     user_id: str = Depends(get_current_user),
-) -> MobileSuit:
+) -> MobileSuitResponse:
     """機体に武器を装備する.
 
     Args:
@@ -165,7 +172,7 @@ async def equip_weapon(
         user_id: 現在のユーザーID
 
     Returns:
-        MobileSuit: 更新された機体情報
+        MobileSuitResponse: 更新された機体情報
 
     Raises:
         HTTPException: 機体が存在しない、武器を所持していないなどのエラー
@@ -192,4 +199,4 @@ async def equip_weapon(
     session.commit()
     session.refresh(mobile_suit)
 
-    return mobile_suit
+    return MobileSuitResponse.from_mobile_suit(mobile_suit)

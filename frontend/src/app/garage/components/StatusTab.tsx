@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { MobileSuit, Pilot, UpgradePreview } from "@/types/battle";
 import { upgradeMobileSuit, getUpgradePreview } from "@/services/api";
 import { SciFiButton, SciFiPanel } from "@/components/ui";
+import { getRankColor, getRank } from "@/utils/rankUtils";
 
 type StatType = "hp" | "armor" | "mobility" | "weapon_power" | "melee_aptitude" | "shooting_aptitude" | "accuracy_bonus" | "evasion_bonus" | "acceleration_bonus" | "turning_bonus";
 
@@ -12,6 +13,10 @@ interface StatInfo {
   key: StatType;
   getValue: (ms: MobileSuit) => number;
   format: (val: number) => string;
+  /** ランク変換する場合のランクキー名 (hp_rank, armor_rank, mobility_rank) */
+  rankKey?: keyof Pick<MobileSuit, "hp_rank" | "armor_rank" | "mobility_rank">;
+  /** getRank() に渡すステータス名 (rankKey がある場合に使用) */
+  rankStatName?: "hp" | "armor" | "mobility";
 }
 
 const STAT_TYPES: StatInfo[] = [
@@ -20,18 +25,24 @@ const STAT_TYPES: StatInfo[] = [
     key: "hp",
     getValue: (ms) => ms.max_hp,
     format: (val) => val.toFixed(0),
+    rankKey: "hp_rank",
+    rankStatName: "hp",
   },
   {
     label: "装甲",
     key: "armor",
     getValue: (ms) => ms.armor,
     format: (val) => val.toFixed(0),
+    rankKey: "armor_rank",
+    rankStatName: "armor",
   },
   {
     label: "機動性",
     key: "mobility",
     getValue: (ms) => ms.mobility,
     format: (val) => val.toFixed(2),
+    rankKey: "mobility_rank",
+    rankStatName: "mobility",
   },
   {
     label: "武器威力",
@@ -134,19 +145,25 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
 
   return (
     <div className="space-y-4">
-      {/* 基本スペック表示 */}
+      {/* 基本スペック表示（ランク表記） */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3 bg-[#0a0a0a] rounded border border-[#00ff41]/30">
           <div className="text-xs text-[#00ff41]/60">HP</div>
-          <div className="text-lg font-bold text-[#00ff41]">{mobileSuit.max_hp}</div>
+          <div className={`text-lg font-bold ${getRankColor(mobileSuit.hp_rank ?? "C")}`}>
+            {mobileSuit.hp_rank ?? "C"}
+          </div>
         </div>
         <div className="p-3 bg-[#0a0a0a] rounded border border-[#00ff41]/30">
           <div className="text-xs text-[#00ff41]/60">装甲</div>
-          <div className="text-lg font-bold text-[#00ff41]">{mobileSuit.armor}</div>
+          <div className={`text-lg font-bold ${getRankColor(mobileSuit.armor_rank ?? "C")}`}>
+            {mobileSuit.armor_rank ?? "C"}
+          </div>
         </div>
         <div className="p-3 bg-[#0a0a0a] rounded border border-[#00ff41]/30">
           <div className="text-xs text-[#00ff41]/60">機動性</div>
-          <div className="text-lg font-bold text-[#00ff41]">{mobileSuit.mobility.toFixed(2)}</div>
+          <div className={`text-lg font-bold ${getRankColor(mobileSuit.mobility_rank ?? "C")}`}>
+            {mobileSuit.mobility_rank ?? "C"}
+          </div>
         </div>
         <div className="p-3 bg-[#0a0a0a] rounded border border-[#00ff41]/30">
           <div className="text-xs text-[#00ff41]/60">武器威力</div>
@@ -186,6 +203,13 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
           const canAfford = pilot && preview ? pilot.credits >= preview.cost : false;
           const isMaxed = preview?.at_max_cap || false;
 
+          // ランク表示用（rankKeyが定義されているステータスのみ）
+          const currentRank = stat.rankKey ? mobileSuit[stat.rankKey] : undefined;
+          const newRank =
+            stat.rankStatName && preview && !isMaxed
+              ? getRank(stat.rankStatName, preview.new_value)
+              : undefined;
+
           return (
             <div
               key={stat.key}
@@ -195,15 +219,29 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                 <div className="flex-1">
                   <h5 className="text-sm font-bold mb-1 text-[#00ff41]">{stat.label}</h5>
                   <div className="flex items-center gap-3 text-sm">
-                    <span>
-                      現在: <span className="text-[#ffb000] font-bold">{stat.format(currentValue)}</span>
-                    </span>
+                    {currentRank ? (
+                      /* ランク変換対象ステータス：ランク表示 */
+                      <span>
+                        現在: <span className={`font-bold ${getRankColor(currentRank)}`}>{currentRank}</span>
+                      </span>
+                    ) : (
+                      <span>
+                        現在: <span className="text-[#ffb000] font-bold">{stat.format(currentValue)}</span>
+                      </span>
+                    )}
                     {preview && !isMaxed && (
                       <>
                         <span className="text-[#00ff41]/30">→</span>
-                        <span>
-                          強化後: <span className="text-[#00ff41] font-bold">{stat.format(preview.new_value)}</span>
-                        </span>
+                        {newRank ? (
+                          /* ランク変換対象：強化後もランク表示 */
+                          <span>
+                            強化後: <span className={`font-bold ${getRankColor(newRank)}`}>{newRank}</span>
+                          </span>
+                        ) : (
+                          <span>
+                            強化後: <span className="text-[#00ff41] font-bold">{stat.format(preview.new_value)}</span>
+                          </span>
+                        )}
                       </>
                     )}
                   </div>
@@ -276,3 +314,4 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
     </div>
   );
 }
+
