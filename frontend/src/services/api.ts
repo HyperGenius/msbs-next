@@ -109,6 +109,45 @@ export function useMissions() {
 }
 
 /**
+ * 未読バトル結果を取得するSWRフック
+ */
+export function useUnreadBattleResults() {
+  const { data, error, isLoading, mutate } = useSWR<BattleResult[]>(
+    `${API_BASE_URL}/api/battles/unread`,
+    fetcher
+  );
+
+  return {
+    unreadBattles: data,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * バトル結果を既読にする関数
+ */
+export async function markBattleAsRead(battleId: string): Promise<void> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/battles/${battleId}/read`, {
+    method: "POST",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to mark battle as read: ${res.status} ${res.statusText}`);
+  }
+}
+
+/**
  * バトル履歴を取得するSWRフック
  */
 export function useBattleHistory(limit: number = 50) {
