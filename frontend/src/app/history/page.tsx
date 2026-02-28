@@ -21,7 +21,9 @@ export default function HistoryPage() {
     [mobileSuits]
   );
 
-  /** player_info から自機・僚機の ID セットを算出 */
+  /** player_info から自機・僚機の ID セットを算出
+   * Note: enemies_info にはバッチ処理時の全非主要ユニットが含まれ、
+   * 同じ team_id を持つユニットは僚機として扱う */
   const playerTeamIds = useMemo(() => {
     if (!selectedBattle?.player_info) return new Set<string>();
     const playerInfo = selectedBattle.player_info;
@@ -270,13 +272,14 @@ export default function HistoryPage() {
                   <div className="flex items-center gap-2 mb-2">
                     <button
                       onClick={() => setIsFiltered((v) => !v)}
+                      aria-label={isFiltered ? "ログフィルター解除" : "自機関連ログのみ表示"}
                       className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
                         isFiltered
                           ? "bg-blue-700 text-blue-100"
                           : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                       }`}
                     >
-                      {isFiltered ? "🔍 自機関連のみ表示中" : "🔍 ログフィルター: OFF"}
+                      {isFiltered ? "自機関連のみ表示中" : "ログフィルター: OFF"}
                     </button>
                   </div>
                 )}
@@ -293,7 +296,7 @@ export default function HistoryPage() {
                       return (
                         <div
                           key={index}
-                          {...(isFirstOfTurn ? { "data-turn-start": log.turn } : {})}
+                          data-turn-start={isFirstOfTurn ? log.turn : undefined}
                           className={`border-l-2 pl-2 py-1 transition-colors ${
                             isActiveTurn
                               ? "border-green-400 bg-green-900/40 text-green-200 shadow-[0_0_8px_rgba(34,197,94,0.3)]"
