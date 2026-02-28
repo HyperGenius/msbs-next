@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { MobileSuit, Pilot } from "@/types/battle";
 import { upgradeMobileSuit } from "@/services/api";
-import { SciFiButton, SciFiPanel, SciFiProgress } from "@/components/ui";
+import { SciFiButton, SciFiPanel, SciFiProgress, HoldSciFiButton } from "@/components/ui";
 import { getRankColor, getRank } from "@/utils/rankUtils";
 
 /** ランク進捗計算用の閾値テーブル（rankUtils と同じ値） */
@@ -502,24 +502,18 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                     </div>
                   </div>
 
-                  {/* 確定ボタン */}
-                  <SciFiButton
-                    variant="primary"
-                    size="sm"
-                    className="w-full touch-manipulation"
-                    onClick={() => handleConfirm(stat)}
-                    disabled={
-                      steps === 0 ||
-                      !canAfford ||
-                      confirming === stat.key
+                  {/* 確定ボタン（長押しで発火） */}
+                  <HoldSciFiButton
+                    onHoldComplete={() => handleConfirm(stat)}
+                    disabled={steps === 0 || !canAfford}
+                    loading={confirming === stat.key}
+                    label={
+                      steps > 0
+                        ? `長押しで確定 (${totalCost.toLocaleString()} Credits)`
+                        : "長押しで確定"
                     }
-                  >
-                    {confirming === stat.key
-                      ? "強化中..."
-                      : steps > 0
-                      ? `実行 (${totalCost.toLocaleString()} Credits)`
-                      : "実行"}
-                  </SciFiButton>
+                    loadingLabel="強化中..."
+                  />
                 </>
               )}
             </div>
