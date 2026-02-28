@@ -1,9 +1,9 @@
 /* frontend/src/app/history/page.tsx */
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBattleHistory, useMissions, useMobileSuits } from "@/services/api";
-import { BattleResult, MobileSuit } from "@/types/battle";
+import { BattleLog, BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 import Link from "next/link";
 
@@ -13,11 +13,56 @@ export default function HistoryPage() {
   const { mobileSuits } = useMobileSuits();
   const [selectedBattle, setSelectedBattle] = useState<BattleResult | null>(null);
   const [currentTurn, setCurrentTurn] = useState(0);
+  const [isFiltered, setIsFiltered] = useState(false);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   const ownedMobileSuitIds = useMemo(
     () => new Set(mobileSuits?.map((ms) => ms.id) ?? []),
     [mobileSuits]
   );
+
+  /** player_info から自機・僚機の ID セットを算出 */
+  const playerTeamIds = useMemo(() => {
+    if (!selectedBattle?.player_info) return new Set<string>();
+    const playerInfo = selectedBattle.player_info;
+    const teamId = playerInfo.team_id ?? playerInfo.id;
+    const ids = new Set<string>([playerInfo.id]);
+    // 同じ team_id を持つ僚機を追加
+    if (selectedBattle.enemies_info) {
+      for (const e of selectedBattle.enemies_info) {
+        if ((e.team_id ?? e.id) === teamId) {
+          ids.add(e.id);
+        }
+      }
+    }
+    return ids;
+  }, [selectedBattle]);
+
+  const playerId = selectedBattle?.player_info?.id ?? null;
+
+  /** ログフィルタリング: 自機/僚機のアクション or 自機がターゲット */
+  const filterRelevantLogs = useCallback(
+    (logs: BattleLog[]): BattleLog[] => {
+      if (!isFiltered || !playerId) return logs;
+      return logs.filter(
+        (log) =>
+          playerTeamIds.has(log.actor_id) ||
+          (log.target_id != null && log.target_id === playerId)
+      );
+    },
+    [isFiltered, playerId, playerTeamIds]
+  );
+
+  /** currentTurn 変更時に該当ターンのログへ自動スクロール */
+  useEffect(() => {
+    if (!logContainerRef.current || !selectedBattle) return;
+    const target = logContainerRef.current.querySelector(
+      `[data-turn-start="${currentTurn}"]`
+    );
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [currentTurn, selectedBattle]);
 
   const getMissionName = (missionId: number | null, createdAt?: string): string => {
     if (missionId && missions) {
@@ -220,23 +265,49 @@ export default function HistoryPage() {
                   </div>
                 )}
 
-                <div className="space-y-1 text-sm font-mono">
-                  {selectedBattle.logs.map((log, index) => {
-                    const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
-                    return (
-                      <div
-                        key={index}
-                        className={`border-l-2 pl-2 py-1 ${
-                          isOwnUnit
-                            ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                            : "border-green-900 text-green-600"
-                        }`}
-                      >
-                        <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
-                        <span>{log.message}</span>
-                      </div>
-                    );
-                  })}
+                {/* Log Filter Toggle */}
+                {hasReplayData && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      onClick={() => setIsFiltered((v) => !v)}
+                      className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                        isFiltered
+                          ? "bg-blue-700 text-blue-100"
+                          : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      }`}
+                    >
+                      {isFiltered ? "🔍 自機関連のみ表示中" : "🔍 ログフィルター: OFF"}
+                    </button>
+                  </div>
+                )}
+
+                <div ref={logContainerRef} className="space-y-1 text-sm font-mono">
+                  {(() => {
+                    const displayedLogs = filterRelevantLogs(selectedBattle.logs);
+                    const seenTurns = new Set<number>();
+                    return displayedLogs.map((log, index) => {
+                      const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
+                      const isActiveTurn = log.turn === currentTurn;
+                      const isFirstOfTurn = !seenTurns.has(log.turn);
+                      if (isFirstOfTurn) seenTurns.add(log.turn);
+                      return (
+                        <div
+                          key={index}
+                          {...(isFirstOfTurn ? { "data-turn-start": log.turn } : {})}
+                          className={`border-l-2 pl-2 py-1 transition-colors ${
+                            isActiveTurn
+                              ? "border-green-400 bg-green-900/40 text-green-200 shadow-[0_0_8px_rgba(34,197,94,0.3)]"
+                              : isOwnUnit
+                              ? "border-blue-500 bg-blue-900/30 text-blue-300"
+                              : "border-green-900 text-green-600"
+                          }`}
+                        >
+                          <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
+                          <span>{log.message}</span>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             </div>

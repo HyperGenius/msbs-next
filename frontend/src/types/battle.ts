@@ -50,6 +50,7 @@ export interface MobileSuit {
     position: Vector3;
     weapons: Weapon[];
     side: "PLAYER" | "ENEMY";
+    team_id?: string | null;
     tactics: Tactics;
     beam_resistance?: number;
     physical_resistance?: number;
