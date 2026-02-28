@@ -281,22 +281,29 @@ class EngineeringService:
         attributes.flag_modified(ms, "weapons")
 
     def upgrade_stat(
-        self, mobile_suit_id: str, stat_type: str, pilot: Pilot
+        self, mobile_suit_id: str, stat_type: str, pilot: Pilot, steps: int = 1
     ) -> tuple[MobileSuit, Pilot, int]:
-        """Upgrade a specific stat of a mobile suit.
+        """Upgrade a specific stat of a mobile suit one or more steps.
+
+        All cost calculation and cap validation is performed server-side for each
+        step so that client-supplied values are never trusted.
 
         Args:
             mobile_suit_id: ID of the mobile suit to upgrade
             stat_type: Type of stat to upgrade
             pilot: Pilot who owns the mobile suit
+            steps: Number of upgrade steps to apply (default 1)
 
         Returns:
-            tuple[MobileSuit, Pilot, int]: Updated mobile suit, pilot, and upgrade cost
+            tuple[MobileSuit, Pilot, int]: Updated mobile suit, pilot, and total cost
 
         Raises:
-            ValueError: If stat is at max cap or invalid parameters
+            ValueError: If stat is at max cap, invalid parameters, or steps < 1
             RuntimeError: If insufficient credits
         """
+        if steps < 1:
+            raise ValueError("steps must be at least 1")
+
         # Convert string ID to UUID if necessary
         ms_id = (
             uuid.UUID(mobile_suit_id)
@@ -313,20 +320,21 @@ class EngineeringService:
         if ms.user_id != pilot.user_id:
             raise ValueError("You don't own this mobile suit")
 
-        # Validate and get cost
-        _, cost = self._validate_and_get_cost(ms, stat_type)
+        total_cost = 0
+        for _ in range(steps):
+            # Validate cap and compute cost for the current stat value
+            _, cost = self._validate_and_get_cost(ms, stat_type)
 
-        # Check if pilot has enough credits
-        if pilot.credits < cost:
-            raise RuntimeError(
-                f"Insufficient credits. Required: {cost}, Available: {pilot.credits}"
-            )
+            # Check if pilot has enough credits for this step
+            if pilot.credits < cost:
+                raise RuntimeError(
+                    f"Insufficient credits. Required: {cost}, Available: {pilot.credits}"
+                )
 
-        # Deduct credits
-        pilot.credits -= cost
-
-        # Apply upgrade
-        self._apply_upgrade(ms, stat_type)
+            # Deduct credits and apply upgrade
+            pilot.credits -= cost
+            total_cost += cost
+            self._apply_upgrade(ms, stat_type)
 
         # Save changes
         self.session.add(ms)
@@ -335,7 +343,7 @@ class EngineeringService:
         self.session.refresh(ms)
         self.session.refresh(pilot)
 
-        return ms, pilot, cost
+        return ms, pilot, total_cost
 
     def get_upgrade_preview(self, mobile_suit_id: str, stat_type: str) -> dict:
         """Get preview of what an upgrade would do.

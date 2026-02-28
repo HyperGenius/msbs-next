@@ -1,7 +1,5 @@
 """ランク変換ユーティリティのテスト."""
 
-import pytest
-
 from app.core.rank_utils import get_rank
 
 
@@ -27,8 +25,8 @@ class TestGetRank:
 
     def test_hp_rank_c(self):
         """HP が 700〜999 は C ランク."""
-        assert get_rank("hp", 800) == "C"   # Zaku II
-        assert get_rank("hp", 750) == "C"   # GM
+        assert get_rank("hp", 800) == "C"  # Zaku II
+        assert get_rank("hp", 750) == "C"  # GM
         assert get_rank("hp", 700) == "C"
 
     def test_hp_rank_d(self):
@@ -44,24 +42,24 @@ class TestGetRank:
     # --- 装甲 ランクテスト ---
     def test_armor_rank_s(self):
         """装甲が 100 以上は S ランク."""
-        assert get_rank("armor", 100) == "S"   # Gundam
+        assert get_rank("armor", 100) == "S"  # Gundam
         assert get_rank("armor", 150) == "S"
 
     def test_armor_rank_a(self):
         """装甲が 80〜99 は A ランク."""
-        assert get_rank("armor", 80) == "A"    # Dom
-        assert get_rank("armor", 85) == "A"    # Gelgoog
+        assert get_rank("armor", 80) == "A"  # Dom
+        assert get_rank("armor", 85) == "A"  # Gelgoog
         assert get_rank("armor", 99) == "A"
 
     def test_armor_rank_b(self):
         """装甲が 60〜79 は B ランク."""
-        assert get_rank("armor", 60) == "B"    # Gouf
+        assert get_rank("armor", 60) == "B"  # Gouf
         assert get_rank("armor", 79) == "B"
 
     def test_armor_rank_c(self):
         """装甲が 40〜59 は C ランク."""
-        assert get_rank("armor", 50) == "C"    # Zaku II
-        assert get_rank("armor", 45) == "C"    # GM
+        assert get_rank("armor", 50) == "C"  # Zaku II
+        assert get_rank("armor", 45) == "C"  # GM
 
     def test_armor_rank_d(self):
         """装甲が 20〜39 は D ランク."""
@@ -81,23 +79,23 @@ class TestGetRank:
 
     def test_mobility_rank_a(self):
         """機動性が 1.5〜1.9 は A ランク."""
-        assert get_rank("mobility", 1.5) == "A"   # Gundam
+        assert get_rank("mobility", 1.5) == "A"  # Gundam
         assert get_rank("mobility", 1.9) == "A"
 
     def test_mobility_rank_b(self):
         """機動性が 1.2〜1.4 は B ランク."""
         assert get_rank("mobility", 1.2) == "B"
-        assert get_rank("mobility", 1.3) == "B"   # Gouf
-        assert get_rank("mobility", 1.4) == "B"   # Gelgoog
+        assert get_rank("mobility", 1.3) == "B"  # Gouf
+        assert get_rank("mobility", 1.4) == "B"  # Gelgoog
 
     def test_mobility_rank_c(self):
         """機動性が 0.9〜1.1 は C ランク."""
-        assert get_rank("mobility", 1.0) == "C"   # Zaku II
-        assert get_rank("mobility", 1.1) == "C"   # GM
+        assert get_rank("mobility", 1.0) == "C"  # Zaku II
+        assert get_rank("mobility", 1.1) == "C"  # GM
 
     def test_mobility_rank_d(self):
         """機動性が 0.6〜0.8 は D ランク."""
-        assert get_rank("mobility", 0.8) == "D"   # Dom
+        assert get_rank("mobility", 0.8) == "D"  # Dom
         assert get_rank("mobility", 0.6) == "D"
 
     def test_mobility_rank_e(self):

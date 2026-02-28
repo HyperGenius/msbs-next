@@ -288,6 +288,7 @@ export interface PurchaseResponse {
 export interface UpgradeRequest {
     mobile_suit_id: string;
     target_stat: "hp" | "armor" | "mobility" | "weapon_power" | "melee_aptitude" | "shooting_aptitude" | "accuracy_bonus" | "evasion_bonus" | "acceleration_bonus" | "turning_bonus";
+    steps?: number;
 }
 
 /**

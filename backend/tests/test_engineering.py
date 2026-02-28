@@ -423,3 +423,83 @@ def test_upgrade_preview_evasion_bonus_at_cap(
     assert preview["new_value"] == pytest.approx(
         EngineeringService.MAX_EVASION_BONUS_CAP
     )
+
+
+def test_upgrade_multiple_steps(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test upgrading HP with multiple steps at once."""
+    service = EngineeringService(session)
+    initial_credits = pilot.credits
+    initial_hp = mobile_suit.max_hp
+    steps = 3
+
+    updated_ms, updated_pilot, total_cost = service.upgrade_stat(
+        str(mobile_suit.id), "hp", pilot, steps=steps
+    )
+
+    assert updated_ms.max_hp == initial_hp + EngineeringService.HP_INCREASE * steps
+    assert updated_pilot.credits == initial_credits - total_cost
+    assert total_cost > 0
+
+
+def test_upgrade_multiple_steps_cumulative_cost(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test that multi-step cost equals sum of individual step costs."""
+    service = EngineeringService(session)
+    initial_hp = mobile_suit.max_hp
+
+    # Calculate expected cost for each step
+    expected_total = sum(
+        EngineeringService.calculate_upgrade_cost(
+            "hp", initial_hp + i * EngineeringService.HP_INCREASE
+        )
+        for i in range(3)
+    )
+
+    _, _, total_cost = service.upgrade_stat(str(mobile_suit.id), "hp", pilot, steps=3)
+
+    assert total_cost == expected_total
+
+
+def test_upgrade_steps_invalid_zero(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test that steps=0 raises ValueError."""
+    service = EngineeringService(session)
+
+    with pytest.raises(ValueError, match="steps must be at least 1"):
+        service.upgrade_stat(str(mobile_suit.id), "hp", pilot, steps=0)
+
+
+def test_upgrade_steps_insufficient_credits_midway(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test that insufficient credits mid-loop raises RuntimeError."""
+    # Give pilot only enough credits for 1 upgrade but request 2
+    cost_step1 = EngineeringService.calculate_upgrade_cost("hp", mobile_suit.max_hp)
+    pilot.credits = cost_step1  # Exactly enough for first step only
+    session.add(pilot)
+    session.commit()
+
+    service = EngineeringService(session)
+
+    with pytest.raises(RuntimeError, match="Insufficient credits"):
+        service.upgrade_stat(str(mobile_suit.id), "hp", pilot, steps=2)
+
+
+def test_upgrade_steps_hits_cap(
+    session: Session, pilot: Pilot, mobile_suit: MobileSuit
+) -> None:
+    """Test that steps hitting the cap raises ValueError."""
+    # Set HP one step below cap
+    mobile_suit.max_hp = EngineeringService.MAX_HP_CAP - EngineeringService.HP_INCREASE
+    session.add(mobile_suit)
+    session.commit()
+
+    service = EngineeringService(session)
+
+    # Requesting 2 steps when only 1 is possible should raise on the 2nd step
+    with pytest.raises(ValueError, match="already at maximum"):
+        service.upgrade_stat(str(mobile_suit.id), "hp", pilot, steps=2)
