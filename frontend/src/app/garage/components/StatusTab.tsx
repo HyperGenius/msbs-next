@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { MobileSuit, Pilot, UpgradePreview } from "@/types/battle";
 import { upgradeMobileSuit, getUpgradePreview } from "@/services/api";
 import { SciFiButton, SciFiPanel } from "@/components/ui";
-import { getRankColor } from "@/utils/rankUtils";
+import { getRankColor, getRank } from "@/utils/rankUtils";
 
 type StatType = "hp" | "armor" | "mobility" | "weapon_power" | "melee_aptitude" | "shooting_aptitude" | "accuracy_bonus" | "evasion_bonus" | "acceleration_bonus" | "turning_bonus";
 
@@ -15,6 +15,8 @@ interface StatInfo {
   format: (val: number) => string;
   /** ランク変換する場合のランクキー名 (hp_rank, armor_rank, mobility_rank) */
   rankKey?: keyof Pick<MobileSuit, "hp_rank" | "armor_rank" | "mobility_rank">;
+  /** getRank() に渡すステータス名 (rankKey がある場合に使用) */
+  rankStatName?: "hp" | "armor" | "mobility";
 }
 
 const STAT_TYPES: StatInfo[] = [
@@ -24,6 +26,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.max_hp,
     format: (val) => val.toFixed(0),
     rankKey: "hp_rank",
+    rankStatName: "hp",
   },
   {
     label: "装甲",
@@ -31,6 +34,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.armor,
     format: (val) => val.toFixed(0),
     rankKey: "armor_rank",
+    rankStatName: "armor",
   },
   {
     label: "機動性",
@@ -38,6 +42,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.mobility,
     format: (val) => val.toFixed(2),
     rankKey: "mobility_rank",
+    rankStatName: "mobility",
   },
   {
     label: "武器威力",
@@ -200,6 +205,10 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
 
           // ランク表示用（rankKeyが定義されているステータスのみ）
           const currentRank = stat.rankKey ? mobileSuit[stat.rankKey] : undefined;
+          const newRank =
+            stat.rankStatName && preview && !isMaxed
+              ? getRank(stat.rankStatName, preview.new_value)
+              : undefined;
 
           return (
             <div
@@ -223,10 +232,16 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                     {preview && !isMaxed && (
                       <>
                         <span className="text-[#00ff41]/30">→</span>
-                        {/* 強化後の値表示（ランク対象は値のみ、ランク変動はバックエンドから更新後に反映） */}
-                        <span>
-                          強化後: <span className="text-[#00ff41] font-bold">{stat.format(preview.new_value)}</span>
-                        </span>
+                        {newRank ? (
+                          /* ランク変換対象：強化後もランク表示 */
+                          <span>
+                            強化後: <span className={`font-bold ${getRankColor(newRank)}`}>{newRank}</span>
+                          </span>
+                        ) : (
+                          <span>
+                            強化後: <span className="text-[#00ff41] font-bold">{stat.format(preview.new_value)}</span>
+                          </span>
+                        )}
                       </>
                     )}
                   </div>
