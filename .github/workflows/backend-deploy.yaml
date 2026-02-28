@@ -14,6 +14,14 @@ on:
         required: true
       GCP_PROJECT_ID:
         required: true
+      NEON_DATABASE_URL:
+        required: true
+      CLERK_SECRET_KEY:
+        required: true
+      CLERK_JWKS_URL:
+        required: true
+      ALLOWED_ORIGINS:
+        required: false
 
 jobs:
   deploy:
@@ -63,4 +71,10 @@ jobs:
         run: |
           cd infra/cloud-run
           terraform init
-          terraform apply -auto-approve -var="image_tag=${{ steps.tag.outputs.value }}"
+          terraform apply -auto-approve \
+            -var="image_tag=${{ steps.tag.outputs.value }}" \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="database_url=${{ secrets.NEON_DATABASE_URL }}" \
+            -var="clerk_secret_key=${{ secrets.CLERK_SECRET_KEY }}" \
+            -var="clerk_jwks_url=${{ secrets.CLERK_JWKS_URL }}" \
+            -var="allowed_origins=${{ secrets.ALLOWED_ORIGINS }}"
