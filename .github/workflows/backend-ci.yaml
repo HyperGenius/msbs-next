@@ -11,6 +11,15 @@ on:
     paths:
       - "backend/**"
 
+# 連続してPushされた際、古いCIジョブを自動キャンセルする
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# デフォルト権限を最小限に設定
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -27,19 +36,28 @@ jobs:
         with:
           python-version: "3.11"
           cache: 'pip'
+          # サブディレクトリにファイルがある場合は明示
+          cache-dependency-path: 'backend/requirements-dev.txt'
       
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Lint
+      - name: Lint (Ruff)
+        # --output-format=github をつけるとPR上にインラインで警告が表示される
         run: |
-          ruff check .
+          ruff check --output-format=github .
           ruff format --check .
 
-      # 型チェックを追加する, backend/alembic/versions/ を除外する
-      # - name: Type Check
-      #   run: mypy .
+      - name: Type Check (mypy)
+        # alembic/versions/ 以下はマイグレーションファイルが入る想定で、ここは型チェックの対象外とする
+        run: mypy --exclude '^alembic/versions/' .
 
-      # テストを追加する
-      # - name: Run tests
-      #   run: pytest
+      - name: Run tests (pytest)
+        run: pytest
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/backend-deploy.yaml
+    # inherit にすることで親のシークレットをそのまま渡す
+    secrets: inherit
