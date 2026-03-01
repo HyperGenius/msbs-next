@@ -1,9 +1,9 @@
 /* frontend/src/app/garage/components/WeaponChangeModal.tsx */
 "use client";
 
-import { MobileSuit, WeaponListing, Pilot } from "@/types/battle";
+import { MobileSuit, Weapon, WeaponListing, Pilot } from "@/types/battle";
 import { SciFiButton, SciFiCard, SciFiHeading, SciFiPanel } from "@/components/ui";
-import { calcWeaponDiff, diffColor, diffText } from "../utils";
+import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
 
 interface WeaponChangeModalProps {
   selectedMs: MobileSuit;
@@ -15,6 +15,38 @@ interface WeaponChangeModalProps {
   onSetPreviewWeaponId: (id: string | null) => void;
   onEquipWeapon: (weaponId: string) => void;
   onClose: () => void;
+}
+
+const RANK_ORDER = ["S", "A", "B", "C", "D", "E"];
+
+function resolveRank(weapon: Weapon, field: "power" | "range" | "accuracy"): string {
+  if (field === "power") return weapon.power_rank ?? getWeaponRank("weapon_power", weapon.power);
+  if (field === "range") return weapon.range_rank ?? getWeaponRank("weapon_range", weapon.range);
+  return weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.accuracy);
+}
+
+/** ランク比較: 新ランクが上位なら正、下位なら負、同じなら0 */
+function rankCompare(currentRank: string, newRank: string): number {
+  return RANK_ORDER.indexOf(currentRank) - RANK_ORDER.indexOf(newRank);
+}
+
+interface RankDiffBadgeProps {
+  currentRank: string | undefined;
+  newRank: string;
+}
+
+function RankDiffBadge({ currentRank, newRank }: RankDiffBadgeProps) {
+  const diff = currentRank ? rankCompare(currentRank, newRank) : 0;
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`font-bold ${getRankColor(newRank)}`}>{newRank}</span>
+      {currentRank && diff !== 0 && (
+        <span className={`text-xs ${diff > 0 ? "text-green-400" : "text-red-400"}`}>
+          ({diff > 0 ? "↑" : "↓"}{currentRank}→{newRank})
+        </span>
+      )}
+    </span>
+  );
 }
 
 export default function WeaponChangeModal({
@@ -83,32 +115,38 @@ export default function WeaponChangeModal({
           {/* Preview — fixed height area to prevent layout shift */}
           <div className="mb-4 p-3 bg-gray-900 rounded border border-green-700 min-h-[80px] flex flex-col justify-center">
             {previewListing ? (() => {
-              const diff = calcWeaponDiff(currentWeapon, previewListing.weapon);
+              const pw = previewListing.weapon;
               return (
                 <>
                   <p className="text-xs font-bold text-green-400 mb-2">
-                    ▶ 装備変更プレビュー: {previewListing.weapon.name}
+                    ▶ 装備変更プレビュー: {pw.name}
                   </p>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div>
                       <span className="text-gray-400">威力:</span>
-                      <span className="ml-1 font-bold">{previewListing.weapon.power}</span>
-                      <span className={`ml-1 ${diffColor(diff.power)}`}>
-                        ({diffText(diff.power)})
+                      <span className="ml-1">
+                        <RankDiffBadge
+                          currentRank={currentWeapon ? resolveRank(currentWeapon, "power") : undefined}
+                          newRank={resolveRank(pw, "power")}
+                        />
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-400">射程:</span>
-                      <span className="ml-1 font-bold">{previewListing.weapon.range}m</span>
-                      <span className={`ml-1 ${diffColor(diff.range)}`}>
-                        ({diffText(diff.range)})
+                      <span className="ml-1">
+                        <RankDiffBadge
+                          currentRank={currentWeapon ? resolveRank(currentWeapon, "range") : undefined}
+                          newRank={resolveRank(pw, "range")}
+                        />
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-400">命中:</span>
-                      <span className="ml-1 font-bold">{previewListing.weapon.accuracy}%</span>
-                      <span className={`ml-1 ${diffColor(diff.accuracy)}`}>
-                        ({diffText(diff.accuracy)})
+                      <span className="ml-1">
+                        <RankDiffBadge
+                          currentRank={currentWeapon ? resolveRank(currentWeapon, "accuracy") : undefined}
+                          newRank={resolveRank(pw, "accuracy")}
+                        />
                       </span>
                     </div>
                   </div>
@@ -125,7 +163,6 @@ export default function WeaponChangeModal({
           <div className="space-y-3 mb-6 overflow-y-auto flex-1">
             {ownedListings?.map((weaponListing) => {
               const weapon = weaponListing.weapon;
-              const diff = calcWeaponDiff(currentWeapon, weapon);
               const totalCount = pilot?.inventory?.[weaponListing.id] || 0;
               const availableCount = calcAvailableCount(weaponListing.id);
               const isDisabled = availableCount <= 0;
@@ -170,36 +207,30 @@ export default function WeaponChangeModal({
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
                           <span className="text-gray-400">威力:</span>
-                          <span className="ml-1 font-bold text-green-400">
-                            {weapon.power}
+                          <span className="ml-1">
+                            <RankDiffBadge
+                              currentRank={currentWeapon ? resolveRank(currentWeapon, "power") : undefined}
+                              newRank={resolveRank(weapon, "power")}
+                            />
                           </span>
-                          {currentWeapon && (
-                            <span className={`ml-1 text-xs ${diffColor(diff.power)}`}>
-                              ({diffText(diff.power)})
-                            </span>
-                          )}
                         </div>
                         <div>
                           <span className="text-gray-400">射程:</span>
-                          <span className="ml-1 font-bold text-green-400">
-                            {weapon.range}m
+                          <span className="ml-1">
+                            <RankDiffBadge
+                              currentRank={currentWeapon ? resolveRank(currentWeapon, "range") : undefined}
+                              newRank={resolveRank(weapon, "range")}
+                            />
                           </span>
-                          {currentWeapon && (
-                            <span className={`ml-1 text-xs ${diffColor(diff.range)}`}>
-                              ({diffText(diff.range)})
-                            </span>
-                          )}
                         </div>
                         <div>
                           <span className="text-gray-400">命中:</span>
-                          <span className="ml-1 font-bold text-green-400">
-                            {weapon.accuracy}%
+                          <span className="ml-1">
+                            <RankDiffBadge
+                              currentRank={currentWeapon ? resolveRank(currentWeapon, "accuracy") : undefined}
+                              newRank={resolveRank(weapon, "accuracy")}
+                            />
                           </span>
-                          {currentWeapon && (
-                            <span className={`ml-1 text-xs ${diffColor(diff.accuracy)}`}>
-                              ({diffText(diff.accuracy)})
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -246,3 +277,5 @@ export default function WeaponChangeModal({
     </div>
   );
 }
+
+

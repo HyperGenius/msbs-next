@@ -25,6 +25,12 @@ export interface Weapon {
     en_cost?: number;
     cool_down_turn?: number;
     is_melee?: boolean;
+    /** 威力ランク (S〜E) - APIから付与される */
+    power_rank?: string;
+    /** 射程ランク (S〜E) - APIから付与される */
+    range_rank?: string;
+    /** 命中率ランク (S〜E) - APIから付与される */
+    accuracy_rank?: string;
 }
 
 /**

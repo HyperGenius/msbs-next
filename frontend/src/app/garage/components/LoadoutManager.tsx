@@ -4,6 +4,7 @@
 import { MobileSuit } from "@/types/battle";
 import { WEAPON_SLOTS } from "../constants";
 import { SciFiButton } from "@/components/ui";
+import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
 
 interface LoadoutManagerProps {
   selectedMs: MobileSuit;
@@ -60,15 +61,21 @@ export default function LoadoutManager({
                     </div>
                     <div>
                       <span className="text-gray-400">威力:</span>
-                      <span className="ml-1 font-bold">{equippedWeapon.power}</span>
+                      <span className={`ml-1 font-bold ${getRankColor(equippedWeapon.power_rank ?? getWeaponRank("weapon_power", equippedWeapon.power))}`}>
+                        {equippedWeapon.power_rank ?? getWeaponRank("weapon_power", equippedWeapon.power)}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-400">射程:</span>
-                      <span className="ml-1 font-bold">{equippedWeapon.range}m</span>
+                      <span className={`ml-1 font-bold ${getRankColor(equippedWeapon.range_rank ?? getWeaponRank("weapon_range", equippedWeapon.range))}`}>
+                        {equippedWeapon.range_rank ?? getWeaponRank("weapon_range", equippedWeapon.range)}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-400">命中:</span>
-                      <span className="ml-1 font-bold">{equippedWeapon.accuracy}%</span>
+                      <span className={`ml-1 font-bold ${getRankColor(equippedWeapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", equippedWeapon.accuracy))}`}>
+                        {equippedWeapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", equippedWeapon.accuracy)}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-400">最適:</span>
