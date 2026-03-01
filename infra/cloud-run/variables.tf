@@ -1,3 +1,7 @@
+# infra/cloud-run/variables.tf
+# ==========================================
+# GCP 基本設定
+# ==========================================
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
@@ -9,6 +13,9 @@ variable "region" {
   default     = "asia-northeast1"
 }
 
+# ==========================================
+# Cloud Run サービス設定
+# ==========================================
 variable "service_name" {
   description = "Cloud Run service name"
   type        = string
@@ -21,29 +28,9 @@ variable "image_tag" {
   default     = "latest"
 }
 
-variable "database_url" {
-  description = "Neon Database connection URL"
-  type        = string
-  sensitive   = true
-}
-
-variable "clerk_secret_key" {
-  description = "Clerk Secret Key for authentication"
-  type        = string
-  sensitive   = true
-}
-
-variable "clerk_jwks_url" {
-  description = "Clerk JWKS URL for JWT verification"
-  type        = string
-}
-
-variable "allowed_origins" {
-  description = "Comma-separated list of allowed CORS origins (e.g., Vercel domains)"
-  type        = string
-  default     = ""
-}
-
+# ==========================================
+# リソース・スケーリング設定
+# ==========================================
 variable "container_concurrency" {
   description = "Maximum number of concurrent requests per container instance"
   type        = number
@@ -72,4 +59,30 @@ variable "memory_limit" {
   description = "Memory limit for each container instance"
   type        = string
   default     = "512Mi"
+}
+
+# ==========================================
+# アプリケーション環境変数・シークレット
+# ==========================================
+variable "database_url" {
+  description = "Neon Database connection URL"
+  type        = string
+  sensitive   = true
+}
+
+variable "clerk_secret_key" {
+  description = "Clerk Secret Key for authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "clerk_jwks_url" {
+  description = "Clerk JWKS URL for JWT verification"
+  type        = string
+}
+
+variable "allowed_origins" {
+  description = "Comma-separated list of allowed CORS origins (e.g., Vercel domains)"
+  type        = string
+  default     = ""
 }
