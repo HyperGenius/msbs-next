@@ -2,6 +2,7 @@
 
 import { usePlayerProfile } from "@/services/api";
 import { Tactics } from "@/types/battle";
+import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
 
 interface PlayerProfileModalProps {
   userId: string;
@@ -201,15 +202,21 @@ export default function PlayerProfileModal({
                           <div className="grid grid-cols-3 gap-2 text-sm text-gray-400">
                             <div>
                               <span className="text-gray-500">Power:</span>{" "}
-                              {weapon.power}
+                              <span className={`font-bold ${getRankColor(weapon.power_rank ?? getWeaponRank("weapon_power", weapon.power))}`}>
+                                {weapon.power_rank ?? getWeaponRank("weapon_power", weapon.power)}
+                              </span>
                             </div>
                             <div>
                               <span className="text-gray-500">Range:</span>{" "}
-                              {weapon.range}
+                              <span className={`font-bold ${getRankColor(weapon.range_rank ?? getWeaponRank("weapon_range", weapon.range))}`}>
+                                {weapon.range_rank ?? getWeaponRank("weapon_range", weapon.range)}
+                              </span>
                             </div>
                             <div>
                               <span className="text-gray-500">Accuracy:</span>{" "}
-                              {weapon.accuracy}%
+                              <span className={`font-bold ${getRankColor(weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.accuracy))}`}>
+                                {weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.accuracy)}
+                              </span>
                             </div>
                           </div>
                         </div>

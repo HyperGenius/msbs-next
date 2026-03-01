@@ -22,5 +22,29 @@
     { "rank": "C", "min": 0.9 },
     { "rank": "D", "min": 0.6 },
     { "rank": "E", "min": 0.0 }
+  ],
+  "weapon_power": [
+    { "rank": "S", "min": 300 },
+    { "rank": "A", "min": 200 },
+    { "rank": "B", "min": 150 },
+    { "rank": "C", "min": 100 },
+    { "rank": "D", "min": 50 },
+    { "rank": "E", "min": 0 }
+  ],
+  "weapon_range": [
+    { "rank": "S", "min": 600 },
+    { "rank": "A", "min": 500 },
+    { "rank": "B", "min": 400 },
+    { "rank": "C", "min": 300 },
+    { "rank": "D", "min": 200 },
+    { "rank": "E", "min": 0 }
+  ],
+  "weapon_accuracy": [
+    { "rank": "S", "min": 90 },
+    { "rank": "A", "min": 80 },
+    { "rank": "B", "min": 70 },
+    { "rank": "C", "min": 60 },
+    { "rank": "D", "min": 50 },
+    { "rank": "E", "min": 0 }
   ]
 }

@@ -48,17 +48,57 @@ const THRESHOLDS: Record<string, RankThreshold[]> = {
     { rank: "D", min: 0.6 },
     { rank: "E", min: 0.0 },
   ],
+  weapon_power: [
+    { rank: "S", min: 300 },
+    { rank: "A", min: 200 },
+    { rank: "B", min: 150 },
+    { rank: "C", min: 100 },
+    { rank: "D", min: 50 },
+    { rank: "E", min: 0 },
+  ],
+  weapon_range: [
+    { rank: "S", min: 600 },
+    { rank: "A", min: 500 },
+    { rank: "B", min: 400 },
+    { rank: "C", min: 300 },
+    { rank: "D", min: 200 },
+    { rank: "E", min: 0 },
+  ],
+  weapon_accuracy: [
+    { rank: "S", min: 90 },
+    { rank: "A", min: 80 },
+    { rank: "B", min: 70 },
+    { rank: "C", min: 60 },
+    { rank: "D", min: 50 },
+    { rank: "E", min: 0 },
+  ],
 };
 
-/**
- * ステータス値をランク文字列（S〜E）に変換する.
- * バックエンドと同じ閾値テーブルを使用。
- */
-export function getRank(statName: "hp" | "armor" | "mobility", value: number): string {
+function lookupRank(statName: string, value: number): string {
   const table = THRESHOLDS[statName];
   if (!table) return "C";
   for (const entry of table) {
     if (value >= entry.min) return entry.rank;
   }
   return "E";
+}
+
+/**
+ * ステータス値をランク文字列（S〜E）に変換する.
+ * バックエンドと同じ閾値テーブルを使用。
+ */
+export function getRank(statName: "hp" | "armor" | "mobility", value: number): string {
+  return lookupRank(statName, value);
+}
+
+/**
+ * 武器パラメータ値をランク文字列（S〜E）に変換する.
+ * バックエンドと同じ閾値テーブルを使用。
+ * ショップ画面などランクフィールドが付与されていない場合のフォールバックとして使用する。
+ */
+export function getWeaponRank(
+  statName: "weapon_power" | "weapon_range" | "weapon_accuracy",
+  value: number
+): string {
+  return lookupRank(statName, value);
 }

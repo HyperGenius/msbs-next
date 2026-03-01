@@ -46,6 +46,27 @@ class Weapon(SQLModel):
     cool_down_turn: int = Field(default=0, description="発射後の再使用待機ターン数")
 
 
+class WeaponResponse(Weapon):
+    """武器APIレスポンスモデル (ランクフィールド付き)."""
+
+    power_rank: str = "C"
+    range_rank: str = "C"
+    accuracy_rank: str = "C"
+
+    @classmethod
+    def from_weapon(cls, weapon: "Weapon") -> "WeaponResponse":
+        """WeaponインスタンスからWeaponResponseを生成する."""
+        from app.core.rank_utils import get_rank
+
+        data = weapon.model_dump() if hasattr(weapon, "model_dump") else dict(weapon)
+        return cls(
+            **data,
+            power_rank=get_rank("weapon_power", weapon.power),
+            range_rank=get_rank("weapon_range", weapon.range),
+            accuracy_rank=get_rank("weapon_accuracy", weapon.accuracy),
+        )
+
+
 # --- Database Models (テーブル定義) ---
 
 
@@ -194,7 +215,7 @@ class MobileSuitResponse(SQLModel):
     max_propellant: int = 1000
     position: "Vector3" = None  # type: ignore[assignment]
     velocity: "Vector3" = None  # type: ignore[assignment]
-    weapons: list["Weapon"] = []
+    weapons: list["WeaponResponse"] = []
     tactics: dict = {}
     active_weapon_index: int = 0
     personality: str | None = None
@@ -213,6 +234,14 @@ class MobileSuitResponse(SQLModel):
     def from_mobile_suit(cls, ms: "MobileSuit") -> "MobileSuitResponse":
         """MobileSuitインスタンスからMobileSuitResponseを生成する."""
         from app.core.rank_utils import get_rank
+
+        weapons_response = []
+        for w in ms.weapons:
+            if isinstance(w, dict):
+                weapon_obj = Weapon(**w)
+            else:
+                weapon_obj = w
+            weapons_response.append(WeaponResponse.from_weapon(weapon_obj))
 
         return cls(
             id=ms.id,
@@ -239,7 +268,7 @@ class MobileSuitResponse(SQLModel):
             max_propellant=ms.max_propellant,
             position=ms.position,
             velocity=ms.velocity,
-            weapons=ms.weapons,
+            weapons=weapons_response,
             tactics=ms.tactics,
             active_weapon_index=ms.active_weapon_index,
             personality=ms.personality,

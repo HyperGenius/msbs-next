@@ -6,7 +6,7 @@ import { useShopListings, purchaseMobileSuit, usePilot, useWeaponListings, purch
 import { ShopListing, WeaponListing } from "@/types/battle";
 import Link from "next/link";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
-import { getRankColor, getRank } from "@/utils/rankUtils";
+import { getRankColor, getRank, getWeaponRank } from "@/utils/rankUtils";
 
 type TabType = "mobile_suits" | "weapons";
 
@@ -402,15 +402,21 @@ export default function ShopPage() {
                           </div>
                           <div>
                             <span className="text-[#00ff41]/60">威力:</span>
-                            <span className="ml-2 font-bold">{weapon.weapon.power}</span>
+                            <span className={`ml-2 font-bold ${getRankColor(weapon.weapon.power_rank ?? getWeaponRank("weapon_power", weapon.weapon.power))}`}>
+                              {weapon.weapon.power_rank ?? getWeaponRank("weapon_power", weapon.weapon.power)}
+                            </span>
                           </div>
                           <div>
                             <span className="text-[#00ff41]/60">射程:</span>
-                            <span className="ml-2 font-bold">{weapon.weapon.range}m</span>
+                            <span className={`ml-2 font-bold ${getRankColor(weapon.weapon.range_rank ?? getWeaponRank("weapon_range", weapon.weapon.range))}`}>
+                              {weapon.weapon.range_rank ?? getWeaponRank("weapon_range", weapon.weapon.range)}
+                            </span>
                           </div>
                           <div>
                             <span className="text-[#00ff41]/60">命中率:</span>
-                            <span className="ml-2 font-bold">{weapon.weapon.accuracy}%</span>
+                            <span className={`ml-2 font-bold ${getRankColor(weapon.weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.weapon.accuracy))}`}>
+                              {weapon.weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.weapon.accuracy)}
+                            </span>
                           </div>
                           <div>
                             <span className="text-[#00ff41]/60">最適射程:</span>
