@@ -223,6 +223,7 @@ export interface Pilot {
     id: string;
     user_id: string;
     name: string;
+    faction: string;
     level: number;
     exp: number;
     credits: number;

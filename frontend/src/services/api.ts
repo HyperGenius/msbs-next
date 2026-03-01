@@ -40,7 +40,9 @@ const fetcher = async (url: string) => {
   
   const res = await fetch(url, { headers });
   if (!res.ok) {
-    throw new Error(`Failed to fetch data from ${url}: ${res.status} ${res.statusText}`);
+    const error = new Error(`Failed to fetch data from ${url}: ${res.status} ${res.statusText}`) as Error & { status: number };
+    error.status = res.status;
+    throw error;
   }
   return res.json();
 };
@@ -268,6 +270,7 @@ export async function cancelEntry(): Promise<void> {
 
 /**
  * パイロット情報を取得するSWRフック
+ * 404エラーの場合はisNotFoundフラグを返す
  */
 export function usePilot() {
   const { data, error, isLoading, mutate } = useSWR<Pilot>(
@@ -275,10 +278,13 @@ export function usePilot() {
     fetcher
   );
 
+  const isNotFound = error && (error as { status?: number }).status === 404;
+
   return {
     pilot: data,
     isLoading,
-    isError: error,
+    isError: error && !isNotFound ? error : undefined,
+    isNotFound: !!isNotFound,
     mutate,
   };
 }
@@ -312,6 +318,38 @@ export async function createPilot(
     const errorData = await res.json().catch(() => ({}));
     throw new Error(
       errorData.detail || `Failed to create pilot: ${res.status} ${res.statusText}`
+    );
+  }
+
+  return res.json();
+}
+
+/**
+ * パイロットを登録する関数（オンボーディング用）
+ */
+export async function registerPilot(
+  name: string,
+  faction: "FEDERATION" | "ZEON"
+): Promise<{ pilot: Pilot; mobile_suit_id: string; message: string }> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/pilots/register`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ name, faction }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(
+      errorData.detail || `Failed to register pilot: ${res.status} ${res.statusText}`
     );
   }
 

@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { BattleLog, BattleResult, MobileSuit, BattleRewards } from "@/types/battle";
 import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory, useUnreadBattleResults, markBattleAsRead, createPilot } from "@/services/api";
@@ -20,12 +21,13 @@ const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
 type OnboardingState = "NOT_STARTED" | "BATTLE_STARTED" | "BATTLE_FINISHED" | "COMPLETED";
 
 export default function Home() {
+  const router = useRouter();
   const { getToken, isSignedIn, isLoaded } = useAuth();
   const { missions, isLoading: missionsLoading } = useMissions();
   const { mobileSuits, isLoading: mobileSuitsLoading, mutate: mutateMobileSuits } = useMobileSuits();
   const { entryStatus, isLoading: entryStatusLoading, mutate: mutateEntryStatus } = useEntryStatus();
   const { entryCount, mutate: mutateEntryCount } = useEntryCount();
-  const { pilot, isLoading: pilotLoading, isError: pilotError, mutate: mutatePilot } = usePilot();
+  const { pilot, isLoading: pilotLoading, isError: pilotError, isNotFound: pilotNotFound, mutate: mutatePilot } = usePilot();
   const { battles, isLoading: battlesLoading } = useBattleHistory(1);
   const { unreadBattles, mutate: mutateUnreadBattles } = useUnreadBattleResults();
   const [logs, setLogs] = useState<BattleLog[]>([]);
@@ -62,14 +64,14 @@ export default function Home() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn || pilotLoading) return;
 
-    // パイロットが存在しない場合のみスターター選択を表示
-    if (pilotError && !pilot) {
-      setShowStarterSelection(true);
+    // パイロットが存在しない場合（404）はオンボーディングへリダイレクト
+    if (pilotNotFound && !pilot) {
+      router.push("/onboarding");
     } else if (pilot) {
       // パイロットが存在する場合はモーダルを非表示
       setShowStarterSelection(false);
     }
-  }, [isLoaded, isSignedIn, pilot, pilotLoading, pilotError]);
+  }, [isLoaded, isSignedIn, pilot, pilotLoading, pilotNotFound, router]);
 
   // ログイン成功時にSWRキャッシュを強制更新
   const prevIsSignedInRef = useRef<boolean | undefined>(undefined);
@@ -543,7 +545,7 @@ export default function Home() {
           startStep={onboardingState === "BATTLE_FINISHED" ? 4 : 0}
         />
 
-        {/* Mission Selection Panel (開発環境のみ表示) */}
+        {/* Mission Selection Panel & Text Log (開発環境のみ表示) */}
         <DevSimulationPanel
           missions={missions}
           missionsLoading={missionsLoading}
@@ -553,112 +555,10 @@ export default function Home() {
           enemiesData={enemiesData}
           isLoading={isLoading}
           startBattle={startBattle}
+          logs={logs}
+          currentTurn={currentTurn}
+          winner={winner}
         />
-
-        {/* Text Log Area */}
-        <div className="bg-black p-4 rounded border border-green-900 min-h-[400px] max-h-[600px] overflow-y-auto shadow-inner font-mono text-sm">
-          {logs.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center opacity-30 min-h-[300px]">
-              <p>-- NO BATTLE DATA --</p>
-              <p className="text-xs mt-2">Initialize simulation to view logs</p>
-            </div>
-          ) : (
-            <ul className="space-y-1">
-              {logs.map((log, index) => {
-                // 現在のターンに対応するログをハイライト
-                const isCurrentTurn = log.turn === currentTurn;
-
-                // ログ表示用: playerDataなどがnullの場合はIDをそのまま表示
-                const actorName = log.actor_id === playerData?.id ? playerData.name
-                  : enemiesData.find(e => e.id === log.actor_id)?.name
-                    || log.actor_id;
-                const isPlayer = log.actor_id === playerData?.id;
-
-                // メッセージタイプに応じたスタイルを決定するヘルパー関数
-                const getLogStyle = () => {
-                  // リソース関連メッセージ判定
-                  const isResourceMessage = log.message.includes("弾切れ") || 
-                                          log.message.includes("EN不足") || 
-                                          log.message.includes("クールダウン") ||
-                                          log.message.includes("待機");
-                  
-                  // 地形・索敵関連メッセージ判定
-                  const isTerrainMessage = log.action_type === "DETECTION" ||
-                                         log.message.includes("地形") ||
-                                         log.message.includes("索敵");
-                  
-                  // 属性関連メッセージ判定
-                  const isAttributeMessage = log.message.includes("BEAM") ||
-                                           log.message.includes("PHYSICAL") ||
-                                           log.message.includes("ビーム") ||
-                                           log.message.includes("実弾");
-                  
-                  // スタイルの構築
-                  if (isCurrentTurn) {
-                    return {
-                      borderStyle: "border-green-400",
-                      bgStyle: "bg-green-900/30",
-                      textStyle: "text-white"
-                    };
-                  }
-                  
-                  if (isResourceMessage) {
-                    return {
-                      borderStyle: "border-orange-500",
-                      bgStyle: "",
-                      textStyle: "text-orange-400 font-semibold"
-                    };
-                  }
-                  
-                  if (isTerrainMessage) {
-                    return {
-                      borderStyle: "border-cyan-500",
-                      bgStyle: "",
-                      textStyle: "text-cyan-400"
-                    };
-                  }
-                  
-                  if (isAttributeMessage) {
-                    return {
-                      borderStyle: "border-purple-500",
-                      bgStyle: "",
-                      textStyle: "text-purple-400"
-                    };
-                  }
-                  
-                  // デフォルトスタイル
-                  return {
-                    borderStyle: "border-green-900",
-                    bgStyle: "",
-                    textStyle: "text-green-600"
-                  };
-                };
-                
-                const { borderStyle, bgStyle, textStyle } = getLogStyle();
-
-                return (
-                  <li
-                    key={index}
-                    className={`border-l-2 pl-2 py-1 transition-colors ${borderStyle} ${bgStyle} ${textStyle}`}
-                  >
-                    <span className="opacity-50 mr-4 w-16 inline-block">[Turn {log.turn}]</span>
-                    <span className={`font-bold mr-2 ${isPlayer ? 'text-blue-400' : 'text-red-400'}`}>
-                      {actorName}:
-                    </span>
-                    <span>{log.message}</span>
-                  </li>
-                );
-              })}
-
-              {/* Winner Announcement */}
-              {winner && playerData && (
-                <li className="mt-8 text-center text-xl border-t border-green-500 pt-4 text-yellow-400 animate-pulse font-bold">
-                  *** WINNER: {winner === playerData.id ? playerData.name : "ENEMY FORCES"} ***
-                </li>
-              )}
-            </ul>
-          )}
-        </div>
       </div>
     </main>
   );

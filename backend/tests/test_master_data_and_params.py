@@ -2,6 +2,7 @@
 
 from fastapi import status
 
+from app.core.auth import get_current_user
 from app.core.gamedata import (
     _get_shop_listings,
     _get_weapon_shop_listings,
@@ -10,7 +11,8 @@ from app.core.gamedata import (
     reload_master_data,
 )
 from app.engine.simulation import BattleSimulator
-from app.models.models import MobileSuit, Vector3, Weapon
+from app.models.models import MobileSuit, Pilot, Vector3, Weapon
+from main import app
 
 # === マスターデータ読み込みテスト ===
 
@@ -313,19 +315,37 @@ def test_weapon_is_melee_default_false():
     assert weapon.is_melee is False
 
 
-def test_shop_listings_include_new_params(client):
+def test_shop_listings_include_new_params(client, session):
     """ショップリストに新パラメータが含まれること."""
-    response = client.get("/api/shop/listings")
-    assert response.status_code == status.HTTP_200_OK
+    # 勢力なしパイロットを作成（全機体が返る）
+    test_user_id = "test_user_params"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        faction="",
+    )
+    session.add(pilot)
+    session.commit()
 
-    listings = response.json()
-    assert len(listings) > 0
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
 
-    for item in listings:
-        specs = item["specs"]
-        assert "melee_aptitude" in specs
-        assert "shooting_aptitude" in specs
-        assert "accuracy_bonus" in specs
-        assert "evasion_bonus" in specs
-        assert "acceleration_bonus" in specs
-        assert "turning_bonus" in specs
+    try:
+        response = client.get("/api/shop/listings")
+        assert response.status_code == status.HTTP_200_OK
+
+        listings = response.json()
+        assert len(listings) > 0
+
+        for item in listings:
+            specs = item["specs"]
+            assert "melee_aptitude" in specs
+            assert "shooting_aptitude" in specs
+            assert "accuracy_bonus" in specs
+            assert "evasion_bonus" in specs
+            assert "acceleration_bonus" in specs
+            assert "turning_bonus" in specs
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
