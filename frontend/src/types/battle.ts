@@ -110,6 +110,7 @@ export interface BattleRewards {
     level_after: number;
     total_exp: number;
     total_credits: number;
+    kills?: number;
 }
 
 /**
@@ -164,6 +165,14 @@ export interface BattleResult {
     environment?: string;
     player_info?: MobileSuit;
     enemies_info?: MobileSuit[];
+    ms_snapshot?: MobileSuit;
+    kills?: number;
+    exp_gained?: number;
+    credits_gained?: number;
+    level_before?: number;
+    level_after?: number;
+    level_up?: boolean;
+    is_read?: boolean;
     created_at: string;
 }
 

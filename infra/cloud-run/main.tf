@@ -1,72 +1,4 @@
-# Artifact Registry リポジトリ
-resource "google_artifact_registry_repository" "msbs_next" {
-  location      = var.region
-  repository_id = "msbs-next"
-  description   = "Docker repository for MSBS-Next backend images"
-  format        = "DOCKER"
-
-  labels = {
-    environment = "production"
-    project     = "msbs-next"
-  }
-}
-
-# Secret Manager: Database URL
-resource "google_secret_manager_secret" "database_url" {
-  secret_id = "msbs-next-database-url"
-
-  replication {
-    auto {}
-  }
-
-  labels = {
-    service = var.service_name
-  }
-}
-
-resource "google_secret_manager_secret_version" "database_url" {
-  secret      = google_secret_manager_secret.database_url.id
-  secret_data = var.database_url
-}
-
-# Secret Manager: Clerk Secret Key
-resource "google_secret_manager_secret" "clerk_secret_key" {
-  secret_id = "msbs-next-clerk-secret-key"
-
-  replication {
-    auto {}
-  }
-
-  labels = {
-    service = var.service_name
-  }
-}
-
-resource "google_secret_manager_secret_version" "clerk_secret_key" {
-  secret      = google_secret_manager_secret.clerk_secret_key.id
-  secret_data = var.clerk_secret_key
-}
-
-# Cloud Run サービスアカウント
-resource "google_service_account" "cloud_run" {
-  account_id   = "${var.service_name}-sa"
-  display_name = "Service Account for ${var.service_name}"
-  description  = "Used by Cloud Run service to access GCP resources"
-}
-
-# Secret Manager へのアクセス権限
-resource "google_secret_manager_secret_iam_member" "database_url_access" {
-  secret_id = google_secret_manager_secret.database_url.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
-resource "google_secret_manager_secret_iam_member" "clerk_secret_key_access" {
-  secret_id = google_secret_manager_secret.clerk_secret_key.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.cloud_run.email}"
-}
-
+# infra/cloud-run/main.tf
 # Cloud Run サービス
 resource "google_cloud_run_v2_service" "msbs_next_api" {
   name     = var.service_name
@@ -173,9 +105,11 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
 }
 
 # Cloud Run サービスへの一般公開アクセスを許可
-#resource "google_cloud_run_v2_service_iam_member" "public_access" {
-#  name     = google_cloud_run_v2_service.msbs_next_api.name
-#  location = google_cloud_run_v2_service.msbs_next_api.location
-#  role     = "roles/run.invoker"
-#  member   = "allUsers"
-#}
+resource "google_cloud_run_v2_service_iam_member" "public_access" {
+  name     = google_cloud_run_v2_service.msbs_next_api.name
+  project  = google_cloud_run_v2_service.msbs_next_api.project
+  location = google_cloud_run_v2_service.msbs_next_api.location
+
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}

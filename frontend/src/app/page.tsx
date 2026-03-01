@@ -3,8 +3,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { BattleLog, MobileSuit, BattleRewards } from "@/types/battle";
-import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory, createPilot } from "@/services/api";
+import { BattleLog, BattleResult, MobileSuit, BattleRewards } from "@/types/battle";
+import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory, useUnreadBattleResults, markBattleAsRead, createPilot } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
 import CountdownTimer from "@/components/Dashboard/CountdownTimer";
 import EntryDashboard from "@/components/Dashboard/EntryDashboard";
@@ -27,6 +27,7 @@ export default function Home() {
   const { entryCount, mutate: mutateEntryCount } = useEntryCount();
   const { pilot, isLoading: pilotLoading, isError: pilotError, mutate: mutatePilot } = usePilot();
   const { battles, isLoading: battlesLoading } = useBattleHistory(1);
+  const { unreadBattles, mutate: mutateUnreadBattles } = useUnreadBattleResults();
   const [logs, setLogs] = useState<BattleLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
@@ -44,7 +45,13 @@ export default function Home() {
   const [modalResult, setModalResult] = useState<{
     winLoss: "WIN" | "LOSE" | "DRAW";
     rewards: BattleRewards | null;
+    msSnapshot?: MobileSuit | null;
+    kills?: number;
   } | null>(null);
+  // 未読バトル結果モーダル用キュー
+  const [unreadQueue, setUnreadQueue] = useState<BattleResult[]>([]);
+  const [currentUnreadBattle, setCurrentUnreadBattle] = useState<BattleResult | null>(null);
+  const unreadShownRef = useRef(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [onboardingState, setOnboardingState] = useState<OnboardingState>("NOT_STARTED");
@@ -70,9 +77,47 @@ export default function Home() {
     if (isLoaded && isSignedIn && prevIsSignedInRef.current !== true) {
       mutateMobileSuits();
       mutatePilot();
+      mutateUnreadBattles();
     }
     prevIsSignedInRef.current = isSignedIn;
-  }, [isLoaded, isSignedIn, mutateMobileSuits, mutatePilot]);
+  }, [isLoaded, isSignedIn, mutateMobileSuits, mutatePilot, mutateUnreadBattles]);
+
+  // ログイン時に未読バトル結果をキューに積む
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (!unreadBattles || unreadBattles.length === 0) return;
+    if (unreadShownRef.current) return;
+
+    unreadShownRef.current = true;
+    setUnreadQueue([...unreadBattles]);
+  }, [isLoaded, isSignedIn, unreadBattles]);
+
+  // 未読キューから次の結果を表示
+  useEffect(() => {
+    if (unreadQueue.length > 0 && !currentUnreadBattle && !showResultModal) {
+      const [next, ...rest] = unreadQueue;
+      setCurrentUnreadBattle(next);
+      setUnreadQueue(rest);
+      const rewardsFromBattle: BattleRewards | null =
+        next.exp_gained !== undefined
+          ? {
+              exp_gained: next.exp_gained ?? 0,
+              credits_gained: next.credits_gained ?? 0,
+              level_before: next.level_before ?? 0,
+              level_after: next.level_after ?? 0,
+              total_exp: 0,
+              total_credits: 0,
+            }
+          : null;
+      setModalResult({
+        winLoss: next.win_loss,
+        rewards: rewardsFromBattle,
+        msSnapshot: (next.ms_snapshot as MobileSuit | null) ?? null,
+        kills: next.kills,
+      });
+      setShowResultModal(true);
+    }
+  }, [unreadQueue, currentUnreadBattle, showResultModal]);
 
   // オンボーディングの表示判定
   useEffect(() => {
@@ -143,10 +188,15 @@ export default function Home() {
   // シミュレーション実行時に結果モーダルを表示
   useEffect(() => {
     if (winLoss && rewards) {
-      setModalResult({ winLoss, rewards });
+      setModalResult({
+        winLoss,
+        rewards,
+        msSnapshot: playerData,
+        kills: rewards.kills,
+      });
       setShowResultModal(true);
     }
-  }, [winLoss, rewards]);
+  }, [winLoss, rewards, playerData]);
 
 
   const startBattle = async (missionId: number) => {
@@ -444,8 +494,20 @@ export default function Home() {
           <BattleResultModal
             winLoss={modalResult.winLoss}
             rewards={modalResult.rewards}
-            onClose={() => {
+            msSnapshot={modalResult.msSnapshot}
+            kills={modalResult.kills}
+            onClose={async () => {
               setShowResultModal(false);
+              // 未読バトル結果を既読にする（CONTINUEを押したタイミング）
+              if (currentUnreadBattle) {
+                try {
+                  await markBattleAsRead(currentUnreadBattle.id);
+                  await mutateUnreadBattles();
+                } catch (e) {
+                  console.error("Failed to mark battle as read:", e);
+                }
+                setCurrentUnreadBattle(null);
+              }
               // 初回バトル終了後、オンボーディングを再開
               // onboardingState が BATTLE_STARTED の場合のみ再開（これは初回チュートリアル中のみ）
               if (onboardingState === "BATTLE_STARTED") {

@@ -37,6 +37,13 @@ def test_models():
     assert hasattr(BattleResult, "win_loss")
     assert hasattr(BattleResult, "logs")
     assert hasattr(BattleResult, "created_at")
+    # Check new detail fields
+    assert hasattr(BattleResult, "kills")
+    assert hasattr(BattleResult, "exp_gained")
+    assert hasattr(BattleResult, "credits_gained")
+    assert hasattr(BattleResult, "level_up")
+    assert hasattr(BattleResult, "is_read")
+    assert hasattr(BattleResult, "ms_snapshot")
     print("  ✓ BattleResult model is correctly defined")
 
     print("✓ All models are correctly defined\n")
@@ -54,7 +61,9 @@ def test_api_endpoints():
     required_endpoints = [
         "/api/missions",
         "/api/battles",
+        "/api/battles/unread",
         "/api/battles/{battle_id}",
+        "/api/battles/{battle_id}/read",
         "/api/battle/simulate",
     ]
 

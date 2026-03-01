@@ -69,6 +69,15 @@
             "type": "shell",
             "command": "source backend/.venv/bin/activate && pre-commit run --all-files",
             "problemMatcher": []
+        },
+        {
+            "label": "Run Storybook",
+            "type": "shell",
+            "command": "npm run storybook",
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}/frontend"
+            }
         }
 	]
 }
