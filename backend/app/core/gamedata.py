@@ -47,8 +47,8 @@ STARTER_KITS: dict[str, dict[str, Any]] = {
             "turning_bonus": 1.0,
             "weapons": [
                 Weapon(
-                    id="trainer_rifle",
-                    name="Trainer Rifle",
+                    id="trainer_spray_gun",
+                    name="Beam Spray Gun(Trainer)",
                     power=80,
                     range=400,
                     accuracy=60,
@@ -79,12 +79,12 @@ STARTER_KITS: dict[str, dict[str, Any]] = {
             "turning_bonus": 1.0,
             "weapons": [
                 Weapon(
-                    id="trainer_rifle",
-                    name="Trainer Rifle",
+                    id="trainer_machine_gun",
+                    name="Zaku Machine Gun(Trainer)",
                     power=80,
                     range=400,
                     accuracy=60,
-                    type="BEAM",
+                    type="PHYSICAL",
                     optimal_range=300.0,
                     decay_rate=0.08,
                     is_melee=False,
