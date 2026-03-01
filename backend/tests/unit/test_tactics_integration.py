@@ -57,7 +57,9 @@ def test_tactics_integration() -> None:
             current_hp=30,  # Weakest enemy
             armor=5,
             mobility=1.5,
-            position=Vector3(x=500, y=200, z=0),
+            position=Vector3(
+                x=400, y=200, z=0
+            ),  # ~447m away, within default sensor_range of 500m
             weapons=[
                 Weapon(
                     id="heat_rod",
