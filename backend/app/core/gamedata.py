@@ -25,6 +25,88 @@ _shop_listings_cache: list[dict] | None = None
 _weapon_shop_listings_cache: list[dict] | None = None
 
 
+# 練習機マスターデータ（ショップには並ばない専用機体）
+# 連邦・ジオン双方で全ステータスが同一
+STARTER_KITS: dict[str, dict[str, Any]] = {
+    "FEDERATION": {
+        "id": "gm_trainer",
+        "name": "RGM-79T GM Trainer",
+        "description": "地球連邦軍の練習用モビルスーツ。全勢力共通の標準スペック。",
+        "specs": {
+            "max_hp": 700,
+            "armor": 40,
+            "mobility": 1.0,
+            "sensor_range": 500.0,
+            "beam_resistance": 0.0,
+            "physical_resistance": 0.0,
+            "melee_aptitude": 1.0,
+            "shooting_aptitude": 1.0,
+            "accuracy_bonus": 0.0,
+            "evasion_bonus": 0.0,
+            "acceleration_bonus": 1.0,
+            "turning_bonus": 1.0,
+            "weapons": [
+                Weapon(
+                    id="trainer_rifle",
+                    name="Trainer Rifle",
+                    power=80,
+                    range=400,
+                    accuracy=60,
+                    type="BEAM",
+                    optimal_range=300.0,
+                    decay_rate=0.08,
+                    is_melee=False,
+                )
+            ],
+        },
+    },
+    "ZEON": {
+        "id": "zaku_ii_trainer",
+        "name": "MS-06T Zaku II Trainer",
+        "description": "ジオン公国軍の練習用モビルスーツ。全勢力共通の標準スペック。",
+        "specs": {
+            "max_hp": 700,
+            "armor": 40,
+            "mobility": 1.0,
+            "sensor_range": 500.0,
+            "beam_resistance": 0.0,
+            "physical_resistance": 0.0,
+            "melee_aptitude": 1.0,
+            "shooting_aptitude": 1.0,
+            "accuracy_bonus": 0.0,
+            "evasion_bonus": 0.0,
+            "acceleration_bonus": 1.0,
+            "turning_bonus": 1.0,
+            "weapons": [
+                Weapon(
+                    id="trainer_rifle",
+                    name="Trainer Rifle",
+                    power=80,
+                    range=400,
+                    accuracy=60,
+                    type="BEAM",
+                    optimal_range=300.0,
+                    decay_rate=0.08,
+                    is_melee=False,
+                )
+            ],
+        },
+    },
+}
+
+
+def get_starter_kit_by_faction(faction: str) -> dict[str, Any] | None:
+    """勢力に対応した練習機データを取得する.
+
+    Args:
+        faction: 勢力コード (FEDERATION/ZEON)
+
+    Returns:
+        dict | None: 練習機データ。見つからない場合はNone
+    """
+    return STARTER_KITS.get(faction)
+
+
 def _load_mobile_suits_json() -> list[dict]:
     """JSONファイルから機体マスターデータを読み込む."""
     json_path = _DATA_DIR / "mobile_suits.json"
@@ -41,6 +123,7 @@ def _load_mobile_suits_json() -> list[dict]:
                 "id": item["id"],
                 "name": item["name"],
                 "price": item["price"],
+                "faction": item.get("faction", ""),
                 "description": item["description"],
                 "specs": specs_copy,
             }

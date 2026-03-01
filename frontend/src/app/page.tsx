@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { BattleLog, BattleResult, MobileSuit, BattleRewards } from "@/types/battle";
 import { useMissions, useMobileSuits, useEntryStatus, useEntryCount, entryBattle, cancelEntry, usePilot, useBattleHistory, useUnreadBattleResults, markBattleAsRead, createPilot } from "@/services/api";
@@ -20,12 +21,13 @@ const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
 type OnboardingState = "NOT_STARTED" | "BATTLE_STARTED" | "BATTLE_FINISHED" | "COMPLETED";
 
 export default function Home() {
+  const router = useRouter();
   const { getToken, isSignedIn, isLoaded } = useAuth();
   const { missions, isLoading: missionsLoading } = useMissions();
   const { mobileSuits, isLoading: mobileSuitsLoading, mutate: mutateMobileSuits } = useMobileSuits();
   const { entryStatus, isLoading: entryStatusLoading, mutate: mutateEntryStatus } = useEntryStatus();
   const { entryCount, mutate: mutateEntryCount } = useEntryCount();
-  const { pilot, isLoading: pilotLoading, isError: pilotError, mutate: mutatePilot } = usePilot();
+  const { pilot, isLoading: pilotLoading, isError: pilotError, isNotFound: pilotNotFound, mutate: mutatePilot } = usePilot();
   const { battles, isLoading: battlesLoading } = useBattleHistory(1);
   const { unreadBattles, mutate: mutateUnreadBattles } = useUnreadBattleResults();
   const [logs, setLogs] = useState<BattleLog[]>([]);
@@ -62,14 +64,14 @@ export default function Home() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn || pilotLoading) return;
 
-    // パイロットが存在しない場合のみスターター選択を表示
-    if (pilotError && !pilot) {
-      setShowStarterSelection(true);
+    // パイロットが存在しない場合（404）はオンボーディングへリダイレクト
+    if (pilotNotFound && !pilot) {
+      router.push("/onboarding");
     } else if (pilot) {
       // パイロットが存在する場合はモーダルを非表示
       setShowStarterSelection(false);
     }
-  }, [isLoaded, isSignedIn, pilot, pilotLoading, pilotError]);
+  }, [isLoaded, isSignedIn, pilot, pilotLoading, pilotNotFound, router]);
 
   // ログイン成功時にSWRキャッシュを強制更新
   const prevIsSignedInRef = useRef<boolean | undefined>(undefined);

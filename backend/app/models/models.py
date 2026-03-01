@@ -419,6 +419,10 @@ class Pilot(SQLModel, table=True):
         description="Clerk User ID (NPC の場合は npc-{uuid} 形式)",
     )
     name: str = Field(description="パイロット名（ユーザー名）")
+    faction: str = Field(
+        default="",
+        description="所属勢力 (FEDERATION/ZEON)",
+    )
     is_npc: bool = Field(
         default=False, index=True, description="NPC パイロットかどうか"
     )

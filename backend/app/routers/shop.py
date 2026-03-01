@@ -57,16 +57,30 @@ class WeaponPurchaseResponse(BaseModel):
 
 
 @router.get("/listings", response_model=list[ShopListingResponse])
-async def get_shop_listings() -> list[ShopListingResponse]:
-    """ショップの商品一覧を取得する.
+async def get_shop_listings(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> list[ShopListingResponse]:
+    """ショップの商品一覧を取得する（パイロットの勢力でフィルタリング）.
 
     Returns:
         list[ShopListingResponse]: 商品一覧
     """
+    # パイロット情報を取得して勢力を確認
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    pilot = session.exec(statement).first()
+    pilot_faction = pilot.faction if pilot else ""
+
     listings = []
     for item in SHOP_LISTINGS:
         # 型チェックのためのキャスト
         item = cast(dict[str, Any], item)
+
+        # 勢力フィルタリング: パイロットに勢力が設定されている場合、合致する機体のみ返す
+        item_faction = cast(str, item.get("faction", ""))
+        if pilot_faction and item_faction and item_faction != pilot_faction:
+            continue
+
         # Weaponオブジェクトをdictに変換
         specs = cast(dict[str, Any], item["specs"]).copy()
         specs["weapons"] = [w.model_dump() for w in specs["weapons"]]
@@ -115,18 +129,26 @@ async def purchase_mobile_suit(
     if not pilot:
         raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
 
-    # 3. 所持金チェック
+    # 3. 勢力バリデーション
+    item_faction = listing.get("faction", "")
+    if pilot.faction and item_faction and item_faction != pilot.faction:
+        raise HTTPException(
+            status_code=403,
+            detail=f"この機体はあなたの勢力（{pilot.faction}）では購入できません",
+        )
+
+    # 4. 所持金チェック
     if pilot.credits < listing["price"]:
         raise HTTPException(
             status_code=400,
             detail=f"所持金が不足しています。必要: {listing['price']} Credits, 所持: {pilot.credits} Credits",
         )
 
-    # 4. 所持金を減算
+    # 5. 所持金を減算
     pilot.credits -= listing["price"]
     pilot.updated_at = datetime.now(UTC)
 
-    # 5. 機体を生成
+    # 6. 機体を生成
     specs = listing["specs"]
     new_mobile_suit = MobileSuit(
         user_id=user_id,

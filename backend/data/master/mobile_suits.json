@@ -3,6 +3,7 @@
     "id": "zaku_ii",
     "name": "Zaku II",
     "price": 500,
+    "faction": "ZEON",
     "description": "量産型モビルスーツ。バランスの取れた性能で扱いやすい。",
     "specs": {
       "max_hp": 800,
@@ -36,6 +37,7 @@
     "id": "gm",
     "name": "RGM-79 GM",
     "price": 500,
+    "faction": "FEDERATION",
     "description": "連邦軍の量産型モビルスーツ。ビーム兵器を装備したバランス型。",
     "specs": {
       "max_hp": 750,
@@ -69,6 +71,7 @@
     "id": "dom",
     "name": "Dom",
     "price": 1200,
+    "faction": "ZEON",
     "description": "重装甲型モビルスーツ。高い装甲と火力を持つが機動性は低い。",
     "specs": {
       "max_hp": 1000,
@@ -102,6 +105,7 @@
     "id": "gouf",
     "name": "Gouf",
     "price": 1000,
+    "faction": "ZEON",
     "description": "白兵戦特化型モビルスーツ。高い機動性と近接戦闘能力を持つ。",
     "specs": {
       "max_hp": 850,
@@ -135,6 +139,7 @@
     "id": "gundam",
     "name": "Gundam",
     "price": 5000,
+    "faction": "FEDERATION",
     "description": "連邦軍の最新鋭モビルスーツ。全ての性能が高水準。",
     "specs": {
       "max_hp": 1200,
@@ -168,6 +173,7 @@
     "id": "gelgoog",
     "name": "Gelgoog",
     "price": 2500,
+    "faction": "ZEON",
     "description": "ジオン軍の高性能機。ガンダムに匹敵する性能を持つ。",
     "specs": {
       "max_hp": 1100,

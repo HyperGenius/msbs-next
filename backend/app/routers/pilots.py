@@ -5,9 +5,10 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.core.auth import get_current_user
+from app.core.gamedata import get_starter_kit_by_faction
 from app.core.skills import get_all_skills
 from app.db import get_session
-from app.models.models import Pilot
+from app.models.models import MobileSuit, Pilot
 from app.services.pilot_service import PilotService
 
 router = APIRouter(prefix="/api/pilots", tags=["pilots"])
@@ -18,6 +19,21 @@ class CreatePilotRequest(BaseModel):
 
     name: str
     starter_unit_id: str = "zaku_ii"
+
+
+class RegisterPilotRequest(BaseModel):
+    """パイロット登録リクエスト（オンボーディング用）."""
+
+    name: str
+    faction: str
+
+
+class RegisterPilotResponse(BaseModel):
+    """パイロット登録レスポンス."""
+
+    pilot: dict
+    mobile_suit_id: str
+    message: str
 
 
 @router.post("/create", response_model=Pilot)
@@ -101,6 +117,102 @@ async def get_my_pilot(
         )
 
     return pilot
+
+
+@router.post("/register", response_model=RegisterPilotResponse)
+async def register_pilot(
+    request: RegisterPilotRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> RegisterPilotResponse:
+    """新規パイロットを登録し、勢力に応じた練習機を付与する（オンボーディング用）.
+
+    Args:
+        request: パイロット登録リクエスト（name, faction）
+        session: データベースセッション
+        user_id: 現在のユーザーID
+
+    Returns:
+        RegisterPilotResponse: 作成されたパイロット情報と付与された機体のID
+
+    Raises:
+        HTTPException: パイロットが既に存在する、または無効な勢力の場合
+    """
+    # 既存のパイロットをチェック
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    existing_pilot = session.exec(statement).first()
+
+    if existing_pilot:
+        raise HTTPException(
+            status_code=400, detail="Pilot already exists for this user"
+        )
+
+    # 有効な勢力かチェック
+    valid_factions = ["FEDERATION", "ZEON"]
+    if request.faction not in valid_factions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid faction: {request.faction}. Must be one of {valid_factions}",
+        )
+
+    # パイロット名のバリデーション
+    name = request.name.strip()
+    if not name or len(name) < 2 or len(name) > 15:
+        raise HTTPException(
+            status_code=400,
+            detail="Pilot name must be between 2 and 15 characters",
+        )
+
+    # パイロット作成
+    pilot = Pilot(
+        user_id=user_id,
+        name=name,
+        faction=request.faction,
+        level=1,
+        exp=0,
+        credits=1000,
+    )
+    session.add(pilot)
+    session.commit()
+    session.refresh(pilot)
+
+    # 勢力に応じた練習機を取得
+    starter_kit = get_starter_kit_by_faction(request.faction)
+    if not starter_kit:
+        raise HTTPException(
+            status_code=500, detail="Starter kit not found for the specified faction"
+        )
+
+    specs = starter_kit["specs"]
+    new_mobile_suit = MobileSuit(
+        user_id=user_id,
+        name=starter_kit["name"],
+        max_hp=specs["max_hp"],
+        current_hp=specs["max_hp"],
+        armor=specs["armor"],
+        mobility=specs["mobility"],
+        sensor_range=specs.get("sensor_range", 500.0),
+        beam_resistance=specs.get("beam_resistance", 0.0),
+        physical_resistance=specs.get("physical_resistance", 0.0),
+        melee_aptitude=specs.get("melee_aptitude", 1.0),
+        shooting_aptitude=specs.get("shooting_aptitude", 1.0),
+        accuracy_bonus=specs.get("accuracy_bonus", 0.0),
+        evasion_bonus=specs.get("evasion_bonus", 0.0),
+        acceleration_bonus=specs.get("acceleration_bonus", 1.0),
+        turning_bonus=specs.get("turning_bonus", 1.0),
+        weapons=specs["weapons"],
+        side="PLAYER",
+    )
+    session.add(new_mobile_suit)
+    session.commit()
+    session.refresh(new_mobile_suit)
+    session.refresh(pilot)
+
+    return RegisterPilotResponse(
+        pilot=pilot.model_dump(mode="json"),
+        mobile_suit_id=str(new_mobile_suit.id),
+        message=f"パイロット {name} を登録しました。{starter_kit['name']} を付与しました。",
+    )
 
 
 class SkillUnlockRequest(BaseModel):
