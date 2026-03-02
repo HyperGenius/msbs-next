@@ -2,13 +2,14 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlalchemy import delete
+from sqlmodel import Session, col, select
 
 from app.core.auth import get_current_user
 from app.core.gamedata import get_starter_kit_by_faction
 from app.core.skills import get_all_skills
 from app.db import get_session
-from app.models.models import MobileSuit, Pilot
+from app.models.models import BattleEntry, BattleResult, MobileSuit, Pilot
 from app.services.pilot_service import PilotService
 
 router = APIRouter(prefix="/api/pilots", tags=["pilots"])
@@ -213,6 +214,47 @@ async def register_pilot(
         mobile_suit_id=str(new_mobile_suit.id),
         message=f"パイロット {name} を登録しました。{starter_kit['name']} を付与しました。",
     )
+
+
+class DeleteAccountResponse(BaseModel):
+    """アカウント削除レスポンス."""
+
+    message: str
+
+
+@router.delete("/me", response_model=DeleteAccountResponse)
+async def delete_my_account(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> DeleteAccountResponse:
+    """現在のユーザーに紐づく全データを削除し、アカウントを初期状態にリセットする.
+
+    削除対象: BattleEntry, BattleResult, MobileSuit, Pilot
+
+    Args:
+        session: データベースセッション
+        user_id: 現在のユーザーID
+
+    Returns:
+        DeleteAccountResponse: 削除完了メッセージ
+
+    Raises:
+        HTTPException: 削除処理中にエラーが発生した場合
+    """
+    try:
+        # 子レコードから順番にバルク削除（外部キー制約考慮）
+        session.exec(delete(BattleEntry).where(col(BattleEntry.user_id) == user_id))
+        session.exec(delete(BattleResult).where(col(BattleResult.user_id) == user_id))
+        session.exec(delete(MobileSuit).where(col(MobileSuit.user_id) == user_id))
+        session.exec(delete(Pilot).where(col(Pilot.user_id) == user_id))
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reset account: {e}"
+        ) from e
+
+    return DeleteAccountResponse(message="アカウントを初期状態にリセットしました。")
 
 
 class SkillUnlockRequest(BaseModel):
