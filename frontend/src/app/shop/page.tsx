@@ -6,6 +6,7 @@ import { useShopListings, purchaseMobileSuit, usePilot, useWeaponListings, purch
 import { ShopListing, WeaponListing } from "@/types/battle";
 import Link from "next/link";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
+import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
 import { getRankColor, getRank, getWeaponRank } from "@/utils/rankUtils";
 
 type TabType = "mobile_suits" | "weapons";
@@ -15,93 +16,60 @@ export default function ShopPage() {
   const { weaponListings, isLoading: weaponsLoading, isError: weaponsError } = useWeaponListings();
   const { pilot, mutate: mutatePilot } = usePilot();
   const [activeTab, setActiveTab] = useState<TabType>("mobile_suits");
-  const [selectedItem, setSelectedItem] = useState<ShopListing | null>(null);
-  const [selectedWeapon, setSelectedWeapon] = useState<WeaponListing | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [showWeaponDialog, setShowWeaponDialog] = useState(false);
+  const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
 
-  const handlePurchaseClick = (item: ShopListing) => {
-    setSelectedItem(item);
-    setShowConfirmDialog(true);
-    setPurchaseMessage(null);
-  };
-
-  const handleConfirmPurchase = async () => {
-    if (!selectedItem) return;
-
+  const handleMobileSuitHoldComplete = async (item: ShopListing) => {
+    if (isPurchasing) return;
     setIsPurchasing(true);
+    setPurchasingId(item.id);
     setPurchaseMessage(null);
 
     try {
-      const result = await purchaseMobileSuit(selectedItem.id);
+      const result = await purchaseMobileSuit(item.id);
       setPurchaseMessage(result.message);
-      
-      // パイロット情報を更新
       mutatePilot();
-      
-      // 成功メッセージを表示後、ダイアログを閉じる
       setTimeout(() => {
-        setShowConfirmDialog(false);
-        setSelectedItem(null);
-      }, 2000);
+        setPurchaseMessage(null);
+      }, 3000);
     } catch (error) {
       if (error instanceof Error) {
         setPurchaseMessage(`エラー: ${error.message}`);
       } else {
         setPurchaseMessage("購入に失敗しました");
       }
+      setTimeout(() => setPurchaseMessage(null), 3000);
     } finally {
       setIsPurchasing(false);
+      setPurchasingId(null);
     }
   };
 
-  const handleCancelPurchase = () => {
-    setShowConfirmDialog(false);
-    setSelectedItem(null);
-    setPurchaseMessage(null);
-  };
-
-  const handleWeaponPurchaseClick = (weapon: WeaponListing) => {
-    setSelectedWeapon(weapon);
-    setShowWeaponDialog(true);
-    setPurchaseMessage(null);
-  };
-
-  const handleConfirmWeaponPurchase = async () => {
-    if (!selectedWeapon) return;
-
+  const handleWeaponHoldComplete = async (weapon: WeaponListing) => {
+    if (isPurchasing) return;
     setIsPurchasing(true);
+    setPurchasingId(weapon.id);
     setPurchaseMessage(null);
 
     try {
-      const result = await purchaseWeapon(selectedWeapon.id);
+      const result = await purchaseWeapon(weapon.id);
       setPurchaseMessage(result.message);
-      
-      // パイロット情報を更新
       mutatePilot();
-      
-      // 成功メッセージを表示後、ダイアログを閉じる
       setTimeout(() => {
-        setShowWeaponDialog(false);
-        setSelectedWeapon(null);
-      }, 2000);
+        setPurchaseMessage(null);
+      }, 3000);
     } catch (error) {
       if (error instanceof Error) {
         setPurchaseMessage(`エラー: ${error.message}`);
       } else {
         setPurchaseMessage("購入に失敗しました");
       }
+      setTimeout(() => setPurchaseMessage(null), 3000);
     } finally {
       setIsPurchasing(false);
+      setPurchasingId(null);
     }
-  };
-
-  const handleCancelWeaponPurchase = () => {
-    setShowWeaponDialog(false);
-    setSelectedWeapon(null);
-    setPurchaseMessage(null);
   };
 
   const canAfford = (price: number): boolean => {
@@ -339,15 +307,24 @@ export default function ShopPage() {
                     </div>
 
                     {/* Purchase Button */}
-                    <SciFiButton
-                      onClick={() => handlePurchaseClick(item)}
-                      disabled={!affordable || isPurchasing}
-                      variant={affordable ? "secondary" : "danger"}
-                      size="md"
-                      className="w-full"
-                    >
-                      {affordable ? "購入する (BUY)" : "購入不可"}
-                    </SciFiButton>
+                    {affordable ? (
+                      <HoldSciFiButton
+                        onHoldComplete={() => handleMobileSuitHoldComplete(item)}
+                        disabled={isPurchasing && purchasingId !== item.id}
+                        loading={purchasingId === item.id}
+                        label="長押しで購入 (HOLD TO BUY)"
+                        className="w-full"
+                      />
+                    ) : (
+                      <SciFiButton
+                        disabled
+                        variant="danger"
+                        size="md"
+                        className="w-full"
+                      >
+                        購入不可
+                      </SciFiButton>
+                    )}
                   </SciFiCard>
                 );
               })}
@@ -458,14 +435,23 @@ export default function ShopPage() {
                       </div>
 
                       {/* Purchase Button */}
-                      <SciFiButton
-                        variant="secondary"
-                        className="w-full"
-                        onClick={() => handleWeaponPurchaseClick(weapon)}
-                        disabled={!affordable}
-                      >
-                        {affordable ? "購入する (PURCHASE)" : "所持金不足 (INSUFFICIENT FUNDS)"}
-                      </SciFiButton>
+                      {affordable ? (
+                        <HoldSciFiButton
+                          onHoldComplete={() => handleWeaponHoldComplete(weapon)}
+                          disabled={isPurchasing && purchasingId !== weapon.id}
+                          loading={purchasingId === weapon.id}
+                          label="長押しで購入 (HOLD TO BUY)"
+                          className="w-full"
+                        />
+                      ) : (
+                        <SciFiButton
+                          disabled
+                          variant="danger"
+                          className="w-full"
+                        >
+                          所持金不足 (INSUFFICIENT FUNDS)
+                        </SciFiButton>
+                      )}
                     </SciFiCard>
                   );
                 })}
@@ -474,143 +460,15 @@ export default function ShopPage() {
           </>
         )}
 
-        {/* Confirmation Dialog for Mobile Suits */}
-        {showConfirmDialog && selectedItem && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-            <SciFiPanel variant="secondary" chiseled={true}>
-              <div className="p-8 max-w-md mx-4">
-                <SciFiHeading level={3} className="mb-4" variant="secondary">
-                  購入確認
-                </SciFiHeading>
-              
-                {purchaseMessage ? (
-                  <SciFiPanel 
-                    variant={purchaseMessage.startsWith("エラー") ? "secondary" : "primary"}
-                    chiseled={false}
-                  >
-                    <div className="p-4">
-                      {purchaseMessage}
-                    </div>
-                  </SciFiPanel>
-                ) : (
-                  <>
-                    <p className="mb-4 text-[#00ff41]">
-                      <span className="font-bold text-[#ffb000]">
-                        {selectedItem.name}
-                      </span>
-                      を
-                      <span className="font-bold text-[#ffb000] mx-1">
-                        {selectedItem.price.toLocaleString()} Credits
-                      </span>
-                      で購入しますか？
-                    </p>
-
-                    <div className="mb-6 p-3 bg-[#0a0a0a] border-2 border-[#ffb000]/30">
-                      <div className="flex justify-between text-sm text-[#00ff41]">
-                        <span className="text-[#00ff41]/60">現在の所持金:</span>
-                        <span className="font-bold">{pilot?.credits.toLocaleString()} C</span>
-                      </div>
-                      <div className="flex justify-between text-sm mt-2 text-[#00ff41]">
-                        <span className="text-[#00ff41]/60">購入後:</span>
-                        <span className="font-bold text-[#00ff41]">
-                          {((pilot?.credits || 0) - selectedItem.price).toLocaleString()} C
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4">
-                      <SciFiButton
-                        onClick={handleConfirmPurchase}
-                        disabled={isPurchasing}
-                        variant="secondary"
-                        size="md"
-                        className="flex-1"
-                      >
-                        {isPurchasing ? "処理中..." : "購入"}
-                      </SciFiButton>
-                      <SciFiButton
-                        onClick={handleCancelPurchase}
-                        disabled={isPurchasing}
-                        variant="danger"
-                        size="md"
-                        className="flex-1"
-                      >
-                        キャンセル
-                      </SciFiButton>
-                    </div>
-                  </>
-                )}
-              </div>
-            </SciFiPanel>
-          </div>
-        )}
-
-        {/* Confirmation Dialog for Weapons */}
-        {showWeaponDialog && selectedWeapon && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-            <SciFiPanel variant="secondary" chiseled={true}>
-              <div className="p-8 max-w-md mx-4">
-                <SciFiHeading level={3} className="mb-4" variant="secondary">
-                  武器購入確認
-                </SciFiHeading>
-              
-                {purchaseMessage ? (
-                  <SciFiPanel 
-                    variant={purchaseMessage.startsWith("エラー") ? "secondary" : "primary"}
-                    chiseled={false}
-                  >
-                    <div className="p-4">
-                      {purchaseMessage}
-                    </div>
-                  </SciFiPanel>
-                ) : (
-                  <>
-                    <p className="mb-4 text-[#00ff41]">
-                      <span className="font-bold text-[#ffb000]">
-                        {selectedWeapon.name}
-                      </span>
-                      を
-                      <span className="font-bold text-[#ffb000] mx-1">
-                        {selectedWeapon.price.toLocaleString()} Credits
-                      </span>
-                      で購入しますか？
-                    </p>
-
-                    <div className="mb-6 p-3 bg-[#0a0a0a] border-2 border-[#ffb000]/30">
-                      <div className="flex justify-between text-sm text-[#00ff41]">
-                        <span className="text-[#00ff41]/60">現在の所持金:</span>
-                        <span className="font-bold">{pilot?.credits.toLocaleString()} C</span>
-                      </div>
-                      <div className="flex justify-between text-sm mt-2 text-[#00ff41]">
-                        <span className="text-[#00ff41]/60">購入後:</span>
-                        <span className="font-bold text-[#00ff41]">
-                          {((pilot?.credits || 0) - selectedWeapon.price).toLocaleString()} C
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4">
-                      <SciFiButton
-                        onClick={handleConfirmWeaponPurchase}
-                        disabled={isPurchasing}
-                        variant="secondary"
-                        size="md"
-                        className="flex-1"
-                      >
-                        {isPurchasing ? "処理中..." : "購入"}
-                      </SciFiButton>
-                      <SciFiButton
-                        onClick={handleCancelWeaponPurchase}
-                        disabled={isPurchasing}
-                        variant="danger"
-                        size="md"
-                        className="flex-1"
-                      >
-                        キャンセル
-                      </SciFiButton>
-                    </div>
-                  </>
-                )}
+        {/* Purchase Result Toast */}
+        {purchaseMessage && (
+          <div className="fixed top-4 right-4 z-50 max-w-sm">
+            <SciFiPanel
+              variant={purchaseMessage.startsWith("エラー") ? "secondary" : "primary"}
+              chiseled={false}
+            >
+              <div className="p-4 font-mono text-sm">
+                {purchaseMessage}
               </div>
             </SciFiPanel>
           </div>
