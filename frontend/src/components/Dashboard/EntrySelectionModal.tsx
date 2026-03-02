@@ -50,15 +50,17 @@ export default function EntrySelectionModal({
                         <h3 className="text-xl font-bold text-[#00ff41]">
                           {ms.name}
                         </h3>
+                        {/* 機体アイコン 将来実装予定
                         <div className="w-12 h-12 bg-[#00ff41]/20 rounded border-2 border-[#00ff41]/50 flex items-center justify-center">
                           <span className="text-2xl">🤖</span>
                         </div>
+                         */}
                       </div>
 
                       {/* ステータス表示 */}
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
-                          <p className="text-[#00ff41]/60 text-xs mb-1">HP</p>
+                          <p className="text-[#00ff41]/60 text-xs mb-1">耐久</p>
                           <p className={`font-bold ${getRankColor(hpRank)}`}>{hpRank}</p>
                         </div>
                         <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
@@ -69,14 +71,10 @@ export default function EntrySelectionModal({
                           <p className="text-[#00ff41]/60 text-xs mb-1">機動性</p>
                           <p className={`font-bold ${getRankColor(mobilityRank)}`}>{mobilityRank}</p>
                         </div>
-                        <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
-                          <p className="text-[#00ff41]/60 text-xs mb-1">武器</p>
-                          <p className="text-[#00ff41] font-bold">{ms.weapons.length}基</p>
-                        </div>
                       </div>
 
                       {/* 武器リスト */}
-                      <div className="border-t border-[#00ff41]/20 pt-2">
+                      <div className="border-t border-[#00ff41]/20 pt-2 h-26 overflow-y-auto">
                         <p className="text-xs text-[#00ff41]/60 mb-1">装備武器:</p>
                         <div className="space-y-1">
                           {ms.weapons.map((weapon, idx) => {
