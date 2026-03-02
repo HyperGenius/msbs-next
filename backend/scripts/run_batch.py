@@ -226,21 +226,18 @@ def _save_battle_results(
         individual_win_loss = "WIN" if entry_team_id in alive_team_ids else "LOSE"
         individual_kills = kills if individual_win_loss == "WIN" else 0
 
-        battle_result = BattleResult(
-            user_id=entry.user_id,
-            room_id=room.id,
-            win_loss=individual_win_loss,
-            logs=[log.model_dump() for log in simulator.logs],
-            player_info=player_unit.model_dump(),
-            enemies_info=[e.model_dump() for e in enemy_units],
-        )
-        session.add(battle_result)
+        # 報酬の計算と付与（BattleResult作成前にlevel_beforeを確定）
+        exp_gained = 0
+        credits_gained = 0
+        level_before = 0
+        level_after = 0
+        level_up = False
 
-        # 報酬を付与
         if entry.user_id:
             try:
                 pilot_name = entry.mobile_suit_snapshot.get("name", "Unknown Pilot")
                 pilot = pilot_service.get_or_create_pilot(entry.user_id, pilot_name)
+                level_before = pilot.level
 
                 exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
                     win=individual_win_loss == "WIN",
@@ -251,11 +248,32 @@ def _save_battle_results(
                     pilot, exp_gained, credits_gained
                 )
 
+                level_after = pilot.level
+                level_up = level_after > level_before
+
                 print(f"  報酬付与 ({entry.user_id}): {', '.join(reward_logs)}")
 
             except Exception as e:
                 print(f"  警告: 報酬付与エラー ({entry.user_id}): {e}")
                 traceback.print_exc()
+
+        battle_result = BattleResult(
+            user_id=entry.user_id,
+            room_id=room.id,
+            win_loss=individual_win_loss,
+            logs=[log.model_dump() for log in simulator.logs],
+            player_info=player_unit.model_dump(),
+            enemies_info=[e.model_dump() for e in enemy_units],
+            ms_snapshot=entry.mobile_suit_snapshot,
+            kills=individual_kills,
+            exp_gained=exp_gained,
+            credits_gained=credits_gained,
+            level_before=level_before,
+            level_after=level_after,
+            level_up=level_up,
+            is_read=False,
+        )
+        session.add(battle_result)
 
     # NPC の成長処理
     for npc_entry in npc_entries:
