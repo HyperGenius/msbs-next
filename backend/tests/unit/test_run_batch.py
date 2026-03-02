@@ -1,13 +1,20 @@
 """Tests for run_batch._save_battle_results."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.db import json_serializer
-from app.models.models import BattleEntry, BattleResult, BattleRoom, MobileSuit, Pilot, Vector3, Weapon
+from app.models.models import (
+    BattleEntry,
+    BattleResult,
+    BattleRoom,
+    MobileSuit,
+    Vector3,
+    Weapon,
+)
 
 
 @pytest.fixture
@@ -43,7 +50,9 @@ def _make_room(session: Session) -> BattleRoom:
     return room
 
 
-def _make_entry(session: Session, room: BattleRoom, user_id: str, snapshot: dict) -> BattleEntry:
+def _make_entry(
+    session: Session, room: BattleRoom, user_id: str, snapshot: dict
+) -> BattleEntry:
     suit = MobileSuit(
         name=snapshot["name"],
         max_hp=snapshot["max_hp"],
@@ -88,10 +97,12 @@ def test_save_battle_results_sets_detail_fields(in_memory_session):
 
     snapshot = _make_snapshot("Hero Gundam")
     # スナップショットの team_id を明示的にセット（勝利判定のため）
-    from app.models.models import MobileSuit as MS
-
-    entry_suit = MS(**{k: v for k, v in snapshot.items() if k in MS.model_fields})
-    snapshot["team_id"] = str(entry_suit.id) if entry_suit.team_id is None else entry_suit.team_id
+    entry_suit = MobileSuit(
+        **{k: v for k, v in snapshot.items() if k in MobileSuit.model_fields}
+    )
+    snapshot["team_id"] = (
+        str(entry_suit.id) if entry_suit.team_id is None else entry_suit.team_id
+    )
 
     entry = _make_entry(session, room, "user_hero", snapshot)
 
@@ -120,7 +131,9 @@ def test_save_battle_results_sets_detail_fields(in_memory_session):
         enemy_units=[],
     )
 
-    results = list(session.exec(select(BattleResult).where(BattleResult.room_id == room.id)).all())
+    results = list(
+        session.exec(select(BattleResult).where(BattleResult.room_id == room.id)).all()
+    )
     assert len(results) == 1
     result = results[0]
 
@@ -180,7 +193,9 @@ def test_save_battle_results_lose(in_memory_session):
         enemy_units=[other_unit],
     )
 
-    results = list(session.exec(select(BattleResult).where(BattleResult.room_id == room.id)).all())
+    results = list(
+        session.exec(select(BattleResult).where(BattleResult.room_id == room.id)).all()
+    )
     assert len(results) == 1
     result = results[0]
 
@@ -225,7 +240,9 @@ def test_save_battle_results_snapshot_immutability(in_memory_session):
         enemy_units=[],
     )
 
-    results = list(session.exec(select(BattleResult).where(BattleResult.room_id == room.id)).all())
+    results = list(
+        session.exec(select(BattleResult).where(BattleResult.room_id == room.id)).all()
+    )
     result = results[0]
 
     # スナップショットはエントリー時のものと一致する
