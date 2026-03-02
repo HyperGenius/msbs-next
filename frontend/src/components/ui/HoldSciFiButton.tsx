@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 
-const HOLD_DURATION_MS = 1500;
+const HOLD_DURATION_MS = 1000;
 const TICK_MS = 16; // ~60fps
 
 interface HoldSciFiButtonProps {
