@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { usePilot } from "@/services/api";
+import { usePilot, resetAccount } from "@/services/api";
 import { SciFiButton, SciFiHeading } from "@/components/ui";
 
 const navLinks = [
@@ -17,6 +17,20 @@ const navLinks = [
 export default function Header() {
   const { pilot } = usePilot();
   const [isOpen, setIsOpen] = useState(false);
+  const isDev = process.env.NODE_ENV === "development";
+
+  const handleResetAccount = useCallback(async () => {
+    if (!confirm("【デバッグ】アカウントを初期状態にリセットします。パイロット、機体、戦績が全て削除されます。よろしいですか？")) {
+      return;
+    }
+    try {
+      await resetAccount();
+      localStorage.removeItem("msbs_onboarding_completed");
+      window.location.reload();
+    } catch (e) {
+      alert(`リセットに失敗しました: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, []);
 
   // Close mobile menu on Escape key
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -76,6 +90,11 @@ export default function Header() {
             </Link>
           </SignedOut>
           <SignedIn>
+            {isDev && (
+              <SciFiButton variant="danger" size="sm" onClick={handleResetAccount}>
+                Reset Account (Debug)
+              </SciFiButton>
+            )}
             <UserButton 
               appearance={{
                 elements: {

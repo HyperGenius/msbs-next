@@ -900,6 +900,29 @@ export async function leaveTeam(teamId: string): Promise<void> {
 }
 
 /**
+ * アカウントをリセットする関数（デバッグ用）
+ * 現在のユーザーに紐づく全データ（パイロット、機体、戦績）を削除する
+ */
+export async function resetAccount(): Promise<void> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/pilots/me`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to reset account: ${res.status} ${res.statusText}`);
+  }
+}
+
+/**
  * チーム単位でバトルにエントリーする関数
  */
 export async function teamEntry(request: TeamEntryRequest): Promise<TeamEntryResponse> {
