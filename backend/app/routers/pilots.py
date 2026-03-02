@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import delete
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.auth import get_current_user
 from app.core.gamedata import get_starter_kit_by_faction
@@ -243,10 +243,10 @@ async def delete_my_account(
     """
     try:
         # 子レコードから順番にバルク削除（外部キー制約考慮）
-        session.exec(delete(BattleEntry).where(BattleEntry.user_id == user_id))
-        session.exec(delete(BattleResult).where(BattleResult.user_id == user_id))
-        session.exec(delete(MobileSuit).where(MobileSuit.user_id == user_id))
-        session.exec(delete(Pilot).where(Pilot.user_id == user_id))
+        session.exec(delete(BattleEntry).where(col(BattleEntry.user_id) == user_id))
+        session.exec(delete(BattleResult).where(col(BattleResult.user_id) == user_id))
+        session.exec(delete(MobileSuit).where(col(MobileSuit.user_id) == user_id))
+        session.exec(delete(Pilot).where(col(Pilot.user_id) == user_id))
         session.commit()
     except Exception as e:
         session.rollback()
