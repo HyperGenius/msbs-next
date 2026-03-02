@@ -2,6 +2,7 @@
 
 import { MobileSuit } from "@/types/battle";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
+import { getRank, getWeaponRank, getRankColor } from "@/utils/rankUtils";
 
 interface EntrySelectionModalProps {
   mobileSuits: MobileSuit[];
@@ -38,63 +39,73 @@ export default function EntrySelectionModal({
                 interactive={true}
                 className="hover:sf-border-glow-green"
               >
-                <div className="space-y-3">
-                  {/* 機体名 */}
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-bold text-[#00ff41]">
-                      {ms.name}
-                    </h3>
-                    <div className="w-12 h-12 bg-[#00ff41]/20 rounded border-2 border-[#00ff41]/50 flex items-center justify-center">
-                      <span className="text-2xl">🤖</span>
-                    </div>
-                  </div>
-
-                  {/* ステータス表示 */}
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
-                      <p className="text-[#00ff41]/60 text-xs mb-1">HP</p>
-                      <p className="text-[#00ff41] font-bold">{ms.max_hp}</p>
-                    </div>
-                    <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
-                      <p className="text-[#00ff41]/60 text-xs mb-1">装甲</p>
-                      <p className="text-[#00ff41] font-bold">{ms.armor}</p>
-                    </div>
-                    <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
-                      <p className="text-[#00ff41]/60 text-xs mb-1">機動性</p>
-                      <p className="text-[#00ff41] font-bold">{ms.mobility}</p>
-                    </div>
-                    <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
-                      <p className="text-[#00ff41]/60 text-xs mb-1">武器</p>
-                      <p className="text-[#00ff41] font-bold">{ms.weapons.length}基</p>
-                    </div>
-                  </div>
-
-                  {/* 武器リスト */}
-                  <div className="border-t border-[#00ff41]/20 pt-2">
-                    <p className="text-xs text-[#00ff41]/60 mb-1">装備武器:</p>
-                    <div className="space-y-1">
-                      {ms.weapons.map((weapon, idx) => (
-                        <div
-                          key={`${ms.id}-weapon-${idx}`}
-                          className="text-xs text-[#00ff41]/80 flex items-center justify-between"
-                        >
-                          <span>• {weapon.name}</span>
-                          <span className="text-[#00ff41]/50">威力: {weapon.power}</span>
+                {(() => {
+                  const hpRank = ms.hp_rank ?? getRank("hp", ms.max_hp);
+                  const armorRank = ms.armor_rank ?? getRank("armor", ms.armor);
+                  const mobilityRank = ms.mobility_rank ?? getRank("mobility", ms.mobility);
+                  return (
+                    <div className="space-y-3">
+                      {/* 機体名 */}
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xl font-bold text-[#00ff41]">
+                          {ms.name}
+                        </h3>
+                        {/* 機体アイコン 将来実装予定
+                        <div className="w-12 h-12 bg-[#00ff41]/20 rounded border-2 border-[#00ff41]/50 flex items-center justify-center">
+                          <span className="text-2xl">🤖</span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                         */}
+                      </div>
 
-                  {/* 選択ボタン */}
-                  <SciFiButton
-                    onClick={() => onSelect(ms.id)}
-                    disabled={isLoading}
-                    variant="primary"
-                    className="w-full"
-                  >
-                    {isLoading ? "エントリー中..." : "この機体で出撃"}
-                  </SciFiButton>
-                </div>
+                      {/* ステータス表示 */}
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
+                          <p className="text-[#00ff41]/60 text-xs mb-1">耐久</p>
+                          <p className={`font-bold ${getRankColor(hpRank)}`}>{hpRank}</p>
+                        </div>
+                        <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
+                          <p className="text-[#00ff41]/60 text-xs mb-1">装甲</p>
+                          <p className={`font-bold ${getRankColor(armorRank)}`}>{armorRank}</p>
+                        </div>
+                        <div className="bg-[#0a0a0a]/70 p-2 border border-[#00ff41]/30">
+                          <p className="text-[#00ff41]/60 text-xs mb-1">機動性</p>
+                          <p className={`font-bold ${getRankColor(mobilityRank)}`}>{mobilityRank}</p>
+                        </div>
+                      </div>
+
+                      {/* 武器リスト */}
+                      <div className="border-t border-[#00ff41]/20 pt-2 h-26 overflow-y-auto">
+                        <p className="text-xs text-[#00ff41]/60 mb-1">装備武器:</p>
+                        <div className="space-y-1">
+                          {ms.weapons.map((weapon, idx) => {
+                            const powerRank = weapon.power_rank ?? getWeaponRank("weapon_power", weapon.power);
+                            return (
+                              <div
+                                key={`${ms.id}-weapon-${idx}`}
+                                className="text-xs text-[#00ff41]/80 flex items-center justify-between"
+                              >
+                                <span>• {weapon.name}</span>
+                                <span className="text-[#00ff41]/50">
+                                  威力: <span className={getRankColor(powerRank)}>{powerRank}</span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 選択ボタン */}
+                      <SciFiButton
+                        onClick={() => onSelect(ms.id)}
+                        disabled={isLoading}
+                        variant="primary"
+                        className="w-full"
+                      >
+                        {isLoading ? "エントリー中..." : "この機体で出撃"}
+                      </SciFiButton>
+                    </div>
+                  );
+                })()}
               </SciFiCard>
             ))}
           </div>
