@@ -51,7 +51,18 @@ export default function Header() {
           <SciFiHeading level={1} className="text-2xl">
             MSBS-Next Simulator
           </SciFiHeading>
-          <p className="text-sm text-[#00ff41]/60 font-mono ml-5">Phase 1: Prototype Environment</p>
+          <p className="text-sm text-[#00ff41]/60 font-mono ml-5">
+            Phase 1: Prototype Environment
+          </p>
+          {/* デバッグボタンを配置 */}
+          {isDev && (
+            <button
+              onClick={handleResetAccount}
+              className="mb-1 px-2 py-0.5 text-xs bg-red-900/50 text-red-400 border border-red-500/50 hover:bg-red-900 transition-colors"
+            >
+              [SYS_RESET]
+            </button>
+          )}
         </div>
 
         {/* Desktop Navigation */}
@@ -90,12 +101,7 @@ export default function Header() {
             </Link>
           </SignedOut>
           <SignedIn>
-            {isDev && (
-              <SciFiButton variant="danger" size="sm" onClick={handleResetAccount}>
-                Reset Account (Debug)
-              </SciFiButton>
-            )}
-            <UserButton 
+            <UserButton
               appearance={{
                 elements: {
                   avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
@@ -113,7 +119,7 @@ export default function Header() {
             </Link>
           </SignedOut>
           <SignedIn>
-            <UserButton 
+            <UserButton
               appearance={{
                 elements: {
                   avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
