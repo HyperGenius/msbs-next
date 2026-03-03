@@ -151,19 +151,28 @@ export default function PlayerProfileModal({
                     <div>
                       <p className="text-gray-500 text-sm">HP</p>
                       <p className="text-lg font-bold">
-                        {profile.mobile_suit.max_hp}
+                        {profile.mobile_suit.max_hp}{" "}
+                        <span className={`text-sm ${profile.mobile_suit.display.hp.colorClass}`}>
+                          [{profile.mobile_suit.display.hp.rank}]
+                        </span>
                       </p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Armor</p>
                       <p className="text-lg font-bold">
-                        {profile.mobile_suit.armor}
+                        {profile.mobile_suit.armor}{" "}
+                        <span className={`text-sm ${profile.mobile_suit.display.armor.colorClass}`}>
+                          [{profile.mobile_suit.display.armor.rank}]
+                        </span>
                       </p>
                     </div>
                     <div>
                       <p className="text-gray-500 text-sm">Mobility</p>
                       <p className="text-lg font-bold">
-                        {profile.mobile_suit.mobility.toFixed(2)}
+                        {profile.mobile_suit.mobility.toFixed(2)}{" "}
+                        <span className={`text-sm ${profile.mobile_suit.display.mobility.colorClass}`}>
+                          [{profile.mobile_suit.display.mobility.rank}]
+                        </span>
                       </p>
                     </div>
                     <div>
