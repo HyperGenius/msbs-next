@@ -105,12 +105,6 @@ export default function HistoryPage() {
 
         <div className="mb-6 flex justify-between items-center">
           <h1 className="text-3xl font-bold border-l-4 border-green-500 pl-2">Battle History</h1>
-          <Link
-            href="/"
-            className="px-4 py-2 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors"
-          >
-            ← Back to Missions
-          </Link>
         </div>
 
         {isLoading && (

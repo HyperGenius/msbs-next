@@ -19,7 +19,7 @@ export default function MobileSuitList({
     <SciFiPanel variant="primary">
       <div className="p-4 sm:p-6">
         <SciFiHeading level={3} className="mb-4 text-lg sm:text-xl">
-          機体一覧
+          MS一覧
         </SciFiHeading>
 
         {mobileSuits && mobileSuits.length > 0 ? (

@@ -41,16 +41,12 @@ export default function EntryDashboard({
 
           {/* 使用機体情報 */}
           <div className="bg-gray-800/70 rounded-lg p-4 border border-green-700">
-            <p className="text-xs text-gray-400 mb-2">使用機体</p>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-5 flex-wrap">
                 <p className="text-xl font-bold text-white">
                   {mobileSuit.name}
                 </p>
                 <MobileSuitRankBadges mobileSuit={mobileSuit} />
-              </div>
-              <div className="w-16 h-16 bg-green-900/50 rounded border-2 border-green-500 flex items-center justify-center">
-                <span className="text-2xl">🤖</span>
               </div>
             </div>
           </div>

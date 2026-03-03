@@ -107,9 +107,6 @@ export default function ShopPage() {
                 {activeTab === "mobile_suits" ? "モビルスーツ販売所" : "武器販売所"}
               </p>
             </div>
-            <Link href="/garage" className="w-full sm:w-auto">
-              <SciFiButton variant="primary" size="sm" className="w-full sm:w-auto">&lt; Back to Garage</SciFiButton>
-            </Link>
           </div>
         </div>
 
