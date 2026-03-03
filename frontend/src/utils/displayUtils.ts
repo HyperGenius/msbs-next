@@ -23,10 +23,10 @@ export const STATUS_LABELS = {
 /** 武器のステータス項目名 */
 export const WEAPON_LABELS = {
   type: "属性",
-  power: "威力",
+  power: "攻撃力",
   range: "射程",
   accuracy: "命中率",
-  optimal_range: "最適射程",
+  optimal_range: "適正距離",
   decay_rate: "減衰率",
   max_ammo: "弾数",
   en_cost: "EN消費",
