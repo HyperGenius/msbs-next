@@ -1,6 +1,12 @@
 /* frontend/src/services/api.ts */
 import useSWR from "swr";
 import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, BulkUpgradeRequest, BulkUpgradeResponse, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile, Friend, Team, TeamEntryRequest, TeamEntryResponse } from "@/types/battle";
+import { EnrichedMobileSuit, enrichMobileSuit } from "@/utils/rankUtils";
+
+/** PlayerProfile の mobile_suit フィールドが EnrichedMobileSuit に変換された型 */
+export type EnrichedPlayerProfile = Omit<PlayerProfile, "mobile_suit"> & {
+  mobile_suit: EnrichedMobileSuit | null;
+};
 
 // Backend API Base URL
 // 本番環境では環境変数NEXT_PUBLIC_API_URLを使用
@@ -57,7 +63,7 @@ export function useMobileSuits() {
   );
 
   return {
-    mobileSuits: data,
+    mobileSuits: data?.map(enrichMobileSuit),
     isLoading,
     isError: error,
     mutate,
@@ -641,9 +647,16 @@ export function usePlayerProfile(userId: string | null) {
     userId ? `${API_BASE_URL}/api/rankings/pilot/${userId}/profile` : null,
     fetcher
   );
-  
+
+  const profile: EnrichedPlayerProfile | undefined = data
+    ? {
+        ...data,
+        mobile_suit: data.mobile_suit ? enrichMobileSuit(data.mobile_suit) : null,
+      }
+    : undefined;
+
   return {
-    profile: data,
+    profile,
     isLoading,
     isError: error,
   };

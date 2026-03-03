@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MobileSuit, Pilot } from "@/types/battle";
+import { EnrichedMobileSuit } from "@/utils/rankUtils";
 import { SciFiButton, SciFiHeading, SciFiPanel } from "@/components/ui";
 import StatusTab from "./StatusTab";
 import SpecsDisplay from "./SpecsDisplay";
@@ -29,7 +30,7 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 interface CustomizationModalProps {
-  mobileSuit: MobileSuit;
+  mobileSuit: EnrichedMobileSuit;
   pilot: Pilot | undefined;
   formData: FormData;
   isSaving: boolean;

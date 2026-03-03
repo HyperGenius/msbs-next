@@ -1,40 +1,13 @@
 /* frontend/src/app/garage/components/SpecsDisplay.tsx */
 "use client";
 
-import { MobileSuit } from "@/types/battle";
+import { EnrichedMobileSuit } from "@/utils/rankUtils";
 
 interface SpecsDisplayProps {
-  selectedMs: MobileSuit;
+  selectedMs: EnrichedMobileSuit;
 }
 
-const TERRAIN_LIST = [
-  { env: "SPACE", label: "宇宙", icon: "🌌" },
-  { env: "GROUND", label: "地上", icon: "🏔️" },
-  { env: "COLONY", label: "コロニー", icon: "🏢" },
-  { env: "UNDERWATER", label: "水中", icon: "🌊" },
-] as const;
-
-function getRankColor(r: string): string {
-  switch (r) {
-    case "S": return "text-green-400";
-    case "A": return "text-blue-400";
-    case "B": return "text-yellow-400";
-    case "C": return "text-orange-400";
-    case "D": return "text-red-400";
-    default: return "text-gray-400";
-  }
-}
-
-function getRankModifier(r: string): string {
-  switch (r) {
-    case "S": return "+20%";
-    case "A": return "±0%";
-    case "B": return "-20%";
-    case "C": return "-40%";
-    case "D": return "-60%";
-    default: return "±0%";
-  }
-}
+const TERRAIN_LIST = ["SPACE", "GROUND", "COLONY", "UNDERWATER"] as const;
 
 export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
   return (
@@ -146,17 +119,17 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
       <div className="mb-4 p-3 bg-gray-900 rounded border border-green-800">
         <h4 className="text-sm font-bold mb-2 text-green-400">地形適正</h4>
         <div className="grid grid-cols-4 gap-2 text-xs">
-          {TERRAIN_LIST.map(({ env, label, icon }) => {
-            const rank = selectedMs.terrain_adaptability?.[env] || "A";
+          {TERRAIN_LIST.map((env) => {
+            const info = selectedMs.display.terrain[env];
             return (
               <div key={env} className="p-2 bg-gray-800 rounded text-center">
-                <div className="text-base mb-1">{icon}</div>
-                <div className="text-xs text-gray-400 mb-1">{label}</div>
-                <div className={`text-lg font-bold ${getRankColor(rank)}`}>
-                  {rank}
+                <div className="text-base mb-1">{info.icon}</div>
+                <div className="text-xs text-gray-400 mb-1">{info.label}</div>
+                <div className={`text-lg font-bold ${info.colorClass}`}>
+                  {info.rank}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {getRankModifier(rank)}
+                  {info.modifier}
                 </div>
               </div>
             );
