@@ -4,6 +4,7 @@
 import { MobileSuit, Weapon, WeaponListing, Pilot } from "@/types/battle";
 import { SciFiButton, SciFiCard, SciFiHeading, SciFiPanel } from "@/components/ui";
 import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
+import { WEAPON_LABELS } from "@/utils/displayUtils";
 
 interface WeaponChangeModalProps {
   selectedMs: MobileSuit;
@@ -123,7 +124,7 @@ export default function WeaponChangeModal({
                   </p>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <span className="text-gray-400">威力:</span>
+                      <span className="text-gray-400">{WEAPON_LABELS.power}:</span>
                       <span className="ml-1">
                         <RankDiffBadge
                           currentRank={currentWeapon ? resolveRank(currentWeapon, "power") : undefined}
@@ -132,7 +133,7 @@ export default function WeaponChangeModal({
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-400">射程:</span>
+                      <span className="text-gray-400">{WEAPON_LABELS.range}:</span>
                       <span className="ml-1">
                         <RankDiffBadge
                           currentRank={currentWeapon ? resolveRank(currentWeapon, "range") : undefined}
@@ -141,7 +142,7 @@ export default function WeaponChangeModal({
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-400">命中:</span>
+                      <span className="text-gray-400">{WEAPON_LABELS.accuracy}:</span>
                       <span className="ml-1">
                         <RankDiffBadge
                           currentRank={currentWeapon ? resolveRank(currentWeapon, "accuracy") : undefined}
@@ -206,7 +207,7 @@ export default function WeaponChangeModal({
 
                       <div className="grid grid-cols-3 gap-2 text-xs">
                         <div>
-                          <span className="text-gray-400">威力:</span>
+                          <span className="text-gray-400">{WEAPON_LABELS.power}:</span>
                           <span className="ml-1">
                             <RankDiffBadge
                               currentRank={currentWeapon ? resolveRank(currentWeapon, "power") : undefined}
@@ -215,7 +216,7 @@ export default function WeaponChangeModal({
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-400">射程:</span>
+                          <span className="text-gray-400">{WEAPON_LABELS.range}:</span>
                           <span className="ml-1">
                             <RankDiffBadge
                               currentRank={currentWeapon ? resolveRank(currentWeapon, "range") : undefined}
@@ -224,7 +225,7 @@ export default function WeaponChangeModal({
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-400">命中:</span>
+                          <span className="text-gray-400">{WEAPON_LABELS.accuracy}:</span>
                           <span className="ml-1">
                             <RankDiffBadge
                               currentRank={currentWeapon ? resolveRank(currentWeapon, "accuracy") : undefined}

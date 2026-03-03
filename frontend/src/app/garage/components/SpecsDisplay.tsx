@@ -2,6 +2,7 @@
 "use client";
 
 import { EnrichedMobileSuit } from "@/utils/rankUtils";
+import { STATUS_LABELS } from "@/utils/displayUtils";
 
 interface SpecsDisplayProps {
   selectedMs: EnrichedMobileSuit;
@@ -23,25 +24,25 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
         </h4>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-400">格闘適性:</span>
+            <span className="text-gray-400">{STATUS_LABELS.melee_aptitude}:</span>
             <span className="ml-2 font-bold text-red-400">
               ×{(selectedMs.melee_aptitude ?? 1.0).toFixed(1)}
             </span>
           </div>
           <div>
-            <span className="text-gray-400">射撃適性:</span>
+            <span className="text-gray-400">{STATUS_LABELS.shooting_aptitude}:</span>
             <span className="ml-2 font-bold text-blue-400">
               ×{(selectedMs.shooting_aptitude ?? 1.0).toFixed(1)}
             </span>
           </div>
           <div>
-            <span className="text-gray-400">命中補正:</span>
+            <span className="text-gray-400">{STATUS_LABELS.accuracy_bonus}:</span>
             <span className="ml-2 font-bold text-green-400">
               {(selectedMs.accuracy_bonus ?? 0.0) >= 0 ? "+" : ""}{(selectedMs.accuracy_bonus ?? 0.0).toFixed(1)}%
             </span>
           </div>
           <div>
-            <span className="text-gray-400">回避補正:</span>
+            <span className="text-gray-400">{STATUS_LABELS.evasion_bonus}:</span>
             <span className="ml-2 font-bold text-yellow-400">
               {(selectedMs.evasion_bonus ?? 0.0) >= 0 ? "+" : ""}{(selectedMs.evasion_bonus ?? 0.0).toFixed(1)}%
             </span>
@@ -56,13 +57,13 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
         </h4>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-400">加速性能:</span>
+            <span className="text-gray-400">{STATUS_LABELS.acceleration_bonus}:</span>
             <span className="ml-2 font-bold text-purple-400">
               ×{(selectedMs.acceleration_bonus ?? 1.0).toFixed(1)}
             </span>
           </div>
           <div>
-            <span className="text-gray-400">旋回性能:</span>
+            <span className="text-gray-400">{STATUS_LABELS.turning_bonus}:</span>
             <span className="ml-2 font-bold text-purple-400">
               ×{(selectedMs.turning_bonus ?? 1.0).toFixed(1)}
             </span>
@@ -77,19 +78,19 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
         </h4>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-400">最大EN:</span>
+            <span className="text-gray-400">{STATUS_LABELS.max_en}:</span>
             <span className="ml-2 font-bold text-cyan-400">
               {selectedMs.max_en || 1000}
             </span>
           </div>
           <div>
-            <span className="text-gray-400">EN回復:</span>
+            <span className="text-gray-400">{STATUS_LABELS.en_recovery}:</span>
             <span className="ml-2 font-bold text-cyan-400">
               {selectedMs.en_recovery || 100}/ターン
             </span>
           </div>
           <div>
-            <span className="text-gray-400">最大推進剤:</span>
+            <span className="text-gray-400">{STATUS_LABELS.max_propellant}:</span>
             <span className="ml-2 font-bold text-purple-400">
               {selectedMs.max_propellant || 1000}
             </span>
@@ -101,13 +102,13 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
       <div className="mb-4 p-3 bg-gray-900 rounded">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-400">対ビーム防御:</span>
+            <span className="text-gray-400">{STATUS_LABELS.beam_resistance}:</span>
             <span className="ml-2 font-bold text-blue-400">
               {((selectedMs.beam_resistance || 0) * 100).toFixed(0)}%
             </span>
           </div>
           <div>
-            <span className="text-gray-400">対実弾防御:</span>
+            <span className="text-gray-400">{STATUS_LABELS.physical_resistance}:</span>
             <span className="ml-2 font-bold text-yellow-400">
               {((selectedMs.physical_resistance || 0) * 100).toFixed(0)}%
             </span>

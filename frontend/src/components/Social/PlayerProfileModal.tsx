@@ -3,6 +3,7 @@
 import { usePlayerProfile } from "@/services/api";
 import { Tactics } from "@/types/battle";
 import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
+import { STATUS_LABELS, WEAPON_LABELS, PILOT_LABELS } from "@/utils/displayUtils";
 
 interface PlayerProfileModalProps {
   userId: string;
@@ -86,25 +87,25 @@ export default function PlayerProfileModal({
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-gray-500 text-sm">Level</p>
+                    <p className="text-gray-500 text-sm">{PILOT_LABELS.level}</p>
                     <p className="text-2xl font-bold text-green-400">
                       {profile.level}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-500 text-sm">Wins</p>
+                    <p className="text-gray-500 text-sm">{PILOT_LABELS.wins}</p>
                     <p className="text-2xl font-bold text-green-400">
                       {profile.wins}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-500 text-sm">Losses</p>
+                    <p className="text-gray-500 text-sm">{PILOT_LABELS.losses}</p>
                     <p className="text-2xl font-bold text-red-400">
                       {profile.losses}
                     </p>
                   </div>
                   <div>
-                    <p className="text-gray-500 text-sm">Total Kills</p>
+                    <p className="text-gray-500 text-sm">{PILOT_LABELS.kills}</p>
                     <p className="text-2xl font-bold text-yellow-400">
                       {profile.kills}
                     </p>
@@ -114,7 +115,7 @@ export default function PlayerProfileModal({
                 {/* Win Rate */}
                 {profile.wins + profile.losses > 0 && (
                   <div className="mt-4 pt-4 border-t border-gray-700">
-                    <p className="text-gray-500 text-sm">Win Rate</p>
+                    <p className="text-gray-500 text-sm">{PILOT_LABELS.win_rate}</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 bg-gray-700 rounded-full h-4 overflow-hidden">
                         <div
@@ -149,7 +150,7 @@ export default function PlayerProfileModal({
                   {/* Stats Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
-                      <p className="text-gray-500 text-sm">HP</p>
+                      <p className="text-gray-500 text-sm">{STATUS_LABELS.max_hp}</p>
                       <p className="text-lg font-bold">
                         {profile.mobile_suit.max_hp}{" "}
                         <span className={`text-sm ${profile.mobile_suit.display.hp.colorClass}`}>
@@ -158,7 +159,7 @@ export default function PlayerProfileModal({
                       </p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-sm">Armor</p>
+                      <p className="text-gray-500 text-sm">{STATUS_LABELS.armor}</p>
                       <p className="text-lg font-bold">
                         {profile.mobile_suit.armor}{" "}
                         <span className={`text-sm ${profile.mobile_suit.display.armor.colorClass}`}>
@@ -167,7 +168,7 @@ export default function PlayerProfileModal({
                       </p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-sm">Mobility</p>
+                      <p className="text-gray-500 text-sm">{STATUS_LABELS.mobility}</p>
                       <p className="text-lg font-bold">
                         {profile.mobile_suit.mobility.toFixed(2)}{" "}
                         <span className={`text-sm ${profile.mobile_suit.display.mobility.colorClass}`}>
@@ -176,7 +177,7 @@ export default function PlayerProfileModal({
                       </p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-sm">Sensor Range</p>
+                      <p className="text-gray-500 text-sm">{STATUS_LABELS.sensor_range}</p>
                       <p className="text-lg font-bold">
                         {profile.mobile_suit.sensor_range || 500}
                       </p>
@@ -210,19 +211,19 @@ export default function PlayerProfileModal({
                           </div>
                           <div className="grid grid-cols-3 gap-2 text-sm text-gray-400">
                             <div>
-                              <span className="text-gray-500">Power:</span>{" "}
+                              <span className="text-gray-500">{WEAPON_LABELS.power}:</span>{" "}
                               <span className={`font-bold ${getRankColor(weapon.power_rank ?? getWeaponRank("weapon_power", weapon.power))}`}>
                                 {weapon.power_rank ?? getWeaponRank("weapon_power", weapon.power)}
                               </span>
                             </div>
                             <div>
-                              <span className="text-gray-500">Range:</span>{" "}
+                              <span className="text-gray-500">{WEAPON_LABELS.range}:</span>{" "}
                               <span className={`font-bold ${getRankColor(weapon.range_rank ?? getWeaponRank("weapon_range", weapon.range))}`}>
                                 {weapon.range_rank ?? getWeaponRank("weapon_range", weapon.range)}
                               </span>
                             </div>
                             <div>
-                              <span className="text-gray-500">Accuracy:</span>{" "}
+                              <span className="text-gray-500">{WEAPON_LABELS.accuracy}:</span>{" "}
                               <span className={`font-bold ${getRankColor(weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.accuracy))}`}>
                                 {weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.accuracy)}
                               </span>
