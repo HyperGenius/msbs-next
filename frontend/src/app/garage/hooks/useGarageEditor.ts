@@ -10,6 +10,7 @@ import {
   equipWeapon,
 } from "@/services/api";
 import { MobileSuit } from "@/types/battle";
+import { EnrichedMobileSuit, enrichMobileSuit } from "@/utils/rankUtils";
 
 /**
  * ガレージ編集画面の状態管理・API呼び出しをまとめたカスタムフック
@@ -19,7 +20,7 @@ export function useGarageEditor() {
   const { pilot, mutate: mutatePilot } = usePilot();
   const { weaponListings } = useWeaponListings();
 
-  const [selectedMs, setSelectedMs] = useState<MobileSuit | null>(null);
+  const [selectedMs, setSelectedMs] = useState<EnrichedMobileSuit | null>(null);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export function useGarageEditor() {
   });
 
   // 機体選択時の処理（モーダルを開く）
-  const handleSelectMs = (ms: MobileSuit) => {
+  const handleSelectMs = (ms: EnrichedMobileSuit) => {
     setSelectedMs(ms);
     setFormData({
       name: ms.name,
@@ -68,7 +69,7 @@ export function useGarageEditor() {
 
   // Engineering強化完了時の処理
   const handleUpgraded = (updatedMs: MobileSuit) => {
-    setSelectedMs(updatedMs);
+    setSelectedMs(enrichMobileSuit(updatedMs));
     mutate();
     mutatePilot();
   };
@@ -85,7 +86,7 @@ export function useGarageEditor() {
       const updatedData = await updateMobileSuit(selectedMs.id, formData);
       setSuccessMessage("機体データを更新しました");
       mutate();
-      setSelectedMs(updatedData);
+      setSelectedMs(enrichMobileSuit(updatedData));
     } catch (error) {
       console.error("Update error:", error);
       alert("更新に失敗しました。");
@@ -121,7 +122,7 @@ export function useGarageEditor() {
       setShowWeaponModal(false);
       setPreviewWeaponId(null);
       mutate();
-      setSelectedMs(updatedMs);
+      setSelectedMs(enrichMobileSuit(updatedMs));
     } catch (error) {
       console.error("Equip error:", error);
       alert(

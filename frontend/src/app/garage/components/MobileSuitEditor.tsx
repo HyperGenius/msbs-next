@@ -1,7 +1,7 @@
 /* frontend/src/app/garage/components/MobileSuitEditor.tsx */
 "use client";
 
-import { MobileSuit } from "@/types/battle";
+import { EnrichedMobileSuit } from "@/utils/rankUtils";
 import {
   SciFiButton,
   SciFiHeading,
@@ -24,7 +24,7 @@ interface FormData {
 }
 
 interface MobileSuitEditorProps {
-  selectedMs: MobileSuit | null;
+  selectedMs: EnrichedMobileSuit | null;
   formData: FormData;
   isSaving: boolean;
   successMessage: string | null;

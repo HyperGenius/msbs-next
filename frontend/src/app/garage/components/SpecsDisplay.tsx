@@ -1,40 +1,14 @@
 /* frontend/src/app/garage/components/SpecsDisplay.tsx */
 "use client";
 
-import { MobileSuit } from "@/types/battle";
+import { EnrichedMobileSuit } from "@/utils/rankUtils";
+import { STATUS_LABELS } from "@/utils/displayUtils";
 
 interface SpecsDisplayProps {
-  selectedMs: MobileSuit;
+  selectedMs: EnrichedMobileSuit;
 }
 
-const TERRAIN_LIST = [
-  { env: "SPACE", label: "宇宙", icon: "🌌" },
-  { env: "GROUND", label: "地上", icon: "🏔️" },
-  { env: "COLONY", label: "コロニー", icon: "🏢" },
-  { env: "UNDERWATER", label: "水中", icon: "🌊" },
-] as const;
-
-function getRankColor(r: string): string {
-  switch (r) {
-    case "S": return "text-green-400";
-    case "A": return "text-blue-400";
-    case "B": return "text-yellow-400";
-    case "C": return "text-orange-400";
-    case "D": return "text-red-400";
-    default: return "text-gray-400";
-  }
-}
-
-function getRankModifier(r: string): string {
-  switch (r) {
-    case "S": return "+20%";
-    case "A": return "±0%";
-    case "B": return "-20%";
-    case "C": return "-40%";
-    case "D": return "-60%";
-    default: return "±0%";
-  }
-}
+const TERRAIN_LIST = ["SPACE", "GROUND", "COLONY", "UNDERWATER"] as const;
 
 export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
   return (
@@ -50,25 +24,25 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
         </h4>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-400">格闘適性:</span>
+            <span className="text-gray-400">{STATUS_LABELS.melee_aptitude}:</span>
             <span className="ml-2 font-bold text-red-400">
               ×{(selectedMs.melee_aptitude ?? 1.0).toFixed(1)}
             </span>
           </div>
           <div>
-            <span className="text-gray-400">射撃適性:</span>
+            <span className="text-gray-400">{STATUS_LABELS.shooting_aptitude}:</span>
             <span className="ml-2 font-bold text-blue-400">
               ×{(selectedMs.shooting_aptitude ?? 1.0).toFixed(1)}
             </span>
           </div>
           <div>
-            <span className="text-gray-400">命中補正:</span>
+            <span className="text-gray-400">{STATUS_LABELS.accuracy_bonus}:</span>
             <span className="ml-2 font-bold text-green-400">
               {(selectedMs.accuracy_bonus ?? 0.0) >= 0 ? "+" : ""}{(selectedMs.accuracy_bonus ?? 0.0).toFixed(1)}%
             </span>
           </div>
           <div>
-            <span className="text-gray-400">回避補正:</span>
+            <span className="text-gray-400">{STATUS_LABELS.evasion_bonus}:</span>
             <span className="ml-2 font-bold text-yellow-400">
               {(selectedMs.evasion_bonus ?? 0.0) >= 0 ? "+" : ""}{(selectedMs.evasion_bonus ?? 0.0).toFixed(1)}%
             </span>
@@ -83,13 +57,13 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
         </h4>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-400">加速性能:</span>
+            <span className="text-gray-400">{STATUS_LABELS.acceleration_bonus}:</span>
             <span className="ml-2 font-bold text-purple-400">
               ×{(selectedMs.acceleration_bonus ?? 1.0).toFixed(1)}
             </span>
           </div>
           <div>
-            <span className="text-gray-400">旋回性能:</span>
+            <span className="text-gray-400">{STATUS_LABELS.turning_bonus}:</span>
             <span className="ml-2 font-bold text-purple-400">
               ×{(selectedMs.turning_bonus ?? 1.0).toFixed(1)}
             </span>
@@ -104,19 +78,19 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
         </h4>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-400">最大EN:</span>
+            <span className="text-gray-400">{STATUS_LABELS.max_en}:</span>
             <span className="ml-2 font-bold text-cyan-400">
               {selectedMs.max_en || 1000}
             </span>
           </div>
           <div>
-            <span className="text-gray-400">EN回復:</span>
+            <span className="text-gray-400">{STATUS_LABELS.en_recovery}:</span>
             <span className="ml-2 font-bold text-cyan-400">
               {selectedMs.en_recovery || 100}/ターン
             </span>
           </div>
           <div>
-            <span className="text-gray-400">最大推進剤:</span>
+            <span className="text-gray-400">{STATUS_LABELS.max_propellant}:</span>
             <span className="ml-2 font-bold text-purple-400">
               {selectedMs.max_propellant || 1000}
             </span>
@@ -128,13 +102,13 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
       <div className="mb-4 p-3 bg-gray-900 rounded">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-400">対ビーム防御:</span>
+            <span className="text-gray-400">{STATUS_LABELS.beam_resistance}:</span>
             <span className="ml-2 font-bold text-blue-400">
               {((selectedMs.beam_resistance || 0) * 100).toFixed(0)}%
             </span>
           </div>
           <div>
-            <span className="text-gray-400">対実弾防御:</span>
+            <span className="text-gray-400">{STATUS_LABELS.physical_resistance}:</span>
             <span className="ml-2 font-bold text-yellow-400">
               {((selectedMs.physical_resistance || 0) * 100).toFixed(0)}%
             </span>
@@ -146,17 +120,17 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
       <div className="mb-4 p-3 bg-gray-900 rounded border border-green-800">
         <h4 className="text-sm font-bold mb-2 text-green-400">地形適正</h4>
         <div className="grid grid-cols-4 gap-2 text-xs">
-          {TERRAIN_LIST.map(({ env, label, icon }) => {
-            const rank = selectedMs.terrain_adaptability?.[env] || "A";
+          {TERRAIN_LIST.map((env) => {
+            const info = selectedMs.display.terrain[env];
             return (
               <div key={env} className="p-2 bg-gray-800 rounded text-center">
-                <div className="text-base mb-1">{icon}</div>
-                <div className="text-xs text-gray-400 mb-1">{label}</div>
-                <div className={`text-lg font-bold ${getRankColor(rank)}`}>
-                  {rank}
+                <div className="text-base mb-1">{info.icon}</div>
+                <div className="text-xs text-gray-400 mb-1">{info.label}</div>
+                <div className={`text-lg font-bold ${info.colorClass}`}>
+                  {info.rank}
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  {getRankModifier(rank)}
+                  {info.modifier}
                 </div>
               </div>
             );

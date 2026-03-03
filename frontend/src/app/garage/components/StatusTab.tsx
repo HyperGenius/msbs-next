@@ -6,6 +6,7 @@ import { bulkUpgradeMobileSuit } from "@/services/api";
 import { SciFiBlockIndicator } from "@/components/ui";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
 import { getRankColor, getRank } from "@/utils/rankUtils";
+import { STATUS_LABELS } from "@/utils/displayUtils";
 
 type StatType =
   | "hp"
@@ -32,7 +33,7 @@ interface StatInfo {
 
 const STAT_TYPES: StatInfo[] = [
   {
-    label: "耐久",
+    label: STATUS_LABELS.hp,
     key: "hp",
     getValue: (ms) => ms.max_hp,
     format: (val) => val.toFixed(0),
@@ -43,7 +44,7 @@ const STAT_TYPES: StatInfo[] = [
     rankStatName: "hp",
   },
   {
-    label: "装甲",
+    label: STATUS_LABELS.armor,
     key: "armor",
     getValue: (ms) => ms.armor,
     format: (val) => val.toFixed(0),
@@ -54,7 +55,7 @@ const STAT_TYPES: StatInfo[] = [
     rankStatName: "armor",
   },
   {
-    label: "機動性",
+    label: STATUS_LABELS.mobility,
     key: "mobility",
     getValue: (ms) => ms.mobility,
     format: (val) => val.toFixed(2),
@@ -65,7 +66,7 @@ const STAT_TYPES: StatInfo[] = [
     rankStatName: "mobility",
   },
   {
-    label: "格闘適性",
+    label: STATUS_LABELS.melee_aptitude,
     key: "melee_aptitude",
     getValue: (ms) => ms.melee_aptitude ?? 1.0,
     format: (val) => `×${val.toFixed(2)}`,
@@ -75,7 +76,7 @@ const STAT_TYPES: StatInfo[] = [
     costDivisor: 2,
   },
   {
-    label: "射撃適性",
+    label: STATUS_LABELS.shooting_aptitude,
     key: "shooting_aptitude",
     getValue: (ms) => ms.shooting_aptitude ?? 1.0,
     format: (val) => `×${val.toFixed(2)}`,
@@ -85,7 +86,7 @@ const STAT_TYPES: StatInfo[] = [
     costDivisor: 2,
   },
   {
-    label: "命中補正",
+    label: STATUS_LABELS.accuracy_bonus,
     key: "accuracy_bonus",
     getValue: (ms) => ms.accuracy_bonus ?? 0.0,
     format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}%`,
@@ -95,7 +96,7 @@ const STAT_TYPES: StatInfo[] = [
     costDivisor: 10,
   },
   {
-    label: "回避補正",
+    label: STATUS_LABELS.evasion_bonus,
     key: "evasion_bonus",
     getValue: (ms) => ms.evasion_bonus ?? 0.0,
     format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}%`,
@@ -105,7 +106,7 @@ const STAT_TYPES: StatInfo[] = [
     costDivisor: 10,
   },
   {
-    label: "加速補正",
+    label: STATUS_LABELS.acceleration_bonus,
     key: "acceleration_bonus",
     getValue: (ms) => ms.acceleration_bonus ?? 0.0,
     format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(2)}`,
@@ -115,7 +116,7 @@ const STAT_TYPES: StatInfo[] = [
     costDivisor: 2,
   },
   {
-    label: "旋回補正",
+    label: STATUS_LABELS.turning_bonus,
     key: "turning_bonus",
     getValue: (ms) => ms.turning_bonus ?? 0.0,
     format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(2)}`,

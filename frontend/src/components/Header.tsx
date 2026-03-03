@@ -48,9 +48,11 @@ export default function Header() {
     <header className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-4 sm:pt-6 md:pt-8 mb-8 border-b-2 border-[#00ff41]/30 pb-4 sf-scanline font-mono">
       <div className="flex justify-between items-center">
         <div>
-          <SciFiHeading level={1} className="text-2xl">
-            MSBS-Next Simulator
-          </SciFiHeading>
+          <Link href="/">
+            <SciFiHeading level={1} className="text-2xl">
+              MSBS-Next Simulator
+            </SciFiHeading>
+          </Link>
           <p className="text-sm text-[#00ff41]/60 font-mono ml-5">
             Phase 1: Prototype Environment
           </p>

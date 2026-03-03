@@ -20,12 +20,6 @@ export default function RankingsPage() {
           <h1 className="text-2xl sm:text-3xl font-bold border-l-4 border-green-500 pl-2">
             Pilot Rankings
           </h1>
-          <Link
-            href="/"
-            className="px-4 py-2 bg-green-900 hover:bg-green-800 rounded font-bold transition-colors w-full sm:w-auto text-center"
-          >
-            ← Back to Dashboard
-          </Link>
         </div>
 
         {isLoading && (

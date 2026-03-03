@@ -55,12 +55,8 @@ export default function GaragePage() {
         <div className="mb-4 sm:mb-8 border-b-2 border-[#00ff41]/30 pb-4">
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
             <div>
-              <SciFiHeading level={2} className="text-xl sm:text-2xl">GARAGE - Mobile Suit Hangar</SciFiHeading>
-              <p className="text-xs sm:text-sm text-[#00ff41]/60 ml-0 sm:ml-5">機体管理システム — 機体をクリックしてカスタマイズ</p>
+              <SciFiHeading level={2} className="text-xl sm:text-2xl">GARAGE</SciFiHeading>
             </div>
-            <Link href="/" className="w-full sm:w-auto">
-              <SciFiButton variant="primary" size="sm" className="w-full sm:w-auto">&lt; Back to Simulator</SciFiButton>
-            </Link>
           </div>
         </div>
 
