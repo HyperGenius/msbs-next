@@ -152,7 +152,6 @@ export default function PlayerProfileModal({
                     <div>
                       <p className="text-gray-500 text-sm">{STATUS_LABELS.max_hp}</p>
                       <p className="text-lg font-bold">
-                        {profile.mobile_suit.max_hp}{" "}
                         <span className={`text-sm ${profile.mobile_suit.display.hp.colorClass}`}>
                           [{profile.mobile_suit.display.hp.rank}]
                         </span>
@@ -161,7 +160,6 @@ export default function PlayerProfileModal({
                     <div>
                       <p className="text-gray-500 text-sm">{STATUS_LABELS.armor}</p>
                       <p className="text-lg font-bold">
-                        {profile.mobile_suit.armor}{" "}
                         <span className={`text-sm ${profile.mobile_suit.display.armor.colorClass}`}>
                           [{profile.mobile_suit.display.armor.rank}]
                         </span>
@@ -170,18 +168,18 @@ export default function PlayerProfileModal({
                     <div>
                       <p className="text-gray-500 text-sm">{STATUS_LABELS.mobility}</p>
                       <p className="text-lg font-bold">
-                        {profile.mobile_suit.mobility.toFixed(2)}{" "}
                         <span className={`text-sm ${profile.mobile_suit.display.mobility.colorClass}`}>
                           [{profile.mobile_suit.display.mobility.rank}]
                         </span>
                       </p>
                     </div>
+
+                    {/* センサーレンジ情報を追加するかも
                     <div>
                       <p className="text-gray-500 text-sm">{STATUS_LABELS.sensor_range}</p>
                       <p className="text-lg font-bold">
-                        {profile.mobile_suit.sensor_range || 500}
                       </p>
-                    </div>
+                    </div> */}
                   </div>
 
                   {/* Weapons */}
