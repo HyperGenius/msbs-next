@@ -216,6 +216,45 @@ async def register_pilot(
     )
 
 
+class PilotNameUpdateRequest(BaseModel):
+    """パイロット名更新リクエスト."""
+
+    name: str
+
+
+@router.put("/me/name", response_model=Pilot)
+async def update_pilot_name(
+    request: PilotNameUpdateRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> Pilot:
+    """現在のユーザーのパイロット名を更新する.
+
+    Args:
+        request: パイロット名更新リクエスト
+        session: データベースセッション
+        user_id: 現在のユーザーID
+
+    Returns:
+        Pilot: 更新後のパイロット情報
+
+    Raises:
+        HTTPException: パイロットが見つからない、またはバリデーションエラーの場合
+    """
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    pilot = session.exec(statement).first()
+
+    if not pilot:
+        raise HTTPException(status_code=404, detail="Pilot not found")
+
+    try:
+        pilot_service = PilotService(session)
+        pilot = pilot_service.update_pilot_name(pilot, request.name)
+        return pilot
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 class DeleteAccountResponse(BaseModel):
     """アカウント削除レスポンス."""
 

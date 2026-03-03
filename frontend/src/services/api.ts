@@ -590,6 +590,33 @@ export async function unlockSkill(skillId: string): Promise<SkillUnlockResponse>
 }
 
 /**
+ * パイロット名を更新する関数
+ */
+export async function updatePilotName(name: string): Promise<Pilot> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/pilots/me/name`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ name }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to update pilot name: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+/**
  * 現在のランキングを取得するSWRフック
  */
 export function useRankings(limit: number = 100) {

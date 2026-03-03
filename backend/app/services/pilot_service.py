@@ -236,6 +236,36 @@ class PilotService:
 
         return total_exp, total_credits
 
+    def update_pilot_name(self, pilot: Pilot, new_name: str) -> Pilot:
+        """パイロット名を更新する.
+
+        Args:
+            pilot: 対象パイロット
+            new_name: 新しいパイロット名（前後の空白を除去した後、2〜20文字）
+
+        Returns:
+            Pilot: 更新後のパイロット
+
+        Raises:
+            ValueError: 名前のバリデーションに失敗した場合（空文字・2文字未満・20文字超）
+        """
+        name = new_name.strip()
+        if not name:
+            raise ValueError("パイロット名を入力してください")
+        if len(name) < 2:
+            raise ValueError("パイロット名は2文字以上で入力してください")
+        if len(name) > 20:
+            raise ValueError("パイロット名は20文字以内で入力してください")
+
+        pilot.name = name
+        pilot.updated_at = datetime.now(UTC)
+
+        self.session.add(pilot)
+        self.session.commit()
+        self.session.refresh(pilot)
+
+        return pilot
+
     def unlock_skill(self, pilot: Pilot, skill_id: str) -> tuple[Pilot, str]:
         """スキルを習得または強化する.
 
