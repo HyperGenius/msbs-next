@@ -7,7 +7,7 @@ import { ShopListing, WeaponListing } from "@/types/battle";
 import Link from "next/link";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
-import { getRankColor, getRank, getWeaponRank } from "@/utils/rankUtils";
+import { getRankColor, getRank, getWeaponRank, getOptimalRangeLabel, getDecayRateRank } from "@/utils/rankUtils";
 import { STATUS_LABELS, WEAPON_LABELS } from "@/utils/displayUtils";
 
 type TabType = "mobile_suits" | "weapons";
@@ -291,8 +291,8 @@ export default function ShopPage() {
                               </div>
                               <div>
                                 <span className="text-[#00ff41]/60">{WEAPON_LABELS.optimal_range}:</span>
-                                <span className="ml-1 font-bold text-[#00ff41]">
-                                  {item.specs.weapons[0].optimal_range || 300}m
+                                <span className={`ml-1 font-bold ${getOptimalRangeLabel(item.specs.weapons[0].optimal_range || 300).colorClass}`}>
+                                  {getOptimalRangeLabel(item.specs.weapons[0].optimal_range || 300).label} ({item.specs.weapons[0].optimal_range || 300}m)
                                 </span>
                               </div>
                               <div>
@@ -398,14 +398,14 @@ export default function ShopPage() {
                           </div>
                           <div>
                             <span className="text-[#00ff41]/60">{WEAPON_LABELS.optimal_range}:</span>
-                            <span className="ml-2 font-bold text-green-400">
-                              {weapon.weapon.optimal_range || 300}m
+                            <span className={`ml-2 font-bold ${getOptimalRangeLabel(weapon.weapon.optimal_range || 300).colorClass}`}>
+                              {getOptimalRangeLabel(weapon.weapon.optimal_range || 300).label} ({weapon.weapon.optimal_range || 300}m)
                             </span>
                           </div>
                           <div>
                             <span className="text-[#00ff41]/60">{WEAPON_LABELS.decay_rate}:</span>
-                            <span className="ml-2 font-bold">
-                              {((weapon.weapon.decay_rate || 0.05) * 100).toFixed(1)}%
+                            <span className={`ml-2 font-bold ${getRankColor(getDecayRateRank(weapon.weapon.decay_rate || 0.05))}`}>
+                              {getDecayRateRank(weapon.weapon.decay_rate || 0.05)} ({((weapon.weapon.decay_rate || 0.05) * 100).toFixed(1)}%)
                             </span>
                           </div>
                           {weapon.weapon.max_ammo !== null && weapon.weapon.max_ammo !== undefined && (

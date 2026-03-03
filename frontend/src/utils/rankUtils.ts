@@ -118,6 +118,35 @@ export function getWeaponRank(
   return lookupRank(statName, value);
 }
 
+/** 最適射程の距離ラベルと色クラス */
+export interface OptimalRangeDisplayInfo {
+  label: string;
+  colorClass: string;
+}
+
+/**
+ * 最適射程（m）を距離カテゴリに変換する.
+ * ≤ 200m: 近距離 / ≤ 400m: 中距離 / > 400m: 遠距離
+ */
+export function getOptimalRangeLabel(value: number): OptimalRangeDisplayInfo {
+  if (value <= 200) return { label: "近距離", colorClass: "text-orange-400" };
+  if (value <= 400) return { label: "中距離", colorClass: "text-yellow-400" };
+  return { label: "遠距離", colorClass: "text-blue-400" };
+}
+
+/**
+ * 減衰率（0〜1 の小数）をランク文字列（S〜E）に変換する.
+ * 値が小さいほど高ランク（S = 減衰しない、E = 高減衰率）。
+ */
+export function getDecayRateRank(value: number): string {
+  if (value <= 0.02) return "S";
+  if (value <= 0.05) return "A";
+  if (value <= 0.10) return "B";
+  if (value <= 0.20) return "C";
+  if (value <= 0.30) return "D";
+  return "E";
+}
+
 /** 地形環境ごとのアイコンとラベル */
 const TERRAIN_META: Record<string, { icon: string; label: string }> = {
   SPACE:      { icon: "🌌", label: "宇宙" },
