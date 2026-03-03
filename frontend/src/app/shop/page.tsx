@@ -178,7 +178,7 @@ export default function ShopPage() {
                       <h4 className="text-sm font-bold mb-2 text-[#ffb000]">
                         SPECIFICATIONS
                       </h4>
-                      <div className="grid grid-cols-2 gap-2 text-sm mb-3 text-[#00ff41]">
+                      <div className="grid grid-cols-3 gap-2 text-sm mb-3 text-[#00ff41]">
                         <div>
                           <span className="text-[#00ff41]/60">{STATUS_LABELS.max_hp}:</span>
                           <span className={`ml-2 font-bold ${getRankColor(getRank("hp", item.specs.max_hp))}`}>
@@ -197,77 +197,14 @@ export default function ShopPage() {
                             {getRank("mobility", item.specs.mobility)}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-[#00ff41]/60">武器:</span>
-                          <span className="ml-2 font-bold">
-                            {item.specs.weapons[0]?.name || "N/A"}
-                          </span>
-                        </div>
                       </div>
                       
-                      {/* Resistance Info */}
-                      <div className="border-t-2 border-[#ffb000]/30 pt-2 mb-2">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <span className="text-[#00ff41]/60">{STATUS_LABELS.beam_resistance}:</span>
-                            <span className="ml-2 font-bold text-[#00f0ff]">
-                              {((item.specs.beam_resistance || 0) * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{STATUS_LABELS.physical_resistance}:</span>
-                            <span className="ml-2 font-bold text-[#ffb000]">
-                              {((item.specs.physical_resistance || 0) * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Combat Aptitude */}
-                      <div className="border-t-2 border-[#ffb000]/30 pt-2 mb-2">
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div>
-                            <span className="text-[#00ff41]/60">{STATUS_LABELS.melee_aptitude}:</span>
-                            <span className="ml-1 font-bold text-red-400">
-                              ×{(item.specs.melee_aptitude ?? 1.0).toFixed(1)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{STATUS_LABELS.shooting_aptitude}:</span>
-                            <span className="ml-1 font-bold text-[#00f0ff]">
-                              ×{(item.specs.shooting_aptitude ?? 1.0).toFixed(1)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{STATUS_LABELS.accuracy_bonus}:</span>
-                            <span className="ml-1 font-bold text-green-400">
-                              {(item.specs.accuracy_bonus ?? 0) >= 0 ? "+" : ""}{(item.specs.accuracy_bonus ?? 0).toFixed(1)}%
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{STATUS_LABELS.evasion_bonus}:</span>
-                            <span className="ml-1 font-bold text-yellow-400">
-                              {(item.specs.evasion_bonus ?? 0) >= 0 ? "+" : ""}{(item.specs.evasion_bonus ?? 0).toFixed(1)}%
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{STATUS_LABELS.acceleration_bonus}:</span>
-                            <span className="ml-1 font-bold text-purple-400">
-                              ×{(item.specs.acceleration_bonus ?? 1.0).toFixed(1)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{STATUS_LABELS.turning_bonus}:</span>
-                            <span className="ml-1 font-bold text-purple-400">
-                              ×{(item.specs.turning_bonus ?? 1.0).toFixed(1)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Weapon Details */}
                       {item.specs.weapons && item.specs.weapons.length > 0 && (
                         <div className="border-t-2 border-[#ffb000]/30 pt-2">
+                          <h4 className="text-sm font-bold mb-2 text-[#ffb000]">
+                            MAIN WEAPON
+                          </h4>
                           <div className="text-xs">
                             <div className="font-bold text-[#00ff41] mb-1">
                               {item.specs.weapons[0].name}
@@ -284,21 +221,9 @@ export default function ShopPage() {
                                 </span>
                               </div>
                               <div>
-                                <span className="text-[#00ff41]/60">{WEAPON_LABELS.power}:</span>
-                                <span className="ml-1 font-bold">
-                                  {item.specs.weapons[0].power}
-                                </span>
-                              </div>
-                              <div>
                                 <span className="text-[#00ff41]/60">{WEAPON_LABELS.optimal_range}:</span>
                                 <span className={`ml-1 font-bold ${getOptimalRangeLabel(item.specs.weapons[0].optimal_range || 300).colorClass}`}>
-                                  {getOptimalRangeLabel(item.specs.weapons[0].optimal_range || 300).label} ({item.specs.weapons[0].optimal_range || 300}m)
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-[#00ff41]/60">{WEAPON_LABELS.accuracy}:</span>
-                                <span className="ml-1 font-bold">
-                                  {item.specs.weapons[0].accuracy}%
+                                  {getOptimalRangeLabel(item.specs.weapons[0].optimal_range || 300).label}
                                 </span>
                               </div>
                             </div>
@@ -365,7 +290,7 @@ export default function ShopPage() {
                       {/* Weapon Specs */}
                       <div className="mb-4 p-3 bg-[#0a0a0a] border-2 border-[#ffb000]/30">
                         <h4 className="text-sm font-bold mb-2 text-[#ffb000]">
-                          武器スペック
+                          SPECIFICATIONS
                         </h4>
                         <div className="grid grid-cols-2 gap-2 text-sm text-[#00ff41]">
                           <div>
@@ -399,20 +324,20 @@ export default function ShopPage() {
                           <div>
                             <span className="text-[#00ff41]/60">{WEAPON_LABELS.optimal_range}:</span>
                             <span className={`ml-2 font-bold ${getOptimalRangeLabel(weapon.weapon.optimal_range || 300).colorClass}`}>
-                              {getOptimalRangeLabel(weapon.weapon.optimal_range || 300).label} ({weapon.weapon.optimal_range || 300}m)
+                              {getOptimalRangeLabel(weapon.weapon.optimal_range || 300).label}
                             </span>
                           </div>
                           <div>
                             <span className="text-[#00ff41]/60">{WEAPON_LABELS.decay_rate}:</span>
                             <span className={`ml-2 font-bold ${getRankColor(getDecayRateRank(weapon.weapon.decay_rate || 0.05))}`}>
-                              {getDecayRateRank(weapon.weapon.decay_rate || 0.05)} ({((weapon.weapon.decay_rate || 0.05) * 100).toFixed(1)}%)
+                              {getDecayRateRank(weapon.weapon.decay_rate || 0.05)}
                             </span>
                           </div>
                           {weapon.weapon.max_ammo !== null && weapon.weapon.max_ammo !== undefined && (
                             <div>
                               <span className="text-[#00ff41]/60">{WEAPON_LABELS.max_ammo}:</span>
                               <span className="ml-2 font-bold text-orange-400">
-                                {weapon.weapon.max_ammo}
+                                有
                               </span>
                             </div>
                           )}
@@ -420,7 +345,7 @@ export default function ShopPage() {
                             <div>
                               <span className="text-[#00ff41]/60">{WEAPON_LABELS.en_cost}:</span>
                               <span className="ml-2 font-bold text-cyan-400">
-                                {weapon.weapon.en_cost}
+                                有
                               </span>
                             </div>
                           )}
@@ -428,7 +353,7 @@ export default function ShopPage() {
                             <div>
                               <span className="text-[#00ff41]/60">{WEAPON_LABELS.cool_down_turn}:</span>
                               <span className="ml-2 font-bold text-pink-400">
-                                {weapon.weapon.cool_down_turn}ターン
+                                有
                               </span>
                             </div>
                           )}
