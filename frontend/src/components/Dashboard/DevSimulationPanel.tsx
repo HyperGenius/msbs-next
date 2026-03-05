@@ -4,6 +4,7 @@
  */
 import { BattleLog, Mission, MobileSuit } from "@/types/battle";
 import { SciFiPanel, SciFiButton, SciFiHeading } from "@/components/ui";
+import { formatBattleLog } from "@/utils/logFormatter";
 
 interface DevSimulationPanelProps {
   missions: Mission[] | undefined;
@@ -117,65 +118,10 @@ export default function DevSimulationPanel({
                     || log.actor_id;
                 const isPlayer = log.actor_id === playerData?.id;
 
-                // メッセージタイプに応じたスタイルを決定するヘルパー関数
-                const getLogStyle = () => {
-                  // リソース関連メッセージ判定
-                  const isResourceMessage = log.message.includes("弾切れ") ||
-                                          log.message.includes("EN不足") ||
-                                          log.message.includes("クールダウン") ||
-                                          log.message.includes("待機");
-
-                  // 地形・索敵関連メッセージ判定
-                  const isTerrainMessage = log.action_type === "DETECTION" ||
-                                         log.message.includes("地形") ||
-                                         log.message.includes("索敵");
-
-                  // 属性関連メッセージ判定
-                  const isAttributeMessage = log.message.includes("BEAM") ||
-                                           log.message.includes("PHYSICAL") ||
-                                           log.message.includes("ビーム") ||
-                                           log.message.includes("実弾");
-
-                  if (isCurrentTurn) {
-                    return {
-                      borderStyle: "border-green-400",
-                      bgStyle: "bg-green-900/30",
-                      textStyle: "text-white"
-                    };
-                  }
-
-                  if (isResourceMessage) {
-                    return {
-                      borderStyle: "border-orange-500",
-                      bgStyle: "",
-                      textStyle: "text-orange-400 font-semibold"
-                    };
-                  }
-
-                  if (isTerrainMessage) {
-                    return {
-                      borderStyle: "border-cyan-500",
-                      bgStyle: "",
-                      textStyle: "text-cyan-400"
-                    };
-                  }
-
-                  if (isAttributeMessage) {
-                    return {
-                      borderStyle: "border-purple-500",
-                      bgStyle: "",
-                      textStyle: "text-purple-400"
-                    };
-                  }
-
-                  return {
-                    borderStyle: "border-green-900",
-                    bgStyle: "",
-                    textStyle: "text-green-600"
-                  };
-                };
-
-                const { borderStyle, bgStyle, textStyle } = getLogStyle();
+                const displayLog = formatBattleLog(log, false, playerData?.id ?? "");
+                const { borderStyle, bgStyle, textStyle } = isCurrentTurn
+                  ? { borderStyle: "border-green-400", bgStyle: "bg-green-900/30", textStyle: "text-white" }
+                  : displayLog.style;
 
                 return (
                   <li
@@ -186,7 +132,7 @@ export default function DevSimulationPanel({
                     <span className={`font-bold mr-2 ${isPlayer ? 'text-blue-400' : 'text-red-400'}`}>
                       {actorName}:
                     </span>
-                    <span>{log.message}</span>
+                    <span>{displayLog.message}</span>
                   </li>
                 );
               })}
