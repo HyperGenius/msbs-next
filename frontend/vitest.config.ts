@@ -32,6 +32,18 @@ export default defineConfig({
           setupFiles: ['.storybook/vitest.setup.ts'],
         },
       },
+      {
+        resolve: {
+          alias: {
+            '@': path.join(dirname, 'src'),
+          },
+        },
+        test: {
+          name: 'unit',
+          environment: 'node',
+          include: ['tests/unit/**/*.test.ts'],
+        },
+      },
     ],
   },
 });

@@ -68,13 +68,28 @@
             "label": "Pre-commit run all files",
             "type": "shell",
             "command": "source backend/.venv/bin/activate && pre-commit run --all-files",
-            "problemMatcher": []
+            "problemMatcher": [],
+            "presentation": {
+                "group": "test-runners"
+            }
         },
         {
             "label": "Run Storybook",
             "type": "shell",
             "command": "npm run storybook",
             "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}/frontend"
+            }
+        },
+        {
+            "label": "Run Vitest",
+            "type": "shell",
+            "command": "npx vitest run",
+            "problemMatcher": [],
+            "presentation": {
+                "group": "test-runners"
+            },
             "options": {
                 "cwd": "${workspaceFolder}/frontend"
             }

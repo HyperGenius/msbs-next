@@ -2,8 +2,10 @@
  * DevSimulationPanel
  * 開発環境（NODE_ENV === "development"）でのみ表示される即時シミュレーションパネル
  */
+import { useState } from "react";
 import { BattleLog, Mission, MobileSuit } from "@/types/battle";
 import { SciFiPanel, SciFiButton, SciFiHeading } from "@/components/ui";
+import { formatBattleLog } from "@/utils/logFormatter";
 
 interface DevSimulationPanelProps {
   missions: Mission[] | undefined;
@@ -32,6 +34,9 @@ export default function DevSimulationPanel({
   currentTurn,
   winner,
 }: DevSimulationPanelProps) {
+  // 本番ログプレビューモードのトグル（開発環境専用）
+  const [isProductionPreview, setIsProductionPreview] = useState(false);
+
   if (process.env.NODE_ENV !== "development") return null;
 
   return (
@@ -100,6 +105,25 @@ export default function DevSimulationPanel({
 
         {/* Text Log Area */}
         <div className="mt-6 bg-black p-4 rounded border border-green-900 min-h-[400px] max-h-[600px] overflow-y-auto shadow-inner font-mono text-sm">
+          {/* 本番ログプレビュートグル */}
+          {logs.length > 0 && (
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-900">
+              <button
+                onClick={() => setIsProductionPreview((v) => !v)}
+                aria-label={isProductionPreview ? "開発表示に切り替え" : "本番表示プレビューに切り替え"}
+                className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                  isProductionPreview
+                    ? "bg-yellow-700 text-yellow-100"
+                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+              >
+                {isProductionPreview ? "本番プレビュー中" : "本番プレビュー: OFF"}
+              </button>
+              <span className="text-[10px] text-gray-500">
+                {isProductionPreview ? "抽象化テキスト表示中（距離・命中率・ダメージ非表示）" : "詳細数値ログ表示中"}
+              </span>
+            </div>
+          )}
           {logs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center opacity-30 min-h-[300px]">
               <p>-- NO BATTLE DATA --</p>
@@ -117,65 +141,10 @@ export default function DevSimulationPanel({
                     || log.actor_id;
                 const isPlayer = log.actor_id === playerData?.id;
 
-                // メッセージタイプに応じたスタイルを決定するヘルパー関数
-                const getLogStyle = () => {
-                  // リソース関連メッセージ判定
-                  const isResourceMessage = log.message.includes("弾切れ") ||
-                                          log.message.includes("EN不足") ||
-                                          log.message.includes("クールダウン") ||
-                                          log.message.includes("待機");
-
-                  // 地形・索敵関連メッセージ判定
-                  const isTerrainMessage = log.action_type === "DETECTION" ||
-                                         log.message.includes("地形") ||
-                                         log.message.includes("索敵");
-
-                  // 属性関連メッセージ判定
-                  const isAttributeMessage = log.message.includes("BEAM") ||
-                                           log.message.includes("PHYSICAL") ||
-                                           log.message.includes("ビーム") ||
-                                           log.message.includes("実弾");
-
-                  if (isCurrentTurn) {
-                    return {
-                      borderStyle: "border-green-400",
-                      bgStyle: "bg-green-900/30",
-                      textStyle: "text-white"
-                    };
-                  }
-
-                  if (isResourceMessage) {
-                    return {
-                      borderStyle: "border-orange-500",
-                      bgStyle: "",
-                      textStyle: "text-orange-400 font-semibold"
-                    };
-                  }
-
-                  if (isTerrainMessage) {
-                    return {
-                      borderStyle: "border-cyan-500",
-                      bgStyle: "",
-                      textStyle: "text-cyan-400"
-                    };
-                  }
-
-                  if (isAttributeMessage) {
-                    return {
-                      borderStyle: "border-purple-500",
-                      bgStyle: "",
-                      textStyle: "text-purple-400"
-                    };
-                  }
-
-                  return {
-                    borderStyle: "border-green-900",
-                    bgStyle: "",
-                    textStyle: "text-green-600"
-                  };
-                };
-
-                const { borderStyle, bgStyle, textStyle } = getLogStyle();
+                const displayLog = formatBattleLog(log, isProductionPreview, playerData?.id ?? "");
+                const { borderStyle, bgStyle, textStyle } = isCurrentTurn
+                  ? { borderStyle: "border-green-400", bgStyle: "bg-green-900/30", textStyle: "text-white" }
+                  : displayLog.style;
 
                 return (
                   <li
@@ -186,7 +155,7 @@ export default function DevSimulationPanel({
                     <span className={`font-bold mr-2 ${isPlayer ? 'text-blue-400' : 'text-red-400'}`}>
                       {actorName}:
                     </span>
-                    <span>{log.message}</span>
+                    <span>{displayLog.message}</span>
                   </li>
                 );
               })}

@@ -6,6 +6,9 @@ import { useBattleHistory, useMissions, useMobileSuits } from "@/services/api";
 import { BattleLog, BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 import Link from "next/link";
+import { formatBattleLog } from "@/utils/logFormatter";
+
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 export default function HistoryPage() {
   const { battles, isLoading, isError } = useBattleHistory(50);
@@ -13,7 +16,9 @@ export default function HistoryPage() {
   const { mobileSuits } = useMobileSuits();
   const [selectedBattle, setSelectedBattle] = useState<BattleResult | null>(null);
   const [currentTurn, setCurrentTurn] = useState(0);
-  const [isFiltered, setIsFiltered] = useState(false);
+  const [isFiltered, setIsFiltered] = useState(IS_PRODUCTION);
+  // 開発環境専用: 本番ログの抽象化をプレビューするトグル
+  const [isProductionPreview, setIsProductionPreview] = useState(false);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   const ownedMobileSuitIds = useMemo(
@@ -265,8 +270,8 @@ export default function HistoryPage() {
 
                 {/* 下部スクロール: ログ一覧 */}
                 <div className="flex-1 overflow-y-auto p-4">
-                  {/* Log Filter Toggle */}
-                  {hasReplayData && (
+                  {/* Log Filter Toggle — 本番環境では非表示 */}
+                  {hasReplayData && !IS_PRODUCTION && (
                     <div className="flex items-center gap-2 mb-2">
                       <button
                         onClick={() => setIsFiltered((v) => !v)}
@@ -279,6 +284,17 @@ export default function HistoryPage() {
                       >
                         {isFiltered ? "自機関連のみ表示中" : "ログフィルター: OFF"}
                       </button>
+                      <button
+                        onClick={() => setIsProductionPreview((v) => !v)}
+                        aria-label={isProductionPreview ? "開発表示に切り替え" : "本番表示プレビューに切り替え"}
+                        className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                          isProductionPreview
+                            ? "bg-yellow-700 text-yellow-100"
+                            : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        }`}
+                      >
+                        {isProductionPreview ? "本番プレビュー中" : "本番プレビュー: OFF"}
+                      </button>
                     </div>
                   )}
 
@@ -287,6 +303,7 @@ export default function HistoryPage() {
                       const displayedLogs = filterRelevantLogs(selectedBattle.logs);
                       const seenTurns = new Set<number>();
                       return displayedLogs.map((log, index) => {
+                        const displayLog = formatBattleLog(log, IS_PRODUCTION || isProductionPreview, playerId ?? "");
                         const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
                         const isActiveTurn = log.turn === currentTurn;
                         const isFirstOfTurn = !seenTurns.has(log.turn);
@@ -304,7 +321,7 @@ export default function HistoryPage() {
                             }`}
                           >
                             <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
-                            <span>{log.message}</span>
+                            <span>{displayLog.message}</span>
                           </div>
                         );
                       });
