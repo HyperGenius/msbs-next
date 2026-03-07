@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { BattleRewards, MobileSuit } from "@/types/battle";
 import MobileSuitRankBadges from "./MobileSuitRankBadges";
+import { getWeaponRank, getRankColor } from "@/utils/rankUtils";
 
 interface BattleResultModalProps {
   winLoss: "WIN" | "LOSE" | "DRAW";
@@ -197,13 +198,16 @@ export default function BattleResultModal({
                   <MobileSuitRankBadges mobileSuit={msSnapshot} />
                   {msSnapshot.weapons && msSnapshot.weapons.length > 0 && (
                     <div className="mt-2 space-y-1">
-                      {msSnapshot.weapons.slice(0, 2).map((weapon, i) => (
-                        <p key={i} className="text-xs text-gray-400 truncate">
-                          <span className="text-gray-500">{i === 0 ? "メイン: " : "サブ: "}</span>
-                          {weapon.name}
-                          <span className="ml-2 text-gray-600">威力 {weapon.power}</span>
-                        </p>
-                      ))}
+                      {msSnapshot.weapons.slice(0, 2).map((weapon, i) => {
+                          const powerRank = getWeaponRank("weapon_power", weapon.power);
+                          return (
+                            <p key={i} className="text-xs text-gray-400 truncate">
+                              <span className="text-gray-500">{i === 0 ? "メイン: " : "サブ: "}</span>
+                              {weapon.name}
+                              <span className={`ml-2 font-bold ${getRankColor(powerRank)}`}>威力 {powerRank}</span>
+                            </p>
+                          );
+                        })}
                     </div>
                   )}
                 </div>
