@@ -12,6 +12,12 @@ interface BattleResultModalProps {
   onClose: () => void;
 }
 
+/**
+ * BattleResultModal
+ * バトル終了時に表示されるリザルト画面。
+ * 勝敗結果、獲得報酬（経験値・クレジット）、レベルアップ演出、
+ * および出撃時の機体ステータスのスナップショットを表示する。
+ */
 export default function BattleResultModal({
   winLoss,
   rewards,
@@ -92,18 +98,18 @@ export default function BattleResultModal({
     border: isWin
       ? "border-blue-500"
       : isLose
-      ? "border-red-600"
-      : "border-yellow-500",
+        ? "border-red-600"
+        : "border-yellow-500",
     bg: isWin
       ? "bg-gradient-to-br from-blue-900/90 to-slate-900/90"
       : isLose
-      ? "bg-gradient-to-br from-red-900/90 to-gray-900/90"
-      : "bg-gradient-to-br from-yellow-900/90 to-gray-900/90",
+        ? "bg-gradient-to-br from-red-900/90 to-gray-900/90"
+        : "bg-gradient-to-br from-yellow-900/90 to-gray-900/90",
     resultBg: isWin
       ? "bg-blue-500/20 text-blue-200 border-2 border-blue-400"
       : isLose
-      ? "bg-red-600/20 text-red-200 border-2 border-red-500"
-      : "bg-yellow-500/20 text-yellow-200 border-2 border-yellow-400",
+        ? "bg-red-600/20 text-red-200 border-2 border-red-500"
+        : "bg-yellow-500/20 text-yellow-200 border-2 border-yellow-400",
     accent: isWin ? "text-yellow-400" : isLose ? "text-red-400" : "text-yellow-400",
     statBorder: isWin ? "border-blue-700" : isLose ? "border-red-800" : "border-yellow-700",
   };
@@ -152,23 +158,24 @@ export default function BattleResultModal({
       <div className="max-w-2xl w-full mx-4 relative">
         {/* メインカード */}
         <div
-          className={`rounded-lg border-4 p-8 transform transition-all duration-500 ${
-            showContent ? "scale-100 opacity-100" : "scale-75 opacity-0"
-          } ${theme.bg} ${theme.border}`}
+          className={`rounded-lg border-4 p-8 transform transition-all duration-500 ${showContent ? "scale-100 opacity-100" : "scale-75 opacity-0"
+            } ${theme.bg} ${theme.border}`}
         >
           {/* 結果タイトル */}
           <div className="text-center mb-6">
-            <div className={`inline-block px-8 py-4 rounded-lg text-5xl font-bold animate-pulse ${theme.resultBg}`}>
+            <div className={`inline-block px-8 py-4 rounded-lg text-4xl font-bold animate-pulse ${theme.resultBg}`}>
               {winLoss === "WIN" && "★ MISSION COMPLETE ★"}
               {winLoss === "LOSE" && "✕ MISSION FAILED ✕"}
               {winLoss === "DRAW" && "- DRAW -"}
             </div>
 
+            {/* デザイン再考のため一旦コメントアウト
             {msSnapshot && (
               <p className={`mt-3 text-2xl font-bold ${msSnapshot.current_hp <= 0 ? "text-red-400" : "text-green-400"}`}>
                 {msSnapshot.current_hp <= 0 ? "✕ 撃墜" : "✓ 生還"}
               </p>
             )}
+            */}
 
             {winLoss === "WIN" && (
               <div className="mt-4 text-6xl animate-bounce">🎉</div>
@@ -215,9 +222,8 @@ export default function BattleResultModal({
           {/* 報酬表示 */}
           {rewards && (
             <div
-              className={`space-y-4 mb-8 transition-all duration-700 ${
-                showRewards ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-              }`}
+              className={`space-y-4 mb-8 transition-all duration-700 ${showRewards ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+                }`}
             >
               <h3 className={`text-xl font-bold text-center border-b-2 pb-2 ${theme.accent} border-current/50`}>
                 獲得報酬
@@ -244,11 +250,10 @@ export default function BattleResultModal({
               {/* レベルアップ表示 */}
               {rewards.level_after > rewards.level_before && (
                 <div
-                  className={`rounded-lg p-4 border-2 border-yellow-400 text-center transition-all duration-500 ${
-                    showLevelUp
+                  className={`rounded-lg p-4 border-2 border-yellow-400 text-center transition-all duration-500 ${showLevelUp
                       ? "bg-yellow-500/30 scale-105"
                       : "bg-yellow-500/10 scale-100"
-                  }`}
+                    }`}
                 >
                   <p className="text-2xl font-bold text-yellow-300">
                     🎉 LEVEL UP! 🎉
@@ -264,13 +269,12 @@ export default function BattleResultModal({
           {/* 閉じるボタン */}
           <button
             onClick={onClose}
-            className={`w-full px-6 py-3 font-bold rounded-lg transition-colors border ${
-              isWin
+            className={`w-full px-6 py-3 font-bold rounded-lg transition-colors border ${isWin
                 ? "bg-blue-800 hover:bg-blue-700 text-blue-100 border-blue-600"
                 : isLose
-                ? "bg-gray-700 hover:bg-gray-600 text-white border-gray-500"
-                : "bg-gray-700 hover:bg-gray-600 text-white border-gray-500"
-            }`}
+                  ? "bg-gray-700 hover:bg-gray-600 text-white border-gray-500"
+                  : "bg-gray-700 hover:bg-gray-600 text-white border-gray-500"
+              }`}
           >
             CONTINUE
           </button>
