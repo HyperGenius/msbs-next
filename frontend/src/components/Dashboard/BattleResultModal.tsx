@@ -115,7 +115,7 @@ export default function BattleResultModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-sm overflow-y-auto py-4 sm:py-0">
       {/* レベルアップエフェクト（オーバーレイ） */}
       {showLevelUp && (
         <div
@@ -158,12 +158,12 @@ export default function BattleResultModal({
       <div className="max-w-2xl w-full mx-4 relative">
         {/* メインカード */}
         <div
-          className={`rounded-lg border-4 p-8 transform transition-all duration-500 ${showContent ? "scale-100 opacity-100" : "scale-75 opacity-0"
+          className={`rounded-lg border-4 p-4 sm:p-8 transform transition-all duration-500 ${showContent ? "scale-100 opacity-100" : "scale-75 opacity-0"
             } ${theme.bg} ${theme.border}`}
         >
           {/* 結果タイトル */}
-          <div className="text-center mb-6">
-            <div className={`inline-block px-8 py-4 rounded-lg text-4xl font-bold animate-pulse ${theme.resultBg}`}>
+          <div className="text-center mb-4 sm:mb-6">
+            <div className={`inline-block px-4 sm:px-8 py-3 sm:py-4 rounded-lg text-2xl sm:text-4xl font-bold animate-pulse ${theme.resultBg}`}>
               {winLoss === "WIN" && "★ MISSION COMPLETE ★"}
               {winLoss === "LOSE" && "✕ MISSION FAILED ✕"}
               {winLoss === "DRAW" && "- DRAW -"}
@@ -178,27 +178,27 @@ export default function BattleResultModal({
             */}
 
             {winLoss === "WIN" && (
-              <div className="mt-4 text-6xl animate-bounce">🎉</div>
+              <div className="mt-3 sm:mt-4 text-4xl sm:text-6xl animate-bounce">🎉</div>
             )}
             {winLoss === "LOSE" && (
-              <div className="mt-4 text-4xl text-red-400">⚠️</div>
+              <div className="mt-3 sm:mt-4 text-3xl sm:text-4xl text-red-400">⚠️</div>
             )}
           </div>
 
           {/* 機体スナップショット表示 */}
           {msSnapshot && (
-            <div className={`mb-5 rounded-lg p-4 border ${theme.statBorder} bg-black/40`}>
-              <h3 className={`text-sm font-bold mb-3 uppercase tracking-wider ${theme.accent}`}>
+            <div className={`mb-4 sm:mb-5 rounded-lg p-3 sm:p-4 border ${theme.statBorder} bg-black/40`}>
+              <h3 className={`text-sm font-bold mb-2 sm:mb-3 uppercase tracking-wider ${theme.accent}`}>
                 出撃機体
               </h3>
-              <div className="flex items-start gap-4">
-                <div className="flex-1">
-                  <p className="text-white font-bold text-lg">{msSnapshot.name}</p>
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-bold text-base sm:text-lg truncate">{msSnapshot.name}</p>
                   <MobileSuitRankBadges mobileSuit={msSnapshot} />
                   {msSnapshot.weapons && msSnapshot.weapons.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {msSnapshot.weapons.slice(0, 2).map((weapon, i) => (
-                        <p key={i} className="text-xs text-gray-400">
+                        <p key={i} className="text-xs text-gray-400 truncate">
                           <span className="text-gray-500">{i === 0 ? "メイン: " : "サブ: "}</span>
                           {weapon.name}
                           <span className="ml-2 text-gray-600">威力 {weapon.power}</span>
@@ -215,33 +215,33 @@ export default function BattleResultModal({
           {(kills !== undefined && kills > 0) && (
             <div className={`mb-4 rounded-lg p-3 border ${theme.statBorder} bg-black/40 text-center`}>
               <p className="text-xs text-gray-400 mb-1">撃墜数</p>
-              <p className={`text-3xl font-bold ${theme.accent}`}>{kills}</p>
+              <p className={`text-2xl sm:text-3xl font-bold ${theme.accent}`}>{kills}</p>
             </div>
           )}
 
           {/* 報酬表示 */}
           {rewards && (
             <div
-              className={`space-y-4 mb-8 transition-all duration-700 ${showRewards ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+              className={`space-y-3 sm:space-y-4 mb-6 sm:mb-8 transition-all duration-700 ${showRewards ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
                 }`}
             >
-              <h3 className={`text-xl font-bold text-center border-b-2 pb-2 ${theme.accent} border-current/50`}>
+              <h3 className={`text-lg sm:text-xl font-bold text-center border-b-2 pb-2 ${theme.accent} border-current/50`}>
                 獲得報酬
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {/* 経験値 */}
-                <div className={`bg-black/40 rounded-lg p-6 border-2 ${theme.statBorder}`}>
-                  <p className="text-sm text-gray-400 mb-2">経験値</p>
-                  <p className={`text-4xl font-bold ${isWin ? "text-blue-300" : "text-gray-300"}`}>
+                <div className={`bg-black/40 rounded-lg p-4 sm:p-6 border-2 ${theme.statBorder}`}>
+                  <p className="text-xs sm:text-sm text-gray-400 mb-1 sm:mb-2">経験値</p>
+                  <p className={`text-3xl sm:text-4xl font-bold ${isWin ? "text-blue-300" : "text-gray-300"}`}>
                     +{animatedExp}
                   </p>
                 </div>
 
                 {/* クレジット */}
-                <div className={`bg-black/40 rounded-lg p-6 border-2 ${theme.statBorder}`}>
-                  <p className="text-sm text-gray-400 mb-2">クレジット</p>
-                  <p className="text-4xl font-bold text-yellow-400">
+                <div className={`bg-black/40 rounded-lg p-4 sm:p-6 border-2 ${theme.statBorder}`}>
+                  <p className="text-xs sm:text-sm text-gray-400 mb-1 sm:mb-2">クレジット</p>
+                  <p className="text-3xl sm:text-4xl font-bold text-yellow-400">
                     +{animatedCredits.toLocaleString()}
                   </p>
                 </div>
@@ -250,15 +250,15 @@ export default function BattleResultModal({
               {/* レベルアップ表示 */}
               {rewards.level_after > rewards.level_before && (
                 <div
-                  className={`rounded-lg p-4 border-2 border-yellow-400 text-center transition-all duration-500 ${showLevelUp
+                  className={`rounded-lg p-3 sm:p-4 border-2 border-yellow-400 text-center transition-all duration-500 ${showLevelUp
                       ? "bg-yellow-500/30 scale-105"
                       : "bg-yellow-500/10 scale-100"
                     }`}
                 >
-                  <p className="text-2xl font-bold text-yellow-300">
+                  <p className="text-xl sm:text-2xl font-bold text-yellow-300">
                     🎉 LEVEL UP! 🎉
                   </p>
-                  <p className="text-xl text-yellow-400 mt-1">
+                  <p className="text-lg sm:text-xl text-yellow-400 mt-1">
                     Lv.{rewards.level_before} → Lv.{rewards.level_after}
                   </p>
                 </div>
