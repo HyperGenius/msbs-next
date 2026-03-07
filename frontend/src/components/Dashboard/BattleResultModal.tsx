@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { BattleRewards, MobileSuit } from "@/types/battle";
+import MobileSuitRankBadges from "./MobileSuitRankBadges";
 
 interface BattleResultModalProps {
   winLoss: "WIN" | "LOSE" | "DRAW";
@@ -163,6 +164,12 @@ export default function BattleResultModal({
               {winLoss === "DRAW" && "- DRAW -"}
             </div>
 
+            {msSnapshot && (
+              <p className={`mt-3 text-2xl font-bold ${msSnapshot.current_hp <= 0 ? "text-red-400" : "text-green-400"}`}>
+                {msSnapshot.current_hp <= 0 ? "✕ 撃墜" : "✓ 生還"}
+              </p>
+            )}
+
             {winLoss === "WIN" && (
               <div className="mt-4 text-6xl animate-bounce">🎉</div>
             )}
@@ -180,6 +187,7 @@ export default function BattleResultModal({
               <div className="flex items-start gap-4">
                 <div className="flex-1">
                   <p className="text-white font-bold text-lg">{msSnapshot.name}</p>
+                  <MobileSuitRankBadges mobileSuit={msSnapshot} />
                   {msSnapshot.weapons && msSnapshot.weapons.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {msSnapshot.weapons.slice(0, 2).map((weapon, i) => (
@@ -191,11 +199,6 @@ export default function BattleResultModal({
                       ))}
                     </div>
                   )}
-                </div>
-                <div className="text-right text-xs text-gray-500 space-y-1">
-                  <p>HP: <span className="text-white">{msSnapshot.max_hp}</span></p>
-                  <p>装甲: <span className="text-white">{msSnapshot.armor}</span></p>
-                  <p>機動: <span className="text-white">{msSnapshot.mobility?.toFixed(1)}</span></p>
                 </div>
               </div>
             </div>
@@ -227,9 +230,6 @@ export default function BattleResultModal({
                   <p className={`text-4xl font-bold ${isWin ? "text-blue-300" : "text-gray-300"}`}>
                     +{animatedExp}
                   </p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    累積: {rewards.total_exp} EXP
-                  </p>
                 </div>
 
                 {/* クレジット */}
@@ -237,9 +237,6 @@ export default function BattleResultModal({
                   <p className="text-sm text-gray-400 mb-2">クレジット</p>
                   <p className="text-4xl font-bold text-yellow-400">
                     +{animatedCredits.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-2">
-                    所持金: {rewards.total_credits.toLocaleString()} CR
                   </p>
                 </div>
               </div>
