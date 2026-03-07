@@ -2,6 +2,7 @@
  * DevSimulationPanel
  * 開発環境（NODE_ENV === "development"）でのみ表示される即時シミュレーションパネル
  */
+import { useState } from "react";
 import { BattleLog, Mission, MobileSuit } from "@/types/battle";
 import { SciFiPanel, SciFiButton, SciFiHeading } from "@/components/ui";
 import { formatBattleLog } from "@/utils/logFormatter";
@@ -33,6 +34,9 @@ export default function DevSimulationPanel({
   currentTurn,
   winner,
 }: DevSimulationPanelProps) {
+  // 本番ログプレビューモードのトグル（開発環境専用）
+  const [isProductionPreview, setIsProductionPreview] = useState(false);
+
   if (process.env.NODE_ENV !== "development") return null;
 
   return (
@@ -101,6 +105,25 @@ export default function DevSimulationPanel({
 
         {/* Text Log Area */}
         <div className="mt-6 bg-black p-4 rounded border border-green-900 min-h-[400px] max-h-[600px] overflow-y-auto shadow-inner font-mono text-sm">
+          {/* 本番ログプレビュートグル */}
+          {logs.length > 0 && (
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-green-900">
+              <button
+                onClick={() => setIsProductionPreview((v) => !v)}
+                aria-label={isProductionPreview ? "開発表示に切り替え" : "本番表示プレビューに切り替え"}
+                className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                  isProductionPreview
+                    ? "bg-yellow-700 text-yellow-100"
+                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+              >
+                {isProductionPreview ? "本番プレビュー中" : "本番プレビュー: OFF"}
+              </button>
+              <span className="text-[10px] text-gray-500">
+                {isProductionPreview ? "抽象化テキスト表示中（距離・命中率・ダメージ非表示）" : "詳細数値ログ表示中"}
+              </span>
+            </div>
+          )}
           {logs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center opacity-30 min-h-[300px]">
               <p>-- NO BATTLE DATA --</p>
@@ -118,7 +141,7 @@ export default function DevSimulationPanel({
                     || log.actor_id;
                 const isPlayer = log.actor_id === playerData?.id;
 
-                const displayLog = formatBattleLog(log, false, playerData?.id ?? "");
+                const displayLog = formatBattleLog(log, isProductionPreview, playerData?.id ?? "");
                 const { borderStyle, bgStyle, textStyle } = isCurrentTurn
                   ? { borderStyle: "border-green-400", bgStyle: "bg-green-900/30", textStyle: "text-white" }
                   : displayLog.style;

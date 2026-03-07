@@ -17,6 +17,8 @@ export default function HistoryPage() {
   const [selectedBattle, setSelectedBattle] = useState<BattleResult | null>(null);
   const [currentTurn, setCurrentTurn] = useState(0);
   const [isFiltered, setIsFiltered] = useState(IS_PRODUCTION);
+  // 開発環境専用: 本番ログの抽象化をプレビューするトグル
+  const [isProductionPreview, setIsProductionPreview] = useState(false);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   const ownedMobileSuitIds = useMemo(
@@ -282,6 +284,17 @@ export default function HistoryPage() {
                       >
                         {isFiltered ? "自機関連のみ表示中" : "ログフィルター: OFF"}
                       </button>
+                      <button
+                        onClick={() => setIsProductionPreview((v) => !v)}
+                        aria-label={isProductionPreview ? "開発表示に切り替え" : "本番表示プレビューに切り替え"}
+                        className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
+                          isProductionPreview
+                            ? "bg-yellow-700 text-yellow-100"
+                            : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        }`}
+                      >
+                        {isProductionPreview ? "本番プレビュー中" : "本番プレビュー: OFF"}
+                      </button>
                     </div>
                   )}
 
@@ -290,7 +303,7 @@ export default function HistoryPage() {
                       const displayedLogs = filterRelevantLogs(selectedBattle.logs);
                       const seenTurns = new Set<number>();
                       return displayedLogs.map((log, index) => {
-                        const displayLog = formatBattleLog(log, IS_PRODUCTION, playerId ?? "");
+                        const displayLog = formatBattleLog(log, IS_PRODUCTION || isProductionPreview, playerId ?? "");
                         const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
                         const isActiveTurn = log.turn === currentTurn;
                         const isFirstOfTurn = !seenTurns.has(log.turn);
