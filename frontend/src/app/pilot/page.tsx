@@ -151,6 +151,15 @@ export default function PilotPage() {
   const requiredExp = pilot.level * 100;
   const expProgress = Math.min((pilot.exp / requiredExp) * 100, 100);
 
+  /** パイロットのステータス値を名前で取得するマップ */
+  const pilotStatValues: Record<string, number> = {
+    dex: pilot.dex,
+    intel: pilot.intel,
+    ref: pilot.ref,
+    tou: pilot.tou,
+    luk: pilot.luk,
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -249,7 +258,7 @@ export default function PilotPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
             {(Object.keys(STATUS_LABELS) as Array<keyof typeof STATUS_LABELS>).map((stat) => {
               const info = STATUS_LABELS[stat];
-              const currentVal = (pilot[stat as keyof typeof pilot] as number) ?? 0;
+              const currentVal = pilotStatValues[stat] ?? 0;
               const pendingVal = pendingAlloc[stat];
               const displayVal = currentVal + pendingVal;
               const rank = getStatRank(displayVal);
