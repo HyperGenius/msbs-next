@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock
 
+import pytest
 from sqlmodel import Session
 
 from app.models.models import MobileSuit, Pilot
@@ -206,3 +207,164 @@ def test_get_or_create_pilot_returns_existing_pilot() -> None:
     # session.add が呼ばれないことを確認（新規作成していない）
     session.add.assert_not_called()
     session.commit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# ステータスポイント付与・割り振りのテスト
+# ---------------------------------------------------------------------------
+
+
+def test_add_rewards_grants_status_points_on_level_up() -> None:
+    """レベルアップ時にステータスポイントが付与されることをテスト."""
+    from app.services.pilot_service import STATUS_POINTS_PER_LEVEL
+
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    pilot = Pilot(
+        user_id="test_user",
+        name="Test Pilot",
+        level=1,
+        exp=90,
+        credits=1000,
+        status_points=0,
+    )
+
+    updated_pilot, logs = service.add_rewards(pilot, 20, 0)
+
+    # Lv1→2 でレベルアップ: STATUS_POINTS_PER_LEVEL 分ポイント付与
+    assert updated_pilot.status_points == STATUS_POINTS_PER_LEVEL
+    assert any("ステータスポイント" in log for log in logs)
+
+
+def test_add_rewards_grants_status_points_multiple_level_ups() -> None:
+    """複数レベルアップ時に累積ステータスポイントが付与されることをテスト."""
+    from app.services.pilot_service import STATUS_POINTS_PER_LEVEL
+
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    pilot = Pilot(
+        user_id="test_user",
+        name="Test Pilot",
+        level=1,
+        exp=50,
+        credits=1000,
+        status_points=0,
+    )
+
+    # Lv1→3 のダブルレベルアップ
+    updated_pilot, _ = service.add_rewards(pilot, 300, 0)
+
+    assert updated_pilot.level == 3
+    assert updated_pilot.status_points == STATUS_POINTS_PER_LEVEL * 2
+
+
+def test_allocate_status_points_basic() -> None:
+    """基本的なステータスポイント割り振りをテスト."""
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    pilot = Pilot(
+        user_id="test_user",
+        name="Test Pilot",
+        level=5,
+        exp=0,
+        credits=1000,
+        status_points=10,
+        dex=0,
+        intel=0,
+        ref=0,
+        tou=0,
+        luk=0,
+    )
+
+    updated_pilot = service.allocate_status_points(pilot, dex=3, intel=2, ref=1, tou=2, luk=2)
+
+    assert updated_pilot.dex == 3
+    assert updated_pilot.intel == 2
+    assert updated_pilot.ref == 1
+    assert updated_pilot.tou == 2
+    assert updated_pilot.luk == 2
+    assert updated_pilot.status_points == 0  # 10 - (3+2+1+2+2)
+
+
+def test_allocate_status_points_insufficient_points() -> None:
+    """所持ポイント不足時はエラーになることをテスト."""
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    pilot = Pilot(
+        user_id="test_user",
+        name="Test Pilot",
+        level=2,
+        exp=0,
+        credits=1000,
+        status_points=3,
+    )
+
+    with pytest.raises(ValueError, match="ステータスポイントが不足しています"):
+        service.allocate_status_points(pilot, dex=5)  # 5 > 3
+
+
+def test_allocate_status_points_negative_value_raises() -> None:
+    """負の値を指定するとエラーになることをテスト."""
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    pilot = Pilot(
+        user_id="test_user",
+        name="Test Pilot",
+        level=5,
+        exp=0,
+        credits=1000,
+        status_points=10,
+    )
+
+    with pytest.raises(ValueError, match="0以上"):
+        service.allocate_status_points(pilot, dex=-1)
+
+
+def test_allocate_status_points_partial() -> None:
+    """一部のステータスにだけ割り振ることができるテスト."""
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    pilot = Pilot(
+        user_id="test_user",
+        name="Test Pilot",
+        level=5,
+        exp=0,
+        credits=1000,
+        status_points=10,
+        dex=0,
+        intel=0,
+        ref=0,
+        tou=0,
+        luk=0,
+    )
+
+    updated_pilot = service.allocate_status_points(pilot, luk=4)
+
+    assert updated_pilot.luk == 4
+    assert updated_pilot.dex == 0
+    assert updated_pilot.status_points == 6  # 10 - 4
+
+
+def test_allocate_status_points_zero_allocation() -> None:
+    """ゼロポイントを割り振ってもエラーにならないことをテスト."""
+    session = MagicMock(spec=Session)
+    service = PilotService(session)
+
+    pilot = Pilot(
+        user_id="test_user",
+        name="Test Pilot",
+        level=5,
+        exp=0,
+        credits=1000,
+        status_points=5,
+    )
+
+    updated_pilot = service.allocate_status_points(pilot)  # all zeros
+
+    assert updated_pilot.status_points == 5  # unchanged

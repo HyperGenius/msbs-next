@@ -596,6 +596,52 @@ export async function unlockSkill(skillId: string): Promise<SkillUnlockResponse>
 }
 
 /**
+ * ステータスポイントを割り振るリクエスト型
+ */
+export interface StatusAllocateRequest {
+  dex?: number;
+  intel?: number;
+  ref?: number;
+  tou?: number;
+  luk?: number;
+}
+
+/**
+ * ステータスポイントを各ステータスへ割り振る関数
+ */
+export async function allocateStatusPoints(request: StatusAllocateRequest): Promise<Pilot> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const body = {
+    dex: request.dex ?? 0,
+    intel: request.intel ?? 0,
+    ref: request.ref ?? 0,
+    tou: request.tou ?? 0,
+    luk: request.luk ?? 0,
+  };
+
+  const res = await fetch(`${API_BASE_URL}/api/pilots/status/allocate`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to allocate status points: ${res.status} ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+/**
  * パイロット名を更新する関数
  */
 export async function updatePilotName(name: string): Promise<Pilot> {

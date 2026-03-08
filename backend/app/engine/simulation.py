@@ -4,6 +4,13 @@ import random
 import numpy as np
 
 from app.core.npc_data import BATTLE_CHATTER
+from app.engine.calculator import (
+    PilotStats,
+    calculate_critical_chance,
+    calculate_damage_variance,
+    calculate_hit_chance,
+    calculate_initiative,
+)
 from app.engine.constants import (
     SPECIAL_ENVIRONMENT_EFFECTS,
     TERRAIN_ADAPTABILITY_MODIFIERS,
@@ -21,6 +28,7 @@ class BattleSimulator:
         player_skills: dict[str, int] | None = None,
         environment: str = "SPACE",
         special_effects: list[str] | None = None,
+        player_pilot_stats: PilotStats | None = None,
     ):
         """初期化.
 
@@ -30,6 +38,7 @@ class BattleSimulator:
             player_skills: プレイヤーのスキル (skill_id: level)
             environment: 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)
             special_effects: 特殊環境効果リスト (MINOVSKY/GRAVITY_WELL/OBSTACLE)
+            player_pilot_stats: プレイヤーのパイロットステータス (DEX/INT/REF/TOU/LUK)
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -43,6 +52,7 @@ class BattleSimulator:
         self.player_skills = player_skills or {}
         self.environment = environment
         self.special_effects: list[str] = special_effects or []
+        self.player_pilot_stats: PilotStats = player_pilot_stats or PilotStats()
 
         # team_id が未設定のユニットにはソロ参加用のIDを自動付与
         for unit in self.units:
@@ -111,8 +121,15 @@ class BattleSimulator:
         alive_units = [u for u in self.units if u.current_hp > 0]
         # 機動性が同じ場合のためにランダム値を事前に付与
         units_with_random = [(u, random.random()) for u in alive_units]
-        # 機動性とランダム値でソート（機動性が高い方が先、同値ならランダム）
-        units_with_random.sort(key=lambda x: (x[0].mobility, x[1]), reverse=True)
+
+        # REF ステータスを考慮したイニシアチブ値でソート（高い方が先行）
+        def _get_initiative(unit: MobileSuit) -> float:
+            ref = self.player_pilot_stats.ref if unit.side == "PLAYER" else 0
+            return calculate_initiative(unit.mobility, ref)
+
+        units_with_random.sort(
+            key=lambda x: (_get_initiative(x[0]), x[1]), reverse=True
+        )
 
         # 索敵フェーズ（ターン開始時）
         self._detection_phase()
@@ -439,7 +456,17 @@ class BattleSimulator:
             obstacle = SPECIAL_ENVIRONMENT_EFFECTS["OBSTACLE"]
             hit_chance -= obstacle["accuracy_penalty"]
 
-        hit_chance = max(0, min(100, hit_chance))
+        # パイロットステータス補正を適用
+        attacker_dex = self.player_pilot_stats.dex if actor.side == "PLAYER" else 0
+        defender_int = self.player_pilot_stats.intel if target.side == "PLAYER" else 0
+        hit_chance = calculate_hit_chance(
+            hit_chance,
+            distance_from_optimal=distance_from_optimal,
+            decay_rate=weapon.decay_rate,
+            attacker_dex=attacker_dex,
+            defender_int=defender_int,
+        )
+
         return hit_chance, distance_from_optimal
 
     def _consume_attack_resources(
@@ -541,7 +568,16 @@ class BattleSimulator:
             crit_skill_level = self.player_skills.get("crit_rate_up", 0)
             base_crit_rate += (crit_skill_level * 1.0) / 100.0  # +1% / Lv
 
-        is_crit = random.random() < base_crit_rate
+        # パイロットステータス補正: INT（攻撃側）・TOU（防御側）
+        attacker_int = self.player_pilot_stats.intel if actor.side == "PLAYER" else 0
+        defender_tou_crit = self.player_pilot_stats.tou if target.side == "PLAYER" else 0
+        adjusted_crit_rate = calculate_critical_chance(
+            base_crit_rate,
+            attacker_int=attacker_int,
+            defender_tou=defender_tou_crit,
+        )
+
+        is_crit = random.random() < adjusted_crit_rate
 
         if not is_crit:
             base_damage = max(1, weapon.power - target.armor)
@@ -578,9 +614,39 @@ class BattleSimulator:
                 base_damage = int(base_damage * (1.0 - resistance))
                 resistance_msg = f" [対実弾装甲により{int(resistance * 100)}%軽減]"
 
-        # 乱数幅
-        variance = random.uniform(0.9, 1.1)
-        final_damage = int(base_damage * variance)
+        # パイロットステータス補正: ダメージ乱数変動・LUK 完全回避
+        attacker_tou = self.player_pilot_stats.tou if actor.side == "PLAYER" else 0
+        attacker_luk = self.player_pilot_stats.luk if actor.side == "PLAYER" else 0
+        defender_dex = self.player_pilot_stats.dex if target.side == "PLAYER" else 0
+        defender_tou = self.player_pilot_stats.tou if target.side == "PLAYER" else 0
+        defender_luk = self.player_pilot_stats.luk if target.side == "PLAYER" else 0
+
+        final_damage, perfect_evade = calculate_damage_variance(
+            base_damage,
+            attacker_luk=attacker_luk,
+            attacker_tou=attacker_tou,
+            defender_dex=defender_dex,
+            defender_tou=defender_tou,
+            defender_luk=defender_luk,
+        )
+
+        # 完全回避（LUK 発動）
+        if perfect_evade:
+            # 被弾時のセリフ生成
+            hit_chatter = self._generate_chatter(target, "hit")
+            self.logs.append(
+                BattleLog(
+                    turn=self.turn,
+                    actor_id=actor.id,
+                    action_type="MISS",
+                    target_id=target.id,
+                    damage=0,
+                    message=f"{log_base} -> 命中！ しかし{target.name}は奇跡的に回避した！",
+                    position_snapshot=snapshot,
+                    chatter=attack_chatter or hit_chatter,
+                )
+            )
+            return
 
         target.current_hp -= final_damage
 

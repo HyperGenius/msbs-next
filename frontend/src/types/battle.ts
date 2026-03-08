@@ -230,6 +230,14 @@ export interface Pilot {
     skill_points: number;
     skills: Record<string, number>;
     inventory?: Record<string, number>;
+    // ステータスポイントシステム
+    status_points: number;
+    dex: number;
+    intel: number;
+    ref: number;
+    tou: number;
+    luk: number;
+    awq: number;
     created_at: string;
     updated_at: string;
 }

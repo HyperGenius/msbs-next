@@ -309,6 +309,16 @@ class SkillUnlockResponse(BaseModel):
     message: str
 
 
+class StatusAllocateRequest(BaseModel):
+    """ステータスポイント割り振りリクエスト."""
+
+    dex: int = 0
+    intel: int = 0
+    ref: int = 0
+    tou: int = 0
+    luk: int = 0
+
+
 @router.get("/skills", response_model=list)
 async def get_skills() -> list:
     """利用可能なスキル一覧を取得する.
@@ -350,5 +360,45 @@ async def unlock_skill(
     try:
         pilot, message = pilot_service.unlock_skill(pilot, request.skill_id)
         return SkillUnlockResponse(pilot=pilot, message=message)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/status/allocate", response_model=Pilot)
+async def allocate_status_points(
+    request: StatusAllocateRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> Pilot:
+    """パイロットのステータスポイントを各ステータスへ割り振る.
+
+    Args:
+        request: 各ステータスへの割り振りポイント数
+        session: データベースセッション
+        user_id: 現在のユーザーID
+
+    Returns:
+        Pilot: 更新後のパイロット情報
+
+    Raises:
+        HTTPException: パイロットが見つからない、またはバリデーションエラーの場合
+    """
+    statement = select(Pilot).where(Pilot.user_id == user_id)
+    pilot = session.exec(statement).first()
+
+    if not pilot:
+        raise HTTPException(status_code=404, detail="Pilot not found")
+
+    try:
+        pilot_service = PilotService(session)
+        pilot = pilot_service.allocate_status_points(
+            pilot,
+            dex=request.dex,
+            intel=request.intel,
+            ref=request.ref,
+            tou=request.tou,
+            luk=request.luk,
+        )
+        return pilot
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
