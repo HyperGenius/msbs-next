@@ -439,10 +439,15 @@ class Pilot(SQLModel, table=True):
 
     # ステータスポイントシステム
     status_points: int = Field(default=0, description="未使用のステータスポイント")
-    dex: int = Field(default=0, description="器用 (DEX) - 命中率・距離減衰緩和・被ダメージカット")
+    dex: int = Field(
+        default=0, description="器用 (DEX) - 命中率・距離減衰緩和・被ダメージカット"
+    )
     intel: int = Field(default=0, description="直感 (INT) - クリティカル率・回避率")
     ref: int = Field(default=0, description="反応 (REF) - イニシアチブ・機動性乗算")
-    tou: int = Field(default=0, description="耐久 (TOU) - 攻撃ダメージ加算・被クリティカル率低下・防御加算")
+    tou: int = Field(
+        default=0,
+        description="耐久 (TOU) - 攻撃ダメージ加算・被クリティカル率低下・防御加算",
+    )
     luk: int = Field(default=0, description="幸運 (LUK) - ダメージ乱数偏り・完全回避")
     awq: int = Field(default=0, description="覚醒 (AWQ/NT) - 将来用隠しステータス")
 

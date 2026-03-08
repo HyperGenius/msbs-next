@@ -560,59 +560,12 @@ class BattleSimulator:
         attack_chatter: str | None = None,
     ) -> None:
         """命中時の処理."""
-        # クリティカル判定
-        base_crit_rate = 0.05
-
-        # プレイヤーの攻撃時はクリティカル率スキル補正を適用
-        if actor.side == "PLAYER":
-            crit_skill_level = self.player_skills.get("crit_rate_up", 0)
-            base_crit_rate += (crit_skill_level * 1.0) / 100.0  # +1% / Lv
-
-        # パイロットステータス補正: INT（攻撃側）・TOU（防御側）
-        attacker_int = self.player_pilot_stats.intel if actor.side == "PLAYER" else 0
-        defender_tou_crit = self.player_pilot_stats.tou if target.side == "PLAYER" else 0
-        adjusted_crit_rate = calculate_critical_chance(
-            base_crit_rate,
-            attacker_int=attacker_int,
-            defender_tou=defender_tou_crit,
+        base_damage, log_msg = self._calculate_hit_base_damage(
+            actor, target, weapon, log_base
         )
-
-        is_crit = random.random() < adjusted_crit_rate
-
-        if not is_crit:
-            base_damage = max(1, weapon.power - target.armor)
-            log_msg = f"{log_base} -> 命中！"
-        else:
-            base_damage = int(weapon.power * 1.2)
-            log_msg = f"{log_base} -> クリティカルヒット！！"
-
-        # プレイヤーの攻撃時はダメージ向上スキル補正を適用
-        if actor.side == "PLAYER":
-            damage_skill_level = self.player_skills.get("damage_up", 0)
-            damage_multiplier = 1.0 + (damage_skill_level * 3.0) / 100.0  # +3% / Lv
-            base_damage = int(base_damage * damage_multiplier)
-
-        # 機体パラメータ補正: 格闘/射撃適性をダメージに乗算
-        is_melee = getattr(weapon, "is_melee", False)
-        if is_melee:
-            aptitude = getattr(actor, "melee_aptitude", 1.0)
-        else:
-            aptitude = getattr(actor, "shooting_aptitude", 1.0)
-        base_damage = int(base_damage * aptitude)
-
-        # 武器タイプに応じた耐性を適用
-        weapon_type = getattr(weapon, "type", "PHYSICAL")
-        resistance_msg = ""
-        if weapon_type == "BEAM":
-            resistance = getattr(target, "beam_resistance", 0.0)
-            if resistance > 0:
-                base_damage = int(base_damage * (1.0 - resistance))
-                resistance_msg = f" [対ビーム装甲により{int(resistance * 100)}%軽減]"
-        elif weapon_type == "PHYSICAL":
-            resistance = getattr(target, "physical_resistance", 0.0)
-            if resistance > 0:
-                base_damage = int(base_damage * (1.0 - resistance))
-                resistance_msg = f" [対実弾装甲により{int(resistance * 100)}%軽減]"
+        base_damage, resistance_msg = self._apply_hit_damage_modifiers(
+            actor, target, weapon, base_damage
+        )
 
         # パイロットステータス補正: ダメージ乱数変動・LUK 完全回避
         attacker_tou = self.player_pilot_stats.tou if actor.side == "PLAYER" else 0
@@ -668,6 +621,71 @@ class BattleSimulator:
 
         if target.current_hp <= 0:
             self._process_destruction(target)
+
+    def _calculate_hit_base_damage(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: Weapon,
+        log_base: str,
+    ) -> tuple[int, str]:
+        """命中時の基礎ダメージとログメッセージを算出する."""
+        base_crit_rate = 0.05
+
+        if actor.side == "PLAYER":
+            crit_skill_level = self.player_skills.get("crit_rate_up", 0)
+            base_crit_rate += (crit_skill_level * 1.0) / 100.0  # +1% / Lv
+
+        attacker_int = self.player_pilot_stats.intel if actor.side == "PLAYER" else 0
+        defender_tou_crit = (
+            self.player_pilot_stats.tou if target.side == "PLAYER" else 0
+        )
+        adjusted_crit_rate = calculate_critical_chance(
+            base_crit_rate,
+            attacker_int=attacker_int,
+            defender_tou=defender_tou_crit,
+        )
+
+        is_crit = random.random() < adjusted_crit_rate
+        if not is_crit:
+            return max(1, weapon.power - target.armor), f"{log_base} -> 命中！"
+        return int(weapon.power * 1.2), f"{log_base} -> クリティカルヒット！！"
+
+    def _apply_hit_damage_modifiers(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: Weapon,
+        base_damage: int,
+    ) -> tuple[int, str]:
+        """命中ダメージへスキル・適性・耐性補正を適用する."""
+        if actor.side == "PLAYER":
+            damage_skill_level = self.player_skills.get("damage_up", 0)
+            damage_multiplier = 1.0 + (damage_skill_level * 3.0) / 100.0  # +3% / Lv
+            base_damage = int(base_damage * damage_multiplier)
+
+        is_melee = getattr(weapon, "is_melee", False)
+        aptitude = (
+            getattr(actor, "melee_aptitude", 1.0)
+            if is_melee
+            else getattr(actor, "shooting_aptitude", 1.0)
+        )
+        base_damage = int(base_damage * aptitude)
+
+        weapon_type = getattr(weapon, "type", "PHYSICAL")
+        resistance_msg = ""
+        if weapon_type == "BEAM":
+            resistance = getattr(target, "beam_resistance", 0.0)
+            if resistance > 0:
+                base_damage = int(base_damage * (1.0 - resistance))
+                resistance_msg = f" [対ビーム装甲により{int(resistance * 100)}%軽減]"
+        elif weapon_type == "PHYSICAL":
+            resistance = getattr(target, "physical_resistance", 0.0)
+            if resistance > 0:
+                base_damage = int(base_damage * (1.0 - resistance))
+                resistance_msg = f" [対実弾装甲により{int(resistance * 100)}%軽減]"
+
+        return base_damage, resistance_msg
 
     def _process_miss(
         self,

@@ -279,7 +279,9 @@ def test_allocate_status_points_basic() -> None:
         luk=0,
     )
 
-    updated_pilot = service.allocate_status_points(pilot, dex=3, intel=2, ref=1, tou=2, luk=2)
+    updated_pilot = service.allocate_status_points(
+        pilot, dex=3, intel=2, ref=1, tou=2, luk=2
+    )
 
     assert updated_pilot.dex == 3
     assert updated_pilot.intel == 2

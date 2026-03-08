@@ -203,7 +203,9 @@ class PilotService:
         if level_up_count > 0:
             logs.append(f"合計 {level_up_count} レベル上昇しました")
             logs.append(f"スキルポイント +{level_up_count}")
-            logs.append(f"ステータスポイント +{level_up_count * STATUS_POINTS_PER_LEVEL}")
+            logs.append(
+                f"ステータスポイント +{level_up_count * STATUS_POINTS_PER_LEVEL}"
+            )
 
         self.session.add(pilot)
         self.session.commit()

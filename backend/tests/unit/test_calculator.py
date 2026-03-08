@@ -68,8 +68,12 @@ def test_calculate_hit_chance_dex_reduces_distance_penalty() -> None:
     # hit_chance がすでにペナルティを差し引いた後の値として渡す
     # DEX なし時: 60.0
     base = 60.0
-    result_no_dex = calculate_hit_chance(base, distance_from_optimal=100.0, decay_rate=0.1, attacker_dex=0)
-    result_with_dex = calculate_hit_chance(base, distance_from_optimal=100.0, decay_rate=0.1, attacker_dex=10)
+    result_no_dex = calculate_hit_chance(
+        base, distance_from_optimal=100.0, decay_rate=0.1, attacker_dex=0
+    )
+    result_with_dex = calculate_hit_chance(
+        base, distance_from_optimal=100.0, decay_rate=0.1, attacker_dex=10
+    )
     assert result_with_dex > result_no_dex
 
 
@@ -166,9 +170,13 @@ def test_calculate_damage_variance_luk_biases_variance_up() -> None:
     """攻撃側の LUK は乱数を最大値方向に偏らせる（大量試行で平均が上がる）."""
     n = 1000
     random.seed(0)
-    damages_no_luk = [calculate_damage_variance(100, attacker_luk=0)[0] for _ in range(n)]
+    damages_no_luk = [
+        calculate_damage_variance(100, attacker_luk=0)[0] for _ in range(n)
+    ]
     random.seed(0)
-    damages_high_luk = [calculate_damage_variance(100, attacker_luk=10)[0] for _ in range(n)]
+    damages_high_luk = [
+        calculate_damage_variance(100, attacker_luk=10)[0] for _ in range(n)
+    ]
     avg_no_luk = sum(damages_no_luk) / n
     avg_high_luk = sum(damages_high_luk) / n
     assert avg_high_luk > avg_no_luk
