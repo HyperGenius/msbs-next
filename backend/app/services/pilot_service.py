@@ -9,6 +9,9 @@ from app.core.gamedata import get_shop_listing_by_id
 from app.core.skills import SKILL_COST, get_skill_definition
 from app.models.models import MobileSuit, Pilot
 
+# レベルアップ時に付与するステータスポイント数
+STATUS_POINTS_PER_LEVEL: int = 2
+
 
 class PilotService:
     """パイロット成長・報酬管理サービス."""
@@ -191,6 +194,7 @@ class PilotService:
                 pilot.exp -= required_exp
                 pilot.level += 1
                 pilot.skill_points += 1  # レベルアップ時にSP付与
+                pilot.status_points += STATUS_POINTS_PER_LEVEL  # ステータスポイント付与
                 level_up_count += 1
                 logs.append(f"レベルアップ! Lv.{pilot.level}")
             else:
@@ -199,6 +203,9 @@ class PilotService:
         if level_up_count > 0:
             logs.append(f"合計 {level_up_count} レベル上昇しました")
             logs.append(f"スキルポイント +{level_up_count}")
+            logs.append(
+                f"ステータスポイント +{level_up_count * STATUS_POINTS_PER_LEVEL}"
+            )
 
         self.session.add(pilot)
         self.session.commit()
@@ -306,3 +313,60 @@ class PilotService:
 
         message = f"{skill_def['name']} Lv.{pilot.skills[skill_id]} を習得しました"
         return pilot, message
+
+    def allocate_status_points(
+        self,
+        pilot: Pilot,
+        dex: int = 0,
+        intel: int = 0,
+        ref: int = 0,
+        tou: int = 0,
+        luk: int = 0,
+    ) -> Pilot:
+        """ステータスポイントを各ステータスへ割り振る.
+
+        Args:
+            pilot: 対象パイロット
+            dex: 器用 (DEX) に割り振るポイント数
+            intel: 直感 (INT) に割り振るポイント数
+            ref: 反応 (REF) に割り振るポイント数
+            tou: 耐久 (TOU) に割り振るポイント数
+            luk: 幸運 (LUK) に割り振るポイント数
+
+        Returns:
+            Pilot: 更新後のパイロット
+
+        Raises:
+            ValueError: 割り振りポイントが負、または未使用ポイントを超える場合
+        """
+        allocations = {"dex": dex, "intel": intel, "ref": ref, "tou": tou, "luk": luk}
+
+        # 各値が負でないことを確認
+        for stat_name, value in allocations.items():
+            if value < 0:
+                raise ValueError(
+                    f"ステータスポイントの割り振りは0以上である必要があります: {stat_name}={value}"
+                )
+
+        total_allocated = sum(allocations.values())
+
+        # 未使用ポイントの範囲内か確認
+        if total_allocated > pilot.status_points:
+            raise ValueError(
+                f"ステータスポイントが不足しています (必要: {total_allocated}, 所持: {pilot.status_points})"
+            )
+
+        # ステータスに加算
+        pilot.dex += dex
+        pilot.intel += intel
+        pilot.ref += ref
+        pilot.tou += tou
+        pilot.luk += luk
+        pilot.status_points -= total_allocated
+        pilot.updated_at = datetime.now(UTC)
+
+        self.session.add(pilot)
+        self.session.commit()
+        self.session.refresh(pilot)
+
+        return pilot
