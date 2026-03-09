@@ -108,24 +108,6 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
     msg.includes("ビーム") ||
     msg.includes("実弾");
 
-  const isCriticalHit = msg.includes("★★ クリティカルヒット");
-
-  const isLukEvasion = msg.includes("★ [LUK]");
-
-  if (isCriticalHit) {
-    return {
-      borderStyle: "border-yellow-500",
-      bgStyle: "",
-      textStyle: "text-yellow-400 font-bold",
-    };
-  }
-  if (isLukEvasion) {
-    return {
-      borderStyle: "border-sky-500",
-      bgStyle: "",
-      textStyle: "text-sky-400 font-semibold",
-    };
-  }
   if (isResourceMessage) {
     return {
       borderStyle: "border-orange-500",
