@@ -296,3 +296,40 @@ describe("formatBattleLog – TARGET_SELECTIONスタイル", () => {
     expect(result.style.textStyle).toContain("text-blue-400");
   });
 });
+
+// ─────────────────────────────────────────────
+// getLogStyle — クリティカルヒット・LUK回避スタイル
+// ─────────────────────────────────────────────
+describe("formatBattleLog – クリティカルヒット・LUK回避スタイル", () => {
+  it("★★ クリティカルヒットメッセージはイエロースタイル", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが[ビーム・ライフル]で攻撃！ -> ★★ クリティカルヒット！！ 弱点を的確に捉え、Zakuに150ダメージ！（致命的なヒット）",
+      damage: 150,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-yellow-500");
+    expect(result.style.textStyle).toContain("text-yellow-400");
+  });
+
+  it("★ [LUK]の奇跡メッセージはスカイスタイル", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが[ビーム・ライフル]で攻撃！ -> 直撃コース！ しかしZakuは信じられない反射神経で紙一重の回避！ ★ [LUK]の奇跡が働いた！",
+      action_type: "MISS",
+      damage: 0,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-sky-500");
+    expect(result.style.textStyle).toContain("text-sky-400");
+  });
+
+  it("クリティカルヒットはリソースメッセージより優先される", () => {
+    // ★★ クリティカルヒットが含まれる場合、他のキーワードより優先される
+    const log = makeLog({
+      message: "[アムロ]のGundamが[ビーム・ライフル]で攻撃！ -> ★★ クリティカルヒット！！ 弱点を的確に捉え、Zakuに100ダメージ！（致命的なヒット）",
+      action_type: "ATTACK",
+      damage: 100,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-yellow-500");
+  });
+});

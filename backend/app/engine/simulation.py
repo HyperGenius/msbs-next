@@ -734,7 +734,7 @@ class BattleSimulator:
                     action_type="MISS",
                     target_id=target.id,
                     damage=0,
-                    message=f"{log_base} -> 直撃コース！ しかし{target.name}は信じられない反射神経で紙一重の回避！",
+                    message=f"{log_base} -> 直撃コース！ しかし{target.name}は信じられない反射神経で紙一重の回避！ ★ [LUK]の奇跡が働いた！",
                     position_snapshot=snapshot,
                     chatter=attack_chatter or hit_chatter,
                 )
@@ -747,7 +747,8 @@ class BattleSimulator:
         hit_chatter = self._generate_chatter(target, "hit")
 
         # 命中状況テキスト
-        if "クリティカルヒット" in log_msg:
+        is_crit = "クリティカルヒット" in log_msg
+        if is_crit:
             hit_text = " -> ★★ クリティカルヒット！！"
         elif is_optimal_distance:
             hit_text = " -> 最適射程でクリーンヒット！"
@@ -767,6 +768,9 @@ class BattleSimulator:
             else:
                 # 高軽減: 装甲メッセージ自体にダメージの深刻度が含まれている
                 damage_message = f"{resistance_msg} {target.name}に{final_damage}ダメージ！{hp_comment}"
+        elif is_crit:
+            # クリティカルヒット: 弱点を捉えた強調表現を追加
+            damage_message = f" 弱点を的確に捉え、{target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
         else:
             damage_message = (
                 f" {target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
