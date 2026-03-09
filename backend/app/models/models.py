@@ -156,6 +156,7 @@ class BattleLog(SQLModel):
     message: str
     position_snapshot: Vector3  # その瞬間の座標（3D再生用）
     chatter: str | None = None  # NPCのセリフ（戦闘中の掛け声など）
+    weapon_name: str | None = None  # 使用した武器名
 
 
 class Mission(SQLModel, table=True):

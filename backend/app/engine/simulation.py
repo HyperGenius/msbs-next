@@ -62,6 +62,16 @@ class BattleSimulator:
                     "current_cool_down": 0,
                 }
 
+    def _format_actor_name(self, actor: MobileSuit) -> str:
+        """アクター名を [パイロット名]のMS名 形式でフォーマットする.
+
+        パイロット名が設定されている場合は「[パイロット名]のMS名」、
+        設定されていない場合は「MS名」のみ返す。
+        """
+        if actor.pilot_name:
+            return f"[{actor.pilot_name}]の{actor.name}"
+        return actor.name
+
     def _generate_chatter(self, unit: MobileSuit, chatter_type: str) -> str | None:
         """NPCのセリフを生成する.
 
@@ -451,13 +461,31 @@ class BattleSimulator:
             weapon, weapon_state, resources
         )
 
+        actor_name = self._format_actor_name(actor)
+        weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
+
         if not can_attack:
+            if "クールダウン" in failure_reason:
+                wait_message = (
+                    f"{actor_name}は{weapon_display}の冷却を待ちながら"
+                    f"（{failure_reason.replace('クールダウン中 ', '')}）、やむなく待機"
+                )
+            elif failure_reason == "EN不足":
+                wait_message = (
+                    f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
+                )
+            elif failure_reason == "弾切れ":
+                wait_message = (
+                    f"{actor_name}は{weapon_display}の弾薬が尽きており、攻撃手段がない"
+                )
+            else:
+                wait_message = f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
             self.logs.append(
                 BattleLog(
                     turn=self.turn,
                     actor_id=actor.id,
                     action_type="WAIT",
-                    message=f"{actor.name}は{failure_reason}のため攻撃できない（待機）",
+                    message=wait_message,
                     position_snapshot=snapshot,
                 )
             )
@@ -478,7 +506,7 @@ class BattleSimulator:
         elif distance_from_optimal > 200:
             distance_msg = " (距離不利)"
 
-        log_base = f"{actor.name}の攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
+        log_base = f"{actor_name}が{weapon_display}で攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
 
         # リソース消費
         self._consume_attack_resources(weapon, weapon_state, resources)
@@ -527,16 +555,28 @@ class BattleSimulator:
         # 武器タイプに応じた耐性を適用
         weapon_type = getattr(weapon, "type", "PHYSICAL")
         resistance_msg = ""
+        resistance = 0.0
+        is_high_resistance = False
         if weapon_type == "BEAM":
             resistance = getattr(target, "beam_resistance", 0.0)
             if resistance > 0:
                 base_damage = int(base_damage * (1.0 - resistance))
-                resistance_msg = f" [対ビーム装甲により{int(resistance * 100)}%軽減]"
+                attr = "ビーム"
+                is_high_resistance = resistance >= 0.2
+                if is_high_resistance:
+                    resistance_msg = f" しかし{target.name}の強固な対{attr}装甲が衝撃を受け止め、ダメージは軽微に！"
+                else:
+                    resistance_msg = f" {target.name}の対{attr}装甲をわずかに弾きながらも、"
         elif weapon_type == "PHYSICAL":
             resistance = getattr(target, "physical_resistance", 0.0)
             if resistance > 0:
                 base_damage = int(base_damage * (1.0 - resistance))
-                resistance_msg = f" [対実弾装甲により{int(resistance * 100)}%軽減]"
+                attr = "実弾"
+                is_high_resistance = resistance >= 0.2
+                if is_high_resistance:
+                    resistance_msg = f" しかし{target.name}の強固な対{attr}装甲が衝撃を受け止め、ダメージは軽微に！"
+                else:
+                    resistance_msg = f" {target.name}の対{attr}装甲をわずかに弾きながらも、"
 
         # 乱数幅
         variance = random.uniform(0.9, 1.1)
@@ -547,6 +587,16 @@ class BattleSimulator:
         # 被弾時のセリフ生成
         hit_chatter = self._generate_chatter(target, "hit")
 
+        # 装甲軽減メッセージに応じてダメージ表現を構築
+        if resistance_msg and is_high_resistance:
+            # 高軽減: 「しかし〜ダメージは軽微に！」（ダメージ数値を末尾に追加）
+            damage_message = f"{resistance_msg}（{final_damage}ダメージ）"
+        elif resistance_msg:
+            # 低軽減: 「〜をわずかに弾きながらも、XXダメージ！」
+            damage_message = f"{resistance_msg}{target.name}に{final_damage}ダメージ！"
+        else:
+            damage_message = f" {target.name}に{final_damage}ダメージ！"
+
         self.logs.append(
             BattleLog(
                 turn=self.turn,
@@ -554,8 +604,9 @@ class BattleSimulator:
                 action_type="ATTACK",
                 target_id=target.id,
                 damage=final_damage,
-                message=f"{log_msg}{resistance_msg} {target.name}に{final_damage}ダメージ！",
+                message=f"{log_msg}{damage_message}",
                 position_snapshot=snapshot,
+                weapon_name=weapon.name if weapon else None,
                 chatter=attack_chatter or hit_chatter,
             )
         )

@@ -143,7 +143,7 @@ def test_en_depletion_blocks_attack():
 
     # Check that there are WAIT logs due to EN shortage
     wait_logs = [
-        log for log in sim.logs if log.action_type == "WAIT" and "EN不足" in log.message
+        log for log in sim.logs if log.action_type == "WAIT" and "ENが枯渇" in log.message
     ]
     assert len(wait_logs) > 0, "Expected WAIT logs due to EN shortage"
 
@@ -195,7 +195,7 @@ def test_ammo_depletion_blocks_attack():
 
     # Check that there are WAIT logs due to ammo shortage
     wait_logs = [
-        log for log in sim.logs if log.action_type == "WAIT" and "弾切れ" in log.message
+        log for log in sim.logs if log.action_type == "WAIT" and "弾薬が尽きており" in log.message
     ]
     assert len(wait_logs) > 0, "Expected WAIT logs due to ammo shortage"
 
@@ -249,7 +249,7 @@ def test_cooldown_blocks_attack():
     wait_logs = [
         log
         for log in sim.logs
-        if log.action_type == "WAIT" and "クールダウン中" in log.message
+        if log.action_type == "WAIT" and "冷却を待ちながら" in log.message
     ]
     assert len(wait_logs) > 0, "Expected WAIT logs due to cooldown"
 

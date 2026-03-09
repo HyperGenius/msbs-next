@@ -68,11 +68,12 @@ export interface MobileSuit {
 export interface BattleLog {
     turn: number;
     actor_id: string;
-    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION";
+    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT";
     target_id?: string;
     damage?: number;
     message: string;
     position_snapshot: Vector3;
+    weapon_name?: string;
 }
 
 /**

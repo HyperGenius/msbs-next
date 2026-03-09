@@ -14,6 +14,7 @@ import EntrySelectionModal from "@/components/Dashboard/EntrySelectionModal";
 import OnboardingOverlay from "@/components/Tutorial/OnboardingOverlay";
 import StarterSelectionModal from "@/components/Tutorial/StarterSelectionModal";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiSelect } from "@/components/ui";
+import { getLogStyle } from "@/utils/logFormatter";
 
 const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
 
@@ -567,67 +568,8 @@ export default function Home() {
                     || log.actor_id;
                 const isPlayer = log.actor_id === playerData?.id;
 
-                // メッセージタイプに応じたスタイルを決定するヘルパー関数
-                const getLogStyle = () => {
-                  // リソース関連メッセージ判定
-                  const isResourceMessage = log.message.includes("弾切れ") || 
-                                          log.message.includes("EN不足") || 
-                                          log.message.includes("クールダウン") ||
-                                          log.message.includes("待機");
-                  
-                  // 地形・索敵関連メッセージ判定
-                  const isTerrainMessage = log.action_type === "DETECTION" ||
-                                         log.message.includes("地形") ||
-                                         log.message.includes("索敵");
-                  
-                  // 属性関連メッセージ判定
-                  const isAttributeMessage = log.message.includes("BEAM") ||
-                                           log.message.includes("PHYSICAL") ||
-                                           log.message.includes("ビーム") ||
-                                           log.message.includes("実弾");
-                  
-                  // スタイルの構築
-                  if (isCurrentTurn) {
-                    return {
-                      borderStyle: "border-green-400",
-                      bgStyle: "bg-green-900/30",
-                      textStyle: "text-white"
-                    };
-                  }
-                  
-                  if (isResourceMessage) {
-                    return {
-                      borderStyle: "border-orange-500",
-                      bgStyle: "",
-                      textStyle: "text-orange-400 font-semibold"
-                    };
-                  }
-                  
-                  if (isTerrainMessage) {
-                    return {
-                      borderStyle: "border-cyan-500",
-                      bgStyle: "",
-                      textStyle: "text-cyan-400"
-                    };
-                  }
-                  
-                  if (isAttributeMessage) {
-                    return {
-                      borderStyle: "border-purple-500",
-                      bgStyle: "",
-                      textStyle: "text-purple-400"
-                    };
-                  }
-                  
-                  // デフォルトスタイル
-                  return {
-                    borderStyle: "border-green-900",
-                    bgStyle: "",
-                    textStyle: "text-green-600"
-                  };
-                };
-                
-                const { borderStyle, bgStyle, textStyle } = getLogStyle();
+                // メッセージタイプに応じたスタイルを決定
+                const { borderStyle, bgStyle, textStyle } = getLogStyle(log, isCurrentTurn);
 
                 return (
                   <li

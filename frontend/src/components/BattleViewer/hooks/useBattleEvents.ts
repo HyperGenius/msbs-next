@@ -26,12 +26,19 @@ export function useBattleEvents(
             
             // 防御/軽減検出（ダメージを受けた側）
             if (log.action_type === "ATTACK" && log.target_id && !battleEventMap.has(log.target_id)) {
-                if (log.message.includes("対ビーム装甲により") || log.message.includes("対実弾装甲により")) {
+                // 旧形式: [対ビーム装甲によりXX%軽減] / 新形式: 強固な対XX装甲が衝撃を受け止め
+                const isHighResist =
+                    log.message.includes("対ビーム装甲により") ||
+                    log.message.includes("対実弾装甲により") ||
+                    log.message.includes("装甲が衝撃を受け止め");
+                const isLowResist = log.message.includes("装甲をわずかに弾きながら");
+
+                if (isHighResist || isLowResist) {
                     const resistMatch = log.message.match(RESIST_PATTERN);
                     const percent = resistMatch ? resistMatch[1] : '';
                     battleEventMap.set(log.target_id, {
                         type: 'resist',
-                        text: `RESIST ${percent}%`,
+                        text: percent ? `RESIST ${percent}%` : 'RESIST',
                         color: '#4caf50'
                     });
                 } else if (log.damage && log.damage > 0) {
