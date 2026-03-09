@@ -297,6 +297,7 @@ class BattleLog(SQLModel):
     chatter: str | None = None  # NPCのセリフ（戦闘中の掛け声など）
     weapon_name: str | None = None  # 使用した武器名（フロントエンド表示用）
     target_max_hp: int | None = None  # ターゲットの最大HP（ダメージ割合計算用）
+    skill_activated: bool | None = None  # スキルが命中/回避の判定を変えた場合True
 
 
 class Mission(SQLModel, table=True):

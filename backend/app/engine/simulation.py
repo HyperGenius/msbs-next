@@ -110,15 +110,29 @@ class BattleSimulator:
 
         return None
 
-    def _format_actor_name(self, actor: MobileSuit) -> str:
+    def _format_actor_name(self, actor: MobileSuit, viewer_team_id: str | None = None) -> str:
         """パイロット名付きの機体名を返す.
 
         Args:
             actor: 機体
+            viewer_team_id: 視点チームID。指定された場合、そのチームから未索敵の機体は
+                            「UNKNOWN機」と表示する。省略時はアクターが敵チームなら
+                            プレイヤーチーム視点で自動判定する。
 
         Returns:
-            パイロット名がある場合は「[パイロット名]のMS名」、ない場合は「MS名」
+            - 未索敵の敵: 「UNKNOWN機」
+            - パイロット名がある場合: 「[パイロット名]のMS名」
+            - パイロット名がない場合: 「MS名」
         """
+        # 索敵チェック: 視点チームIDを決定
+        effective_viewer = viewer_team_id
+        if effective_viewer is None and actor.team_id != self.player.team_id:
+            # アクターが敵チームの場合、プレイヤー視点で索敵判定を行う
+            effective_viewer = self.player.team_id
+
+        if effective_viewer and actor.id not in self.team_detected_units.get(effective_viewer, set()):
+            return "UNKNOWN機"
+
         pilot_name = getattr(actor, "pilot_name", None)
         if pilot_name:
             return f"[{pilot_name}]の{actor.name}"
@@ -657,8 +671,26 @@ class BattleSimulator:
             actor, target, weapon, distance
         )
 
-        # ダイスロール
-        is_hit = random.uniform(0, 100) <= hit_chance
+        # スキルボーナスを個別に計算（スキル発動判定のため）
+        skill_bonus = 0.0
+        if actor.side == "PLAYER":
+            accuracy_skill_level = self.player_skills.get("accuracy_up", 0)
+            skill_bonus += accuracy_skill_level * 2.0
+        if target.side == "PLAYER":
+            evasion_skill_level = self.player_skills.get("evasion_up", 0)
+            skill_bonus -= evasion_skill_level * 2.0
+
+        # ダイスロール（ロール値を保持してスキル発動判定に使用）
+        roll = random.uniform(0, 100)
+        is_hit = roll <= hit_chance
+
+        # スキル発動判定: スキルボーナスがあり、それが命中/回避の結果を変えた場合
+        # hit_chance はクランプ済みのため、スキルなし命中率も [0, 100] にクランプして近似
+        skill_activated = False
+        if skill_bonus != 0.0:
+            hit_chance_without_skill = max(0.0, min(100.0, hit_chance - skill_bonus))
+            would_have_hit_without_skill = roll <= hit_chance_without_skill
+            skill_activated = is_hit != would_have_hit_without_skill
 
         # 距離による状況メッセージ（命中/ミスのコンテキストとして使用）
         is_optimal_distance = distance_from_optimal < 50
@@ -683,10 +715,11 @@ class BattleSimulator:
                 snapshot,
                 attack_chatter,
                 is_optimal_distance,
+                skill_activated,
             )
         else:
             self._process_miss(
-                actor, target, log_base, snapshot, attack_chatter, is_bad_distance
+                actor, target, log_base, snapshot, attack_chatter, is_bad_distance, skill_activated
             )
 
     def _process_hit(
@@ -698,6 +731,7 @@ class BattleSimulator:
         snapshot: Vector3,
         attack_chatter: str | None = None,
         is_optimal_distance: bool = False,
+        skill_activated: bool = False,
     ) -> None:
         """命中時の処理."""
         base_damage, log_msg = self._calculate_hit_base_damage(
@@ -788,6 +822,7 @@ class BattleSimulator:
                 position_snapshot=snapshot,
                 weapon_name=weapon.name if weapon else None,
                 chatter=attack_chatter or hit_chatter,
+                skill_activated=True if skill_activated else None,
             )
         )
 
@@ -875,6 +910,7 @@ class BattleSimulator:
         snapshot: Vector3,
         attack_chatter: str | None = None,
         is_bad_distance: bool = False,
+        skill_activated: bool = False,
     ) -> None:
         """ミス時の処理."""
         # ミス時のセリフ生成
@@ -894,6 +930,7 @@ class BattleSimulator:
                 message=f"{log_base}{miss_text}",
                 position_snapshot=snapshot,
                 chatter=attack_chatter or miss_chatter,
+                skill_activated=True if skill_activated else None,
             )
         )
 

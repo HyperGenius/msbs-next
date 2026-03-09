@@ -93,10 +93,13 @@ export default function BattleLogViewer({
                   ? "border-green-400 bg-green-900/40 text-green-200 shadow-[0_0_8px_rgba(34,197,94,0.3)]"
                   : isOwnUnit
                   ? "border-blue-500 bg-blue-900/30 text-blue-300"
-                  : "border-green-900 text-green-600"
+                  : `${displayLog.style.borderStyle} ${displayLog.style.bgStyle} ${displayLog.style.textStyle}`
               }`}
             >
               <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
+              {displayLog.skill_activated && (
+                <span className="text-amber-400 mr-1">★</span>
+              )}
               <span>{displayLog.message}</span>
             </div>
           );
