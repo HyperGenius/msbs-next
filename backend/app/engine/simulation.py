@@ -770,9 +770,7 @@ class BattleSimulator:
                 damage_message = f"{resistance_msg} {target.name}に{final_damage}ダメージ！{hp_comment}"
         elif is_crit:
             # クリティカルヒット: 弱点を捉えた強調表現を追加
-            damage_message = (
-                f" 弱点を的確に捉え、{target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
-            )
+            damage_message = f" 弱点を的確に捉え、{target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
         else:
             damage_message = (
                 f" {target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
