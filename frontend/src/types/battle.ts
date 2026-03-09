@@ -73,6 +73,7 @@ export interface BattleLog {
     damage?: number;
     message: string;
     position_snapshot: Vector3;
+    skill_activated?: boolean;
 }
 
 /**

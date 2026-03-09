@@ -85,7 +85,7 @@ def test_calculate_ranking_upserts_existing_entry(session):
 
 def test_get_current_rankings_returns_sorted_list(session):
     """get_current_rankings() が勝利数の降順で返す."""
-    for i, (name, uid, wins, losses) in enumerate(
+    for _, (name, uid, wins, losses) in enumerate(
         [
             ("Pilot A", "user_rank_a", 10, 2),
             ("Pilot B", "user_rank_b", 5, 5),
