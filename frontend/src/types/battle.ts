@@ -96,6 +96,8 @@ export interface BattleLog {
     chatter?: string;
     weapon_name?: string;
     target_max_hp?: number;
+    /** スキルが命中/回避の判定を変えた場合 true */
+    skill_activated?: boolean;
 }
 
 /**

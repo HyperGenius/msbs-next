@@ -11,6 +11,8 @@ export interface DisplayLog {
   target_id?: string;
   /** 環境に応じて抽象化・フィルタリング済みのメッセージ */
   message: string;
+  /** スキルが命中/回避の判定を変えた場合 true */
+  skill_activated?: boolean;
   /** 表示スタイル（ターンハイライトを除く基本スタイル） */
   style: {
     borderStyle: string;
@@ -86,6 +88,8 @@ function abstractDamage(
 function getLogStyle(log: BattleLog): DisplayLog["style"] {
   const msg = log.message;
 
+  const isSkillActivated = log.skill_activated === true;
+
   const isResourceMessage =
     msg.includes("弾切れ") ||
     msg.includes("EN不足") ||
@@ -124,6 +128,13 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
       borderStyle: "border-sky-500",
       bgStyle: "",
       textStyle: "text-sky-400 font-semibold",
+    };
+  }
+  if (isSkillActivated) {
+    return {
+      borderStyle: "border-amber-500",
+      bgStyle: "",
+      textStyle: "text-amber-400 font-semibold",
     };
   }
   if (isResourceMessage) {
@@ -189,6 +200,7 @@ export function formatBattleLog(
     action_type: log.action_type,
     target_id: log.target_id,
     message,
+    skill_activated: log.skill_activated,
     style: getLogStyle(log),
   };
 }
