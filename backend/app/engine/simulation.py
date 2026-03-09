@@ -264,7 +264,7 @@ class BattleSimulator:
             reason: 選択理由（戦術名）
             details: 詳細情報（スコア値など）
         """
-        _TACTICS_LABEL: dict[str, str] = {
+        _tactics_label: dict[str, str] = {
             "CLOSEST": "近距離優先",
             "WEAKEST": "弱体ターゲット優先",
             "STRONGEST": "高脅威ターゲット優先",
@@ -272,7 +272,7 @@ class BattleSimulator:
             "RANDOM": "ランダム選択",
         }
         actor_name = self._format_actor_name(actor)
-        label = _TACTICS_LABEL.get(reason, reason)
+        label = _tactics_label.get(reason, reason)
 
         if reason == "CLOSEST":
             # details = "距離: XXXm"
@@ -303,13 +303,9 @@ class BattleSimulator:
                 f"最も危険な{target.name}（{details}）を排除対象に選定！"
             )
         elif reason == "RANDOM":
-            message = (
-                f"{actor_name}はランダムに{target.name}をターゲットに選択した"
-            )
+            message = f"{actor_name}はランダムに{target.name}をターゲットに選択した"
         else:
-            message = (
-                f"{actor_name}がターゲット選択: {target.name} (戦術: {reason}, {details})"
-            )
+            message = f"{actor_name}がターゲット選択: {target.name} (戦術: {reason}, {details})"
 
         self.logs.append(
             BattleLog(
@@ -630,17 +626,21 @@ class BattleSimulator:
             actor_name = self._format_actor_name(actor)
             weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
             if "弾切れ" in failure_reason:
-                wait_message = f"{actor_name}は{weapon_display}の弾薬が尽き、攻撃手段がない"
+                wait_message = (
+                    f"{actor_name}は{weapon_display}の弾薬が尽き、攻撃手段がない"
+                )
             elif "EN不足" in failure_reason:
-                wait_message = f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
+                wait_message = (
+                    f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
+                )
             elif "クールダウン" in failure_reason:
                 # failure_reason 例: "クールダウン中 (残りNターン)"
                 remaining_turns = weapon_state.get("current_cool_down", 0)
-                wait_message = (
-                    f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_turns}ターン）、やむなく待機"
-                )
+                wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_turns}ターン）、やむなく待機"
             else:
-                wait_message = f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
+                wait_message = (
+                    f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
+                )
             self.logs.append(
                 BattleLog(
                     turn=self.turn,
@@ -675,9 +675,19 @@ class BattleSimulator:
         attack_chatter = self._generate_chatter(actor, "attack")
 
         if is_hit:
-            self._process_hit(actor, target, weapon, log_base, snapshot, attack_chatter, is_optimal_distance)
+            self._process_hit(
+                actor,
+                target,
+                weapon,
+                log_base,
+                snapshot,
+                attack_chatter,
+                is_optimal_distance,
+            )
         else:
-            self._process_miss(actor, target, log_base, snapshot, attack_chatter, is_bad_distance)
+            self._process_miss(
+                actor, target, log_base, snapshot, attack_chatter, is_bad_distance
+            )
 
     def _process_hit(
         self,
@@ -758,7 +768,9 @@ class BattleSimulator:
                 # 高軽減: 装甲メッセージ自体にダメージの深刻度が含まれている
                 damage_message = f"{resistance_msg} {target.name}に{final_damage}ダメージ！{hp_comment}"
         else:
-            damage_message = f" {target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
+            damage_message = (
+                f" {target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
+            )
 
         self.logs.append(
             BattleLog(
@@ -845,7 +857,9 @@ class BattleSimulator:
                 if resistance >= 0.20:
                     resistance_msg = f" しかし{target.name}の強固な対実弾装甲が衝撃を受け止め、ダメージは軽微に！"
                 else:
-                    resistance_msg = f" {target.name}の対実弾装甲をわずかに弾きながらも、"
+                    resistance_msg = (
+                        f" {target.name}の対実弾装甲をわずかに弾きながらも、"
+                    )
 
         return base_damage, resistance_msg
 
