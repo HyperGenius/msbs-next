@@ -74,6 +74,7 @@ export interface BattleLog {
     message: string;
     position_snapshot: Vector3;
     weapon_name?: string;
+    skill_activated?: boolean;
 }
 
 /**
