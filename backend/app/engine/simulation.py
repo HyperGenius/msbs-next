@@ -466,9 +466,10 @@ class BattleSimulator:
 
         if not can_attack:
             if "クールダウン" in failure_reason:
+                remaining_str = failure_reason.replace("クールダウン中 ", "").strip("()")
                 wait_message = (
                     f"{actor_name}は{weapon_display}の冷却を待ちながら"
-                    f"（{failure_reason.replace('クールダウン中 ', '')}）、やむなく待機"
+                    f"（{remaining_str}）、やむなく待機"
                 )
             elif failure_reason == "EN不足":
                 wait_message = (
