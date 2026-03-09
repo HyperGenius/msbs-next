@@ -529,6 +529,155 @@ describe("formatBattleLog – 武器名付き攻撃ログ", () => {
 });
 
 // ─────────────────────────────────────────────
+// 新形式のターゲット選択メッセージ — 各戦術のナラティブログ
+// ─────────────────────────────────────────────
+describe("formatBattleLog – 新形式ターゲット選択メッセージ", () => {
+  it("CLOSEST戦術のナラティブメッセージはブルースタイル", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogは[戦術: 近距離優先]に従い、中距離にいるAcguyをターゲットに捕捉！",
+      action_type: "TARGET_SELECTION",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-blue-500");
+    expect(result.style.textStyle).toContain("text-blue-400");
+  });
+
+  it("WEAKEST戦術のナラティブメッセージはブルースタイル", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamは[戦術: 弱体ターゲット優先]でスキャン。HP: 45のZakuを狙い撃ちにする！",
+      action_type: "TARGET_SELECTION",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-blue-500");
+    expect(result.style.textStyle).toContain("text-blue-400");
+  });
+
+  it("STRONGEST戦術のナラティブメッセージはブルースタイル", () => {
+    const log = makeLog({
+      message: "Gundamは[戦術: 高脅威ターゲット優先]に従い、Zaku（戦略価値: 100.0）を最優先ターゲットに設定！",
+      action_type: "TARGET_SELECTION",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-blue-500");
+    expect(result.style.textStyle).toContain("text-blue-400");
+  });
+
+  it("THREAT戦術のナラティブメッセージはブルースタイル", () => {
+    const log = makeLog({
+      message: "Gundamは[戦術: 最大脅威優先]で判断し、最も危険なZaku（脅威度: 1.23）を排除対象に選定！",
+      action_type: "TARGET_SELECTION",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-blue-500");
+    expect(result.style.textStyle).toContain("text-blue-400");
+  });
+
+  it("RANDOM戦術のナラティブメッセージはブルースタイル", () => {
+    const log = makeLog({
+      message: "GundamはランダムにZakuをターゲットに選択した",
+      action_type: "TARGET_SELECTION",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-blue-500");
+    expect(result.style.textStyle).toContain("text-blue-400");
+  });
+
+  it("本番環境でも[戦術: ...]の表記はそのまま保持される", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogは[戦術: 近距離優先]に従い、中距離にいるAcguyをターゲットに捕捉！",
+      action_type: "TARGET_SELECTION",
+    });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    expect(result.message).toContain("[戦術: 近距離優先]");
+    expect(result.message).toContain("中距離");
+  });
+});
+
+// ─────────────────────────────────────────────
+// 新形式の索敵ログ — 演出的な発見メッセージ
+// ─────────────────────────────────────────────
+describe("formatBattleLog – 新形式索敵ログ", () => {
+  it("通常の発見メッセージはシアンスタイル", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが近距離にZakuを発見！",
+      action_type: "DETECTION",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-cyan-500");
+    expect(result.style.textStyle).toContain("text-cyan-400");
+  });
+
+  it("ミノフスキー粒子の中での発見メッセージはシアンスタイル", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogが濃密なミノフスキー粒子の中、中距離にリック・ドムの反応を捉えた！",
+      action_type: "DETECTION",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-cyan-500");
+    expect(result.style.textStyle).toContain("text-cyan-400");
+  });
+
+  it("本番環境で距離ラベルはそのまま保持される（数値変換なし）", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが中距離にZakuを発見！",
+      action_type: "DETECTION",
+    });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    // バックエンドがすでに抽象化したラベルなので再変換されない
+    expect(result.message).toContain("中距離");
+    expect(result.message).not.toMatch(/\d+m/);
+  });
+});
+
+// ─────────────────────────────────────────────
+// 新形式の命中/ミスログ — 距離状況の組み込み
+// ─────────────────────────────────────────────
+describe("formatBattleLog – 新形式命中・ミスログの距離コンテキスト", () => {
+  it("最適射程でのクリーンヒットメッセージが正しく表示される（開発環境）", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが[ビーム・ライフル]で攻撃！ (命中: 85%) -> 最適射程でクリーンヒット！ Zakuに100ダメージ！（手痛いダメージ）",
+      action_type: "ATTACK",
+      damage: 100,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.message).toContain("最適射程でクリーンヒット！");
+    expect(result.message).toContain("命中: 85%");
+  });
+
+  it("最適射程クリーンヒット - 本番環境で命中率が削除される", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが[ビーム・ライフル]で攻撃！ (命中: 85%) -> 最適射程でクリーンヒット！ Zakuに100ダメージ！（手痛いダメージ）",
+      action_type: "ATTACK",
+      damage: 100,
+    });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    expect(result.message).toContain("最適射程でクリーンヒット！");
+    expect(result.message).not.toContain("命中:");
+  });
+
+  it("距離不一致による回避メッセージが正しく表示される（開発環境）", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogが[ジャイアント・バズ]で攻撃！ (命中: 30%) -> 距離が合わず、Acguyに回避された！",
+      action_type: "MISS",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.message).toContain("距離が合わず");
+    expect(result.message).toContain("回避された！");
+    expect(result.message).toContain("命中: 30%");
+  });
+
+  it("距離不一致による回避メッセージ - 本番環境で命中率が削除される", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogが[ジャイアント・バズ]で攻撃！ (命中: 30%) -> 距離が合わず、Acguyに回避された！",
+      action_type: "MISS",
+    });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    expect(result.message).toContain("距離が合わず");
+    expect(result.message).not.toContain("命中:");
+  });
+});
+
+// ─────────────────────────────────────────────
 // UNKNOWN機 — 未索敵表示（ログメッセージ内）
 // ─────────────────────────────────────────────
 describe("formatBattleLog – UNKNOWN機 メッセージ表示", () => {
