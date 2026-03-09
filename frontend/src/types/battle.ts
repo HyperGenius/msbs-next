@@ -93,6 +93,9 @@ export interface BattleLog {
     damage?: number;
     message: string;
     position_snapshot: Vector3;
+    chatter?: string;
+    weapon_name?: string;
+    target_max_hp?: number;
 }
 
 /**

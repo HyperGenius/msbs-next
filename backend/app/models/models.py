@@ -295,6 +295,8 @@ class BattleLog(SQLModel):
     message: str
     position_snapshot: Vector3  # その瞬間の座標（3D再生用）
     chatter: str | None = None  # NPCのセリフ（戦闘中の掛け声など）
+    weapon_name: str | None = None  # 使用した武器名（フロントエンド表示用）
+    target_max_hp: int | None = None  # ターゲットの最大HP（ダメージ割合計算用）
 
 
 class Mission(SQLModel, table=True):
