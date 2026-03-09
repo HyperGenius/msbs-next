@@ -89,6 +89,27 @@ class BattleSimulator:
 
         return None
 
+    def _format_actor_name(self, actor: MobileSuit) -> str:
+        """パイロット名付きの機体名を返す。未索敵の敵はUNKNOWN機として表示。
+
+        Args:
+            actor: 機体
+
+        Returns:
+            - 未索敵の敵: "UNKNOWN機"
+            - パイロット名あり: "[パイロット名]のMS名"
+            - パイロット名なし: "MS名"
+        """
+        # 敵機かつプレイヤーチームが未索敵の場合はUNKNOWN
+        if actor.side != "PLAYER" and actor.id not in self.team_detected_units.get(
+            "PLAYER", set()
+        ):
+            return "UNKNOWN機"
+        pilot_name = getattr(actor, "pilot_name", None)
+        if pilot_name:
+            return f"[{pilot_name}]の{actor.name}"
+        return actor.name
+
     def process_turn(self) -> None:
         """1ターン分の処理を実行."""
         self.turn += 1
@@ -171,7 +192,7 @@ class BattleSimulator:
             details: 詳細情報（スコア値など）
         """
         message = (
-            f"{actor.name}がターゲット選択: {target.name} (戦術: {reason}, {details})"
+            f"{self._format_actor_name(actor)}がターゲット選択: {self._format_actor_name(target)} (戦術: {reason}, {details})"
         )
         self.logs.append(
             BattleLog(
@@ -220,7 +241,7 @@ class BattleSimulator:
                             actor_id=unit.id,
                             action_type="DETECTION",
                             target_id=target.id,
-                            message=f"{unit.name}が{target.name}を発見！ (距離: {int(distance)}m)",
+                            message=f"{self._format_actor_name(unit)}が{self._format_actor_name(target)}を発見！ (距離: {int(distance)}m)",
                             position_snapshot=unit.position,
                         )
                     )
@@ -386,16 +407,21 @@ class BattleSimulator:
 
     def _calculate_hit_chance(
         self, actor: MobileSuit, target: MobileSuit, weapon: Weapon, distance: float
-    ) -> tuple[float, float]:
+    ) -> tuple[float, float, float]:
         """命中率を計算する.
 
         Returns:
-            tuple[float, float]: (命中率, 最適距離からの差)
+            tuple[float, float, float]: (命中率, 最適距離からの差, スキルなし命中率)
+            - 命中率: スキル補正込みの命中率 (0-100)
+            - 最適距離からの差: 距離ペナルティ計算に使用
+            - スキルなし命中率: スキル補正を除いた命中率 (0-100, スキル発動判定用)
         """
         distance_from_optimal = abs(distance - weapon.optimal_range)
         dist_penalty = distance_from_optimal * weapon.decay_rate
         evasion_bonus = target.mobility * 10
-        hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
+        base_hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
+
+        hit_chance = base_hit_chance
 
         # プレイヤーの攻撃時はスキル補正を適用
         if actor.side == "PLAYER":
@@ -407,8 +433,9 @@ class BattleSimulator:
             evasion_skill_level = self.player_skills.get("evasion_up", 0)
             hit_chance -= evasion_skill_level * 2.0  # 敵の命中率を -2% / Lv
 
+        hit_chance_no_skill = max(0, min(100, base_hit_chance))
         hit_chance = max(0, min(100, hit_chance))
-        return hit_chance, distance_from_optimal
+        return hit_chance, distance_from_optimal, hit_chance_no_skill
 
     def _consume_attack_resources(
         self, weapon: Weapon, weapon_state: dict, resources: dict
@@ -457,19 +484,38 @@ class BattleSimulator:
                     turn=self.turn,
                     actor_id=actor.id,
                     action_type="WAIT",
-                    message=f"{actor.name}は{failure_reason}のため攻撃できない（待機）",
+                    message=f"{self._format_actor_name(actor)}は{failure_reason}のため攻撃できない（待機）",
                     position_snapshot=snapshot,
                 )
             )
             return
 
         # 命中率計算
-        hit_chance, distance_from_optimal = self._calculate_hit_chance(
+        hit_chance, distance_from_optimal, hit_chance_no_skill = self._calculate_hit_chance(
             actor, target, weapon, distance
         )
 
         # ダイスロール
-        is_hit = random.uniform(0, 100) <= hit_chance
+        roll = random.uniform(0, 100)
+        is_hit = roll <= hit_chance
+
+        # スキルが命中判定を決定的に左右したか判定
+        skill_activated = False
+        if hit_chance != hit_chance_no_skill:
+            is_hit_no_skill = roll <= hit_chance_no_skill
+            skill_activated = is_hit != is_hit_no_skill
+
+        # スキル発動メッセージを構築
+        skill_note = ""
+        if skill_activated:
+            if actor.side == "PLAYER":
+                accuracy_level = self.player_skills.get("accuracy_up", 0)
+                if accuracy_level > 0:
+                    skill_note = f" ★ [射撃精度LV{accuracy_level}]が発動！"
+            if target.side == "PLAYER" and not skill_note:
+                evasion_level = self.player_skills.get("evasion_up", 0)
+                if evasion_level > 0:
+                    skill_note = f" ★ [回避機動LV{evasion_level}]が発動！"
 
         # 距離による状況メッセージ
         distance_msg = ""
@@ -478,7 +524,7 @@ class BattleSimulator:
         elif distance_from_optimal > 200:
             distance_msg = " (距離不利)"
 
-        log_base = f"{actor.name}の攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
+        log_base = f"{self._format_actor_name(actor)}が「{weapon.name}」で攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
 
         # リソース消費
         self._consume_attack_resources(weapon, weapon_state, resources)
@@ -487,9 +533,9 @@ class BattleSimulator:
         attack_chatter = self._generate_chatter(actor, "attack")
 
         if is_hit:
-            self._process_hit(actor, target, weapon, log_base, snapshot, attack_chatter)
+            self._process_hit(actor, target, weapon, log_base, snapshot, attack_chatter, skill_activated, skill_note)
         else:
-            self._process_miss(actor, target, log_base, snapshot, attack_chatter)
+            self._process_miss(actor, target, log_base, snapshot, attack_chatter, skill_activated, skill_note)
 
     def _process_hit(
         self,
@@ -499,6 +545,8 @@ class BattleSimulator:
         log_base: str,
         snapshot: Vector3,
         attack_chatter: str | None = None,
+        skill_activated: bool = False,
+        skill_note: str = "",
     ) -> None:
         """命中時の処理."""
         # クリティカル判定
@@ -554,9 +602,10 @@ class BattleSimulator:
                 action_type="ATTACK",
                 target_id=target.id,
                 damage=final_damage,
-                message=f"{log_msg}{resistance_msg} {target.name}に{final_damage}ダメージ！",
+                message=f"{log_msg}{resistance_msg}{skill_note} {self._format_actor_name(target)}に{final_damage}ダメージ！",
                 position_snapshot=snapshot,
                 chatter=attack_chatter or hit_chatter,
+                skill_activated=skill_activated,
             )
         )
 
@@ -570,6 +619,8 @@ class BattleSimulator:
         log_base: str,
         snapshot: Vector3,
         attack_chatter: str | None = None,
+        skill_activated: bool = False,
+        skill_note: str = "",
     ) -> None:
         """ミス時の処理."""
         # ミス時のセリフ生成
@@ -581,9 +632,10 @@ class BattleSimulator:
                 actor_id=actor.id,
                 action_type="MISS",
                 target_id=target.id,
-                message=f"{log_base} -> 回避された！",
+                message=f"{log_base}{skill_note} -> 回避された！",
                 position_snapshot=snapshot,
                 chatter=attack_chatter or miss_chatter,
+                skill_activated=skill_activated,
             )
         )
 
@@ -606,7 +658,7 @@ class BattleSimulator:
                 turn=self.turn,
                 actor_id=target.id,
                 action_type="DESTROYED",
-                message=f"{target.name} は爆散した...{ace_msg}",
+                message=f"{self._format_actor_name(target)} は爆散した...{ace_msg}",
                 position_snapshot=target.position,
                 chatter=destroyed_chatter,
             )
@@ -650,7 +702,7 @@ class BattleSimulator:
                     turn=self.turn,
                     actor_id=actor.id,
                     action_type="MOVE",
-                    message=f"{actor.name}が後退中 (距離: {int(distance)}m)",
+                    message=f"{self._format_actor_name(actor)}が後退中 (距離: {int(distance)}m)",
                     position_snapshot=actor.position,
                 )
             )
@@ -671,7 +723,7 @@ class BattleSimulator:
                         turn=self.turn,
                         actor_id=actor.id,
                         action_type="MOVE",
-                        message=f"{actor.name}が距離を取る (距離: {int(distance)}m)",
+                        message=f"{self._format_actor_name(actor)}が距離を取る (距離: {int(distance)}m)",
                         position_snapshot=actor.position,
                     )
                 )
@@ -693,7 +745,7 @@ class BattleSimulator:
                         turn=self.turn,
                         actor_id=actor.id,
                         action_type="MOVE",
-                        message=f"{actor.name}が射程内に移動中 (残距離: {int(distance)}m)",
+                        message=f"{self._format_actor_name(actor)}が射程内に移動中 (残距離: {int(distance)}m)",
                         position_snapshot=actor.position,
                     )
                 )
@@ -716,7 +768,7 @@ class BattleSimulator:
                     turn=self.turn,
                     actor_id=actor.id,
                     action_type="MOVE",
-                    message=f"{actor.name}が接近中 (残距離: {int(distance)}m)",
+                    message=f"{self._format_actor_name(actor)}が接近中 (残距離: {int(distance)}m)",
                     position_snapshot=actor.position,
                 )
             )
@@ -776,7 +828,7 @@ class BattleSimulator:
                 turn=self.turn,
                 actor_id=actor.id,
                 action_type="MOVE",
-                message=f"{actor.name}が索敵中 (残距離: {int(distance)}m)",
+                message=f"{self._format_actor_name(actor)}が索敵中 (残距離: {int(distance)}m)",
                 position_snapshot=actor.position,
             )
         )

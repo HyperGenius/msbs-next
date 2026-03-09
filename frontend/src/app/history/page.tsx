@@ -126,7 +126,11 @@ export default function HistoryPage() {
                     {selectedBattle.logs.map((log, index) => (
                       <div
                         key={index}
-                        className="border-l-2 border-green-900 pl-2 py-1 text-green-600"
+                        className={`border-l-2 pl-2 py-1 ${
+                          log.skill_activated
+                            ? "border-yellow-500 text-yellow-400"
+                            : "border-green-900 text-green-600"
+                        }`}
                       >
                         <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
                         <span>{log.message}</span>

@@ -156,6 +156,7 @@ class BattleLog(SQLModel):
     message: str
     position_snapshot: Vector3  # その瞬間の座標（3D再生用）
     chatter: str | None = None  # NPCのセリフ（戦闘中の掛け声など）
+    skill_activated: bool = False  # スキルが命中判定を決定的に左右したかどうか
 
 
 class Mission(SQLModel, table=True):
