@@ -3,6 +3,14 @@
 
 import { BattleResult } from "@/types/battle";
 
+/**
+ * バトル履歴リストを表示するためのプロパティ
+ * @property battles - バトル結果の配列
+ * @property isLoading - データの読み込み中かどうか
+ * @property isError - データの読み込みに失敗したかどうか
+ * @property onSelectBattle - バトルが選択されたときのコールバック関数
+ * @property getMissionName - ミッションIDからミッション名を取得する関数
+ */
 interface BattleListProps {
   battles: BattleResult[];
   isLoading: boolean;
@@ -11,6 +19,10 @@ interface BattleListProps {
   getMissionName: (missionId: number | null, createdAt?: string) => string;
 }
 
+/**
+ * バトル履歴の一覧を表示するコンポーネント
+ * 読み込み中、エラー、データなし、データありの各状態に応じたUIを提供します。
+ */
 export default function BattleList({
   battles,
   isLoading,
