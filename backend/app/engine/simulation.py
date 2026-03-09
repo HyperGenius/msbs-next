@@ -90,7 +90,7 @@ class BattleSimulator:
         return None
 
     def _format_actor_name(self, actor: MobileSuit) -> str:
-        """パイロット名付きの機体名を返す。未索敵の敵はUNKNOWN機として表示。
+        """パイロット名付きの機体名を返す。未索敵の敵はUNKNOWN機として表示.
 
         Args:
             actor: 機体
@@ -191,9 +191,7 @@ class BattleSimulator:
             reason: 選択理由（戦術名）
             details: 詳細情報（スコア値など）
         """
-        message = (
-            f"{self._format_actor_name(actor)}がターゲット選択: {self._format_actor_name(target)} (戦術: {reason}, {details})"
-        )
+        message = f"{self._format_actor_name(actor)}がターゲット選択: {self._format_actor_name(target)} (戦術: {reason}, {details})"
         self.logs.append(
             BattleLog(
                 turn=self.turn,
@@ -454,6 +452,44 @@ class BattleSimulator:
         if weapon.cool_down_turn > 0:
             weapon_state["current_cool_down"] = weapon.cool_down_turn
 
+    def _resolve_skill_activation(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        roll: float,
+        hit_chance: float,
+        hit_chance_no_skill: float,
+    ) -> tuple[bool, str]:
+        """スキルが命中判定へ影響したかを判定し、ログ用注記を返す."""
+        if hit_chance == hit_chance_no_skill:
+            return False, ""
+
+        is_hit_with_skill = roll <= hit_chance
+        is_hit_without_skill = roll <= hit_chance_no_skill
+        skill_activated = is_hit_with_skill != is_hit_without_skill
+        if not skill_activated:
+            return False, ""
+
+        if actor.side == "PLAYER":
+            accuracy_level = self.player_skills.get("accuracy_up", 0)
+            if accuracy_level > 0:
+                return True, f" ★ [射撃精度LV{accuracy_level}]が発動！"
+
+        if target.side == "PLAYER":
+            evasion_level = self.player_skills.get("evasion_up", 0)
+            if evasion_level > 0:
+                return True, f" ★ [回避機動LV{evasion_level}]が発動！"
+
+        return True, ""
+
+    def _build_distance_message(self, distance_from_optimal: float) -> str:
+        """最適距離との差分に応じた状況メッセージを生成する."""
+        if distance_from_optimal < 50:
+            return " (最適距離!)"
+        if distance_from_optimal > 200:
+            return " (距離不利)"
+        return ""
+
     def _process_attack(
         self,
         actor: MobileSuit,
@@ -491,38 +527,23 @@ class BattleSimulator:
             return
 
         # 命中率計算
-        hit_chance, distance_from_optimal, hit_chance_no_skill = self._calculate_hit_chance(
-            actor, target, weapon, distance
+        hit_chance, distance_from_optimal, hit_chance_no_skill = (
+            self._calculate_hit_chance(actor, target, weapon, distance)
         )
 
         # ダイスロール
         roll = random.uniform(0, 100)
         is_hit = roll <= hit_chance
 
-        # スキルが命中判定を決定的に左右したか判定
-        skill_activated = False
-        if hit_chance != hit_chance_no_skill:
-            is_hit_no_skill = roll <= hit_chance_no_skill
-            skill_activated = is_hit != is_hit_no_skill
+        skill_activated, skill_note = self._resolve_skill_activation(
+            actor,
+            target,
+            roll,
+            hit_chance,
+            hit_chance_no_skill,
+        )
 
-        # スキル発動メッセージを構築
-        skill_note = ""
-        if skill_activated:
-            if actor.side == "PLAYER":
-                accuracy_level = self.player_skills.get("accuracy_up", 0)
-                if accuracy_level > 0:
-                    skill_note = f" ★ [射撃精度LV{accuracy_level}]が発動！"
-            if target.side == "PLAYER" and not skill_note:
-                evasion_level = self.player_skills.get("evasion_up", 0)
-                if evasion_level > 0:
-                    skill_note = f" ★ [回避機動LV{evasion_level}]が発動！"
-
-        # 距離による状況メッセージ
-        distance_msg = ""
-        if distance_from_optimal < 50:
-            distance_msg = " (最適距離!)"
-        elif distance_from_optimal > 200:
-            distance_msg = " (距離不利)"
+        distance_msg = self._build_distance_message(distance_from_optimal)
 
         log_base = f"{self._format_actor_name(actor)}が「{weapon.name}」で攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
 
@@ -533,9 +554,26 @@ class BattleSimulator:
         attack_chatter = self._generate_chatter(actor, "attack")
 
         if is_hit:
-            self._process_hit(actor, target, weapon, log_base, snapshot, attack_chatter, skill_activated, skill_note)
+            self._process_hit(
+                actor,
+                target,
+                weapon,
+                log_base,
+                snapshot,
+                attack_chatter,
+                skill_activated,
+                skill_note,
+            )
         else:
-            self._process_miss(actor, target, log_base, snapshot, attack_chatter, skill_activated, skill_note)
+            self._process_miss(
+                actor,
+                target,
+                log_base,
+                snapshot,
+                attack_chatter,
+                skill_activated,
+                skill_note,
+            )
 
     def _process_hit(
         self,

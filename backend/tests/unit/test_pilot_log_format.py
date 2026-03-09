@@ -113,12 +113,8 @@ def test_format_actor_name_player_never_unknown() -> None:
 
 def test_attack_log_includes_pilot_name() -> None:
     """攻撃ログにパイロット名が含まれる."""
-    player = create_test_unit(
-        "Gundam", "PLAYER", pilot_name="アムロ", accuracy=100
-    )
-    enemy = create_test_unit(
-        "Zaku", "ENEMY", position=Vector3(x=100, y=0, z=0), hp=1
-    )
+    player = create_test_unit("Gundam", "PLAYER", pilot_name="アムロ", accuracy=100)
+    enemy = create_test_unit("Zaku", "ENEMY", position=Vector3(x=100, y=0, z=0), hp=1)
     sim = BattleSimulator(player, [enemy])
     sim.team_detected_units["PLAYER"].add(enemy.id)
     sim.team_detected_units["ENEMY"].add(player.id)
@@ -128,15 +124,11 @@ def test_attack_log_includes_pilot_name() -> None:
             break
         sim.process_turn()
 
-    attack_logs = [
-        log for log in sim.logs if log.action_type in ("ATTACK", "MISS")
-    ]
+    attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS")]
     assert len(attack_logs) > 0
 
     # プレイヤーの攻撃ログに「[アムロ]のGundam」が含まれる
-    player_attack_logs = [
-        log for log in attack_logs if log.actor_id == player.id
-    ]
+    player_attack_logs = [log for log in attack_logs if log.actor_id == player.id]
     if player_attack_logs:
         assert any("[アムロ]のGundam" in log.message for log in player_attack_logs)
 
@@ -189,9 +181,7 @@ def test_destruction_log_includes_pilot_name() -> None:
             break
         sim.process_turn()
 
-    destroyed_logs = [
-        log for log in sim.logs if log.action_type == "DESTROYED"
-    ]
+    destroyed_logs = [log for log in sim.logs if log.action_type == "DESTROYED"]
     assert len(destroyed_logs) > 0
     assert any("[ザク兵]のZaku" in log.message for log in destroyed_logs)
 
@@ -219,9 +209,7 @@ def test_skill_activated_flag_in_battle_log() -> None:
 def test_skill_activated_default_false() -> None:
     """スキルなし戦闘では skill_activated は False のまま."""
     player = create_test_unit("Gundam", "PLAYER", accuracy=100)
-    enemy = create_test_unit(
-        "Zaku", "ENEMY", position=Vector3(x=100, y=0, z=0), hp=1
-    )
+    enemy = create_test_unit("Zaku", "ENEMY", position=Vector3(x=100, y=0, z=0), hp=1)
     sim = BattleSimulator(player, [enemy])
     sim.team_detected_units["PLAYER"].add(enemy.id)
     sim.team_detected_units["ENEMY"].add(player.id)
@@ -231,9 +219,7 @@ def test_skill_activated_default_false() -> None:
             break
         sim.process_turn()
 
-    attack_logs = [
-        log for log in sim.logs if log.action_type in ("ATTACK", "MISS")
-    ]
+    attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS")]
     assert len(attack_logs) > 0
     # スキルなしなので skill_activated は False
     assert all(not log.skill_activated for log in attack_logs)
