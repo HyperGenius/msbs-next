@@ -236,3 +236,63 @@ describe("formatBattleLogs – フィルタリング", () => {
     expect(results[0].message).toBe("中距離 から射撃 ダメージ");
   });
 });
+
+// ─────────────────────────────────────────────
+// abstractDamage — target_max_hp を使ったHP割合ベース変換
+// ─────────────────────────────────────────────
+describe("formatBattleLog – HP割合ベースのダメージ抽象化", () => {
+  it("割合 ≥ 20% → 致命的なダメージ", () => {
+    const log = makeLog({ message: "100ダメージを与えた", damage: 100, target_max_hp: 400 });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    // 100 / 400 = 25% → 致命的なダメージ
+    expect(result.message).toBe("致命的なダメージを与えた");
+  });
+
+  it("割合 ≥ 10% かつ < 20% → 手痛いダメージ", () => {
+    const log = makeLog({ message: "50ダメージを与えた", damage: 50, target_max_hp: 400 });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    // 50 / 400 = 12.5% → 手痛いダメージ
+    expect(result.message).toBe("手痛いダメージを与えた");
+  });
+
+  it("割合 ≥ 5% かつ < 10% → ダメージ", () => {
+    const log = makeLog({ message: "30ダメージを与えた", damage: 30, target_max_hp: 400 });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    // 30 / 400 = 7.5% → ダメージ
+    expect(result.message).toBe("ダメージを与えた");
+  });
+
+  it("割合 < 5% → 軽微なダメージ", () => {
+    const log = makeLog({ message: "10ダメージを与えた", damage: 10, target_max_hp: 400 });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    // 10 / 400 = 2.5% → 軽微なダメージ
+    expect(result.message).toBe("軽微なダメージを与えた");
+  });
+
+  it("target_max_hp が 0 のときは絶対値ベースにフォールバックする", () => {
+    const log = makeLog({ message: "150ダメージを与えた", damage: 150, target_max_hp: 0 });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    expect(result.message).toBe("大ダメージを与えた");
+  });
+
+  it("target_max_hp が未指定のときは絶対値ベースにフォールバックする", () => {
+    const log = makeLog({ message: "150ダメージを与えた", damage: 150 });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    expect(result.message).toBe("大ダメージを与えた");
+  });
+});
+
+// ─────────────────────────────────────────────
+// getLogStyle — TARGET_SELECTION スタイル
+// ─────────────────────────────────────────────
+describe("formatBattleLog – TARGET_SELECTIONスタイル", () => {
+  it("ターゲット選択ログはブルースタイル", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogは[戦術: 近距離優先]に従い、中距離にいるAcguyをターゲットに捕捉！",
+      action_type: "TARGET_SELECTION",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-blue-500");
+    expect(result.style.textStyle).toContain("text-blue-400");
+  });
+});

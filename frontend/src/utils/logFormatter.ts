@@ -44,15 +44,35 @@ function removeHitRate(message: string): string {
 
 /**
  * ダメージ数値を抽象化テキストに置換する。
- * log.damage を基に判定し、メッセージ内の数値ダメージ表現を置き換える。
- *   ≥ 100 → 大ダメージ
- *   ≥ 30  → ダメージ
- *   < 30  → ダメージは軽微
+ * `targetMaxHp` が指定された場合は HP 割合ベースの4段階ラベルを使用する。
+ * 未指定の場合は従来の絶対値ベース3段階ラベルにフォールバックする。
+ *   targetMaxHp あり:
+ *     ≥20% → 致命的なダメージ
+ *     ≥10% → 手痛いダメージ
+ *     ≥ 5% → ダメージ
+ *     < 5% → 軽微なダメージ
+ *   targetMaxHp なし（フォールバック）:
+ *     ≥ 100 → 大ダメージ
+ *     ≥  30 → ダメージ
+ *     <  30 → 軽微なダメージ
  */
-function abstractDamage(message: string, damage: number | undefined): string {
+function abstractDamage(
+  message: string,
+  damage: number | undefined,
+  targetMaxHp?: number
+): string {
   if (damage === undefined) return message;
-  const damageLabel =
-    damage >= 100 ? "大ダメージ" : damage >= 30 ? "ダメージ" : "軽微なダメージ";
+  let damageLabel: string;
+  if (targetMaxHp !== undefined && targetMaxHp > 0) {
+    const ratio = damage / targetMaxHp;
+    if (ratio >= 0.20) damageLabel = "致命的なダメージ";
+    else if (ratio >= 0.10) damageLabel = "手痛いダメージ";
+    else if (ratio >= 0.05) damageLabel = "ダメージ";
+    else damageLabel = "軽微なダメージ";
+  } else {
+    damageLabel =
+      damage >= 100 ? "大ダメージ" : damage >= 30 ? "ダメージ" : "軽微なダメージ";
+  }
   // 「N ダメージ」「ダメージ: N」「Nダメージ」の形式を対象に置換
   return message
     .replace(/\d+\s*ダメージ/g, damageLabel)
@@ -70,12 +90,17 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
     msg.includes("弾切れ") ||
     msg.includes("EN不足") ||
     msg.includes("クールダウン") ||
-    msg.includes("待機");
+    msg.includes("待機") ||
+    msg.includes("弾薬が尽き") ||
+    msg.includes("ENが枯渇") ||
+    msg.includes("冷却を待ち");
 
   const isTerrainMessage =
     log.action_type === "DETECTION" ||
     msg.includes("地形") ||
     msg.includes("索敵");
+
+  const isTargetSelectionMessage = log.action_type === "TARGET_SELECTION";
 
   const isAttributeMessage =
     msg.includes("BEAM") ||
@@ -95,6 +120,13 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
       borderStyle: "border-cyan-500",
       bgStyle: "",
       textStyle: "text-cyan-400",
+    };
+  }
+  if (isTargetSelectionMessage) {
+    return {
+      borderStyle: "border-blue-500",
+      bgStyle: "",
+      textStyle: "text-blue-400",
     };
   }
   if (isAttributeMessage) {
@@ -130,7 +162,7 @@ export function formatBattleLog(
   if (isProduction) {
     message = abstractDistance(message);
     message = removeHitRate(message);
-    message = abstractDamage(message, log.damage);
+    message = abstractDamage(message, log.damage, log.target_max_hp);
   }
 
   return {

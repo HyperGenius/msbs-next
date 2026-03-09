@@ -122,7 +122,7 @@ def test_beam_weapon_vs_beam_resistance() -> None:
         if player_attacks:
             # Verify that resistance message is in the log
             resistance_logs = [
-                log for log in player_attacks if "対ビーム装甲" in log.message
+                log for log in player_attacks if "ビーム吸収コーティング" in log.message
             ]
             assert len(resistance_logs) > 0, (
                 "Beam resistance message should appear in player's attack logs"
@@ -170,7 +170,7 @@ def test_optimal_range_hit_bonus() -> None:
     sim.process_turn()
 
     # Check for optimal distance message
-    optimal_logs = [log for log in sim.logs if "最適距離" in log.message]
+    optimal_logs = [log for log in sim.logs if "最適射程" in log.message]
     assert len(optimal_logs) > 0, (
         "Optimal distance message should appear when at optimal range"
     )

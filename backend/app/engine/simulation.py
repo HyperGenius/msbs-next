@@ -110,6 +110,72 @@ class BattleSimulator:
 
         return None
 
+    def _format_actor_name(self, actor: MobileSuit) -> str:
+        """パイロット名付きの機体名を返す.
+
+        Args:
+            actor: 機体
+
+        Returns:
+            パイロット名がある場合は「[パイロット名]のMS名」、ない場合は「MS名」
+        """
+        pilot_name = getattr(actor, "pilot_name", None)
+        if pilot_name:
+            return f"[{pilot_name}]の{actor.name}"
+        return actor.name
+
+    def _get_distance_label(self, distance: float) -> str:
+        """距離を日本語ラベルに変換する.
+
+        Args:
+            distance: 距離(m)
+
+        Returns:
+            近距離 / 中距離 / 遠距離
+        """
+        if distance <= 200:
+            return "近距離"
+        if distance <= 400:
+            return "中距離"
+        return "遠距離"
+
+    def _get_damage_description(self, damage: int, target: MobileSuit) -> str:
+        """HP割合に基づくダメージ表現を返す.
+
+        Args:
+            damage: ダメージ量
+            target: 攻撃対象
+
+        Returns:
+            致命的なヒット / 手痛いダメージ / ダメージ / 軽微なダメージ
+        """
+        ratio = damage / max(1, target.max_hp)
+        if ratio >= 0.20:
+            return "致命的なヒット"
+        if ratio >= 0.10:
+            return "手痛いダメージ"
+        if ratio >= 0.05:
+            return "ダメージ"
+        return "軽微なダメージ"
+
+    def _get_hp_status_comment(self, target: MobileSuit) -> str:
+        """ダメージ後のHP残量に応じた状況コメントを返す.
+
+        Args:
+            target: 攻撃対象
+
+        Returns:
+            HP残量に応じた状況コメント（余裕がある場合は空文字）
+        """
+        ratio = target.current_hp / max(1, target.max_hp)
+        if ratio <= 0.10:
+            return " — 大破寸前...！（残りHP僅少）"
+        if ratio <= 0.20:
+            return " — 機体が限界に近い！"
+        if ratio <= 0.50:
+            return " — 戦闘継続能力が低下"
+        return ""
+
     def process_turn(self) -> None:
         """1ターン分の処理を実行."""
         self.turn += 1
@@ -198,9 +264,49 @@ class BattleSimulator:
             reason: 選択理由（戦術名）
             details: 詳細情報（スコア値など）
         """
-        message = (
-            f"{actor.name}がターゲット選択: {target.name} (戦術: {reason}, {details})"
-        )
+        _tactics_label: dict[str, str] = {
+            "CLOSEST": "近距離優先",
+            "WEAKEST": "弱体ターゲット優先",
+            "STRONGEST": "高脅威ターゲット優先",
+            "THREAT": "最大脅威優先",
+            "RANDOM": "ランダム選択",
+        }
+        actor_name = self._format_actor_name(actor)
+        label = _tactics_label.get(reason, reason)
+
+        if reason == "CLOSEST":
+            # details = "距離: XXXm"
+            dist_str = details.replace("距離: ", "").strip()
+            try:
+                dist_val = float(dist_str.rstrip("m"))
+                dist_label = self._get_distance_label(dist_val)
+            except ValueError:
+                dist_label = dist_str
+            message = (
+                f"{actor_name}は[戦術: {label}]に従い、"
+                f"{dist_label}にいる{target.name}をターゲットに捕捉！"
+            )
+        elif reason == "WEAKEST":
+            # details = "HP: XX"
+            message = (
+                f"{actor_name}は[戦術: {label}]でスキャン。"
+                f"{details}の{target.name}を狙い撃ちにする！"
+            )
+        elif reason == "STRONGEST":
+            message = (
+                f"{actor_name}は[戦術: {label}]に従い、"
+                f"{target.name}（{details}）を最優先ターゲットに設定！"
+            )
+        elif reason == "THREAT":
+            message = (
+                f"{actor_name}は[戦術: {label}]で判断し、"
+                f"最も危険な{target.name}（{details}）を排除対象に選定！"
+            )
+        elif reason == "RANDOM":
+            message = f"{actor_name}はランダムに{target.name}をターゲットに選択した"
+        else:
+            message = f"{actor_name}がターゲット選択: {target.name} (戦術: {reason}, {details})"
+
         self.logs.append(
             BattleLog(
                 turn=self.turn,
@@ -246,18 +352,24 @@ class BattleSimulator:
                     self.team_detected_units[unit.team_id].add(target.id)
 
                     # 発見ログを追加
-                    minovsky_msg = (
-                        " [ミノフスキー粒子影響下]"
-                        if "MINOVSKY" in self.special_effects
-                        else ""
-                    )
+                    dist_label = self._get_distance_label(distance)
+                    actor_name = self._format_actor_name(unit)
+                    if "MINOVSKY" in self.special_effects:
+                        detect_message = (
+                            f"{actor_name}が濃密なミノフスキー粒子の中、"
+                            f"{dist_label}に{target.name}の反応を捉えた！"
+                        )
+                    else:
+                        detect_message = (
+                            f"{actor_name}が{dist_label}に{target.name}を発見！"
+                        )
                     self.logs.append(
                         BattleLog(
                             turn=self.turn,
                             actor_id=unit.id,
                             action_type="DETECTION",
                             target_id=target.id,
-                            message=f"{unit.name}が{target.name}を発見！ (距離: {int(distance)}m){minovsky_msg}",
+                            message=detect_message,
                             position_snapshot=unit.position,
                         )
                     )
@@ -511,12 +623,30 @@ class BattleSimulator:
         )
 
         if not can_attack:
+            actor_name = self._format_actor_name(actor)
+            weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
+            if "弾切れ" in failure_reason:
+                wait_message = (
+                    f"{actor_name}は{weapon_display}の弾薬が尽き、攻撃手段がない"
+                )
+            elif "EN不足" in failure_reason:
+                wait_message = (
+                    f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
+                )
+            elif "クールダウン" in failure_reason:
+                # failure_reason 例: "クールダウン中 (残りNターン)"
+                remaining_turns = weapon_state.get("current_cool_down", 0)
+                wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_turns}ターン）、やむなく待機"
+            else:
+                wait_message = (
+                    f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
+                )
             self.logs.append(
                 BattleLog(
                     turn=self.turn,
                     actor_id=actor.id,
                     action_type="WAIT",
-                    message=f"{actor.name}は{failure_reason}のため攻撃できない（待機）",
+                    message=wait_message,
                     position_snapshot=snapshot,
                 )
             )
@@ -530,14 +660,13 @@ class BattleSimulator:
         # ダイスロール
         is_hit = random.uniform(0, 100) <= hit_chance
 
-        # 距離による状況メッセージ
-        distance_msg = ""
-        if distance_from_optimal < 50:
-            distance_msg = " (最適距離!)"
-        elif distance_from_optimal > 200:
-            distance_msg = " (距離不利)"
+        # 距離による状況メッセージ（命中/ミスのコンテキストとして使用）
+        is_optimal_distance = distance_from_optimal < 50
+        is_bad_distance = distance_from_optimal > 200
 
-        log_base = f"{actor.name}の攻撃！{distance_msg} (命中: {int(hit_chance)}%)"
+        actor_name = self._format_actor_name(actor)
+        weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
+        log_base = f"{actor_name}が{weapon_display}で攻撃！ (命中: {int(hit_chance)}%)"
 
         # リソース消費
         self._consume_attack_resources(weapon, weapon_state, resources)
@@ -546,9 +675,19 @@ class BattleSimulator:
         attack_chatter = self._generate_chatter(actor, "attack")
 
         if is_hit:
-            self._process_hit(actor, target, weapon, log_base, snapshot, attack_chatter)
+            self._process_hit(
+                actor,
+                target,
+                weapon,
+                log_base,
+                snapshot,
+                attack_chatter,
+                is_optimal_distance,
+            )
         else:
-            self._process_miss(actor, target, log_base, snapshot, attack_chatter)
+            self._process_miss(
+                actor, target, log_base, snapshot, attack_chatter, is_bad_distance
+            )
 
     def _process_hit(
         self,
@@ -558,6 +697,7 @@ class BattleSimulator:
         log_base: str,
         snapshot: Vector3,
         attack_chatter: str | None = None,
+        is_optimal_distance: bool = False,
     ) -> None:
         """命中時の処理."""
         base_damage, log_msg = self._calculate_hit_base_damage(
@@ -594,7 +734,7 @@ class BattleSimulator:
                     action_type="MISS",
                     target_id=target.id,
                     damage=0,
-                    message=f"{log_base} -> 命中！ しかし{target.name}は奇跡的に回避した！",
+                    message=f"{log_base} -> 直撃コース！ しかし{target.name}は信じられない反射神経で紙一重の回避！",
                     position_snapshot=snapshot,
                     chatter=attack_chatter or hit_chatter,
                 )
@@ -606,6 +746,32 @@ class BattleSimulator:
         # 被弾時のセリフ生成
         hit_chatter = self._generate_chatter(target, "hit")
 
+        # 命中状況テキスト
+        if "クリティカルヒット" in log_msg:
+            hit_text = " -> ★★ クリティカルヒット！！"
+        elif is_optimal_distance:
+            hit_text = " -> 最適射程でクリーンヒット！"
+        else:
+            hit_text = " -> 命中！"
+
+        # ダメージ表現（HP割合ベース）
+        damage_desc = self._get_damage_description(final_damage, target)
+        # HP残量コメント
+        hp_comment = self._get_hp_status_comment(target)
+
+        # 装甲軽減メッセージ
+        if resistance_msg:
+            if resistance_msg.endswith("、"):
+                # 低軽減: 装甲メッセージの後にダメージ表現を追加
+                damage_message = f"{resistance_msg}{target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
+            else:
+                # 高軽減: 装甲メッセージ自体にダメージの深刻度が含まれている
+                damage_message = f"{resistance_msg} {target.name}に{final_damage}ダメージ！{hp_comment}"
+        else:
+            damage_message = (
+                f" {target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
+            )
+
         self.logs.append(
             BattleLog(
                 turn=self.turn,
@@ -613,8 +779,10 @@ class BattleSimulator:
                 action_type="ATTACK",
                 target_id=target.id,
                 damage=final_damage,
-                message=f"{log_msg}{resistance_msg} {target.name}に{final_damage}ダメージ！",
+                target_max_hp=target.max_hp,
+                message=f"{log_base}{hit_text}{damage_message}",
                 position_snapshot=snapshot,
+                weapon_name=weapon.name if weapon else None,
                 chatter=attack_chatter or hit_chatter,
             )
         )
@@ -678,12 +846,20 @@ class BattleSimulator:
             resistance = getattr(target, "beam_resistance", 0.0)
             if resistance > 0:
                 base_damage = int(base_damage * (1.0 - resistance))
-                resistance_msg = f" [対ビーム装甲により{int(resistance * 100)}%軽減]"
+                if resistance >= 0.20:
+                    resistance_msg = f" しかし{target.name}の強固なビーム吸収コーティングが衝撃を受け止め、ダメージは軽微に！"
+                else:
+                    resistance_msg = f" {target.name}のビーム吸収コーティングをわずかに弾きながらも、"
         elif weapon_type == "PHYSICAL":
             resistance = getattr(target, "physical_resistance", 0.0)
             if resistance > 0:
                 base_damage = int(base_damage * (1.0 - resistance))
-                resistance_msg = f" [対実弾装甲により{int(resistance * 100)}%軽減]"
+                if resistance >= 0.20:
+                    resistance_msg = f" しかし{target.name}の強固な対実弾装甲が衝撃を受け止め、ダメージは軽微に！"
+                else:
+                    resistance_msg = (
+                        f" {target.name}の対実弾装甲をわずかに弾きながらも、"
+                    )
 
         return base_damage, resistance_msg
 
@@ -694,10 +870,16 @@ class BattleSimulator:
         log_base: str,
         snapshot: Vector3,
         attack_chatter: str | None = None,
+        is_bad_distance: bool = False,
     ) -> None:
         """ミス時の処理."""
         # ミス時のセリフ生成
         miss_chatter = self._generate_chatter(actor, "miss")
+
+        if is_bad_distance:
+            miss_text = f" -> 距離が合わず、{target.name}に回避された！"
+        else:
+            miss_text = f" -> {target.name}に回避された！"
 
         self.logs.append(
             BattleLog(
@@ -705,7 +887,7 @@ class BattleSimulator:
                 actor_id=actor.id,
                 action_type="MISS",
                 target_id=target.id,
-                message=f"{log_base} -> 回避された！",
+                message=f"{log_base}{miss_text}",
                 position_snapshot=snapshot,
                 chatter=attack_chatter or miss_chatter,
             )
@@ -730,7 +912,7 @@ class BattleSimulator:
                 turn=self.turn,
                 actor_id=target.id,
                 action_type="DESTROYED",
-                message=f"{target.name} は爆散した...{ace_msg}",
+                message=f"{self._format_actor_name(target)} は爆散した...{ace_msg}",
                 position_snapshot=target.position,
                 chatter=destroyed_chatter,
             )
@@ -773,7 +955,7 @@ class BattleSimulator:
                     turn=self.turn,
                     actor_id=actor.id,
                     action_type="MOVE",
-                    message=f"{actor.name}が後退中 (距離: {int(distance)}m)",
+                    message=f"{self._format_actor_name(actor)}が後退中 (距離: {int(distance)}m)",
                     position_snapshot=actor.position,
                 )
             )
@@ -794,7 +976,7 @@ class BattleSimulator:
                         turn=self.turn,
                         actor_id=actor.id,
                         action_type="MOVE",
-                        message=f"{actor.name}が距離を取る (距離: {int(distance)}m)",
+                        message=f"{self._format_actor_name(actor)}が距離を取る (距離: {int(distance)}m)",
                         position_snapshot=actor.position,
                     )
                 )
@@ -816,7 +998,7 @@ class BattleSimulator:
                         turn=self.turn,
                         actor_id=actor.id,
                         action_type="MOVE",
-                        message=f"{actor.name}が射程内に移動中 (残距離: {int(distance)}m)",
+                        message=f"{self._format_actor_name(actor)}が射程内に移動中 (残距離: {int(distance)}m)",
                         position_snapshot=actor.position,
                     )
                 )
@@ -839,7 +1021,7 @@ class BattleSimulator:
                     turn=self.turn,
                     actor_id=actor.id,
                     action_type="MOVE",
-                    message=f"{actor.name}が接近中 (残距離: {int(distance)}m)",
+                    message=f"{self._format_actor_name(actor)}が接近中 (残距離: {int(distance)}m)",
                     position_snapshot=actor.position,
                 )
             )
@@ -905,7 +1087,7 @@ class BattleSimulator:
                 turn=self.turn,
                 actor_id=actor.id,
                 action_type="MOVE",
-                message=f"{actor.name}が索敵中 (残距離: {int(distance)}m)",
+                message=f"{self._format_actor_name(actor)}が索敵中 (残距離: {int(distance)}m)",
                 position_snapshot=actor.position,
             )
         )
