@@ -1,6 +1,12 @@
 /* frontend/src/constants.ts */
 
 /**
+ * 本番環境フラグ。
+ * process.env.NODE_ENV が "production" のときに true になります。
+ */
+export const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+/**
  * オンボーディング完了フラグの localStorage キー。
  * ブラウザ（デバイス）単位で保存されるグローバルなフラグです。
  * 値は "true" 文字列で保存されます。
