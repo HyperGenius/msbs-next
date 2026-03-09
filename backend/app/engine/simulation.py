@@ -110,7 +110,9 @@ class BattleSimulator:
 
         return None
 
-    def _format_actor_name(self, actor: MobileSuit, viewer_team_id: str | None = None) -> str:
+    def _format_actor_name(
+        self, actor: MobileSuit, viewer_team_id: str | None = None
+    ) -> str:
         """パイロット名付きの機体名を返す.
 
         Args:
@@ -130,7 +132,9 @@ class BattleSimulator:
             # アクターが敵チームの場合、プレイヤー視点で索敵判定を行う
             effective_viewer = self.player.team_id
 
-        if effective_viewer and actor.id not in self.team_detected_units.get(effective_viewer, set()):
+        if effective_viewer and actor.id not in self.team_detected_units.get(
+            effective_viewer, set()
+        ):
             return "UNKNOWN機"
 
         pilot_name = getattr(actor, "pilot_name", None)
@@ -719,7 +723,13 @@ class BattleSimulator:
             )
         else:
             self._process_miss(
-                actor, target, log_base, snapshot, attack_chatter, is_bad_distance, skill_activated
+                actor,
+                target,
+                log_base,
+                snapshot,
+                attack_chatter,
+                is_bad_distance,
+                skill_activated,
             )
 
     def _process_hit(

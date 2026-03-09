@@ -406,6 +406,129 @@ describe("formatBattleLog – skill_activated スタイル・フラグ", () => {
 });
 
 // ─────────────────────────────────────────────
+// 新形式の待機メッセージ — 武器名付きリソース不足
+// ─────────────────────────────────────────────
+describe("formatBattleLog – 新形式の待機メッセージスタイル", () => {
+  it("冷却待ちメッセージ（新形式）はオレンジスタイル", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogは[ジャイアント・バズ]の冷却を待ちながら（残り2ターン）、やむなく待機",
+      action_type: "WAIT",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-orange-500");
+    expect(result.style.textStyle).toContain("text-orange-400");
+  });
+
+  it("EN枯渇メッセージ（新形式）はオレンジスタイル", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogはENが枯渇し、[ビーム・サーベル]を使えず待機中",
+      action_type: "WAIT",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-orange-500");
+    expect(result.style.textStyle).toContain("text-orange-400");
+  });
+
+  it("弾薬切れメッセージ（新形式）はオレンジスタイル", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogは[ジャイアント・バズ]の弾薬が尽き、攻撃手段がない",
+      action_type: "WAIT",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-orange-500");
+    expect(result.style.textStyle).toContain("text-orange-400");
+  });
+});
+
+// ─────────────────────────────────────────────
+// 新形式の装甲軽減メッセージ — 戦闘描写スタイル
+// ─────────────────────────────────────────────
+describe("formatBattleLog – 新形式の装甲軽減メッセージスタイル", () => {
+  it("高軽減・対実弾装甲（新形式）はパープルスタイル", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogが[ジャイアント・バズ]で攻撃！ (命中: 75%) -> 命中！ しかしAcguyの強固な対実弾装甲が衝撃を受け止め、ダメージは軽微に！ Acguyに50ダメージ！",
+      action_type: "ATTACK",
+      damage: 50,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-purple-500");
+    expect(result.style.textStyle).toContain("text-purple-400");
+  });
+
+  it("低軽減・対実弾装甲（新形式）はパープルスタイル", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogが[ジャイアント・バズ]で攻撃！ (命中: 75%) -> 命中！ Acguyの対実弾装甲をわずかに弾きながらも、Acguyに80ダメージ！",
+      action_type: "ATTACK",
+      damage: 80,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-purple-500");
+    expect(result.style.textStyle).toContain("text-purple-400");
+  });
+
+  it("高軽減・ビーム吸収コーティング（新形式）はパープルスタイル", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが[ビーム・ライフル]で攻撃！ (命中: 80%) -> 命中！ しかしZakuの強固なビーム吸収コーティングが衝撃を受け止め、ダメージは軽微に！ Zakuに30ダメージ！",
+      action_type: "ATTACK",
+      damage: 30,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-purple-500");
+    expect(result.style.textStyle).toContain("text-purple-400");
+  });
+
+  it("低軽減・ビーム吸収コーティング（新形式）はパープルスタイル", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが[ビーム・ライフル]で攻撃！ (命中: 80%) -> 命中！ Zakuのビーム吸収コーティングをわずかに弾きながらも、Zakuに90ダメージ！",
+      action_type: "ATTACK",
+      damage: 90,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-purple-500");
+    expect(result.style.textStyle).toContain("text-purple-400");
+  });
+});
+
+// ─────────────────────────────────────────────
+// 新形式の攻撃ログ — 武器名付き攻撃メッセージ
+// ─────────────────────────────────────────────
+describe("formatBattleLog – 武器名付き攻撃ログ", () => {
+  it("武器名付き攻撃ログが正しくメッセージを保持する（開発環境）", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogが[ジャイアント・バズ]で攻撃！ (命中: 75%) -> 命中！ Acguyに80ダメージ！（ダメージ）",
+      action_type: "ATTACK",
+      damage: 80,
+      weapon_name: "ジャイアント・バズ",
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.message).toContain("[ジャイアント・バズ]");
+    expect(result.message).toContain("命中: 75%");
+  });
+
+  it("武器名付き攻撃ログは本番環境で命中率が除去される", () => {
+    const log = makeLog({
+      message: "[マ・クベ]のGelgoogが[ジャイアント・バズ]で攻撃！ (命中: 75%) -> 命中！ Acguyに80ダメージ！（ダメージ）",
+      action_type: "ATTACK",
+      damage: 80,
+      weapon_name: "ジャイアント・バズ",
+    });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    expect(result.message).toContain("[ジャイアント・バズ]");
+    expect(result.message).not.toContain("命中:");
+  });
+
+  it("格闘攻撃ログ（武器なし）が正しく表示される", () => {
+    const log = makeLog({
+      message: "[アムロ]のGundamが[格闘]で攻撃！ (命中: 70%) -> 命中！ Zakuに60ダメージ！（ダメージ）",
+      action_type: "ATTACK",
+      damage: 60,
+    });
+    const result = formatBattleLog(log, false, PLAYER_ID);
+    expect(result.message).toContain("[格闘]");
+  });
+});
+
+// ─────────────────────────────────────────────
 // UNKNOWN機 — 未索敵表示（ログメッセージ内）
 // ─────────────────────────────────────────────
 describe("formatBattleLog – UNKNOWN機 メッセージ表示", () => {
