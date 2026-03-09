@@ -19,7 +19,7 @@ export default function PilotDashboardHeader({ pilot, onOpenNameModal }: PilotDa
         <div className="flex items-center gap-4">
           <div>
             <p className="text-xs text-gray-400 uppercase tracking-widest mb-0.5">Pilot</p>
-            <p className="text-2xl font-bold text-[#00ff41]">🏷️ {pilot.name}</p>
+            <p className="text-2xl font-bold text-[#00ff41]">{pilot.name}</p>
           </div>
           <button
             onClick={onOpenNameModal}

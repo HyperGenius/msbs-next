@@ -97,6 +97,7 @@ export default function ParameterTuningPanel({ pilot, mutatePilot }: ParameterTu
         </div>
       </div>
 
+      {/* ステータス割り振りパネル */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
         {(Object.keys(STATUS_LABELS) as Array<keyof typeof STATUS_LABELS>).map((stat) => {
           const info = STATUS_LABELS[stat];
@@ -113,20 +114,23 @@ export default function ParameterTuningPanel({ pilot, mutatePilot }: ParameterTu
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-xs font-bold text-[#ffb000] uppercase">
+                  <p className="text-xl font-bold text-[#ffb000] uppercase">
                     {info.abbr}{" "}
-                    <span className="text-gray-300 normal-case font-normal">/ {info.label}</span>
+                    <span className="text-gray-300 text-xs normal-case font-normal">/ {info.label}</span>
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5 leading-snug">{info.desc}</p>
+                  {/* ステータス説明, いったんコメントアウト */}
+                  {/* <p className="text-xs text-gray-400 mt-0.5 leading-snug">{info.desc}</p> */}
                 </div>
                 <div className="text-right shrink-0 ml-2">
                   <p className="text-xl font-bold text-[#ffb000]">
-                    {displayVal}
+                    <p className={`font-bold ${rankColor}`}>
+                      Rank {rank}
+                      ({displayVal})
+                    </p>
                     {pendingVal > 0 && (
                       <span className="text-sm text-[#00ff41]"> (+{pendingVal})</span>
                     )}
                   </p>
-                  <p className={`text-xs font-bold ${rankColor}`}>Rank {rank}</p>
                 </div>
               </div>
 
