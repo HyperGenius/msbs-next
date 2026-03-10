@@ -197,3 +197,39 @@ a:not(.no-min-size),
 .animate-fade-in {
   animation: fade-in 0.2s ease-out;
 }
+
+/* Custom Scrollbar */
+/* Firefox (標準仕様) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sf-green-dark) var(--sf-dark-black);
+}
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--sf-dark-black);
+  border-left: 1px solid var(--sf-darker-gray);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--sf-green-dark);
+  /* ほんの少しだけ角を丸めるか、0にしてソリッドにするかはお好みで */
+  border-radius: 2px;
+  /* トラックとの間に少し余白を持たせるテクニック */
+  border: 2px solid var(--sf-dark-black);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sf-neon-green);
+  /* ホバー時に発光しているようなエフェクトを疑似的に追加 */
+  box-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--sf-deep-black);
+}
