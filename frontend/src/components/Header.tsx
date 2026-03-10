@@ -1,3 +1,4 @@
+/* frontend/src/components/Header.tsx */
 "use client";
 
 import { useCallback } from "react";
@@ -14,6 +15,10 @@ const navLinks = [
   { href: "/garage", label: "Hangar", variant: "primary" as const },
 ];
 
+/*
+ * ヘッダーコンポーネント
+ * - サイトタイトルとサブタイトルを表示
+*/
 export default function Header() {
   const { pilot } = usePilot();
   const isDev = process.env.NODE_ENV === "development";

@@ -1,3 +1,4 @@
+/* frontend/src/components/Dashboard/EntryDashboard.tsx */
 "use client";
 
 import { useState } from "react";
@@ -16,6 +17,11 @@ interface EntryDashboardProps {
   disabled?: boolean;
 }
 
+/*
+ * エントリー状況を表示するダッシュボードコンポーネント
+  * - エントリー済みの場合は機体情報と参加者数、キャンセルボタンを表示
+  * - 未エントリーの場合はエントリーボタンと参加者数を表示
+*/
 export default function EntryDashboard({
   isEntered,
   entryCount,
@@ -40,7 +46,7 @@ export default function EntryDashboard({
               </span>
             </div>
             <span className="text-xs text-[#00ff41]/50 font-mono border border-[#00ff41]/30 px-2 py-0.5">
-              ✓ エントリー済み
+              ✓ エントリー完了
             </span>
           </div>
 
@@ -57,6 +63,7 @@ export default function EntryDashboard({
           </div>
 
           {/* アコーディオン：詳細パラメータ */}
+          {/* 将来的にパイロットパラメータと統合したレーダーチャート表示でも面白いかもしれない */}
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             aria-expanded={isExpanded}
@@ -68,42 +75,37 @@ export default function EntryDashboard({
 
           {isExpanded && (
             <div className="mt-2 bg-[#050505] border border-[#00ff41]/20 p-3 font-mono text-xs">
+              {/* 機体の詳細パラメータ,ランクバッジと情報が重複しているため改善が必要 */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                 <div>
                   <span className="text-[#00ff41]/50">{STATUS_LABELS.hp}:</span>{" "}
-                  <span className="text-white">{mobileSuit.max_hp}</span>
                   {mobileSuit.hp_rank && (
                     <span className={`ml-1 ${getRankColor(mobileSuit.hp_rank)}`}>
-                      ({mobileSuit.hp_rank})
+                      {mobileSuit.hp_rank}
                     </span>
                   )}
                 </div>
                 <div>
                   <span className="text-[#00ff41]/50">{STATUS_LABELS.armor}:</span>{" "}
-                  <span className="text-white">{mobileSuit.armor}</span>
                   {mobileSuit.armor_rank && (
                     <span className={`ml-1 ${getRankColor(mobileSuit.armor_rank)}`}>
-                      ({mobileSuit.armor_rank})
+                      {mobileSuit.armor_rank}
                     </span>
                   )}
                 </div>
                 <div>
                   <span className="text-[#00ff41]/50">{STATUS_LABELS.mobility}:</span>{" "}
-                  <span className="text-white">{mobileSuit.mobility}</span>
                   {mobileSuit.mobility_rank && (
                     <span className={`ml-1 ${getRankColor(mobileSuit.mobility_rank)}`}>
-                      ({mobileSuit.mobility_rank})
+                      {mobileSuit.mobility_rank}
                     </span>
                   )}
                 </div>
-                {mobileSuit.sensor_range != null && (
-                  <div>
-                    <span className="text-[#00ff41]/50">{STATUS_LABELS.sensor_range}:</span>{" "}
-                    <span className="text-white">{mobileSuit.sensor_range}</span>
-                  </div>
-                )}
               </div>
 
+              {/* パイロットパラメータを表示する予定, 機体詳細パラメータ整理のタイミングで改修 */}
+
+              {/* 機体の武装表示 */}
               {mobileSuit.weapons && mobileSuit.weapons.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-[#00ff41]/10">
                   <span className="text-[#00ff41]/50 block mb-1">武装:</span>

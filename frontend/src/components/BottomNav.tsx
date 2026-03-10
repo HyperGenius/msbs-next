@@ -1,3 +1,4 @@
+/* frontend/src/components/BottomNav.tsx */
 "use client";
 
 import Link from "next/link";
@@ -17,6 +18,12 @@ const menuItems = [
   { href: "/pilot", label: "Pilot", icon: "🧑‍✈️" },
 ];
 
+/*
+ * スマホ向けのボトムナビゲーションコンポーネント
+ * - 主要なページへのクイックアクセスと、その他のページへのメニューを提供
+ * - デスクトップでは表示されず、Headerのナビゲーションが使用される
+ * - アクセシビリティを考慮し、キーボード操作やスクリーンリーダーに対応
+*/
 export default function BottomNav() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
