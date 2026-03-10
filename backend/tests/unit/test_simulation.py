@@ -708,7 +708,9 @@ def test_format_actor_name_with_pilot_name() -> None:
         armor=10,
         mobility=2.0,
         position=Vector3(x=0, y=0, z=0),
-        weapons=[Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=85)],
+        weapons=[
+            Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=85)
+        ],
         side="PLAYER",
         team_id="PLAYER_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
@@ -767,7 +769,9 @@ def test_format_actor_name_unknown_for_undetected_enemy() -> None:
         armor=5,
         mobility=1.2,
         position=Vector3(x=1000, y=0, z=0),  # 遠距離で未索敵
-        weapons=[Weapon(id="beam", name="Beam Rifle", power=20, range=500, accuracy=75)],
+        weapons=[
+            Weapon(id="beam", name="Beam Rifle", power=20, range=500, accuracy=75)
+        ],
         side="ENEMY",
         team_id="ENEMY_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
@@ -790,7 +794,9 @@ def test_format_actor_name_revealed_after_detection() -> None:
         armor=5,
         mobility=1.2,
         position=Vector3(x=1000, y=0, z=0),
-        weapons=[Weapon(id="beam", name="Beam Rifle", power=20, range=500, accuracy=75)],
+        weapons=[
+            Weapon(id="beam", name="Beam Rifle", power=20, range=500, accuracy=75)
+        ],
         side="ENEMY",
         team_id="ENEMY_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
@@ -802,7 +808,9 @@ def test_format_actor_name_revealed_after_detection() -> None:
 
     # 索敵後は実名表示
     sim.team_detected_units["PLAYER_TEAM"].add(enemy.id)
-    assert sim._format_actor_name(enemy, viewer_team_id="PLAYER_TEAM") == "[Char]のGelgoog"
+    assert (
+        sim._format_actor_name(enemy, viewer_team_id="PLAYER_TEAM") == "[Char]のGelgoog"
+    )
 
 
 def test_attack_log_includes_pilot_name() -> None:
@@ -815,7 +823,9 @@ def test_attack_log_includes_pilot_name() -> None:
         armor=10,
         mobility=2.0,
         position=Vector3(x=0, y=0, z=0),
-        weapons=[Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=100)],
+        weapons=[
+            Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=100)
+        ],
         side="PLAYER",
         team_id="PLAYER_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
@@ -853,7 +863,9 @@ def test_enemy_log_shows_unknown_before_detection() -> None:
         mobility=0.1,  # 遅くして敵が先行
         sensor_range=1.0,  # 極端に短い索敵範囲（敵を発見できない）
         position=Vector3(x=0, y=0, z=0),
-        weapons=[Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=85)],
+        weapons=[
+            Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=85)
+        ],
         side="PLAYER",
         team_id="PLAYER_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
@@ -866,7 +878,9 @@ def test_enemy_log_shows_unknown_before_detection() -> None:
         armor=5,
         mobility=2.0,  # 速くして先行
         position=Vector3(x=100, y=0, z=0),
-        weapons=[Weapon(id="mg", name="Machine Gun", power=15, range=400, accuracy=100)],
+        weapons=[
+            Weapon(id="mg", name="Machine Gun", power=15, range=400, accuracy=100)
+        ],
         side="ENEMY",
         team_id="ENEMY_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
@@ -900,7 +914,9 @@ def test_skill_activated_flag_set_when_skill_changes_outcome() -> None:
         armor=0,
         mobility=2.0,
         position=Vector3(x=0, y=0, z=0),
-        weapons=[Weapon(id="rifle", name="Beam Rifle", power=1, range=500, accuracy=50)],
+        weapons=[
+            Weapon(id="rifle", name="Beam Rifle", power=1, range=500, accuracy=50)
+        ],
         side="PLAYER",
         team_id="PLAYER_TEAM",
         tactics={"priority": "CLOSEST", "range": "BALANCED"},
@@ -929,8 +945,9 @@ def test_skill_activated_flag_set_when_skill_changes_outcome() -> None:
             sim.process_turn()
 
     attack_and_miss_logs = [
-        log for log in sim.logs if log.action_type in ("ATTACK", "MISS")
-        and log.actor_id == player.id
+        log
+        for log in sim.logs
+        if log.action_type in ("ATTACK", "MISS") and log.actor_id == player.id
     ]
     assert len(attack_and_miss_logs) > 0
     # skill_activated フィールドは None または bool のどちらかであること

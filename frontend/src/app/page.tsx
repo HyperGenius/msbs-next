@@ -157,21 +157,26 @@ export default function Home() {
         )}
 
         {/* Countdown Timer */}
-        <div className="mb-4 sm:mb-8">
+        <div className="mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[#00ff41]/40 font-mono text-xs tracking-widest">{"// NEXT BATTLE"}</span>
+            <div className="flex-1 h-px bg-[#00ff41]/20"></div>
+          </div>
           <CountdownTimer targetTime={getNextBattleTime()} />
         </div>
 
         {/* Entry Dashboard */}
-        <div className="mb-4 sm:mb-8 bg-gray-800 p-4 sm:p-6 rounded-lg border border-green-800">
-          <h2 className="text-xl sm:text-2xl font-bold mb-4 border-l-4 border-green-500 pl-2">
-            ENTRY / 出撃登録
-          </h2>
+        <div className="mb-4 sm:mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[#00ff41]/40 font-mono text-xs tracking-widest">{"// CURRENT ENTRY"}</span>
+            <div className="flex-1 h-px bg-[#00ff41]/20"></div>
+          </div>
           {!isSignedIn ? (
-            <div className="text-yellow-400 p-4 border border-yellow-700 rounded bg-yellow-900/20">
+            <div className="text-[#ffb000] p-4 border border-[#ffb000]/30 font-mono text-sm bg-[#0a0a0a]">
               エントリーするにはログインが必要です
             </div>
           ) : entryStatusLoading ? (
-            <p className="text-gray-400">エントリー状況を確認中...</p>
+            <p className="text-[#00ff41]/50 font-mono text-sm">エントリー状況を確認中...</p>
           ) : (
             <EntryDashboard
               isEntered={entryStatus?.is_entered || false}

@@ -49,16 +49,26 @@ export default function CountdownTimer({ targetTime }: CountdownTimerProps) {
     return () => clearInterval(interval);
   }, [targetTime]);
 
+  const formattedStartTime = targetTime
+    ? new Intl.DateTimeFormat("ja-JP", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(targetTime)
+    : null;
+
   if (isProcessing) {
     return (
-      <div className="bg-yellow-900/30 border-2 border-yellow-500 rounded-lg p-6 text-center">
-        <div className="text-yellow-400 text-sm font-bold mb-2 tracking-widest">
+      <div className="bg-[#0a0a0a] border-2 border-[#ffb000]/50 p-4 sm:p-6 text-center">
+        <div className="text-[#ffb000]/60 text-xs font-bold mb-2 tracking-widest">
           STATUS
         </div>
-        <div className="text-4xl font-bold text-yellow-300 animate-pulse">
+        <div className="text-3xl sm:text-4xl font-bold text-[#ffb000] animate-pulse font-mono">
           集計中...
         </div>
-        <div className="text-xs text-yellow-500 mt-2">
+        <div className="text-xs text-[#ffb000]/40 mt-2">
           バトル処理を実行しています
         </div>
       </div>
@@ -66,16 +76,23 @@ export default function CountdownTimer({ targetTime }: CountdownTimerProps) {
   }
 
   return (
-    <div className="bg-gradient-to-r from-green-900/20 to-blue-900/20 border-2 border-green-500 rounded-lg p-6 text-center">
-      <div className="text-green-400 text-sm font-bold mb-2 tracking-widest">
+    <div className="bg-[#0a0a0a] border-2 border-[#00ff41]/30 p-4 sm:p-6 text-center">
+      <div className="text-[#00ff41]/50 text-xs font-bold mb-2 tracking-widest">
         NEXT BATTLE IN
       </div>
-      <div className="text-5xl md:text-6xl font-bold text-green-300 font-mono tracking-wider">
+      <div className="text-4xl sm:text-5xl md:text-6xl font-bold text-[#00ff41] font-mono tracking-wider">
         {timeLeft}
       </div>
-      <div className="text-xs text-gray-400 mt-2">
-        毎日 JST 21:00 / UTC 12:00
-      </div>
+      {formattedStartTime && (
+        <div className="text-xs text-[#00ff41]/50 mt-2 font-mono">
+          START: {formattedStartTime}
+        </div>
+      )}
+      {!formattedStartTime && (
+        <div className="text-xs text-[#00ff41]/30 mt-2">
+          毎日 JST 21:00 / UTC 12:00
+        </div>
+      )}
     </div>
   );
 }
