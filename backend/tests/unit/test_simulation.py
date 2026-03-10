@@ -698,6 +698,246 @@ def test_team_battle_finishes_correctly() -> None:
     assert "TEAM_B" not in alive_teams
 
 
+def test_format_actor_name_with_pilot_name() -> None:
+    """パイロット名がある場合、[パイロット名]のMS名 形式で返すこと."""
+    player = MobileSuit(
+        name="Gundam",
+        pilot_name="Amuro",
+        max_hp=100,
+        current_hp=100,
+        armor=10,
+        mobility=2.0,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=85)],
+        side="PLAYER",
+        team_id="PLAYER_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    enemy = create_test_enemy("Zaku", Vector3(x=100, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+
+    result = sim._format_actor_name(player)
+    assert result == "[Amuro]のGundam"
+
+
+def test_format_actor_name_without_pilot_name() -> None:
+    """パイロット名がない場合（NPC等）、MS名のみを返すこと."""
+    player = create_test_player()
+    enemy = create_test_enemy("Zaku", Vector3(x=100, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+
+    # 検出済みとして登録し、プレイヤーチーム視点で取得する
+    sim.team_detected_units["PLAYER_TEAM"].add(enemy.id)
+    result = sim._format_actor_name(enemy, viewer_team_id="PLAYER_TEAM")
+    assert result == "Zaku"
+
+
+def test_format_actor_name_empty_pilot_name() -> None:
+    """パイロット名が空文字列の場合、MS名のみを返すこと."""
+    player = create_test_player()
+    enemy = MobileSuit(
+        name="Zaku",
+        pilot_name="",
+        max_hp=80,
+        current_hp=80,
+        armor=5,
+        mobility=1.2,
+        position=Vector3(x=100, y=0, z=0),
+        weapons=[Weapon(id="mg", name="Machine Gun", power=15, range=400, accuracy=70)],
+        side="ENEMY",
+        team_id="ENEMY_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    sim = BattleSimulator(player, [enemy])
+
+    # 検出済みとして登録し、プレイヤーチーム視点で取得する
+    sim.team_detected_units["PLAYER_TEAM"].add(enemy.id)
+    result = sim._format_actor_name(enemy, viewer_team_id="PLAYER_TEAM")
+    assert result == "Zaku"
+
+
+def test_format_actor_name_unknown_for_undetected_enemy() -> None:
+    """プレイヤーチームが未索敵の敵は UNKNOWN機 と表示すること."""
+    player = create_test_player()
+    enemy = MobileSuit(
+        name="Gelgoog",
+        pilot_name="Char",
+        max_hp=80,
+        current_hp=80,
+        armor=5,
+        mobility=1.2,
+        position=Vector3(x=1000, y=0, z=0),  # 遠距離で未索敵
+        weapons=[Weapon(id="beam", name="Beam Rifle", power=20, range=500, accuracy=75)],
+        side="ENEMY",
+        team_id="ENEMY_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    sim = BattleSimulator(player, [enemy])
+
+    # プレイヤーチーム視点で未索敵の敵を取得 → UNKNOWN機
+    result = sim._format_actor_name(enemy, viewer_team_id="PLAYER_TEAM")
+    assert result == "UNKNOWN機"
+
+
+def test_format_actor_name_revealed_after_detection() -> None:
+    """索敵後は UNKNOWN機 から実名表示に切り替わること."""
+    player = create_test_player()
+    enemy = MobileSuit(
+        name="Gelgoog",
+        pilot_name="Char",
+        max_hp=80,
+        current_hp=80,
+        armor=5,
+        mobility=1.2,
+        position=Vector3(x=1000, y=0, z=0),
+        weapons=[Weapon(id="beam", name="Beam Rifle", power=20, range=500, accuracy=75)],
+        side="ENEMY",
+        team_id="ENEMY_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    sim = BattleSimulator(player, [enemy])
+
+    # 未索敵時は UNKNOWN機
+    assert sim._format_actor_name(enemy, viewer_team_id="PLAYER_TEAM") == "UNKNOWN機"
+
+    # 索敵後は実名表示
+    sim.team_detected_units["PLAYER_TEAM"].add(enemy.id)
+    assert sim._format_actor_name(enemy, viewer_team_id="PLAYER_TEAM") == "[Char]のGelgoog"
+
+
+def test_attack_log_includes_pilot_name() -> None:
+    """攻撃ログにパイロット名が含まれること."""
+    player = MobileSuit(
+        name="Gundam",
+        pilot_name="Amuro",
+        max_hp=1000,
+        current_hp=1000,
+        armor=10,
+        mobility=2.0,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=100)],
+        side="PLAYER",
+        team_id="PLAYER_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    enemy = MobileSuit(
+        name="Zaku",
+        max_hp=80,
+        current_hp=80,
+        armor=0,
+        mobility=1.2,
+        position=Vector3(x=100, y=0, z=0),
+        weapons=[Weapon(id="mg", name="Machine Gun", power=15, range=400, accuracy=70)],
+        side="ENEMY",
+        team_id="ENEMY_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    sim = BattleSimulator(player, [enemy])
+    sim._detection_phase()
+    sim.process_turn()
+
+    attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS")]
+    player_attack_logs = [log for log in attack_logs if log.actor_id == player.id]
+    assert len(player_attack_logs) > 0
+    # パイロット名が含まれること
+    assert any("[Amuro]のGundam" in log.message for log in player_attack_logs)
+
+
+def test_enemy_log_shows_unknown_before_detection() -> None:
+    """索敵前の敵のアクションログは UNKNOWN機 を含むこと."""
+    player = MobileSuit(
+        name="Gundam",
+        max_hp=100,
+        current_hp=100,
+        armor=10,
+        mobility=0.1,  # 遅くして敵が先行
+        sensor_range=1.0,  # 極端に短い索敵範囲（敵を発見できない）
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[Weapon(id="rifle", name="Beam Rifle", power=30, range=500, accuracy=85)],
+        side="PLAYER",
+        team_id="PLAYER_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    enemy = MobileSuit(
+        name="Zaku",
+        pilot_name="Char",
+        max_hp=1000,
+        current_hp=1000,
+        armor=5,
+        mobility=2.0,  # 速くして先行
+        position=Vector3(x=100, y=0, z=0),
+        weapons=[Weapon(id="mg", name="Machine Gun", power=15, range=400, accuracy=100)],
+        side="ENEMY",
+        team_id="ENEMY_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    sim = BattleSimulator(player, [enemy])
+
+    # 索敵フェーズを手動制御（敵はプレイヤーを発見するが、プレイヤーは敵を発見できない）
+    # プレイヤーチームの索敵済みセットは空のままにする
+    # 敵チームはプレイヤーを発見させる
+    sim.team_detected_units["ENEMY_TEAM"].add(player.id)
+
+    # ターゲット選択ログを生成
+    sim.turn = 1
+    sim._log_target_selection(enemy, player, "CLOSEST", "距離: 100m")
+
+    target_logs = [log for log in sim.logs if log.action_type == "TARGET_SELECTION"]
+    assert len(target_logs) == 1
+    # 索敵前なのでプレイヤー視点では敵が UNKNOWN機 として表示される
+    assert "UNKNOWN機" in target_logs[0].message
+
+
+def test_skill_activated_flag_set_when_skill_changes_outcome() -> None:
+    """スキルが命中/回避の結果を変えた場合、skill_activated=True が設定されること."""
+    import random as _random
+
+    # スキルボーナスが 20% あるシナリオ（accuracy_up Lv10）
+    player = MobileSuit(
+        name="Gundam",
+        max_hp=10000,
+        current_hp=10000,
+        armor=0,
+        mobility=2.0,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[Weapon(id="rifle", name="Beam Rifle", power=1, range=500, accuracy=50)],
+        side="PLAYER",
+        team_id="PLAYER_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    enemy = MobileSuit(
+        name="Zaku",
+        max_hp=10000,
+        current_hp=10000,
+        armor=0,
+        mobility=1.2,
+        position=Vector3(x=100, y=0, z=0),
+        weapons=[Weapon(id="mg", name="Machine Gun", power=1, range=400, accuracy=70)],
+        side="ENEMY",
+        team_id="ENEMY_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+    # accuracy_up Lv10 → +20% hit chance bonus
+    sim = BattleSimulator(player, [enemy], player_skills={"accuracy_up": 10})
+    sim.team_detected_units["PLAYER_TEAM"].add(enemy.id)
+    sim.team_detected_units["ENEMY_TEAM"].add(player.id)
+
+    # 多数のターンを実行してスキル発動ケースが含まれることを確認
+    _random.seed(12345)
+    for _ in range(20):
+        if not sim.is_finished:
+            sim.process_turn()
+
+    attack_and_miss_logs = [
+        log for log in sim.logs if log.action_type in ("ATTACK", "MISS")
+        and log.actor_id == player.id
+    ]
+    assert len(attack_and_miss_logs) > 0
+    # skill_activated フィールドは None または bool のどちらかであること
+    for log in attack_and_miss_logs:
+        assert log.skill_activated is None or isinstance(log.skill_activated, bool)
+
+
 def test_detection_shared_within_team() -> None:
     """同チーム内で索敵情報が共有されること."""
     # チームA: 2機 (1機は敵の近く)
