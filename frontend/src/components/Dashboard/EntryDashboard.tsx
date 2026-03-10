@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { MobileSuit } from "@/types/battle";
+import { getRankColor } from "@/utils/rankUtils";
+import { STATUS_LABELS } from "@/utils/displayUtils";
 import MobileSuitRankBadges from "./MobileSuitRankBadges";
 
 interface EntryDashboardProps {
@@ -22,54 +25,115 @@ export default function EntryDashboard({
   isLoading,
   disabled = false,
 }: EntryDashboardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (isEntered && mobileSuit) {
     return (
-      <div className="space-y-4">
-        {/* エントリー済みステータス */}
-        <div className="bg-green-900/30 border-2 border-green-500 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-              <h3 className="text-2xl font-bold text-green-300">
+      <div className="space-y-3">
+        {/* エントリー確認ステータス */}
+        <div className="bg-[#0a0a0a] border-2 border-[#00ff41]/50 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-[#00ff41] rounded-full animate-pulse"></div>
+              <span className="text-[#00ff41] font-bold font-mono text-sm tracking-widest">
                 ENTRY CONFIRMED
-              </h3>
+              </span>
             </div>
-            <div className="text-sm text-green-400 px-3 py-1 bg-green-900/50 rounded border border-green-700">
+            <span className="text-xs text-[#00ff41]/50 font-mono border border-[#00ff41]/30 px-2 py-0.5">
               ✓ エントリー済み
-            </div>
-          </div>
-
-          {/* 使用機体情報 */}
-          <div className="bg-gray-800/70 rounded-lg p-4 border border-green-700">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-5 flex-wrap">
-                <p className="text-xl font-bold text-white">
-                  {mobileSuit.name}
-                </p>
-                <MobileSuitRankBadges mobileSuit={mobileSuit} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 参加者数表示 */}
-        <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-400">現在の参加エントリー数</span>
-            <span className="text-2xl font-bold text-green-400">
-              {entryCount} <span className="text-sm text-gray-500">機</span>
             </span>
           </div>
+
+          {/* 機体名 + ランクバッジ */}
+          <div className="space-y-2">
+            <div className="flex items-baseline gap-3">
+              <span className="text-[#00ff41]/50 font-mono text-xs">機体名</span>
+              <span className="text-white font-bold font-mono">{mobileSuit.name}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[#00ff41]/50 font-mono text-xs">Specs</span>
+              <MobileSuitRankBadges mobileSuit={mobileSuit} />
+            </div>
+          </div>
+
+          {/* アコーディオン：詳細パラメータ */}
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            aria-expanded={isExpanded}
+            className="w-full flex items-center justify-between px-3 py-2 mt-3 text-xs font-mono text-[#00ff41]/50 border border-[#00ff41]/20 hover:border-[#00ff41]/50 hover:text-[#00ff41]/80 transition-colors no-min-size"
+          >
+            <span>詳細パラメータを展開</span>
+            <span>{isExpanded ? "▲" : "▼"}</span>
+          </button>
+
+          {isExpanded && (
+            <div className="mt-2 bg-[#050505] border border-[#00ff41]/20 p-3 font-mono text-xs">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                <div>
+                  <span className="text-[#00ff41]/50">{STATUS_LABELS.hp}:</span>{" "}
+                  <span className="text-white">{mobileSuit.max_hp}</span>
+                  {mobileSuit.hp_rank && (
+                    <span className={`ml-1 ${getRankColor(mobileSuit.hp_rank)}`}>
+                      ({mobileSuit.hp_rank})
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[#00ff41]/50">{STATUS_LABELS.armor}:</span>{" "}
+                  <span className="text-white">{mobileSuit.armor}</span>
+                  {mobileSuit.armor_rank && (
+                    <span className={`ml-1 ${getRankColor(mobileSuit.armor_rank)}`}>
+                      ({mobileSuit.armor_rank})
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-[#00ff41]/50">{STATUS_LABELS.mobility}:</span>{" "}
+                  <span className="text-white">{mobileSuit.mobility}</span>
+                  {mobileSuit.mobility_rank && (
+                    <span className={`ml-1 ${getRankColor(mobileSuit.mobility_rank)}`}>
+                      ({mobileSuit.mobility_rank})
+                    </span>
+                  )}
+                </div>
+                {mobileSuit.sensor_range != null && (
+                  <div>
+                    <span className="text-[#00ff41]/50">{STATUS_LABELS.sensor_range}:</span>{" "}
+                    <span className="text-white">{mobileSuit.sensor_range}</span>
+                  </div>
+                )}
+              </div>
+
+              {mobileSuit.weapons && mobileSuit.weapons.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-[#00ff41]/10">
+                  <span className="text-[#00ff41]/50 block mb-1">武装:</span>
+                  {mobileSuit.weapons.map((w) => (
+                    <div key={w.id} className="text-[#00ff41]/70 ml-2 py-0.5">
+                      {w.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 参加者数 */}
+        <div className="bg-[#0a0a0a] border border-[#00ff41]/20 p-3 flex items-center justify-between font-mono text-xs">
+          <span className="text-[#00ff41]/50">現在の参加エントリー数</span>
+          <span className="text-[#00ff41] font-bold text-lg">
+            {entryCount} <span className="text-[#00ff41]/40 text-xs">機</span>
+          </span>
         </div>
 
         {/* キャンセルボタン */}
         <button
           onClick={onCancel}
           disabled={isLoading}
-          className={`w-full px-6 py-3 rounded font-bold transition-colors ${
+          className={`w-full px-6 py-3 font-bold font-mono text-sm transition-colors border-2 ${
             isLoading
-              ? "bg-gray-500 cursor-not-allowed text-gray-300"
-              : "bg-red-700 hover:bg-red-600 text-white border border-red-500"
+              ? "bg-gray-700 cursor-not-allowed text-gray-500 border-gray-600"
+              : "bg-transparent text-red-400 border-red-500/50 hover:border-red-500 hover:bg-red-900/20"
           }`}
         >
           {isLoading ? "処理中..." : "エントリーをキャンセル"}
@@ -80,14 +144,14 @@ export default function EntryDashboard({
 
   // 未エントリー時
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* エントリーボタン */}
-      <div className="bg-gray-800/50 border-2 border-gray-700 rounded-lg p-8 text-center">
-        <div className="mb-6">
-          <h3 className="text-xl font-bold text-gray-300 mb-2">
+      <div className="bg-[#0a0a0a] border-2 border-[#00ff41]/20 p-6 text-center">
+        <div className="mb-5">
+          <h3 className="text-sm font-bold font-mono text-[#00ff41]/70 mb-1 tracking-widest">
             次回バトルへの参加登録
           </h3>
-          <p className="text-sm text-gray-500">
+          <p className="text-xs text-[#00ff41]/40 font-mono">
             エントリーすると次回の定期バトルに参加できます
           </p>
         </div>
@@ -95,42 +159,36 @@ export default function EntryDashboard({
         <button
           onClick={onEntry}
           disabled={isLoading || disabled}
-          className={`w-full px-12 py-6 rounded-lg font-bold text-2xl transition-all shadow-lg ${
+          className={`w-full px-8 py-4 font-bold font-mono text-lg border-2 transition-all ${
             isLoading || disabled
-              ? "bg-gray-600 cursor-not-allowed text-gray-400"
-              : "bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-400 hover:to-blue-400 text-white hover:shadow-green-500/50 transform hover:scale-105"
+              ? "bg-gray-700 cursor-not-allowed text-gray-500 border-gray-600"
+              : "bg-[#00ff41] text-black border-[#00ff41] hover:bg-[#00cc33] hover:border-[#00cc33] sf-glow-green"
           }`}
         >
-          {isLoading ? "処理中..." : "⚡ ENTRY ⚡"}
+          {isLoading ? "処理中..." : "▶ 出撃確定"}
         </button>
 
         {disabled && (
-          <p className="text-xs text-yellow-500 mt-3">
+          <p className="text-xs text-[#ffb000]/70 font-mono mt-3">
             ※ エントリーするには機体が必要です
           </p>
         )}
       </div>
 
-      {/* 参加者数表示 */}
-      <div className="bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-lg p-4 border border-blue-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-blue-300">👥 現在の参加者</span>
-          </div>
-          <span className="text-3xl font-bold text-blue-400">
-            {entryCount}
-          </span>
+      {/* 参加者数 */}
+      <div className="bg-[#0a0a0a] border border-[#00ff41]/20 p-3 font-mono">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-[#00ff41]/50">👥 現在の参加者</span>
+          <span className="text-[#00f0ff] font-bold text-xl">{entryCount}</span>
         </div>
-        <div className="mt-2 h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-[#050505] border border-[#00ff41]/10 overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
-            style={{ 
-              // プログレスバーは参加者10人で100%になるように設定
-              width: `${Math.min(entryCount * 10, 100)}%` 
-            }}
+            className="h-full bg-[#00ff41]/60 transition-all duration-500"
+            style={{ width: `${Math.min(entryCount * 10, 100)}%` }}
           ></div>
         </div>
       </div>
     </div>
   );
 }
+
