@@ -218,7 +218,9 @@ def test_create_rooms_creates_npc_pilots(in_memory_session):
     in_memory_session.commit()
 
     # マッチング実行（room_size=3 → NPC 2体生成）
-    service = MatchingService(in_memory_session, room_size=3, npc_persistence_rate=0.0)
+    service = MatchingService(
+        in_memory_session, room_size=3, ace_spawn_rate=0.0, npc_persistence_rate=0.0
+    )
     service.create_rooms()
 
     # NPC パイロットが作成されたことを確認
@@ -255,7 +257,9 @@ def test_create_rooms_npc_snapshot_includes_pilot_level(in_memory_session):
     in_memory_session.add(entry)
     in_memory_session.commit()
 
-    service = MatchingService(in_memory_session, room_size=2, npc_persistence_rate=0.0)
+    service = MatchingService(
+        in_memory_session, room_size=2, ace_spawn_rate=0.0, npc_persistence_rate=0.0
+    )
     service.create_rooms()
 
     npc_entries = in_memory_session.exec(
