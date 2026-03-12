@@ -167,7 +167,11 @@ def test_optimal_range_hit_bonus() -> None:
     enemy.position = Vector3(x=400, y=0, z=0)
 
     sim = BattleSimulator(player, [enemy])
-    sim.process_turn()
+
+    # Run multiple turns to ensure at least one non-crit hit at optimal range
+    max_turns = 10
+    while sim.turn < max_turns and not sim.is_finished:
+        sim.process_turn()
 
     # Check for optimal distance message
     optimal_logs = [log for log in sim.logs if "最適射程" in log.message]
