@@ -384,7 +384,7 @@ export async function registerPilot(
   name: string,
   faction: "FEDERATION" | "ZEON",
   background: string,
-  bonusStats: { bonus_dex: number; bonus_int: number; bonus_ref: number; bonus_tou: number }
+  bonusStats: { bonus_dex: number; bonus_int: number; bonus_ref: number; bonus_tou: number; bonus_luk: number }
 ): Promise<{ pilot: Pilot; mobile_suit_id: string; message: string }> {
   const token = await getAuthToken();
   const headers: HeadersInit = {

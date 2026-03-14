@@ -32,6 +32,7 @@ class RegisterPilotRequest(BaseModel):
     bonus_int: int = 0
     bonus_ref: int = 0
     bonus_tou: int = 0
+    bonus_luk: int = 0
 
 
 class RegisterPilotResponse(BaseModel):
@@ -185,6 +186,7 @@ async def register_pilot(
         request.bonus_int,
         request.bonus_ref,
         request.bonus_tou,
+        request.bonus_luk,
     ]
     if any(v < 0 for v in bonus_values):
         raise HTTPException(
@@ -212,6 +214,7 @@ async def register_pilot(
         intel=base_stats["INT"] + request.bonus_int,
         ref=base_stats["REF"] + request.bonus_ref,
         tou=base_stats["TOU"] + request.bonus_tou,
+        luk=base_stats["LUK"] + request.bonus_luk,
     )
     session.add(pilot)
     session.commit()
