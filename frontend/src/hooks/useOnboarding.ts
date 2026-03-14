@@ -3,7 +3,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createPilot } from "@/services/api";
 import { MobileSuit, BattleResult, Pilot } from "@/types/battle";
 import { ONBOARDING_COMPLETED_KEY, OnboardingState } from "@/constants";
 
@@ -29,13 +28,12 @@ interface UseOnboardingReturn {
   onboardingState: OnboardingState;
   setOnboardingState: (state: OnboardingState) => void;
   showStarterSelection: boolean;
-  starterSelectionLoading: boolean;
   handleOnboardingComplete: () => void;
-  handleStarterSelection: (unitId: "zaku_ii" | "gm") => Promise<void>;
+  handleStarterConfirm: () => void;
 }
 
 /**
- * オンボーディング（初回チュートリアル・スターター選択）に関するロジックを管理するフック。
+ * オンボーディング（初回チュートリアル・機体受領確認）に関するロジックを管理するフック。
  * パイロットが存在しない場合の /onboarding へのリダイレクト、
  * ログイン時の SWR キャッシュ強制更新も担う。
  */
@@ -58,16 +56,13 @@ export function useOnboarding({
   const [onboardingState, setOnboardingState] =
     useState<OnboardingState>("NOT_STARTED");
   const [showStarterSelection, setShowStarterSelection] = useState(false);
-  const [starterSelectionLoading, setStarterSelectionLoading] = useState(false);
 
-  // スターター選択モーダルの表示判定
+  // パイロット未作成時は /onboarding へリダイレクト
   useEffect(() => {
     if (!isLoaded || !isSignedIn || pilotLoading) return;
 
     if (pilotNotFound && !pilot) {
       router.push("/onboarding");
-    } else if (pilot) {
-      setShowStarterSelection(false);
     }
   }, [isLoaded, isSignedIn, pilot, pilotLoading, pilotNotFound, router]);
 
@@ -82,7 +77,7 @@ export function useOnboarding({
     prevIsSignedInRef.current = isSignedIn;
   }, [isLoaded, isSignedIn, mutateMobileSuits, mutatePilot, mutateUnreadBattles]);
 
-  // オンボーディングの表示判定
+  // オンボーディング・機体受領確認モーダルの表示判定
   useEffect(() => {
     if (
       !isLoaded ||
@@ -104,7 +99,8 @@ export function useOnboarding({
       battles.length === 0;
 
     if (isFirstTimeUser && !onboardingCompleted) {
-      setShowOnboarding(true);
+      // 初回ユーザー: 機体受領確認モーダルを表示
+      setShowStarterSelection(true);
       setOnboardingState("NOT_STARTED");
     } else if (onboardingCompleted) {
       setOnboardingState("COMPLETED");
@@ -132,25 +128,11 @@ export function useOnboarding({
     }
   };
 
-  const handleStarterSelection = async (unitId: "zaku_ii" | "gm") => {
-    setStarterSelectionLoading(true);
-    try {
-      await createPilot("New Pilot", unitId);
-      await mutatePilot();
-      await mutateMobileSuits();
-      setShowStarterSelection(false);
-      setShowOnboarding(true);
-      setOnboardingState("NOT_STARTED");
-    } catch (error) {
-      console.error("Error creating pilot:", error);
-      alert(
-        `パイロット作成に失敗しました: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    } finally {
-      setStarterSelectionLoading(false);
-    }
+  // 機体受領確認後、チュートリアルオーバーレイへ進む
+  const handleStarterConfirm = () => {
+    setShowStarterSelection(false);
+    setShowOnboarding(true);
+    setOnboardingState("NOT_STARTED");
   };
 
   return {
@@ -159,8 +141,8 @@ export function useOnboarding({
     onboardingState,
     setOnboardingState,
     showStarterSelection,
-    starterSelectionLoading,
     handleOnboardingComplete,
-    handleStarterSelection,
+    handleStarterConfirm,
   };
 }
+

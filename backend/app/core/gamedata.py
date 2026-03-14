@@ -95,6 +95,56 @@ STARTER_KITS: dict[str, dict[str, Any]] = {
 }
 
 
+# パイロット経歴マスターデータ
+BACKGROUNDS: dict[str, dict[str, Any]] = {
+    "ACADEMY_ELITE": {
+        "id": "ACADEMY_ELITE",
+        "name": "士官学校卒 (Academy Elite)",
+        "description": "正規の軍事教育を受けたエリート。高度な戦術理解とバランスの取れた能力を持つ。",
+        "baseStats": {
+            "DEX": 10,
+            "INT": 8,
+            "REF": 12,
+            "TOU": 10,
+        },
+    },
+    "STREET_SURVIVOR": {
+        "id": "STREET_SURVIVOR",
+        "name": "現場叩き上げ (Street Survivor)",
+        "description": "過酷な環境を生き抜いてきた叩き上げ。野性の勘と並外れた反射神経を誇る。",
+        "baseStats": {
+            "DEX": 7,
+            "INT": 12,
+            "REF": 7,
+            "TOU": 14,
+        },
+    },
+    "EX_MECHANIC": {
+        "id": "EX_MECHANIC",
+        "name": "元メカニック (Ex-Mechanic)",
+        "description": "機械の構造を知り尽くした技術者出身。機体の挙動を正確に制御する器用さを持つ。",
+        "baseStats": {
+            "DEX": 14,
+            "INT": 8,
+            "REF": 6,
+            "TOU": 12,
+        },
+    },
+}
+
+
+def get_background_by_id(background_id: str) -> dict[str, Any] | None:
+    """経歴IDに対応した経歴データを取得する.
+
+    Args:
+        background_id: 経歴ID (ACADEMY_ELITE/STREET_SURVIVOR/EX_MECHANIC)
+
+    Returns:
+        dict | None: 経歴データ。見つからない場合はNone
+    """
+    return BACKGROUNDS.get(background_id)
+
+
 def get_starter_kit_by_faction(faction: str) -> dict[str, Any] | None:
     """勢力に対応した練習機データを取得する.
 
