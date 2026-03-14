@@ -110,6 +110,28 @@
 - [ ] 認証トークンが正しく送信される
 - [ ] バックエンドでユーザー ID が正しく取得できる
 
+## 既知の不具合と修正履歴
+
+### モバイル環境での履歴ページ無限ローディング（Race Condition）
+
+**現象**: スマートフォンエミュレーション時に `/history` ページが "Loading battle history..." から先へ進まない。PC モード（デスクトップ）では正常に表示される。
+
+**原因**: `useBattleHistory` フックが `isLoading: !isLoaded || isLoading` を返すため、Clerk CDN スクリプトの読み込みが完了するまで `isLoaded` が `false` のまま保たれる。スマホエミュレーション時はネットワーク throttling の影響でスクリプト読み込みが遅延し、`isLoaded` が永遠に `false` になるケースがある。
+
+**修正内容**:
+
+1. **`src/app/layout.tsx` — `ClerkProvider` に `dynamic` prop を追加（根本修正）**
+   ```tsx
+   <ClerkProvider dynamic>
+   ```
+   `dynamic` を指定することで、サーバーサイドの認証状態を React コンテキストに即座に埋め込む。Clerk CDN スクリプトの読み込み完了を待たずにクライアント側で `isLoaded: true` になるため、Race Condition が解消される。
+
+2. **`src/app/history/page.tsx` — タイムアウトフォールバックを追加（安全網）**
+   - `useAuth()` の `isLoaded` を監視し、5 秒経過しても初期化が完了しない場合は「ページを再読み込み」ボタンを表示する
+   - 無限ローディングのユーザー体験を防ぐ
+
+---
+
 ## トラブルシューティング
 
 ### よくある問題
