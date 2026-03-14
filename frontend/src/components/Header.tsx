@@ -96,13 +96,15 @@ export default function Header() {
             </Link>
           </SignedOut>
           <SignedIn>
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
-                }
-              }}
-            />
+            <div suppressHydrationWarning>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
+                  }
+                }}
+              />
+            </div>
           </SignedIn>
         </div>
 
@@ -114,13 +116,15 @@ export default function Header() {
             </Link>
           </SignedOut>
           <SignedIn>
-            <UserButton
-              appearance={{
-                elements: {
-                  avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
-                }
-              }}
-            />
+            <div suppressHydrationWarning>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
+                  }
+                }}
+              />
+            </div>
           </SignedIn>
         </div>
       </div>
