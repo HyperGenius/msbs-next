@@ -206,10 +206,7 @@ export default function OnboardingPage() {
             {/* ── STEP 2: 経歴選択 ── */}
             {step === 2 && (
               <div className="space-y-6">
-                <p className="text-[#00ff41]/70 text-sm text-center">経歴（Background）の選択</p>
-                <p className="text-[#00ff41]/50 text-xs text-center">
-                  選択した経歴によって、パイロットの基礎ステータスが決まります。
-                </p>
+                <p className="text-[#00ff41]/70 text-md text-center">あなたの経歴を教えてください</p>
 
                 <div className="space-y-4">
                   {BACKGROUNDS.map((bg) => (
@@ -229,17 +226,20 @@ export default function OnboardingPage() {
                             {selectedBackground?.id === bg.id && (
                               <span className="text-[#00ff41] text-xs">▶</span>
                             )}
-                            <span className="font-bold">{bg.name}</span>
+                            {/* 経歴名 */}
+                            <span className="font-bold underline">{bg.name}</span>
                           </div>
-                          <p className="text-xs opacity-70 leading-relaxed mb-3">{bg.description}</p>
-                          <div className="grid grid-cols-4 gap-2">
+                          {/* 経歴の説明 */}
+                          <p className="text-sm opacity-70 leading-relaxed mb-3">{bg.description}</p>
+                          {/* 各パラメータのボーナス値を表示する, 具体的すぎるため非表示 */}
+                          {/* <div className="grid grid-cols-4 gap-2">
                             {(["DEX", "INT", "REF", "TOU"] as const).map((stat) => (
                               <div key={stat} className="text-center border border-current/30 p-1">
                                 <div className="text-xs opacity-60">{stat}</div>
                                 <div className="font-bold text-sm">{bg.baseStats[stat]}</div>
                               </div>
                             ))}
-                          </div>
+                          </div> */}
                         </div>
                       </div>
                     </button>
@@ -281,8 +281,8 @@ export default function OnboardingPage() {
               <div className="space-y-6">
                 <p className="text-[#00ff41]/70 text-sm text-center">ボーナスポイント割り振り</p>
                 <div className="flex justify-center">
-                  <div className="border border-[#00ff41]/40 bg-[#00ff41]/5 px-4 py-2 text-center">
-                    <span className="text-xs text-[#00ff41]/60">残りポイント</span>
+                  <div className="border border-[#00ff41]/40 bg-[#00ff41]/5 px-4 py-2 text-center flex items-center gap-2">
+                    <div className="text-xs text-[#00ff41]/60 pt-2">残り</div>
                     <div className={`text-2xl font-bold ${remainingPoints > 0 ? "text-[#ffb000]" : "text-[#00ff41]"}`}>
                       {remainingPoints} pt
                     </div>
@@ -297,12 +297,14 @@ export default function OnboardingPage() {
                     return (
                       <div key={stat} className="border border-[#00ff41]/20 bg-[#0a0a0a] p-3">
                         <div className="flex items-center justify-between mb-1">
+                          {/* 項目と説明 */}
                           <div>
                             <span className="font-bold text-[#00ff41]">{stat}</span>
                             <span className="text-xs text-[#00ff41]/50 ml-2">
                               {STAT_DESCRIPTIONS[stat]}
                             </span>
                           </div>
+                          {/* ボーナスポイント操作 */}
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
@@ -313,11 +315,11 @@ export default function OnboardingPage() {
                               −
                             </button>
                             <div className="text-center min-w-[3rem]">
-                              <span className="text-[#00ff41]/50 text-sm">{base}</span>
-                              {bonus > 0 && (
-                                <span className="text-[#ffb000] text-sm"> +{bonus}</span>
-                              )}
-                              <div className="text-lg font-bold text-[#00ff41]">{total}</div>
+                              {/* パラメータ基本値 */}
+                              {/* <span className="text-[#00ff41]/50 text-sm">{base}</span> */}
+                              <span className="text-[#ffb000] text-sm"> +{bonus}</span>
+                              {/* パラメータ合計値 */}
+                              {/* <div className="text-lg font-bold text-[#00ff41]">{total}</div> */}
                             </div>
                             <button
                               type="button"
