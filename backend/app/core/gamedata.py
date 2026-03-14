@@ -23,6 +23,7 @@ _DATA_DIR = Path(
 # インメモリキャッシュ
 _shop_listings_cache: list[dict] | None = None
 _weapon_shop_listings_cache: list[dict] | None = None
+_backgrounds_cache: dict[str, dict[str, Any]] | None = None
 
 
 # 練習機マスターデータ（ショップには並ばない専用機体）
@@ -96,41 +97,20 @@ STARTER_KITS: dict[str, dict[str, Any]] = {
 
 
 # パイロット経歴マスターデータ
-BACKGROUNDS: dict[str, dict[str, Any]] = {
-    "ACADEMY_ELITE": {
-        "id": "ACADEMY_ELITE",
-        "name": "士官学校卒 (Academy Elite)",
-        "description": "正規の軍事教育を受けたエリート。高度な戦術理解とバランスの取れた能力を持つ。",
-        "baseStats": {
-            "DEX": 10,
-            "INT": 8,
-            "REF": 12,
-            "TOU": 10,
-        },
-    },
-    "STREET_SURVIVOR": {
-        "id": "STREET_SURVIVOR",
-        "name": "現場叩き上げ (Street Survivor)",
-        "description": "過酷な環境を生き抜いてきた叩き上げ。野性の勘と並外れた反射神経を誇る。",
-        "baseStats": {
-            "DEX": 7,
-            "INT": 12,
-            "REF": 7,
-            "TOU": 14,
-        },
-    },
-    "EX_MECHANIC": {
-        "id": "EX_MECHANIC",
-        "name": "元メカニック (Ex-Mechanic)",
-        "description": "機械の構造を知り尽くした技術者出身。機体の挙動を正確に制御する器用さを持つ。",
-        "baseStats": {
-            "DEX": 14,
-            "INT": 8,
-            "REF": 6,
-            "TOU": 12,
-        },
-    },
-}
+def _load_backgrounds_json() -> dict[str, dict[str, Any]]:
+    """JSONファイルから経歴マスターデータを読み込む."""
+    json_path = _DATA_DIR / "backgrounds.json"
+    with open(json_path, encoding="utf-8") as f:
+        raw_data: list[dict[str, Any]] = json.load(f)
+    return {item["id"]: item for item in raw_data}
+
+
+def _get_backgrounds() -> dict[str, dict[str, Any]]:
+    """キャッシュ済みの経歴データを取得（未ロード時は自動ロード）."""
+    global _backgrounds_cache
+    if _backgrounds_cache is None:
+        _backgrounds_cache = _load_backgrounds_json()
+    return _backgrounds_cache
 
 
 def get_background_by_id(background_id: str) -> dict[str, Any] | None:
@@ -142,7 +122,7 @@ def get_background_by_id(background_id: str) -> dict[str, Any] | None:
     Returns:
         dict | None: 経歴データ。見つからない場合はNone
     """
-    return BACKGROUNDS.get(background_id)
+    return _get_backgrounds().get(background_id)
 
 
 def get_starter_kit_by_faction(faction: str) -> dict[str, Any] | None:
@@ -224,12 +204,14 @@ def reload_master_data() -> dict[str, int]:
     Returns:
         dict[str, int]: リロードされたデータの件数
     """
-    global _shop_listings_cache, _weapon_shop_listings_cache
+    global _shop_listings_cache, _weapon_shop_listings_cache, _backgrounds_cache
     _shop_listings_cache = _load_mobile_suits_json()
     _weapon_shop_listings_cache = _load_weapons_json()
+    _backgrounds_cache = _load_backgrounds_json()
     return {
         "mobile_suits": len(_shop_listings_cache),
         "weapons": len(_weapon_shop_listings_cache),
+        "backgrounds": len(_backgrounds_cache),
     }
 
 
