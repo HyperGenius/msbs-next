@@ -26,7 +26,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider dynamic>
+    <ClerkProvider>
       <html lang="ja">
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#050505] text-[#00ff41] pb-16 md:pb-0`}

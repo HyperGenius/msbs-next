@@ -16,14 +16,14 @@ export default function HistoryPage() {
   const [selectedBattle, setSelectedBattle] = useState<BattleResult | null>(null);
   const [clerkTimedOut, setClerkTimedOut] = useState(false);
 
-  // Clerk の初期化が長時間（5秒）完了しない場合はタイムアウトとして扱う
+  // Clerk の初期化が長時間（2秒）完了しない場合はタイムアウトとして扱う
   // スマートフォンエミュレーション時などでCDNスクリプトの読み込みが遅い場合の対策
   useEffect(() => {
     if (isLoaded) {
       setClerkTimedOut(false);
       return;
     }
-    const timer = setTimeout(() => setClerkTimedOut(true), 5000);
+    const timer = setTimeout(() => setClerkTimedOut(true), 2000);
     return () => clearTimeout(timer);
   }, [isLoaded]);
 

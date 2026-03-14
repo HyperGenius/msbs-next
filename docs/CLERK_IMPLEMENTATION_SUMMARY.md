@@ -121,14 +121,11 @@
 **修正内容**:
 
 1. **`src/app/layout.tsx` — `ClerkProvider` に `dynamic` prop を追加（根本修正）**
-   ```tsx
-   <ClerkProvider dynamic>
-   ```
-   `dynamic` を指定することで、サーバーサイドの認証状態を React コンテキストに即座に埋め込む。Clerk CDN スクリプトの読み込み完了を待たずにクライアント側で `isLoaded: true` になるため、Race Condition が解消される。
+   ※ `dynamic` prop は `UserButton` など Clerk のクライアント専用コンポーネントとの Hydration エラーを引き起こすため **採用せず**。
 
-2. **`src/app/history/page.tsx` — タイムアウトフォールバックを追加（安全網）**
-   - `useAuth()` の `isLoaded` を監視し、5 秒経過しても初期化が完了しない場合は「ページを再読み込み」ボタンを表示する
-   - 無限ローディングのユーザー体験を防ぐ
+2. **`src/app/history/page.tsx` — タイムアウトフォールバックを追加（対策）**
+   - `useAuth()` の `isLoaded` を監視し、**2 秒**経過しても初期化が完了しない場合は「ページを再読み込み」ボタンを表示する
+   - 再読み込み後は Clerk CDN がブラウザキャッシュから読み込まれるため高速になる
 
 ---
 
