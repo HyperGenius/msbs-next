@@ -179,7 +179,7 @@ async def register_pilot(
         )
 
     # ボーナスポイントバリデーション（合計5ポイント、各値0以上）
-    BONUS_POINTS_TOTAL = 5
+    bonus_points_total = 5
     bonus_values = [
         request.bonus_dex,
         request.bonus_int,
@@ -191,10 +191,10 @@ async def register_pilot(
             status_code=400,
             detail="Bonus stat values must be non-negative",
         )
-    if sum(bonus_values) != BONUS_POINTS_TOTAL:
+    if sum(bonus_values) != bonus_points_total:
         raise HTTPException(
             status_code=400,
-            detail=f"Total bonus points must equal {BONUS_POINTS_TOTAL}",
+            detail=f"Total bonus points must equal {bonus_points_total}",
         )
 
     base_stats = background_data["baseStats"]

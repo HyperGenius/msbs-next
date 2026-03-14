@@ -150,7 +150,11 @@ def test_register_pilot_duplicate_error(client, session):
     try:
         response = client.post(
             "/api/pilots/register",
-            json={"name": "New Pilot", "faction": "ZEON", **_BASE_REGISTER_BODY, "faction": "ZEON"},
+            json={
+                "name": "New Pilot",
+                **_BASE_REGISTER_BODY,
+                "faction": "ZEON",
+            },
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "already exists" in response.json()["detail"]
@@ -268,4 +272,3 @@ def test_register_pilot_negative_bonus(client, session):
         assert "non-negative" in response.json()["detail"]
     finally:
         app.dependency_overrides.pop(get_current_user, None)
-
