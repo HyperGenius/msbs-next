@@ -242,9 +242,11 @@ export default function SignUpPage() {
       const result = await signUp.attemptEmailAddressVerification({
         code: otpCode,
       });
-      if (result.status === "complete" && result.createdSessionId) {
+      if (result.status === "complete") {
         completedAuthRef.current = true;
-        await setActive({ session: result.createdSessionId });
+        if (result.createdSessionId) {
+          await setActive({ session: result.createdSessionId });
+        }
         setPhase(4);
       } else {
         setError("認証が完了しませんでした。もう一度お試しください。");
