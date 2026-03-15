@@ -438,6 +438,9 @@ export default function SignUpPage() {
                   helpText="8文字以上で入力してください"
                 />
 
+                {/* Clerk Smart CAPTCHA マウントポイント（カスタムフロー用） */}
+                <div id="clerk-captcha" />
+
                 <ErrorBanner message={error} />
 
                 <div className="flex gap-3">
