@@ -3,35 +3,99 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SciFiPanel, SciFiButton, SciFiHeading, SciFiInput } from "@/components/ui";
+import { SciFiPanel, SciFiHeading, SciFiInput } from "@/components/ui";
 import { registerPilot } from "@/services/api";
+import backgroundsData from "@/data/backgrounds.json";
 
-type Faction = "FEDERATION" | "ZEON";
+import type { Faction, Background, BonusAllocation, StatKey } from "./_types";
+import { StepIndicator } from "./_components/StepIndicator";
+import { ErrorBanner } from "./_components/ErrorBanner";
+import { NavButtons } from "./_components/NavButtons";
+import { FactionCard } from "./_components/FactionCard";
+import { BackgroundCard } from "./_components/BackgroundCard";
+import { StatAllocationRow } from "./_components/StatAllocationRow";
+
+const BACKGROUNDS: Background[] = backgroundsData as Background[];
+const BONUS_POINTS_TOTAL = 5;
+const STAT_KEYS: StatKey[] = ["DEX", "INT", "REF", "TOU", "LUK"];
+
+const STAT_DESCRIPTIONS: Record<StatKey, string> = {
+  DEX: "器用 (DEX): 手先の器用さ",
+  INT: "直感 (INT): 状況判断力",
+  REF: "反応 (REF): 反射神経",
+  TOU: "耐久 (TOU): 体力・頑丈さ",
+  LUK: "幸運 (LUK): 運の良さ",
+};
+
+const INITIAL_BONUS: BonusAllocation = { DEX: 0, INT: 0, REF: 0, TOU: 0, LUK: 0 };
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // Step 1
   const [pilotName, setPilotName] = useState("");
   const [selectedFaction, setSelectedFaction] = useState<Faction | null>(null);
+
+  // Step 2
+  const [selectedBackground, setSelectedBackground] = useState<Background | null>(null);
+
+  // Step 3
+  const [bonusAllocation, setBonusAllocation] = useState<BonusAllocation>(INITIAL_BONUS);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  const remainingPoints =
+    BONUS_POINTS_TOTAL - Object.values(bonusAllocation).reduce((a, b) => a + b, 0);
 
+  const handleBonusChange = (stat: StatKey, delta: number) => {
+    const current = bonusAllocation[stat];
+    const next = current + delta;
+    if (next < 0) return;
+    if (delta > 0 && remainingPoints <= 0) return;
+    setBonusAllocation((prev) => ({ ...prev, [stat]: next }));
+  };
+
+  const handleStep1Next = () => {
+    setError(null);
     if (!pilotName.trim() || pilotName.trim().length < 2 || pilotName.trim().length > 15) {
       setError("パイロット名は2〜15文字で入力してください");
       return;
     }
-
     if (!selectedFaction) {
       setError("勢力を選択してください");
       return;
     }
+    setStep(2);
+  };
+
+  const handleStep2Next = () => {
+    setError(null);
+    if (!selectedBackground) {
+      setError("経歴を選択してください");
+      return;
+    }
+    setStep(3);
+  };
+
+  const handleSubmit = async () => {
+    setError(null);
+    if (remainingPoints !== 0) {
+      setError(`ボーナスポイントを全て割り振ってください（残り ${remainingPoints} pt）`);
+      return;
+    }
+    if (!selectedFaction || !selectedBackground) return;
 
     setIsSubmitting(true);
     try {
-      await registerPilot(pilotName.trim(), selectedFaction);
+      await registerPilot(pilotName.trim(), selectedFaction, selectedBackground.id, {
+        bonus_dex: bonusAllocation.DEX,
+        bonus_int: bonusAllocation.INT,
+        bonus_ref: bonusAllocation.REF,
+        bonus_tou: bonusAllocation.TOU,
+        bonus_luk: bonusAllocation.LUK,
+      });
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "登録に失敗しました");
@@ -42,21 +106,22 @@ export default function OnboardingPage() {
 
   return (
     <main className="min-h-screen bg-[#050505] text-[#00ff41] flex items-center justify-center p-4 font-mono">
-      <div className="w-full max-w-lg">
+      <div className="w-full max-w-2xl">
         <SciFiPanel variant="primary" chiseled>
           <div className="p-6 sm:p-8 space-y-8">
+            {/* ヘッダー */}
             <div className="text-center">
               <SciFiHeading level={1} variant="primary" className="text-2xl sm:text-3xl mb-2">
                 PILOT REGISTRATION
               </SciFiHeading>
-              <p className="text-[#00ff41]/60 text-sm">
-                パイロット登録を完了してください
-              </p>
+              <StepIndicator currentStep={step} />
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* パイロット名入力 */}
-              <div>
+            {/* ── STEP 1: 勢力 & コールサイン ── */}
+            {step === 1 && (
+              <div className="space-y-6">
+                <p className="text-[#00ff41]/70 text-sm text-center">勢力選択 &amp; コールサイン入力</p>
+
                 <SciFiInput
                   label="パイロット名 / CALLSIGN"
                   variant="primary"
@@ -68,88 +133,115 @@ export default function OnboardingPage() {
                   disabled={isSubmitting}
                   helpText="2〜15文字で入力してください"
                 />
-              </div>
 
-              {/* 勢力選択 */}
-              <div className="space-y-3">
-                <p className="text-sm font-bold font-mono text-[#00ff41]/80 uppercase tracking-wider">
-                  勢力選択 / FACTION
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* 地球連邦軍 */}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedFaction("FEDERATION")}
-                    disabled={isSubmitting}
-                    className={`
-                      relative p-4 border-2 text-left transition-all duration-200 font-mono
-                      ${selectedFaction === "FEDERATION"
-                        ? "border-[#00f0ff] bg-[#00f0ff]/10 text-[#00f0ff]"
-                        : "border-[#00ff41]/30 bg-[#0a0a0a] text-[#00ff41]/60 hover:border-[#00f0ff]/60 hover:text-[#00f0ff]/80"
-                      }
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
-                  >
-                    {selectedFaction === "FEDERATION" && (
-                      <span className="absolute top-2 right-2 text-[#00f0ff] text-xs">▶ SELECTED</span>
-                    )}
-                    <div className="text-lg font-bold mb-1">地球連邦軍</div>
-                    <div className="text-xs opacity-80">Earth Federation Forces</div>
-                    <div className="mt-2 text-xs opacity-60">
-                      練習機: RGM-79T GM Trainer
-                    </div>
-                  </button>
-
-                  {/* ジオン公国軍 */}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedFaction("ZEON")}
-                    disabled={isSubmitting}
-                    className={`
-                      relative p-4 border-2 text-left transition-all duration-200 font-mono
-                      ${selectedFaction === "ZEON"
-                        ? "border-[#ff4400] bg-[#ff4400]/10 text-[#ff4400]"
-                        : "border-[#00ff41]/30 bg-[#0a0a0a] text-[#00ff41]/60 hover:border-[#ff4400]/60 hover:text-[#ff4400]/80"
-                      }
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
-                  >
-                    {selectedFaction === "ZEON" && (
-                      <span className="absolute top-2 right-2 text-[#ff4400] text-xs">▶ SELECTED</span>
-                    )}
-                    <div className="text-lg font-bold mb-1">ジオン公国軍</div>
-                    <div className="text-xs opacity-80">Principality of Zeon</div>
-                    <div className="mt-2 text-xs opacity-60">
-                      練習機: MS-06T Zaku II Trainer
-                    </div>
-                  </button>
+                <div className="space-y-3">
+                  <p className="text-sm font-bold text-[#00ff41]/80 uppercase tracking-wider">
+                    勢力選択 / FACTION
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FactionCard
+                      faction="FEDERATION"
+                      label="地球連邦軍"
+                      subLabel="Earth Federation Forces"
+                      mobilesuit="RGM-79T GM Trainer"
+                      isSelected={selectedFaction === "FEDERATION"}
+                      onSelect={setSelectedFaction}
+                    />
+                    <FactionCard
+                      faction="ZEON"
+                      label="ジオン公国軍"
+                      subLabel="Principality of Zeon"
+                      mobilesuit="MS-06T Zaku II Trainer"
+                      isSelected={selectedFaction === "ZEON"}
+                      onSelect={setSelectedFaction}
+                    />
+                  </div>
+                  <p className="text-xs text-[#00ff41]/40">
+                    ※ 両練習機の性能は同一です。選択した勢力によってショップの品揃えが変わります。
+                  </p>
                 </div>
-                <p className="text-xs text-[#00ff41]/40">
-                  ※ 両練習機の性能は完全に同一です。選択した勢力によってショップの品揃えが変わります。
-                </p>
+
+                <ErrorBanner message={error} />
+
+                <NavButtons
+                  onNext={handleStep1Next}
+                  nextDisabled={!pilotName.trim() || !selectedFaction}
+                />
               </div>
+            )}
 
-              {/* エラーメッセージ */}
-              {error && (
-                <div className="border border-[#ff4400]/50 bg-[#ff4400]/10 p-3 text-[#ff4400] text-sm">
-                  {error}
+            {/* ── STEP 2: 経歴選択 ── */}
+            {step === 2 && (
+              <div className="space-y-6">
+                <p className="text-[#00ff41]/70 text-md text-center">あなたの経歴を教えてください</p>
+
+                <div className="space-y-4">
+                  {BACKGROUNDS.map((bg) => (
+                    <BackgroundCard
+                      key={bg.id}
+                      background={bg}
+                      isSelected={selectedBackground?.id === bg.id}
+                      onSelect={setSelectedBackground}
+                    />
+                  ))}
                 </div>
-              )}
 
-              {/* 登録ボタン */}
-              <SciFiButton
-                type="submit"
-                variant="primary"
-                size="lg"
-                disabled={isSubmitting || !pilotName.trim() || !selectedFaction}
-                className="w-full"
-              >
-                {isSubmitting ? "登録中..." : "▶ 出撃準備完了 / DEPLOY"}
-              </SciFiButton>
-            </form>
+                <ErrorBanner message={error} />
+
+                <NavButtons
+                  onBack={() => { setStep(1); setError(null); }}
+                  onNext={handleStep2Next}
+                  nextDisabled={!selectedBackground}
+                />
+              </div>
+            )}
+
+            {/* ── STEP 3: ボーナスポイント割り振り ── */}
+            {step === 3 && selectedBackground && (
+              <div className="space-y-6">
+                <p className="text-[#00ff41]/70 text-sm text-center">ボーナスポイント割り振り</p>
+                <div className="flex justify-center">
+                  <div className="border border-[#00ff41]/40 bg-[#00ff41]/5 px-4 py-2 text-center flex items-center gap-2">
+                    <div className="text-xs text-[#00ff41]/60 pt-2">残り</div>
+                    <div className={`text-2xl font-bold ${remainingPoints > 0 ? "text-[#ffb000]" : "text-[#00ff41]"}`}>
+                      {remainingPoints} pt
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {STAT_KEYS.map((stat) => (
+                    <StatAllocationRow
+                      key={stat}
+                      stat={stat}
+                      description={STAT_DESCRIPTIONS[stat]}
+                      bonus={bonusAllocation[stat]}
+                      canDecrement={bonusAllocation[stat] > 0}
+                      canIncrement={remainingPoints > 0}
+                      onDecrement={() => handleBonusChange(stat, -1)}
+                      onIncrement={() => handleBonusChange(stat, 1)}
+                    />
+                  ))}
+                </div>
+
+                <p className="text-xs text-[#00ff41]/40 text-center">
+                  ※ ステータスはレベルアップ時にも成長します。初期配分はいつでも確認できます。
+                </p>
+
+                <ErrorBanner message={error} />
+
+                <NavButtons
+                  onBack={() => { setStep(2); setError(null); }}
+                  onSubmit={handleSubmit}
+                  submitDisabled={isSubmitting || remainingPoints !== 0}
+                  submitLabel={isSubmitting ? "登録中..." : "▶ 出撃準備完了 / DEPLOY"}
+                />
+              </div>
+            )}
           </div>
         </SciFiPanel>
       </div>
     </main>
   );
 }
+

@@ -426,6 +426,10 @@ class Pilot(SQLModel, table=True):
         default="",
         description="所属勢力 (FEDERATION/ZEON)",
     )
+    background: str = Field(
+        default="",
+        description="パイロット経歴 (ACADEMY_ELITE/STREET_SURVIVOR/EX_MECHANIC)",
+    )
     is_npc: bool = Field(
         default=False, index=True, description="NPC パイロットかどうか"
     )
