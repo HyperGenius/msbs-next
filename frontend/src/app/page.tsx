@@ -21,7 +21,6 @@ import EntryDashboard from "@/components/Dashboard/EntryDashboard";
 import BattleResultModal from "@/components/Dashboard/BattleResultModal";
 import EntrySelectionModal from "@/components/Dashboard/EntrySelectionModal";
 import OnboardingOverlay from "@/components/Tutorial/OnboardingOverlay";
-import StarterSelectionModal from "@/components/Tutorial/StarterSelectionModal";
 import { SciFiHeading } from "@/components/ui";
 import DevSimulationPanel from "@/components/Dashboard/DevSimulationPanel";
 import BattleResultAnnouncer from "@/components/Dashboard/BattleResultAnnouncer";
@@ -59,9 +58,7 @@ export default function Home() {
     setShowOnboarding,
     onboardingState,
     setOnboardingState,
-    showStarterSelection,
     handleOnboardingComplete,
-    handleStarterConfirm,
   } = useOnboarding({
     isLoaded,
     isSignedIn,
@@ -228,15 +225,6 @@ export default function Home() {
             onSelect={executeEntry}
             onCancel={() => setShowEntryModal(false)}
             isLoading={entryLoading}
-          />
-        )}
-
-        {/* Starter Received Modal */}
-        {showStarterSelection && pilot && (
-          <StarterSelectionModal
-            factionName={pilot.faction === "FEDERATION" ? "地球連邦軍" : "ジオン公国軍"}
-            unitName={pilot.faction === "FEDERATION" ? "RGM-79T GM Trainer" : "MS-06T Zaku II Trainer"}
-            onConfirm={handleStarterConfirm}
           />
         )}
 

@@ -6,6 +6,7 @@ import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePilot, resetAccount } from "@/services/api";
 import { SciFiButton, SciFiHeading } from "@/components/ui";
+import { ONBOARDING_COMPLETED_KEY } from "@/constants";
 
 const navLinks = [
   { href: "/team", label: "Team", variant: "accent" as const },
@@ -29,7 +30,7 @@ export default function Header() {
     }
     try {
       await resetAccount();
-      localStorage.removeItem("msbs_onboarding_completed");
+      localStorage.removeItem(ONBOARDING_COMPLETED_KEY);
       window.location.reload();
     } catch (e) {
       alert(`リセットに失敗しました: ${e instanceof Error ? e.message : String(e)}`);

@@ -2,24 +2,26 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import delete
+from sqlalchemy import delete, or_
 from sqlmodel import Session, col, select
 
 from app.core.auth import get_current_user
 from app.core.gamedata import get_background_by_id, get_starter_kit_by_faction
 from app.core.skills import get_all_skills
 from app.db import get_session
-from app.models.models import BattleEntry, BattleResult, MobileSuit, Pilot
+from app.models.models import (
+    BattleEntry,
+    BattleResult,
+    Friendship,
+    Leaderboard,
+    MobileSuit,
+    Pilot,
+    Team,
+    TeamMember,
+)
 from app.services.pilot_service import PilotService
 
 router = APIRouter(prefix="/api/pilots", tags=["pilots"])
-
-
-class CreatePilotRequest(BaseModel):
-    """パイロット作成リクエスト."""
-
-    name: str
-    starter_unit_id: str = "zaku_ii"
 
 
 class RegisterPilotRequest(BaseModel):
@@ -41,60 +43,6 @@ class RegisterPilotResponse(BaseModel):
     pilot: dict
     mobile_suit_id: str
     message: str
-
-
-@router.post("/create", response_model=Pilot)
-async def create_pilot(
-    request: CreatePilotRequest,
-    session: Session = Depends(get_session),
-    user_id: str = Depends(get_current_user),
-) -> Pilot:
-    """新規パイロットを作成し、選択したスターター機体を付与する.
-
-    Args:
-        request: パイロット作成リクエスト
-        session: データベースセッション
-        user_id: 現在のユーザーID
-
-    Returns:
-        Pilot: 作成されたパイロット情報
-
-    Raises:
-        HTTPException: パイロットが既に存在する、または無効なユニットIDの場合
-    """
-    # 既存のパイロットをチェック
-    statement = select(Pilot).where(Pilot.user_id == user_id)
-    existing_pilot = session.exec(statement).first()
-
-    if existing_pilot:
-        raise HTTPException(
-            status_code=400, detail="Pilot already exists for this user"
-        )
-
-    # 有効なスターターユニットIDかチェック
-    if request.starter_unit_id not in ["zaku_ii", "gm"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid starter unit ID: {request.starter_unit_id}. Must be 'zaku_ii' or 'gm'",
-        )
-
-    # パイロット作成
-    pilot = Pilot(
-        user_id=user_id,
-        name=request.name,
-        level=1,
-        exp=0,
-        credits=1000,
-    )
-    session.add(pilot)
-    session.commit()
-    session.refresh(pilot)
-
-    # スターター機体を付与
-    pilot_service = PilotService(session)
-    pilot_service.create_starter_mobile_suit(user_id, request.starter_unit_id)
-
-    return pilot
 
 
 @router.get("/me", response_model=Pilot)
@@ -120,7 +68,7 @@ async def get_my_pilot(
     if not pilot:
         raise HTTPException(
             status_code=404,
-            detail="Pilot not found. Please create a pilot first using /api/pilots/create",
+            detail="Pilot not found. Please register a pilot first using /api/pilots/register",
         )
 
     return pilot
@@ -311,7 +259,8 @@ async def delete_my_account(
 ) -> DeleteAccountResponse:
     """現在のユーザーに紐づく全データを削除し、アカウントを初期状態にリセットする.
 
-    削除対象: BattleEntry, BattleResult, MobileSuit, Pilot
+    削除対象: BattleEntry, BattleResult, MobileSuit, Pilot,
+              TeamMember, Team, Friendship, Leaderboard
 
     Args:
         session: データベースセッション
@@ -328,6 +277,28 @@ async def delete_my_account(
         session.exec(delete(BattleEntry).where(col(BattleEntry.user_id) == user_id))
         session.exec(delete(BattleResult).where(col(BattleResult.user_id) == user_id))
         session.exec(delete(MobileSuit).where(col(MobileSuit.user_id) == user_id))
+
+        # 自身がオーナーのチームに所属するメンバーレコードを削除
+        owned_team_ids = select(Team.id).where(col(Team.owner_user_id) == user_id)
+        session.exec(delete(TeamMember).where(col(TeamMember.team_id).in_(owned_team_ids)))
+        # 自身がメンバーとして所属するレコードを削除
+        session.exec(delete(TeamMember).where(col(TeamMember.user_id) == user_id))
+        # 自身がオーナーのチームを削除
+        session.exec(delete(Team).where(col(Team.owner_user_id) == user_id))
+
+        # フレンド関係を削除
+        session.exec(
+            delete(Friendship).where(
+                or_(
+                    col(Friendship.user_id) == user_id,
+                    col(Friendship.friend_user_id) == user_id,
+                )
+            )
+        )
+
+        # ランキングデータを削除
+        session.exec(delete(Leaderboard).where(col(Leaderboard.user_id) == user_id))
+
         session.exec(delete(Pilot).where(col(Pilot.user_id) == user_id))
         session.commit()
     except Exception as e:

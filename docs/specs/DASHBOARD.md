@@ -29,7 +29,6 @@
 モーダル（オーバーレイ）:
   - [BattleResultModal]     バトル結果モーダル
   - [EntrySelectionModal]   機体選択モーダル（複数機体保有時）
-  - [StarterSelectionModal] スターター機体選択モーダル
   - [OnboardingOverlay]     オンボーディングオーバーレイ
 ```
 
