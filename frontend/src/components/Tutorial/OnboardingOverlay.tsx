@@ -18,22 +18,22 @@ interface OnboardingOverlayProps {
 
 const ONBOARDING_STEPS: OnboardingStep[] = [
   {
-    title: "ようこそパイロット！",
+    title: "Welcome to MSBS!",
     message:
-      "新規登録ありがとうございます！あなたには初期機体として Zaku II (Starter) が配備されています。さっそくバトルの準備を始めましょう。",
+      "あなたには初期機体として Zaku II (Starter) が配備されました。さっそくバトルの準備を始めましょう。",
     position: "center",
   },
   {
-    title: "ステップ 1: ガレージ (Hangar)",
+    title: "ステップ 1: ガレージ (Garage)",
     message:
-      "まず画面上部の [Hangar] リンクから、あなたの機体を確認しましょう。機体の性能やカスタマイズをチェックできます。",
+      "[Garage]から配備された機体を確認しましょう。機体の性能やカスタマイズをチェックできます。",
     targetSelector: "a[href='/garage']",
     position: "bottom",
   },
   {
     title: "ステップ 2: バトルエントリー",
     message:
-      "準備ができたらダッシュボードからバトルにエントリーしましょう。バトルは毎日21時に開催されます。",
+      "準備ができたらダッシュボードからバトルにエントリーしましょう。バトルは毎週金曜日21時に開催されます。",
     targetSelector: ".mission-selection-panel",
     position: "top",
   },
@@ -44,10 +44,10 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     position: "center",
   },
   {
-    title: "ステップ 4: Engineering へ",
+    title: "ステップ 4: 機体購入",
     message:
-      "画面上部のメニューから [Engineering] を開いて、機体の強化やカスタマイズを行いましょう。装備の購入や機体性能の向上が可能です。",
-    targetSelector: "a[href='/garage/engineering']",
+      "[Shop]を開いて機体や武器を購入してみましょう。",
+    targetSelector: "a[href='/garage/shop']",
     position: "bottom",
   },
 ];
