@@ -234,7 +234,7 @@ export default function OnboardingPage() {
                   onBack={() => { setStep(2); setError(null); }}
                   onSubmit={handleSubmit}
                   submitDisabled={isSubmitting || remainingPoints !== 0}
-                  submitLabel={isSubmitting ? "登録中..." : "▶ 出撃準備完了 / DEPLOY"}
+                  submitLabel={isSubmitting ? "SUBMITTING..." : "SUBMIT!"}
                 />
               </div>
             )}
