@@ -20,11 +20,11 @@ const BONUS_POINTS_TOTAL = 5;
 const STAT_KEYS: StatKey[] = ["DEX", "INT", "REF", "TOU", "LUK"];
 
 const STAT_DESCRIPTIONS: Record<StatKey, string> = {
-  DEX: "器用 (DEX): 命中率・距離減衰緩和・被ダメージカット",
-  INT: "直感 (INT): クリティカル率・回避率",
-  REF: "反応 (REF): イニシアチブ・機動性乗算",
-  TOU: "耐久 (TOU): 攻撃ダメージ加算・被クリティカル率低下",
-  LUK: "幸運 (LUK): ダメージ乱数偏り・完全回避",
+  DEX: "器用 (DEX): 手先の器用さ",
+  INT: "直感 (INT): 状況判断力",
+  REF: "反応 (REF): 反射神経",
+  TOU: "耐久 (TOU): 体力・頑丈さ",
+  LUK: "幸運 (LUK): 運の良さ",
 };
 
 const INITIAL_BONUS: BonusAllocation = { DEX: 0, INT: 0, REF: 0, TOU: 0, LUK: 0 };

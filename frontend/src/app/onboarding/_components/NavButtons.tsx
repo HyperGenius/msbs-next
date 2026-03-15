@@ -15,7 +15,7 @@ export function NavButtons({
   onSubmit,
   nextDisabled = false,
   submitDisabled = false,
-  submitLabel = "▶ 出撃準備完了 / DEPLOY",
+  submitLabel = "▶ LET'S GO",
 }: NavButtonsProps) {
   return (
     <div className="flex gap-3">
@@ -27,7 +27,7 @@ export function NavButtons({
           onClick={onBack}
           className="flex-1"
         >
-          ◀ 戻る
+          ◀ BACK
         </SciFiButton>
       )}
       {onNext && (
@@ -39,7 +39,7 @@ export function NavButtons({
           disabled={nextDisabled}
           className="flex-1"
         >
-          ▶ 次へ / NEXT
+          ▶ NEXT
         </SciFiButton>
       )}
       {onSubmit && (
