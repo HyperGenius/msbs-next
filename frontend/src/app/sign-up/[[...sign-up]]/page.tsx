@@ -135,6 +135,7 @@ export default function SignUpPage() {
 
   // Phase 2
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   // Phase 3
@@ -207,6 +208,14 @@ export default function SignUpPage() {
       setError("メールアドレスを入力してください");
       return;
     }
+    if (!username.trim()) {
+      setError("ユーザー名を入力してください");
+      return;
+    }
+    if (!/^[a-zA-Z0-9_-]{3,32}$/.test(username.trim())) {
+      setError("ユーザー名は3〜32文字の半角英数字・アンダースコア・ハイフンで入力してください");
+      return;
+    }
     if (!password || password.length < 8) {
       setError("パスワードは8文字以上で入力してください");
       return;
@@ -215,7 +224,7 @@ export default function SignUpPage() {
 
     setIsSubmitting(true);
     try {
-      await signUp.create({ emailAddress: email, password });
+      await signUp.create({ emailAddress: email, username: username.trim(), password });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setPhase(3);
     } catch (err: unknown) {
@@ -430,6 +439,16 @@ export default function SignUpPage() {
                 />
 
                 <SciFiInput
+                  label="ユーザー名 / USERNAME"
+                  variant={themeVariant}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="amuro_ray"
+                  disabled={isSubmitting}
+                  helpText="3〜32文字の半角英数字・アンダースコア・ハイフン"
+                />
+
+                <SciFiInput
                   label="パスワード / PASSWORD"
                   variant={themeVariant}
                   type="password"
@@ -461,7 +480,7 @@ export default function SignUpPage() {
                     variant={themeVariant}
                     size="lg"
                     onClick={handlePhase2Submit}
-                    disabled={isSubmitting || !email.trim() || !password}
+                    disabled={isSubmitting || !email.trim() || !username.trim() || !password}
                     className="flex-1"
                   >
                     {isSubmitting ? "PROCESSING..." : "▶ SUBMIT"}
