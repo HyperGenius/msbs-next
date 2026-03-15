@@ -43,9 +43,32 @@ const INITIAL_BONUS: BonusAllocation = {
   LUK: 0,
 };
 
+const FACTION_UNIT_NAME: Record<Faction, string> = {
+  FEDERATION: "RGM-79T GM Trainer",
+  ZEON: "MS-06T Zaku II Trainer",
+};
+
 /* ── 型 ───────────────────────────────────────────── */
 
 type WizardPhase = 1 | 2 | 3 | 4 | 5;
+type ThemeVariant = "secondary" | "accent";
+
+/** テーマバリアントに対応する説明テキストの色クラスを返す */
+function themeTextClass(v: ThemeVariant): string {
+  return v === "accent" ? "text-[#00f0ff]/70" : "text-[#ffb000]/70";
+}
+
+/** テーマバリアントに対応するラベルテキストの色クラスを返す */
+function themeLabelClass(v: ThemeVariant): string {
+  return v === "accent" ? "text-[#00f0ff]/80" : "text-[#ffb000]/80";
+}
+
+/** テーマバリアントに対応するボーダー＋背景クラスを返す */
+function themeBorderBgClass(v: ThemeVariant): string {
+  return v === "accent"
+    ? "border-[#00f0ff]/40 bg-[#00f0ff]/5"
+    : "border-[#ffb000]/40 bg-[#ffb000]/5";
+}
 
 /* ── フェーズインジケーター ──────────────────────── */
 
@@ -136,12 +159,11 @@ export default function SignUpPage() {
     Object.values(bonusAllocation).reduce((a, b) => a + b, 0);
 
   /* テーマバリアント（勢力未選択時は accent） */
-  const themeVariant: "primary" | "secondary" | "accent" =
-    faction === "FEDERATION"
-      ? "accent"
-      : faction === "ZEON"
-        ? "secondary"
-        : "accent";
+  const themeVariant: ThemeVariant =
+    faction === "ZEON" ? "secondary" : "accent";
+
+  /** リロードでPhase 3復帰した場合、Phase 1/2のステートが空のためBACKを禁止 */
+  const resumedAtPhase3 = useRef(false);
 
   /* ── フォールバック ─────────────────────────────── */
 
@@ -158,6 +180,10 @@ export default function SignUpPage() {
       signUp.status === "missing_requirements" &&
       signUp.verifications?.emailAddress?.status === "unverified"
     ) {
+      resumedAtPhase3.current = true;
+      if (signUp.emailAddress) {
+        setEmail(signUp.emailAddress);
+      }
       setPhase(3);
     }
   }, [isLoaded, signUp]);
@@ -283,11 +309,7 @@ export default function SignUpPage() {
           bonus_luk: bonusAllocation.LUK,
         },
       );
-      setEnrollmentUnitName(
-        faction === "FEDERATION"
-          ? "RGM-79T GM Trainer"
-          : "MS-06T Zaku II Trainer",
-      );
+      setEnrollmentUnitName(FACTION_UNIT_NAME[faction]);
       setEnrollmentComplete(true);
     } catch (err: unknown) {
       setError(
@@ -352,7 +374,7 @@ export default function SignUpPage() {
                     faction="FEDERATION"
                     label="地球連邦軍"
                     subLabel="Earth Federation Forces"
-                    mobilesuit="RGM-79T GM Trainer"
+                    mobilesuit={FACTION_UNIT_NAME.FEDERATION}
                     isSelected={faction === "FEDERATION"}
                     onSelect={setFaction}
                   />
@@ -360,7 +382,7 @@ export default function SignUpPage() {
                     faction="ZEON"
                     label="ジオン公国軍"
                     subLabel="Principality of Zeon"
-                    mobilesuit="MS-06T Zaku II Trainer"
+                    mobilesuit={FACTION_UNIT_NAME.ZEON}
                     isSelected={faction === "ZEON"}
                     onSelect={setFaction}
                   />
@@ -390,11 +412,7 @@ export default function SignUpPage() {
             {phase === 2 && (
               <div className="space-y-6">
                 <p
-                  className={`text-sm text-center ${
-                    themeVariant === "accent"
-                      ? "text-[#00f0ff]/70"
-                      : "text-[#ffb000]/70"
-                  }`}
+                  className={`text-sm text-center ${themeTextClass(themeVariant)}`}
                 >
                   連絡先と認証情報を入力してください
                 </p>
@@ -451,11 +469,7 @@ export default function SignUpPage() {
             {phase === 3 && (
               <div className="space-y-6">
                 <p
-                  className={`text-sm text-center ${
-                    themeVariant === "accent"
-                      ? "text-[#00f0ff]/70"
-                      : "text-[#ffb000]/70"
-                  }`}
+                  className={`text-sm text-center ${themeTextClass(themeVariant)}`}
                 >
                   メールに送信された認証コードを入力してください
                 </p>
@@ -473,17 +487,19 @@ export default function SignUpPage() {
                 <ErrorBanner message={error} />
 
                 <div className="flex gap-3">
-                  <SciFiButton
-                    variant="secondary"
-                    size="lg"
-                    onClick={() => {
-                      setPhase(2);
-                      setError(null);
-                    }}
-                    className="flex-1"
-                  >
-                    ◀ BACK
-                  </SciFiButton>
+                  {!resumedAtPhase3.current && (
+                    <SciFiButton
+                      variant="secondary"
+                      size="lg"
+                      onClick={() => {
+                        setPhase(2);
+                        setError(null);
+                      }}
+                      className="flex-1"
+                    >
+                      ◀ BACK
+                    </SciFiButton>
+                  )}
                   <SciFiButton
                     variant={themeVariant}
                     size="lg"
@@ -501,11 +517,7 @@ export default function SignUpPage() {
             {phase === 4 && (
               <div className="space-y-6">
                 <p
-                  className={`text-sm text-center ${
-                    themeVariant === "accent"
-                      ? "text-[#00f0ff]/70"
-                      : "text-[#ffb000]/70"
-                  }`}
+                  className={`text-sm text-center ${themeTextClass(themeVariant)}`}
                 >
                   パイロット情報を入力してください
                 </p>
@@ -524,11 +536,7 @@ export default function SignUpPage() {
                 {/* 経歴選択 */}
                 <div className="space-y-3">
                   <p
-                    className={`text-sm font-bold uppercase tracking-wider font-mono ${
-                      themeVariant === "accent"
-                        ? "text-[#00f0ff]/80"
-                        : "text-[#ffb000]/80"
-                    }`}
+                    className={`text-sm font-bold uppercase tracking-wider font-mono ${themeLabelClass(themeVariant)}`}
                   >
                     経歴選択 / BACKGROUND
                   </p>
@@ -545,30 +553,20 @@ export default function SignUpPage() {
                 {/* ボーナスポイント割り振り */}
                 <div className="space-y-3">
                   <p
-                    className={`text-sm font-bold uppercase tracking-wider font-mono ${
-                      themeVariant === "accent"
-                        ? "text-[#00f0ff]/80"
-                        : "text-[#ffb000]/80"
-                    }`}
+                    className={`text-sm font-bold uppercase tracking-wider font-mono ${themeLabelClass(themeVariant)}`}
                   >
                     ボーナスポイント割り振り / BONUS ALLOCATION
                   </p>
                   <div className="flex justify-center">
                     <div
-                      className={`border px-4 py-2 text-center flex items-center gap-2 ${
-                        themeVariant === "accent"
-                          ? "border-[#00f0ff]/40 bg-[#00f0ff]/5"
-                          : "border-[#ffb000]/40 bg-[#ffb000]/5"
-                      }`}
+                      className={`border px-4 py-2 text-center flex items-center gap-2 ${themeBorderBgClass(themeVariant)}`}
                     >
                       <div className="text-xs opacity-60 pt-2">残り</div>
                       <div
                         className={`text-2xl font-bold ${
                           remainingPoints > 0
                             ? "text-[#ffb000]"
-                            : themeVariant === "accent"
-                              ? "text-[#00f0ff]"
-                              : "text-[#ffb000]"
+                            : themeLabelClass(themeVariant)
                         }`}
                       >
                         {remainingPoints} pt
@@ -627,11 +625,7 @@ export default function SignUpPage() {
                   <div className="space-y-4 py-8">
                     <div className="text-4xl animate-pulse">⚙</div>
                     <p
-                      className={`text-sm ${
-                        themeVariant === "accent"
-                          ? "text-[#00f0ff]/70"
-                          : "text-[#ffb000]/70"
-                      }`}
+                      className={`text-sm ${themeTextClass(themeVariant)}`}
                     >
                       入隊手続き処理中...
                     </p>
@@ -661,11 +655,7 @@ export default function SignUpPage() {
                       入隊許可
                     </SciFiHeading>
                     <p
-                      className={`text-sm ${
-                        themeVariant === "accent"
-                          ? "text-[#00f0ff]/70"
-                          : "text-[#ffb000]/70"
-                      }`}
+                      className={`text-sm ${themeTextClass(themeVariant)}`}
                     >
                       ENLISTMENT APPROVED
                     </p>
