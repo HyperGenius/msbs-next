@@ -382,7 +382,9 @@ export async function createPilot(
  */
 export async function registerPilot(
   name: string,
-  faction: "FEDERATION" | "ZEON"
+  faction: "FEDERATION" | "ZEON",
+  background: string,
+  bonusStats: { bonus_dex: number; bonus_int: number; bonus_ref: number; bonus_tou: number; bonus_luk: number }
 ): Promise<{ pilot: Pilot; mobile_suit_id: string; message: string }> {
   const token = await getAuthToken();
   const headers: HeadersInit = {
@@ -396,7 +398,7 @@ export async function registerPilot(
   const res = await fetch(`${API_BASE_URL}/api/pilots/register`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ name, faction }),
+    body: JSON.stringify({ name, faction, background, ...bonusStats }),
   });
 
   if (!res.ok) {

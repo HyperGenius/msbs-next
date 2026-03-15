@@ -6,7 +6,7 @@ from sqlalchemy import delete
 from sqlmodel import Session, col, select
 
 from app.core.auth import get_current_user
-from app.core.gamedata import get_starter_kit_by_faction
+from app.core.gamedata import get_background_by_id, get_starter_kit_by_faction
 from app.core.skills import get_all_skills
 from app.db import get_session
 from app.models.models import BattleEntry, BattleResult, MobileSuit, Pilot
@@ -27,6 +27,12 @@ class RegisterPilotRequest(BaseModel):
 
     name: str
     faction: str
+    background: str
+    bonus_dex: int = 0
+    bonus_int: int = 0
+    bonus_ref: int = 0
+    bonus_tou: int = 0
+    bonus_luk: int = 0
 
 
 class RegisterPilotResponse(BaseModel):
@@ -164,14 +170,51 @@ async def register_pilot(
             detail="Pilot name must be between 2 and 15 characters",
         )
 
+    # 経歴バリデーション
+    background_data = get_background_by_id(request.background)
+    if not background_data:
+        valid_backgrounds = ["ACADEMY_ELITE", "STREET_SURVIVOR", "EX_MECHANIC"]
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid background: {request.background}. Must be one of {valid_backgrounds}",
+        )
+
+    # ボーナスポイントバリデーション（合計5ポイント、各値0以上）
+    bonus_points_total = 5
+    bonus_values = [
+        request.bonus_dex,
+        request.bonus_int,
+        request.bonus_ref,
+        request.bonus_tou,
+        request.bonus_luk,
+    ]
+    if any(v < 0 for v in bonus_values):
+        raise HTTPException(
+            status_code=400,
+            detail="Bonus stat values must be non-negative",
+        )
+    if sum(bonus_values) != bonus_points_total:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Total bonus points must equal {bonus_points_total}",
+        )
+
+    base_stats = background_data["baseStats"]
+
     # パイロット作成
     pilot = Pilot(
         user_id=user_id,
         name=name,
         faction=request.faction,
+        background=request.background,
         level=1,
         exp=0,
         credits=1000,
+        dex=base_stats["DEX"] + request.bonus_dex,
+        intel=base_stats["INT"] + request.bonus_int,
+        ref=base_stats["REF"] + request.bonus_ref,
+        tou=base_stats["TOU"] + request.bonus_tou,
+        luk=base_stats["LUK"] + request.bonus_luk,
     )
     session.add(pilot)
     session.commit()

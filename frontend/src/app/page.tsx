@@ -60,9 +60,8 @@ export default function Home() {
     onboardingState,
     setOnboardingState,
     showStarterSelection,
-    starterSelectionLoading,
     handleOnboardingComplete,
-    handleStarterSelection,
+    handleStarterConfirm,
   } = useOnboarding({
     isLoaded,
     isSignedIn,
@@ -232,11 +231,12 @@ export default function Home() {
           />
         )}
 
-        {/* Starter Selection Modal */}
-        {showStarterSelection && (
+        {/* Starter Received Modal */}
+        {showStarterSelection && pilot && (
           <StarterSelectionModal
-            onSelect={handleStarterSelection}
-            isLoading={starterSelectionLoading}
+            factionName={pilot.faction === "FEDERATION" ? "地球連邦軍" : "ジオン公国軍"}
+            unitName={pilot.faction === "FEDERATION" ? "RGM-79T GM Trainer" : "MS-06T Zaku II Trainer"}
+            onConfirm={handleStarterConfirm}
           />
         )}
 
