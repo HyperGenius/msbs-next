@@ -711,9 +711,9 @@ export default function SignUpPage() {
                     <SciFiButton
                       variant={themeVariant}
                       size="lg"
-                      onClick={() => router.push("/garage")}
+                      onClick={() => router.push("/")}
                     >
-                      ▶ ガレージへ進む / PROCEED TO GARAGE
+                      ▶ ダッシュボードへ / GO TO DASHBOARD
                     </SciFiButton>
                   </div>
                 )}
