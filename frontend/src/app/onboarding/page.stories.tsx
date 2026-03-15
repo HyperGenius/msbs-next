@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn, userEvent, within, expect, spyOn } from "storybook/test";
-import * as api from "@/services/api";
+import { fn, userEvent, within, spyOn } from "storybook/test";
 import OnboardingPage from "./page";
 
 const meta: Meta<typeof OnboardingPage> = {
@@ -139,34 +138,38 @@ export const Step3AllPointsAllocated: Story = {
 
 // ── フル送信フロー ────────────────────────────────────────────────────────────
 
-/** 送信成功 — APIモックで登録成功 → router.push('/') */
+/** 送信成功 — fetch をモックして登録成功 → router.push('/') */
 export const SubmitSuccess: Story = {
   beforeEach() {
-    spyOn(api, "registerPilot").mockResolvedValue({
-      pilot: {
-        id: "pilot-001",
-        user_id: "user_test",
-        name: "Amuro Ray",
-        faction: "FEDERATION",
-        background: "ACADEMY_ELITE",
-        level: 1,
-        exp: 0,
-        credits: 1000,
-        skill_points: 0,
-        skills: {},
-        status_points: 0,
-        dex: 12,
-        intel: 9,
-        ref: 13,
-        tou: 11,
-        luk: 5,
-        awq: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      mobile_suit_id: "gm-trainer-001",
-      message: "パイロット登録完了。GM Trainer が支給されました。",
-    });
+    spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        pilot: {
+          id: "pilot-001",
+          user_id: "user_test",
+          name: "Amuro Ray",
+          faction: "FEDERATION",
+          background: "ACADEMY_ELITE",
+          level: 1,
+          exp: 0,
+          credits: 1000,
+          skill_points: 0,
+          skills: {},
+          status_points: 0,
+          dex: 12,
+          intel: 9,
+          ref: 13,
+          tou: 11,
+          luk: 5,
+          awq: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        mobile_suit_id: "gm-trainer-001",
+        message: "パイロット登録完了。GM Trainer が支給されました。",
+      }),
+    } as Response);
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -195,12 +198,17 @@ export const SubmitSuccess: Story = {
   },
 };
 
-/** 送信失敗 — APIエラー表示 */
+/** 送信失敗 — fetch をモックして 500 エラーを返す */
 export const SubmitError: Story = {
   beforeEach() {
-    spyOn(api, "registerPilot").mockRejectedValue(
-      new Error("サーバーエラーが発生しました。しばらくしてから再試行してください。")
-    );
+    spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      json: async () => ({
+        detail: "サーバーエラーが発生しました。しばらくしてから再試行してください。",
+      }),
+    } as Response);
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
