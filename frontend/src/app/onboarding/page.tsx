@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SciFiPanel, SciFiHeading, SciFiInput } from "@/components/ui";
-import { registerPilot } from "@/services/api";
+import { registerPilot, usePilot } from "@/services/api";
 import backgroundsData from "@/data/backgrounds.json";
 
 import type { Faction, Background, BonusAllocation, StatKey } from "./_types";
@@ -31,6 +31,7 @@ const INITIAL_BONUS: BonusAllocation = { DEX: 0, INT: 0, REF: 0, TOU: 0, LUK: 0 
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { mutate: mutatePilot } = usePilot();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Step 1
@@ -89,13 +90,14 @@ export default function OnboardingPage() {
 
     setIsSubmitting(true);
     try {
-      await registerPilot(pilotName.trim(), selectedFaction, selectedBackground.id, {
+      const result = await registerPilot(pilotName.trim(), selectedFaction, selectedBackground.id, {
         bonus_dex: bonusAllocation.DEX,
         bonus_int: bonusAllocation.INT,
         bonus_ref: bonusAllocation.REF,
         bonus_tou: bonusAllocation.TOU,
         bonus_luk: bonusAllocation.LUK,
       });
+      mutatePilot(result.pilot, { revalidate: false });
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "登録に失敗しました");
