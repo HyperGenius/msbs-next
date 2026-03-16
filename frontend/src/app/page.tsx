@@ -26,6 +26,7 @@ import DevSimulationPanel from "@/components/Dashboard/DevSimulationPanel";
 import BattleResultAnnouncer from "@/components/Dashboard/BattleResultAnnouncer";
 import RewardPanel from "@/components/Dashboard/RewardPanel";
 import TurnController from "@/components/Dashboard/TurnController";
+import SystemBootScreen from "@/components/Dashboard/SystemBootScreen";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { useBattleSimulation } from "@/hooks/useBattleSimulation";
 import { useUnreadBattleQueue } from "@/hooks/useUnreadBattleQueue";
@@ -117,6 +118,18 @@ export default function Home() {
     if (!entryStatus?.next_room?.scheduled_at) return null;
     return new Date(entryStatus.next_room.scheduled_at);
   };
+
+  const isSystemBooting =
+    !isLoaded ||
+    missionsLoading ||
+    mobileSuitsLoading ||
+    entryStatusLoading ||
+    pilotLoading ||
+    battlesLoading;
+
+  if (isSystemBooting) {
+    return <SystemBootScreen />;
+  }
 
   return (
     <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
