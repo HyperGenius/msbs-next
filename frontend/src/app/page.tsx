@@ -55,9 +55,6 @@ export default function Home() {
 
   const {
     showOnboarding,
-    setShowOnboarding,
-    onboardingState,
-    setOnboardingState,
     handleOnboardingComplete,
   } = useOnboarding({
     isLoaded,
@@ -209,11 +206,6 @@ export default function Home() {
                 }
                 setCurrentUnreadBattle(null);
               }
-              // 初回バトル終了後、オンボーディングを再開（初回チュートリアル中のみ）
-              if (onboardingState === "BATTLE_STARTED") {
-                setOnboardingState("BATTLE_FINISHED");
-                setShowOnboarding(true);
-              }
             }}
           />
         )}
@@ -232,7 +224,6 @@ export default function Home() {
         <OnboardingOverlay
           show={showOnboarding}
           onComplete={handleOnboardingComplete}
-          startStep={onboardingState === "BATTLE_FINISHED" ? 4 : 0}
         />
 
         {/* Mission Selection Panel & Text Log (開発環境のみ表示) */}

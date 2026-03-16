@@ -26,7 +26,6 @@ interface UseOnboardingReturn {
   showOnboarding: boolean;
   setShowOnboarding: (show: boolean) => void;
   onboardingState: OnboardingState;
-  setOnboardingState: (state: OnboardingState) => void;
   handleOnboardingComplete: () => void;
 }
 
@@ -113,15 +112,10 @@ export function useOnboarding({
   ]);
 
   const handleOnboardingComplete = () => {
-    if (onboardingState === "NOT_STARTED") {
-      setShowOnboarding(false);
-      setOnboardingState("BATTLE_STARTED");
-    } else if (onboardingState === "BATTLE_FINISHED") {
-      setShowOnboarding(false);
-      setOnboardingState("COMPLETED");
-      if (typeof window !== "undefined") {
-        localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
-      }
+    setShowOnboarding(false);
+    setOnboardingState("COMPLETED");
+    if (typeof window !== "undefined") {
+      localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
     }
   };
 
@@ -129,7 +123,6 @@ export function useOnboarding({
     showOnboarding,
     setShowOnboarding,
     onboardingState,
-    setOnboardingState,
     handleOnboardingComplete,
   };
 }
