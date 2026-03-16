@@ -279,8 +279,14 @@ async def delete_my_account(
         session.exec(delete(MobileSuit).where(col(MobileSuit.user_id) == user_id))
 
         # 自身がオーナーのチームに所属するメンバーレコードを削除
-        owned_team_ids_subquery = select(Team.id).where(col(Team.owner_user_id) == user_id).subquery()
-        session.exec(delete(TeamMember).where(col(TeamMember.team_id).in_(owned_team_ids_subquery)))
+        owned_team_ids_subquery = select(Team.id).where(
+            col(Team.owner_user_id) == user_id
+        )
+        session.exec(
+            delete(TeamMember).where(
+                col(TeamMember.team_id).in_(owned_team_ids_subquery)
+            )
+        )
         # 自身がメンバーとして所属するレコードを削除
         session.exec(delete(TeamMember).where(col(TeamMember.user_id) == user_id))
         # 自身がオーナーのチームを削除
