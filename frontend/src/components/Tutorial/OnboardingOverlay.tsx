@@ -34,7 +34,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     title: "ステップ 2: バトルエントリー",
     message:
       "準備ができたらダッシュボードからバトルにエントリーしましょう。バトルは毎週金曜日21時に開催されます。",
-    targetSelector: ".mission-selection-panel",
+    targetSelector: "a[href='/']",
     position: "top",
   },
   {
@@ -47,7 +47,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     title: "ステップ 4: 機体購入",
     message:
       "[Shop]を開いて機体や武器を購入してみましょう。",
-    targetSelector: "a[href='/garage/shop']",
+    targetSelector: "a[href='/shop']",
     position: "bottom",
   },
 ];
