@@ -28,10 +28,9 @@
 ### 1.1 初期機体の自動配布 (Starter Kit) ✅ 実装完了 (2026-02-15)
 * **現状:** ~~新規登録時はクレジットのみ所持しており、機体がないため何もできない。~~ → **解決済み**
 * **実装内容:**
-    * ✅ ユーザー作成時（`POST /api/pilots` 相当の処理時）に、デフォルト機体を自動で付与する機能を実装。
-    * ✅ 「初期機体選択ボーナス」として、最初のログイン時に `Zaku II` または `GM` から1つ選ばせるモーダル（`StarterSelectionModal`）を実装。
+    * ✅ ユーザー作成時（`POST /api/pilots/register`）に、勢力に応じた練習機を自動で付与する機能を実装。
     * ✅ バックエンド：`PilotService._create_starter_mobile_suit()` メソッドでスターター機体を作成・付与。
-    * ✅ フロントエンド：`frontend/src/components/Tutorial/StarterSelectionModal.tsx` で機体選択UI実装。
+    * ✅ ~~フロントエンド：`StarterSelectionModal` で機体選択UI実装~~ → オンボーディングフローに統合済み（`StarterSelectionModal` は削除）。
 
 ### 1.2 チュートリアル・ガイダンス ✅ 実装完了 (2026-02-15)
 * **現状:** ~~ガレージやショップへの誘導がない。~~ → **解決済み**
@@ -148,7 +147,7 @@ PvPvEの醍醐味である「他者との比較」を可視化し、モチベー
         * パディング・マージンの調整（`p-4 sm:p-6 md:p-8` など）
     * ✅ **モバイル対応コンポーネント**:
         * ダッシュボード（`EntryDashboard`, `CountdownTimer`）
-        * チュートリアル（`OnboardingOverlay`, `StarterSelectionModal`）
+        * チュートリアル（`OnboardingOverlay`）
         * ショップ（`shop/page.tsx`）
         * ガレージ（`garage/page.tsx`）
         * パイロット情報（`pilot/page.tsx`）

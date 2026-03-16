@@ -15,8 +15,4 @@ export const IS_PRODUCTION = process.env.NODE_ENV === "production";
 export const ONBOARDING_COMPLETED_KEY = "msbs_onboarding_completed";
 
 /** オンボーディングの進行状態 */
-export type OnboardingState =
-  | "NOT_STARTED"
-  | "BATTLE_STARTED"
-  | "BATTLE_FINISHED"
-  | "COMPLETED";
+export type OnboardingState = "NOT_STARTED" | "COMPLETED";

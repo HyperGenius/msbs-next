@@ -26,14 +26,11 @@ interface UseOnboardingReturn {
   showOnboarding: boolean;
   setShowOnboarding: (show: boolean) => void;
   onboardingState: OnboardingState;
-  setOnboardingState: (state: OnboardingState) => void;
-  showStarterSelection: boolean;
   handleOnboardingComplete: () => void;
-  handleStarterConfirm: () => void;
 }
 
 /**
- * オンボーディング（初回チュートリアル・機体受領確認）に関するロジックを管理するフック。
+ * オンボーディング（初回チュートリアル）に関するロジックを管理するフック。
  * パイロットが存在しない場合の /onboarding へのリダイレクト、
  * ログイン時の SWR キャッシュ強制更新も担う。
  */
@@ -55,7 +52,6 @@ export function useOnboarding({
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingState, setOnboardingState] =
     useState<OnboardingState>("NOT_STARTED");
-  const [showStarterSelection, setShowStarterSelection] = useState(false);
 
   // パイロット未作成時は /onboarding へリダイレクト
   useEffect(() => {
@@ -77,7 +73,7 @@ export function useOnboarding({
     prevIsSignedInRef.current = isSignedIn;
   }, [isLoaded, isSignedIn, mutateMobileSuits, mutatePilot, mutateUnreadBattles]);
 
-  // オンボーディング・機体受領確認モーダルの表示判定
+  // オンボーディングの表示判定
   useEffect(() => {
     if (
       !isLoaded ||
@@ -99,8 +95,8 @@ export function useOnboarding({
       battles.length === 0;
 
     if (isFirstTimeUser && !onboardingCompleted) {
-      // 初回ユーザー: 機体受領確認モーダルを表示
-      setShowStarterSelection(true);
+      // 初回ユーザー: チュートリアルオーバーレイを表示
+      setShowOnboarding(true);
       setOnboardingState("NOT_STARTED");
     } else if (onboardingCompleted) {
       setOnboardingState("COMPLETED");
@@ -116,33 +112,18 @@ export function useOnboarding({
   ]);
 
   const handleOnboardingComplete = () => {
-    if (onboardingState === "NOT_STARTED") {
-      setShowOnboarding(false);
-      setOnboardingState("BATTLE_STARTED");
-    } else if (onboardingState === "BATTLE_FINISHED") {
-      setShowOnboarding(false);
-      setOnboardingState("COMPLETED");
-      if (typeof window !== "undefined") {
-        localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
-      }
+    setShowOnboarding(false);
+    setOnboardingState("COMPLETED");
+    if (typeof window !== "undefined") {
+      localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
     }
-  };
-
-  // 機体受領確認後、チュートリアルオーバーレイへ進む
-  const handleStarterConfirm = () => {
-    setShowStarterSelection(false);
-    setShowOnboarding(true);
-    setOnboardingState("NOT_STARTED");
   };
 
   return {
     showOnboarding,
     setShowOnboarding,
     onboardingState,
-    setOnboardingState,
-    showStarterSelection,
     handleOnboardingComplete,
-    handleStarterConfirm,
   };
 }
 
