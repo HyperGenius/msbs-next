@@ -14,7 +14,6 @@ const mainNavItems = [
 
 const menuItems = [
   { href: "/team", label: "Team", icon: "👥" },
-  { href: "/rankings", label: "Rankings", icon: "🏆" },
   { href: "/pilot", label: "Pilot", icon: "🧑‍✈️" },
 ];
 
