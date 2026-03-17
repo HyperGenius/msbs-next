@@ -51,13 +51,13 @@ export default function BottomNav() {
       )}
 
       {/* Bottom navigation bar with relative wrapper for popup */}
-      <div className="relative w-full mt-auto shrink-0 md:hidden">
+      <div className="fixed bottom-0 left-0 right-0 w-full z-50 md:hidden">
         {/* Menu popup */}
         {isMenuOpen && (
           <div
             role="menu"
             aria-labelledby="bottom-nav-menu-button"
-            className="absolute bottom-full right-2 z-50 bg-[#0a0a0a] border-2 border-[#00ff41]/50 p-1 min-w-[180px] sf-scanline"
+            className="absolute bottom-full z-50 m-1 bg-[#0a0a0a] border-2 border-[#00ff41]/50 p-1 min-w-[180px] sf-scanline"
           >
             {menuItems.map(({ href, label, icon }) => (
               <Link
