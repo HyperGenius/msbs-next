@@ -29,10 +29,12 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="ja">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#050505] text-[#00ff41] pb-16 md:pb-0`}
+          className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#050505] text-[#00ff41] flex flex-col h-[100dvh] overflow-hidden md:h-auto md:min-h-screen md:overflow-visible`}
         >
           <Header />
-          {children}
+          <main className="flex-1 overflow-y-auto md:overflow-visible">
+            {children}
+          </main>
           <BottomNav />
         </body>
       </html>
