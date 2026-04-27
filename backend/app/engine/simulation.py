@@ -19,7 +19,9 @@ from app.engine.fuzzy_engine import FuzzyEngine
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 
 _MAX_STEPS = 5000
-_FUZZY_RULES_PATH = Path(__file__).parent.parent.parent / "data" / "fuzzy_rules" / "aggressive.json"
+_FUZZY_RULES_PATH = (
+    Path(__file__).parent.parent.parent / "data" / "fuzzy_rules" / "aggressive.json"
+)
 # 近隣ユニット検索半径 (m)
 _FUZZY_NEIGHBOR_RADIUS = 500.0
 
@@ -287,22 +289,27 @@ class BattleSimulator:
             float(np.linalg.norm(e.position.to_numpy() - pos_unit))
             for e in detected_enemies
         ]
-        distance_to_nearest_enemy = min(distances_to_detected) if distances_to_detected else 9999.0
+        distance_to_nearest_enemy = (
+            min(distances_to_detected) if distances_to_detected else 9999.0
+        )
 
         # enemy_count_near: 索敵済みの敵ユニット数（半径 _FUZZY_NEIGHBOR_RADIUS 以内）
-        enemy_count_near = float(sum(
-            1 for d in distances_to_detected if d <= _FUZZY_NEIGHBOR_RADIUS
-        ))
+        enemy_count_near = float(
+            sum(1 for d in distances_to_detected if d <= _FUZZY_NEIGHBOR_RADIUS)
+        )
 
         # ally_count_near: 同一チームの生存ユニット数（半径 _FUZZY_NEIGHBOR_RADIUS 以内、自分を除く）
-        ally_count_near = float(sum(
-            1
-            for u in self.units
-            if u.current_hp > 0
-            and u.team_id == unit.team_id
-            and u.id != unit.id
-            and float(np.linalg.norm(u.position.to_numpy() - pos_unit)) <= _FUZZY_NEIGHBOR_RADIUS
-        ))
+        ally_count_near = float(
+            sum(
+                1
+                for u in self.units
+                if u.current_hp > 0
+                and u.team_id == unit.team_id
+                and u.id != unit.id
+                and float(np.linalg.norm(u.position.to_numpy() - pos_unit))
+                <= _FUZZY_NEIGHBOR_RADIUS
+            )
+        )
 
         fuzzy_inputs = {
             "hp_ratio": hp_ratio,
@@ -397,7 +404,9 @@ class BattleSimulator:
             if weapon and distance <= weapon.range:
                 self._process_attack(actor, target, distance, pos_actor)
             else:
-                self._process_movement(actor, pos_actor, pos_target, diff_vector, distance)
+                self._process_movement(
+                    actor, pos_actor, pos_target, diff_vector, distance
+                )
         else:
             # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ
             self._process_movement(actor, pos_actor, pos_target, diff_vector, distance)

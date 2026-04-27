@@ -1114,9 +1114,7 @@ def test_ai_decision_phase_logs_ai_decision() -> None:
     ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
     assert len(ai_logs) >= 1
 
-    player_log = next(
-        (log for log in ai_logs if log.actor_id == player.id), None
-    )
+    player_log = next((log for log in ai_logs if log.actor_id == player.id), None)
     assert player_log is not None
     assert player_log.fuzzy_scores is not None
     assert player_log.strategy_mode == "AGGRESSIVE"
@@ -1132,9 +1130,7 @@ def test_ai_decision_phase_fuzzy_scores_recorded() -> None:
     sim._ai_decision_phase(player)
 
     ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
-    player_log = next(
-        (log for log in ai_logs if log.actor_id == player.id), None
-    )
+    player_log = next((log for log in ai_logs if log.actor_id == player.id), None)
     assert player_log is not None
     # fuzzy_scores には activations が記録されている
     assert "action" in player_log.fuzzy_scores
@@ -1144,7 +1140,7 @@ def test_ai_decision_phase_retreat_fallback_to_move() -> None:
     """RETREAT が出力されるシナリオで MOVE にフォールバックすることを確認する."""
     # HP 低く、敵多い → RETREAT が最優勢になるシナリオ
     player = create_fuzzy_test_player()
-    player.current_hp = 5   # HP 非常に低い (LOW ゾーン)
+    player.current_hp = 5  # HP 非常に低い (LOW ゾーン)
     player.max_hp = 100
 
     # 近接敵を大量配置（MANY になるよう）
@@ -1206,7 +1202,11 @@ def test_action_phase_respects_move_action() -> None:
     # MOVE なので攻撃せず、敵のHPが変わっていない
     assert enemy.current_hp == initial_enemy_hp
     # MOVE ログが出力される
-    move_logs = [log for log in sim.logs if log.action_type == "MOVE" and log.actor_id == player.id]
+    move_logs = [
+        log
+        for log in sim.logs
+        if log.action_type == "MOVE" and log.actor_id == player.id
+    ]
     assert len(move_logs) >= 1
 
 
@@ -1226,7 +1226,8 @@ def test_action_phase_respects_attack_action() -> None:
 
     # ATTACK または MISS ログが出力される（攻撃を試みた）
     attack_logs = [
-        log for log in sim.logs
+        log
+        for log in sim.logs
         if log.action_type in ("ATTACK", "MISS", "WAIT") and log.actor_id == player.id
     ]
     assert len(attack_logs) >= 1

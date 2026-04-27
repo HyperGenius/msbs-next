@@ -122,7 +122,9 @@ def run(mission_id: int, max_steps: int = 5000, output_path: str | None = None) 
         # ミッションデータ取得
         mission = session.get(Mission, mission_id)
         if not mission:
-            print(f"エラー: ミッション ID={mission_id} が見つかりません", file=sys.stderr)
+            print(
+                f"エラー: ミッション ID={mission_id} が見つかりません", file=sys.stderr
+            )
             sys.exit(1)
 
         print(f"ミッション名: {mission.name}")
@@ -178,7 +180,9 @@ def run(mission_id: int, max_steps: int = 5000, output_path: str | None = None) 
         sim.step()
         step_count += 1
 
-    print(f"シミュレーション完了 (ステップ数: {step_count}, 経過時間: {sim.elapsed_time:.1f}s)")
+    print(
+        f"シミュレーション完了 (ステップ数: {step_count}, 経過時間: {sim.elapsed_time:.1f}s)"
+    )
 
     # 勝敗判定
     alive_team_ids = {u.team_id for u in sim.units if u.current_hp > 0}
@@ -189,7 +193,11 @@ def run(mission_id: int, max_steps: int = 5000, output_path: str | None = None) 
     else:
         win_loss = "LOSE"
 
-    result_labels = {"WIN": "プレイヤー勝利", "LOSE": "プレイヤー敗北", "DRAW": "引き分け"}
+    result_labels = {
+        "WIN": "プレイヤー勝利",
+        "LOSE": "プレイヤー敗北",
+        "DRAW": "引き分け",
+    }
     print(f"結果: {result_labels[win_loss]}")
 
     kills = sum(1 for e in enemies if e.current_hp <= 0)
