@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # メンバーシップ関数（抽象基底 + 具体実装）
 # ---------------------------------------------------------------------------
@@ -53,6 +52,7 @@ class TriangleMF(MembershipFunction):
     """
 
     def __init__(self, a: float, b: float, c: float) -> None:
+        """パラメータの順序を検査して初期化."""
         if not (a <= b <= c):
             raise ValueError(f"TriangleMF: パラメータ順序違反 a={a}, b={b}, c={c}")
         self.a = a
@@ -70,6 +70,7 @@ class TriangleMF(MembershipFunction):
         return (c - x) / (c - b) if c != b else 1.0
 
     def support_range(self) -> tuple[float, float]:
+        """メンバーシップ関数が非ゼロになる範囲 [min, max] を返す."""
         return (self.a, self.c)
 
 
@@ -84,6 +85,7 @@ class TrapezoidMF(MembershipFunction):
     """
 
     def __init__(self, a: float, b: float, c: float, d: float) -> None:
+        """パラメータの順序を検査して初期化."""
         if not (a <= b <= c <= d):
             raise ValueError(
                 f"TrapezoidMF: パラメータ順序違反 a={a}, b={b}, c={c}, d={d}"
@@ -107,6 +109,7 @@ class TrapezoidMF(MembershipFunction):
         return (d - x) / (d - c) if d != c else 1.0
 
     def support_range(self) -> tuple[float, float]:
+        """メンバーシップ関数が非ゼロになる範囲 [min, max] を返す."""
         return (self.a, self.d)
 
 
@@ -247,8 +250,7 @@ def _fuzzify(
         x_clamped = max(min(all_mins), min(max(all_maxs), x))
 
         fuzzified[var] = {
-            set_name: mf.evaluate(x_clamped)
-            for set_name, mf in mf_sets.items()
+            set_name: mf.evaluate(x_clamped) for set_name, mf in mf_sets.items()
         }
     return fuzzified
 
@@ -315,6 +317,62 @@ def _evaluate_rules(
 _DEFUZZ_RESOLUTION = 200  # 数値積分の分解能
 
 
+def _get_support_range(
+    set_activations: dict[str, float],
+    mf_sets: dict[str, MembershipFunction],
+) -> tuple[float, float] | None:
+    """発火している集合のサポート範囲 (x_min, x_max) を返す. 発火なしの場合は None."""
+    all_mins: list[float] = []
+    all_maxs: list[float] = []
+    for set_name, mf in mf_sets.items():
+        if set_name in set_activations and set_activations[set_name] > 0.0:
+            lo, hi = mf.support_range()
+            all_mins.append(lo)
+            all_maxs.append(hi)
+    if not all_mins:
+        return None
+    return min(all_mins), max(all_maxs)
+
+
+def _centroid_for_variable(
+    set_activations: dict[str, float],
+    mf_sets: dict[str, MembershipFunction],
+) -> float | None:
+    """単一出力変数の重心法デファジフィケーション値を返す. 面積ゼロなら None."""
+    range_ = _get_support_range(set_activations, mf_sets)
+    if range_ is None:
+        return None
+    x_min, x_max = range_
+    if x_min >= x_max:
+        return x_min
+
+    step = (x_max - x_min) / _DEFUZZ_RESOLUTION
+    weighted_sum = 0.0
+    area_sum = 0.0
+    for i in range(_DEFUZZ_RESOLUTION):
+        x = x_min + (i + 0.5) * step
+        mu_combined = _clip_and_combine(x, set_activations, mf_sets)
+        weighted_sum += x * mu_combined
+        area_sum += mu_combined
+
+    return weighted_sum / area_sum if area_sum > 0.0 else None
+
+
+def _clip_and_combine(
+    x: float,
+    set_activations: dict[str, float],
+    mf_sets: dict[str, MembershipFunction],
+) -> float:
+    """クリッピング合成: 各集合の MF を発火強度でクリップし最大値を返す."""
+    mu_combined = 0.0
+    for set_name, activation in set_activations.items():
+        if activation <= 0.0 or set_name not in mf_sets:
+            continue
+        mu_clipped = min(mf_sets[set_name].evaluate(x), activation)
+        mu_combined = max(mu_combined, mu_clipped)
+    return mu_combined
+
+
 def _defuzzify_centroid(
     activations: dict[str, dict[str, float]],
     output_membership_functions: dict[str, dict[str, MembershipFunction]],
@@ -332,53 +390,14 @@ def _defuzzify_centroid(
         {出力変数名: デファジフィケーション値}
     """
     result: dict[str, float] = {}
-
     for out_var, set_activations in activations.items():
         if out_var not in output_membership_functions:
             continue
-
-        mf_sets = output_membership_functions[out_var]
-
-        # 出力変数のサポート範囲を決定
-        all_mins: list[float] = []
-        all_maxs: list[float] = []
-        for set_name, mf in mf_sets.items():
-            if set_name in set_activations and set_activations[set_name] > 0.0:
-                lo, hi = mf.support_range()
-                all_mins.append(lo)
-                all_maxs.append(hi)
-
-        if not all_mins:
-            continue
-
-        x_min = min(all_mins)
-        x_max = max(all_maxs)
-        if x_min >= x_max:
-            result[out_var] = x_min
-            continue
-
-        # 数値積分による重心計算
-        step = (x_max - x_min) / _DEFUZZ_RESOLUTION
-        weighted_sum = 0.0
-        area_sum = 0.0
-
-        for i in range(_DEFUZZ_RESOLUTION):
-            x = x_min + (i + 0.5) * step
-            # クリッピング合成: 各集合の MF を発火強度でクリップし最大値を採用
-            mu_combined = 0.0
-            for set_name, activation in set_activations.items():
-                if activation <= 0.0 or set_name not in mf_sets:
-                    continue
-                mu = mf_sets[set_name].evaluate(x)
-                mu_clipped = min(mu, activation)
-                mu_combined = max(mu_combined, mu_clipped)
-
-            weighted_sum += x * mu_combined
-            area_sum += mu_combined
-
-        if area_sum > 0.0:
-            result[out_var] = weighted_sum / area_sum
-
+        value = _centroid_for_variable(
+            set_activations, output_membership_functions[out_var]
+        )
+        if value is not None:
+            result[out_var] = value
     return result
 
 
@@ -402,6 +421,7 @@ class FuzzyEngine:
         rule_set: FuzzyRuleSet,
         default_output: dict[str, float] | None = None,
     ) -> None:
+        """初期化."""
         self.rule_set = rule_set
         self._default_output: dict[str, float] = default_output or {}
 

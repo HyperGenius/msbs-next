@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
-import json
-import math
 from pathlib import Path
 
 import pytest
 
 from app.engine.fuzzy_engine import (
-    FuzzyEngine,
-    FuzzyRuleSet,
-    TriangleMF,
-    TrapezoidMF,
-    _fuzzify,
-    _evaluate_rules,
-    _defuzzify_centroid,
     FuzzyCondition,
+    FuzzyEngine,
     FuzzyOutput,
     FuzzyRule,
+    FuzzyRuleSet,
+    TrapezoidMF,
+    TriangleMF,
+    _evaluate_rules,
+    _fuzzify,
 )
 
 # ---------------------------------------------------------------------------
@@ -125,21 +122,21 @@ class TestTrapezoidMF:
         """a=b（左側スロープが垂直）でも正しく動作する."""
         mf = TrapezoidMF(0.0, 0.0, 1.0, 2.0)
         assert mf.evaluate(-0.1) == pytest.approx(0.0)  # 範囲外（左）
-        assert mf.evaluate(0.0) == pytest.approx(1.0)   # a=b=0 のフラットトップ開始
-        assert mf.evaluate(0.5) == pytest.approx(1.0)   # フラットトップ内
+        assert mf.evaluate(0.0) == pytest.approx(1.0)  # a=b=0 のフラットトップ開始
+        assert mf.evaluate(0.5) == pytest.approx(1.0)  # フラットトップ内
 
     def test_degenerate_trapezoid_with_same_cd(self) -> None:
         """c=d（右側スロープが垂直）でも正しく動作する."""
         mf = TrapezoidMF(0.0, 1.0, 2.0, 2.0)
-        assert mf.evaluate(1.5) == pytest.approx(1.0)    # フラットトップ内
-        assert mf.evaluate(2.0) == pytest.approx(1.0)    # c=d=2.0 のフラットトップ末端
-        assert mf.evaluate(2.1) == pytest.approx(0.0)    # 範囲外（右）
+        assert mf.evaluate(1.5) == pytest.approx(1.0)  # フラットトップ内
+        assert mf.evaluate(2.0) == pytest.approx(1.0)  # c=d=2.0 のフラットトップ末端
+        assert mf.evaluate(2.1) == pytest.approx(0.0)  # 範囲外（右）
 
     def test_spike_a_eq_b_eq_c_eq_d(self) -> None:
         """a=b=c=d のとき、その点以外はすべて 0.0 になる."""
         mf = TrapezoidMF(1.0, 1.0, 1.0, 1.0)
         assert mf.evaluate(0.9) == pytest.approx(0.0)
-        assert mf.evaluate(1.0) == pytest.approx(1.0)   # 唯一の点: フラットトップ [1,1]
+        assert mf.evaluate(1.0) == pytest.approx(1.0)  # 唯一の点: フラットトップ [1,1]
         assert mf.evaluate(1.1) == pytest.approx(0.0)
 
     def test_invalid_params_raises(self) -> None:
@@ -157,8 +154,8 @@ class TestTrapezoidMF:
         # LOW: trapezoid [0.0, 0.0, 0.20, 0.35]
         mf = TrapezoidMF(0.0, 0.0, 0.20, 0.35)
         assert mf.evaluate(-0.1) == pytest.approx(0.0)  # 範囲外（左）
-        assert mf.evaluate(0.0) == pytest.approx(1.0)   # a=b=0 のフラットトップ開始
-        assert mf.evaluate(0.1) == pytest.approx(1.0)   # フラットトップ内
+        assert mf.evaluate(0.0) == pytest.approx(1.0)  # a=b=0 のフラットトップ開始
+        assert mf.evaluate(0.1) == pytest.approx(1.0)  # フラットトップ内
         assert mf.evaluate(0.20) == pytest.approx(1.0)  # フラットトップ右端
         assert mf.evaluate(0.35) == pytest.approx(0.0)  # 右端 d=0.35 → 0
 
@@ -167,10 +164,10 @@ class TestTrapezoidMF:
         # HIGH: trapezoid [0.65, 0.80, 1.0, 1.0]
         # c=d=1.0 の縮退ケース: x=1.0 はフラットトップの末端として 1.0 を返す
         mf = TrapezoidMF(0.65, 0.80, 1.0, 1.0)
-        assert mf.evaluate(0.65) == pytest.approx(0.0)   # 左端
-        assert mf.evaluate(0.80) == pytest.approx(1.0)   # フラットトップ開始
-        assert mf.evaluate(1.0) == pytest.approx(1.0)    # c=d=1.0 のフラットトップ末端
-        assert mf.evaluate(1.1) == pytest.approx(0.0)    # 範囲外（右）
+        assert mf.evaluate(0.65) == pytest.approx(0.0)  # 左端
+        assert mf.evaluate(0.80) == pytest.approx(1.0)  # フラットトップ開始
+        assert mf.evaluate(1.0) == pytest.approx(1.0)  # c=d=1.0 のフラットトップ末端
+        assert mf.evaluate(1.1) == pytest.approx(0.0)  # 範囲外（右）
 
 
 # ---------------------------------------------------------------------------
@@ -383,7 +380,11 @@ class TestFuzzyEngineIntegration:
     def test_far_enemy_move_fires(self, aggressive_engine: FuzzyEngine) -> None:
         """最近敵との距離が FAR → MOVE が発火する."""
         _, debug = aggressive_engine.infer_with_debug(
-            {"hp_ratio": 0.5, "enemy_count_near": 3.0, "distance_to_nearest_enemy": 800.0}
+            {
+                "hp_ratio": 0.5,
+                "enemy_count_near": 3.0,
+                "distance_to_nearest_enemy": 800.0,
+            }
         )
         activations = debug["activations"].get("action", {})
         assert activations.get("MOVE", 0.0) > 0.0
@@ -503,7 +504,7 @@ class TestFuzzyRuleSetLoad:
             FuzzyRuleSet.from_dict(data)
 
     def test_triangle_wrong_param_count_raises(self) -> None:
-        """triangle に3つ以外のパラメータを渡すと ValueError が発生する."""
+        """Triangle に3つ以外のパラメータを渡すと ValueError が発生する."""
         data = {
             "strategy": "TEST",
             "rules": [],
@@ -515,7 +516,7 @@ class TestFuzzyRuleSetLoad:
             FuzzyRuleSet.from_dict(data)
 
     def test_trapezoid_wrong_param_count_raises(self) -> None:
-        """trapezoid に4つ以外のパラメータを渡すと ValueError が発生する."""
+        """Trapezoid に4つ以外のパラメータを渡すと ValueError が発生する."""
         data = {
             "strategy": "TEST",
             "rules": [],
