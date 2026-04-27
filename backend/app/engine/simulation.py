@@ -22,8 +22,16 @@ _MAX_STEPS = 5000
 _FUZZY_RULES_PATH = (
     Path(__file__).parent.parent.parent / "data" / "fuzzy_rules" / "aggressive.json"
 )
+_TARGET_SELECTION_FUZZY_RULES_PATH = (
+    Path(__file__).parent.parent.parent
+    / "data"
+    / "fuzzy_rules"
+    / "aggressive_target_selection.json"
+)
 # 近隣ユニット検索半径 (m)
 _FUZZY_NEIGHBOR_RADIUS = 500.0
+# ターゲット選択ファジィ推論: 距離の最大値 (m)
+_TARGET_SELECTION_MAX_DIST = 3000.0
 
 
 class BattleSimulator:
@@ -96,6 +104,11 @@ class BattleSimulator:
         # 中階層ファジィ推論エンジン（AGGRESSIVEルールセット）
         self._fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
             _FUZZY_RULES_PATH, default_output={"action": 0.0}
+        )
+        # 低階層ファジィ推論エンジン: ターゲット選択（AGGRESSIVEルールセット）
+        self._target_selection_fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
+            _TARGET_SELECTION_FUZZY_RULES_PATH,
+            default_output={"target_priority": 0.0},
         )
 
     def _generate_chatter(self, unit: MobileSuit, chatter_type: str) -> str | None:
@@ -386,7 +399,7 @@ class BattleSimulator:
         current_action = self.unit_resources[unit_id].get("current_action", "MOVE")
 
         # ターゲット選択
-        target = self._select_target(actor)
+        target = self._select_target_fuzzy(actor)
         if not target:
             # 発見済みの敵がいない場合、最も近い未発見の敵の方向へ移動
             self._search_movement(actor)
@@ -412,7 +425,12 @@ class BattleSimulator:
             self._process_movement(actor, pos_actor, pos_target, diff_vector, distance)
 
     def _log_target_selection(
-        self, actor: MobileSuit, target: MobileSuit, reason: str, details: str
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        reason: str,
+        details: str,
+        fuzzy_scores: dict | None = None,
     ) -> None:
         """ターゲット選択の理由をログに記録する.
 
@@ -428,6 +446,7 @@ class BattleSimulator:
             "STRONGEST": "高脅威ターゲット優先",
             "THREAT": "最大脅威優先",
             "RANDOM": "ランダム選択",
+            "FUZZY": "ファジィ推論",
         }
         actor_name = self._format_actor_name(actor)
         label = _tactics_label.get(reason, reason)
@@ -462,6 +481,11 @@ class BattleSimulator:
             )
         elif reason == "RANDOM":
             message = f"{actor_name}はランダムに{target.name}をターゲットに選択した"
+        elif reason == "FUZZY":
+            message = (
+                f"{actor_name}は[{label}]で{target.name}を最優先ターゲットに決定"
+                f"（{details}）"
+            )
         else:
             message = f"{actor_name}がターゲット選択: {target.name} (戦術: {reason}, {details})"
 
@@ -473,6 +497,7 @@ class BattleSimulator:
                 target_id=target.id,
                 message=message,
                 position_snapshot=actor.position,
+                fuzzy_scores=fuzzy_scores,
             )
         )
 
@@ -587,8 +612,25 @@ class BattleSimulator:
 
         return threat_level
 
-    def _select_target(self, actor: MobileSuit) -> MobileSuit | None:
-        """ターゲットを選択する（戦術と索敵状態に基づく）."""
+    def _calculate_attack_power(self, unit: MobileSuit) -> float:
+        """ユニットの攻撃力を計算する（武器威力の最大値）.
+
+        Args:
+            unit: 評価対象のユニット
+
+        Returns:
+            攻撃力スコア（武器がない場合は0.0）
+        """
+        if not unit.weapons:
+            return 0.0
+        return float(max(w.power for w in unit.weapons))
+
+    def _select_target_legacy(self, actor: MobileSuit) -> MobileSuit | None:
+        """ターゲットを選択する（戦術と索敵状態に基づくレガシー実装）.
+
+        Note:
+            Phase 3以降で廃止予定。フォールバック用として残す。
+        """
         # ターゲット選択: team_idが異なる生存ユニットをリストアップ
         potential_targets = [
             u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id
@@ -651,6 +693,128 @@ class BattleSimulator:
                 actor, target, "CLOSEST", f"距離: {int(distance)}m"
             )
         return target
+
+    def _select_target_fuzzy(self, actor: MobileSuit) -> MobileSuit | None:
+        """ターゲットを選択する（ファジィ推論による動的優先度スコア計算）.
+
+        各索敵済み候補に対してファジィ推論を実行し、最も高い target_priority
+        スコアを持つユニットを選択する。推論失敗時は CLOSEST フォールバックを使用する。
+
+        Args:
+            actor: 選択を行う機体
+
+        Returns:
+            選択されたターゲット。候補が0件の場合は None。
+        """
+        # ターゲット選択: team_idが異なる生存ユニットをリストアップ
+        potential_targets = [
+            u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id
+        ]
+
+        # 索敵済みの敵のみをターゲット候補とする
+        if actor.team_id is None:
+            return None
+        detected_targets = [
+            t
+            for t in potential_targets
+            if t.id in self.team_detected_units[actor.team_id]
+        ]
+
+        # ターゲットが存在しない場合はNoneを返す
+        if not detected_targets:
+            return None
+
+        pos_actor = actor.position.to_numpy()
+
+        # 各候補にファジィ推論を実行し優先度スコアを計算
+        try:
+            best_target: MobileSuit | None = None
+            best_score: float = -1.0
+            best_fuzzy_scores: dict | None = None
+            all_scores: dict[str, float] = {}
+
+            for candidate in detected_targets:
+                pos_candidate = candidate.position.to_numpy()
+                distance = float(np.linalg.norm(pos_candidate - pos_actor))
+                distance = min(distance, _TARGET_SELECTION_MAX_DIST)
+
+                hp_ratio = candidate.current_hp / max(1, candidate.max_hp)
+                attack_power = self._calculate_attack_power(candidate)
+                unit_id_candidate = str(candidate.id)
+                candidate_action = self.unit_resources.get(unit_id_candidate, {}).get(
+                    "current_action", "MOVE"
+                )
+                is_attacking_ally = 1.0 if candidate_action == "ATTACK" else 0.0
+
+                fuzzy_inputs = {
+                    "target_hp_ratio": hp_ratio,
+                    "target_distance": distance,
+                    "target_attack_power": attack_power,
+                    "is_attacking_ally": is_attacking_ally,
+                }
+
+                result, debug = self._target_selection_fuzzy_engine.infer_with_debug(
+                    fuzzy_inputs
+                )
+                score = result.get("target_priority", 0.0)
+                all_scores[str(candidate.id)] = score
+
+                if score > best_score:
+                    best_score = score
+                    best_target = candidate
+                    best_fuzzy_scores = {
+                        "layer": "target_selection",
+                        "selected_target_id": str(candidate.id),
+                        "score": score,
+                        "inputs": fuzzy_inputs,
+                        "fuzzified": debug.get("fuzzified", {}),
+                        "activations": debug.get("activations", {}),
+                        "all_scores": all_scores,
+                    }
+
+            if best_target is None:
+                # フォールバック: CLOSEST
+                best_target = min(
+                    detected_targets,
+                    key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
+                )
+                fallback_distance = float(
+                    np.linalg.norm(best_target.position.to_numpy() - pos_actor)
+                )
+                self._log_target_selection(
+                    actor,
+                    best_target,
+                    "CLOSEST",
+                    f"距離: {int(fallback_distance)}m",
+                )
+                return best_target
+
+            # all_scores を最終状態で更新
+            if best_fuzzy_scores is not None:
+                best_fuzzy_scores["all_scores"] = all_scores
+
+            self._log_target_selection(
+                actor,
+                best_target,
+                "FUZZY",
+                f"優先度スコア: {best_score:.3f}",
+                fuzzy_scores=best_fuzzy_scores,
+            )
+            return best_target
+
+        except Exception:
+            # 推論失敗時は CLOSEST フォールバック
+            fallback = min(
+                detected_targets,
+                key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
+            )
+            fallback_distance = float(
+                np.linalg.norm(fallback.position.to_numpy() - pos_actor)
+            )
+            self._log_target_selection(
+                actor, fallback, "CLOSEST", f"距離: {int(fallback_distance)}m"
+            )
+            return fallback
 
     def _get_or_init_weapon_state(self, weapon: Weapon, resources: dict) -> dict:
         """武器状態を取得または初期化する."""

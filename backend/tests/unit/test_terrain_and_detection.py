@@ -254,19 +254,19 @@ def test_target_selection_requires_detection() -> None:
     sim = BattleSimulator(player, [enemy], environment="SPACE")
 
     # Before detection, target selection should return None
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is None
 
     # Run detection phase (enemy is out of range, so won't be detected)
     sim._detection_phase()
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is None
 
     # Manually add enemy to detected units
     sim.team_detected_units["PLAYER_TEAM"].add(enemy.id)
 
     # Now target selection should work
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is not None
     assert target.id == enemy.id
 
