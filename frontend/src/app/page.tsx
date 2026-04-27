@@ -78,9 +78,9 @@ export default function Home() {
     isLoading,
     winner,
     winLoss,
-    currentTurn,
-    setCurrentTurn,
-    maxTurn,
+    currentTimestamp,
+    setCurrentTimestamp,
+    maxTimestamp,
     selectedMissionId,
     setSelectedMissionId,
     playerData,
@@ -151,13 +151,13 @@ export default function Home() {
               logs={logs}
               player={playerData}
               enemies={enemiesData}
-              currentTurn={currentTurn}
+              currentTimestamp={currentTimestamp}
               environment={currentEnvironment}
             />
             <TurnController
-              currentTurn={currentTurn}
-              maxTurn={maxTurn}
-              onTurnChange={setCurrentTurn}
+              currentTimestamp={currentTimestamp}
+              maxTimestamp={maxTimestamp}
+              onTimestampChange={setCurrentTimestamp}
             />
           </div>
         )}
@@ -250,7 +250,7 @@ export default function Home() {
           isLoading={isLoading}
           startBattle={startBattle}
           logs={logs}
-          currentTurn={currentTurn}
+          currentTimestamp={currentTimestamp}
           winner={winner}
         />
       </div>

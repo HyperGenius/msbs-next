@@ -4,6 +4,8 @@
 export const DEFAULT_MAX_EN = 1000;
 export const EN_WARNING_THRESHOLD = 0.2; // 20%以下でEN不足警告
 export const RESIST_PATTERN = /(\d+)%軽減/; // 軽減率パターン
+/** シミュレーションのステップ幅（秒）。prevSnapshot 計算に使用する。 */
+export const SIMULATION_STEP_S = 0.1;
 
 // 色計算用のヘルパー
 export function getHpColor(current: number, max: number) {

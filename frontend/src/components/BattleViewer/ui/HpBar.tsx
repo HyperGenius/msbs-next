@@ -10,25 +10,25 @@ export function HpBar({
     current, 
     max, 
     colorFunc, 
-    currentTurn,
+    currentTimestamp,
     unitId,
     logs
 }: { 
     current: number; 
     max: number; 
     colorFunc: (ratio: number) => string;
-    currentTurn: number;
+    currentTimestamp: number;
     unitId: string;
     logs: BattleLog[];
 }) {
     const [flash, setFlash] = useState(false);
-    const prevTurnRef = useRef(currentTurn);
+    const prevTimestampRef = useRef(currentTimestamp);
     
     useEffect(() => {
-        // ターンが変わったときにダメージを受けたかチェック
-        if (currentTurn !== prevTurnRef.current) {
-            const turnLogs = logs.filter(log => log.turn === currentTurn);
-            const tookDamage = turnLogs.some(log => 
+        // タイムスタンプが変わったときにダメージを受けたかチェック
+        if (currentTimestamp !== prevTimestampRef.current) {
+            const timestampLogs = logs.filter(log => Math.abs(log.timestamp - currentTimestamp) < 1e-9);
+            const tookDamage = timestampLogs.some(log => 
                 (log.action_type === "ATTACK" && log.target_id === unitId && log.damage && log.damage > 0) ||
                 (log.action_type === "DAMAGE" && log.actor_id === unitId && log.damage && log.damage > 0)
             );
@@ -40,9 +40,9 @@ export function HpBar({
                 setTimeout(() => setFlash(false), 300);
             }
             
-            prevTurnRef.current = currentTurn;
+            prevTimestampRef.current = currentTimestamp;
         }
-    }, [currentTurn, unitId, logs]);
+    }, [currentTimestamp, unitId, logs]);
     
     const ratio = current / max;
     const bgColor = colorFunc(ratio);

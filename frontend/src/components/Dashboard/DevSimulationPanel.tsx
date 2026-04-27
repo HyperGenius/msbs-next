@@ -17,7 +17,7 @@ interface DevSimulationPanelProps {
   isLoading: boolean;
   startBattle: (missionId: number) => void;
   logs: BattleLog[];
-  currentTurn: number;
+  currentTimestamp: number;
   winner: string | null;
 }
 
@@ -31,7 +31,7 @@ export default function DevSimulationPanel({
   isLoading,
   startBattle,
   logs,
-  currentTurn,
+  currentTimestamp,
   winner,
 }: DevSimulationPanelProps) {
   // 本番ログプレビューモードのトグル（開発環境専用）
@@ -133,7 +133,7 @@ export default function DevSimulationPanel({
             <ul className="space-y-1">
               {logs.map((log, index) => {
                 // 現在のターンに対応するログをハイライト
-                const isCurrentTurn = log.turn === currentTurn;
+                const isCurrentTimestamp = Math.abs(log.timestamp - currentTimestamp) < 1e-9;
 
                 // ログ表示用: playerDataなどがnullの場合はIDをそのまま表示
                 const actorName = log.actor_id === playerData?.id ? playerData.name
@@ -142,7 +142,7 @@ export default function DevSimulationPanel({
                 const isPlayer = log.actor_id === playerData?.id;
 
                 const displayLog = formatBattleLog(log, isProductionPreview, playerData?.id ?? "");
-                const { borderStyle, bgStyle, textStyle } = isCurrentTurn
+                const { borderStyle, bgStyle, textStyle } = isCurrentTimestamp
                   ? { borderStyle: "border-green-400", bgStyle: "bg-green-900/30", textStyle: "text-white" }
                   : displayLog.style;
 
@@ -151,7 +151,7 @@ export default function DevSimulationPanel({
                     key={index}
                     className={`border-l-2 pl-2 py-1 transition-colors ${borderStyle} ${bgStyle} ${textStyle}`}
                   >
-                    <span className="opacity-50 mr-4 w-16 inline-block">[Turn {log.turn}]</span>
+                    <span className="opacity-50 mr-4 w-16 inline-block">[{log.timestamp.toFixed(1)}s]</span>
                     <span className={`font-bold mr-2 ${isPlayer ? 'text-blue-400' : 'text-red-400'}`}>
                       {actorName}:
                     </span>

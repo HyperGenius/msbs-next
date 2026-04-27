@@ -8,7 +8,7 @@ import { IS_PRODUCTION } from "@/constants";
 
 interface BattleLogViewerProps {
   logs: BattleLog[];
-  currentTurn: number;
+  currentTimestamp: number;
   isFiltered: boolean;
   isProductionPreview: boolean;
   hasReplayData: boolean;
@@ -21,7 +21,7 @@ interface BattleLogViewerProps {
 
 export default function BattleLogViewer({
   logs,
-  currentTurn,
+  currentTimestamp,
   isFiltered,
   isProductionPreview,
   hasReplayData,
@@ -33,19 +33,19 @@ export default function BattleLogViewer({
 }: BattleLogViewerProps) {
   const logContainerRef = useRef<HTMLDivElement>(null);
 
-  /** currentTurn 変更時に該当ターンのログへ自動スクロール */
+  /** currentTimestamp 変更時に該当タイムスタンプのログへ自動スクロール */
   useEffect(() => {
     if (!logContainerRef.current) return;
     const target = logContainerRef.current.querySelector(
-      `[data-turn-start="${currentTurn}"]`
+      `[data-timestamp-start="${currentTimestamp}"]`
     );
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }, [currentTurn]);
+  }, [currentTimestamp]);
 
   const displayedLogs = filterRelevantLogs(logs);
-  const seenTurns = new Set<number>();
+  const seenTimestamps = new Set<number>();
 
   return (
     <div className="flex-1 overflow-y-auto p-4">
@@ -81,22 +81,22 @@ export default function BattleLogViewer({
         {displayedLogs.map((log, index) => {
           const displayLog = formatBattleLog(log, IS_PRODUCTION || isProductionPreview, playerId ?? "");
           const isOwnUnit = ownedMobileSuitIds.has(log.actor_id);
-          const isActiveTurn = log.turn === currentTurn;
-          const isFirstOfTurn = !seenTurns.has(log.turn);
-          if (isFirstOfTurn) seenTurns.add(log.turn);
+          const isActiveTimestamp = Math.abs(log.timestamp - currentTimestamp) < 1e-9;
+          const isFirstOfTimestamp = !seenTimestamps.has(log.timestamp);
+          if (isFirstOfTimestamp) seenTimestamps.add(log.timestamp);
           return (
             <div
               key={index}
-              data-turn-start={isFirstOfTurn ? log.turn : undefined}
+              data-timestamp-start={isFirstOfTimestamp ? log.timestamp : undefined}
               className={`border-l-2 pl-2 py-1 transition-colors ${
-                isActiveTurn
+                isActiveTimestamp
                   ? "border-green-400 bg-green-900/40 text-green-200 shadow-[0_0_8px_rgba(34,197,94,0.3)]"
                   : isOwnUnit
                   ? "border-blue-500 bg-blue-900/30 text-blue-300"
                   : `${displayLog.style.borderStyle} ${displayLog.style.bgStyle} ${displayLog.style.textStyle}`
               }`}
             >
-              <span className="opacity-50 mr-2">[Turn {log.turn}]</span>
+              <span className="opacity-50 mr-2">[{log.timestamp.toFixed(1)}s]</span>
               {displayLog.skill_activated && (
                 <span className="text-amber-400 mr-1">★</span>
               )}

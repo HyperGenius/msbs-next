@@ -7,13 +7,13 @@ import { RESIST_PATTERN } from "../utils";
 
 export function useBattleEvents(
     logs: BattleLog[],
-    currentTurn: number
+    currentTimestamp: number
 ): Map<string, BattleEventEffect | null> {
     return useMemo(() => {
-        const currentTurnLogs = logs.filter(log => log.turn === currentTurn);
+        const currentTimestampLogs = logs.filter(log => Math.abs(log.timestamp - currentTimestamp) < 1e-9);
         const battleEventMap = new Map<string, BattleEventEffect | null>();
         
-        for (const log of currentTurnLogs) {
+        for (const log of currentTimestampLogs) {
             // クリティカルヒット検出
             if (log.action_type === "ATTACK" && log.actor_id && 
                 log.message.includes("クリティカルヒット") && !battleEventMap.has(log.actor_id)) {
@@ -46,5 +46,5 @@ export function useBattleEvents(
         }
         
         return battleEventMap;
-    }, [logs, currentTurn]);
+    }, [logs, currentTimestamp]);
 }

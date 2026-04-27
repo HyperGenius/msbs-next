@@ -8,7 +8,7 @@ const PLAYER_ID = "player-001";
 /** テスト用ログを生成するヘルパー */
 function makeLog(overrides: Partial<BattleLog> = {}): BattleLog {
   return {
-    turn: 1,
+    timestamp: 0.1,
     actor_id: PLAYER_ID,
     action_type: "ATTACK",
     message: "攻撃した",
@@ -39,10 +39,10 @@ describe("formatBattleLog – 開発環境", () => {
     expect(result.message).toBe("150ダメージを与えた");
   });
 
-  it("actor_id / turn / action_type をそのまま引き継ぐ", () => {
-    const log = makeLog({ turn: 5, action_type: "MISS" });
+  it("actor_id / timestamp / action_type をそのまま引き継ぐ", () => {
+    const log = makeLog({ timestamp: 0.5, action_type: "MISS" });
     const result = formatBattleLog(log, false, PLAYER_ID);
-    expect(result.turn).toBe(5);
+    expect(result.timestamp).toBe(0.5);
     expect(result.action_type).toBe("MISS");
     expect(result.actor_id).toBe(PLAYER_ID);
   });
