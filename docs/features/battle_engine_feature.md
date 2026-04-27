@@ -360,9 +360,9 @@ python scripts/run_simulation.py \
   - `fuzzy_scores: dict | None` 追加
   - `strategy_mode: str | None` 追加
 - [ ] `BattleViewer` を新ログスキーマに対応（Phase 1-4 で対応）
-- [ ] `FuzzyEngine` クラスの新規作成（Phase 1-2）
-- [ ] 中階層ファジィ推論の実装（Phase 1-2）
-- [ ] `aggressive.json` ルールセットの初期定義（Phase 1-2）
+- [x] `FuzzyEngine` クラスの新規作成（Phase 1-2）
+- [x] 中階層ファジィ推論の実装（Phase 1-2）
+- [x] `aggressive.json` ルールセットの初期定義（Phase 1-2）
 - [ ] ローカル実行スクリプト（`run_simulation.py`）の作成（Phase 1-3）
 
 ### Phase 2：低階層ファジィ推論

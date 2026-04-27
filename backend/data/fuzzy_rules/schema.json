@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FuzzyRuleSet",
+  "description": "ファジィ推論ルールセットのJSONスキーマ定義",
+  "type": "object",
+  "required": ["strategy", "rules", "membership_functions"],
+  "properties": {
+    "strategy": {
+      "type": "string",
+      "description": "戦略モード名（例: AGGRESSIVE, DEFENSIVE, SNIPER）"
+    },
+    "layer": {
+      "type": "string",
+      "description": "AIの意思決定階層（例: behavior_selection, target_selection）",
+      "default": ""
+    },
+    "rules": {
+      "type": "array",
+      "description": "ファジィルールの一覧",
+      "items": {
+        "$ref": "#/definitions/FuzzyRule"
+      }
+    },
+    "membership_functions": {
+      "type": "object",
+      "description": "変数名をキーとしたメンバーシップ関数の定義マップ",
+      "additionalProperties": {
+        "type": "object",
+        "description": "集合名をキーとしたメンバーシップ関数の定義マップ",
+        "additionalProperties": {
+          "$ref": "#/definitions/MembershipFunctionDef"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "FuzzyRule": {
+      "type": "object",
+      "required": ["id", "conditions", "operator", "output"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ルールの一意識別子"
+        },
+        "conditions": {
+          "type": "array",
+          "description": "ルールの条件リスト（全て同じ operator で結合される）",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/FuzzyCondition"
+          }
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["AND", "OR"],
+          "description": "条件結合演算子（AND: min演算, OR: max演算）"
+        },
+        "output": {
+          "$ref": "#/definitions/FuzzyOutput"
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 1.0,
+          "description": "ルールの重み（発火強度に掛け合わせる）"
+        }
+      }
+    },
+    "FuzzyCondition": {
+      "type": "object",
+      "required": ["variable", "set"],
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "入力変数名"
+        },
+        "set": {
+          "type": "string",
+          "description": "ファジィ集合名"
+        }
+      }
+    },
+    "FuzzyOutput": {
+      "type": "object",
+      "required": ["variable", "set"],
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "出力変数名"
+        },
+        "set": {
+          "type": "string",
+          "description": "出力先のファジィ集合名"
+        }
+      }
+    },
+    "MembershipFunctionDef": {
+      "type": "object",
+      "required": ["type", "params"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["triangle", "trapezoid"],
+          "description": "メンバーシップ関数の種別"
+        },
+        "params": {
+          "type": "array",
+          "description": "メンバーシップ関数のパラメータ（triangle: [a,b,c], trapezoid: [a,b,c,d]）",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 4
+        }
+      }
+    }
+  }
+}
