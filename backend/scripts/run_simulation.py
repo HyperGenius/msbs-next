@@ -184,13 +184,13 @@ def run(mission_id: int, max_steps: int = 5000, output_path: str | None = None) 
     alive_team_ids = {u.team_id for u in sim.units if u.current_hp > 0}
     if player.team_id in alive_team_ids:
         win_loss = "WIN"
-        print(f"結果: プレイヤー勝利")
     elif not alive_team_ids:
         win_loss = "DRAW"
-        print(f"結果: 引き分け")
     else:
         win_loss = "LOSE"
-        print(f"結果: プレイヤー敗北")
+
+    result_labels = {"WIN": "プレイヤー勝利", "LOSE": "プレイヤー敗北", "DRAW": "引き分け"}
+    print(f"結果: {result_labels[win_loss]}")
 
     kills = sum(1 for e in enemies if e.current_hp <= 0)
     print(f"撃墜数: {kills} / {len(enemies)}")
