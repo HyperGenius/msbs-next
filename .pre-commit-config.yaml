@@ -7,21 +7,19 @@ repos:
       # Linter
       - id: ruff
         args: [--fix]
-        files: ^backend/
       # Formatter
       - id: ruff-format
-        files: ^backend/
 
   # --- Mypy (Type Checker) ---
-  - repo: local
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.0
     hooks:
       - id: mypy
-        name: mypy
-        entry: backend/.venv/bin/python -m mypy
-        args: [--config-file=backend/pyproject.toml]
-        language: system
-        types: [python]
-        require_serial: true
-        files: ^backend/
-        exclude: ^backend/(alembic/versions/|scripts/|tests/)
-        # additional_dependencies:
+        exclude: ^backend/alembic/|^backend/scripts/|^backend/tests/
+        additional_dependencies:
+          - pytest
+          - pytest-mock
+          - pydantic
+          - dotenv
+          - fastapi
+          - sqlmodel

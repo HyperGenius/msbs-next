@@ -1,8 +1,8 @@
 # バトルエンジン高度化 機能仕様書
 
-**バージョン:** 0.2.0  
-**作成日:** 2026-04-26  
-**ステータス:** ドラフト
+**バージョン:** 0.3.0  
+**作成日:** 2026-04-27  
+**ステータス:** Phase 1-1 実装済み
 
 ---
 
@@ -348,13 +348,22 @@ python scripts/run_simulation.py \
 
 **目標:** 時間ステップ制への移行 + 中階層ファジィ推論の最小実装
 
-- [ ] `BattleSimulator` の進行方式をターン制→時間ステップ制へリファクタリング
-- [ ] 新 `BattleLog` スキーマへの移行（`turn` → `timestamp`、`velocity_snapshot` 追加）
-- [ ] `BattleViewer` を新ログスキーマに対応（旧ターン制ログとの後方互換性は持たない）
-- [ ] `FuzzyEngine` クラスの新規作成（メンバーシップ関数・ルール評価・デファジフィケーション）
-- [ ] 中階層ファジィ推論の実装（行動選択：ATTACK / MOVE / RETREAT）
-- [ ] `aggressive.json` ルールセットの初期定義
-- [ ] ローカル実行スクリプト（`run_simulation.py`）の作成
+- [x] `BattleSimulator` の進行方式をターン制→時間ステップ制へリファクタリング
+  - `process_turn()` を廃止し `step(dt: float = 0.1)` に移行
+  - `self.turn` → `self.elapsed_time: float` に置換
+  - `calculate_initiative()` / イニシアチブソート廃止
+  - 最大 5000 ステップで引き分け終了
+  - ステップ処理順: 索敵 → 行動 → リソース更新
+- [x] 新 `BattleLog` スキーマへの移行
+  - `turn: int` → `timestamp: float`（バトル内経過時間 s）
+  - `velocity_snapshot: Vector3 | None` 追加
+  - `fuzzy_scores: dict | None` 追加
+  - `strategy_mode: str | None` 追加
+- [ ] `BattleViewer` を新ログスキーマに対応（Phase 1-4 で対応）
+- [ ] `FuzzyEngine` クラスの新規作成（Phase 1-2）
+- [ ] 中階層ファジィ推論の実装（Phase 1-2）
+- [ ] `aggressive.json` ルールセットの初期定義（Phase 1-2）
+- [ ] ローカル実行スクリプト（`run_simulation.py`）の作成（Phase 1-3）
 
 ### Phase 2：低階層ファジィ推論
 

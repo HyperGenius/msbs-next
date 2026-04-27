@@ -141,7 +141,7 @@ def test_battle_log_includes_chatter():
     for _ in range(5):
         if simulator.is_finished:
             break
-        simulator.process_turn()
+        simulator.step()
 
     # Check logs for chatter
     # logs_with_chatter = [log for log in simulator.logs if log.chatter is not None]
@@ -171,7 +171,7 @@ def test_ace_destruction_log():
     for _ in range(10):
         if simulator.is_finished:
             break
-        simulator.process_turn()
+        simulator.step()
 
     # Find destruction log
     destruction_logs = [log for log in simulator.logs if log.action_type == "DESTROYED"]

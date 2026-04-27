@@ -14,7 +14,7 @@ sys.path.append(os.getcwd())
 from app.models import models  # noqa
 
 # alembic
-from alembic import context
+from alembic import context  # type: ignore[attr-defined]
 
 # Alembic Config object
 config = context.config

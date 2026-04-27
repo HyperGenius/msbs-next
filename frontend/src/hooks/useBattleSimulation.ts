@@ -134,9 +134,9 @@ export function useBattleSimulation({
         mutatePilot();
       }
 
-      const lastTurn =
-        data.logs.length > 0 ? data.logs[data.logs.length - 1].turn : 0;
-      setMaxTurn(lastTurn);
+      const lastTimestamp =
+        data.logs.length > 0 ? data.logs[data.logs.length - 1].timestamp : 0;
+      setMaxTurn(lastTimestamp);
     } catch (error) {
       console.error("Error fetching battle logs:", error);
       alert(

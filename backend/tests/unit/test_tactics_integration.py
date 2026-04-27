@@ -99,7 +99,7 @@ def test_tactics_integration() -> None:
     max_turns = 30
     turns_executed = 0
     while not sim.is_finished and turns_executed < max_turns:
-        sim.process_turn()
+        sim.step()
         turns_executed += 1
 
     # Verify simulation completed
