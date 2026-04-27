@@ -12,12 +12,12 @@ export interface UnitSnapshot {
     warnings: WarningType[];
 }
 
-// 現在のターン時点での情報を計算する関数（Hookではない）
+// 現在のタイムスタンプ時点での情報を計算する関数（Hookではない）
 export function getBattleSnapshot(
     targetId: string,
     initialMs: MobileSuit,
     logs: BattleLog[],
-    currentTurn: number
+    currentTimestamp: number
 ): UnitSnapshot {
     let pos = initialMs.position;
     let hp = initialMs.max_hp; // 戦闘開始時は満タンと仮定
@@ -32,9 +32,9 @@ export function getBattleSnapshot(
         }
     });
 
-    // 開始から現在ターンまでのログを走査して状態を再現
+    // 開始から現在タイムスタンプまでのログを走査して状態を再現
     for (const log of logs) {
-        if (log.turn > currentTurn) break;
+        if (log.timestamp > currentTimestamp + 1e-9) break;
 
         // 位置更新
         if (log.actor_id === targetId && log.position_snapshot) {
@@ -79,17 +79,18 @@ export function getBattleSnapshot(
         }
     }
     
-    // クールダウン判定（簡易版：最後の攻撃から一定ターン以内）
+    // クールダウン判定（簡易版：最後の攻撃から一定時間以内）
     // 注: より正確な実装には武器ごとのクールダウン追跡が必要
-    let lastAttackTurn = 0;
+    let lastAttackTimestamp = 0;
     for (let i = logs.length - 1; i >= 0; i--) {
         if (logs[i].action_type === "ATTACK" && logs[i].actor_id === targetId) {
-            lastAttackTurn = logs[i].turn;
+            lastAttackTimestamp = logs[i].timestamp;
             break;
         }
     }
-    const cooldownTurns = firstWeapon?.cool_down_turn || 0;
-    if (cooldownTurns > 0 && currentTurn - lastAttackTurn < cooldownTurns) {
+    // cool_down_turn を秒換算（1ターン = 0.1s）
+    const cooldownSeconds = (firstWeapon?.cool_down_turn || 0) * 0.1;
+    if (cooldownSeconds > 0 && currentTimestamp - lastAttackTimestamp < cooldownSeconds) {
         warnings.push('cooldown');
     }
 

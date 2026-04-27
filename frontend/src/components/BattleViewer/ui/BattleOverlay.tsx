@@ -19,7 +19,7 @@ interface BattleOverlayProps {
     playerState: UnitState;
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     environment: string;
-    currentTurn: number;
+    currentTimestamp: number;
     logs: BattleLog[];
 }
 
@@ -28,7 +28,7 @@ export function BattleOverlay({
     playerState,
     enemyStates,
     environment,
-    currentTurn,
+    currentTimestamp,
     logs,
 }: BattleOverlayProps) {
     return (
@@ -44,7 +44,7 @@ export function BattleOverlay({
                         current={playerState.hp} 
                         max={player.max_hp} 
                         colorFunc={getHpBarColor}
-                        currentTurn={currentTurn}
+                        currentTimestamp={currentTimestamp}
                         unitId={player.id}
                         logs={logs}
                     />
@@ -81,7 +81,7 @@ export function BattleOverlay({
                             current={state.hp} 
                             max={enemy.max_hp} 
                             colorFunc={getEnemyHpBarColor}
-                            currentTurn={currentTurn}
+                            currentTimestamp={currentTimestamp}
                             unitId={enemy.id}
                             logs={logs}
                         />

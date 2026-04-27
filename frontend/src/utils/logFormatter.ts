@@ -5,7 +5,7 @@ import { BattleLog } from "@/types/battle";
  * UI 表示に特化したログ表現
  */
 export interface DisplayLog {
-  turn: number;
+  timestamp: number;
   actor_id: string;
   action_type: BattleLog["action_type"];
   target_id?: string;
@@ -195,7 +195,7 @@ export function formatBattleLog(
   }
 
   return {
-    turn: log.turn,
+    timestamp: log.timestamp,
     actor_id: log.actor_id,
     action_type: log.action_type,
     target_id: log.target_id,

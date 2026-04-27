@@ -13,7 +13,7 @@ interface BattleViewerProps {
     logs: BattleLog[];
     player: MobileSuit;
     enemies: MobileSuit[];
-    currentTurn: number;
+    currentTimestamp: number;
     environment?: string;
 }
 
@@ -21,22 +21,22 @@ export default function BattleViewer({
     logs, 
     player, 
     enemies, 
-    currentTurn, 
+    currentTimestamp, 
     environment = "SPACE" 
 }: BattleViewerProps) {
     // 状態計算（純粋関数として抽出）
-    const playerSnapshot = getBattleSnapshot(player.id, player, logs, currentTurn);
-    const playerPrevSnapshot = getBattleSnapshot(player.id, player, logs, currentTurn - 1);
+    const playerSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp);
+    const playerPrevSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp - 0.1);
     const playerState = { ...playerSnapshot, prevHp: playerPrevSnapshot.hp };
 
     const enemyStates = enemies.map(enemy => {
-        const snapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTurn);
-        const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTurn - 1);
+        const snapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp);
+        const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp - 0.1);
         return { enemy, state: { ...snapshot, prevHp: prevSnapshot.hp } };
     });
     
     // バトルイベントの取得
-    const battleEventMap = useBattleEvents(logs, currentTurn);
+    const battleEventMap = useBattleEvents(logs, currentTimestamp);
     
     const playerEvent = battleEventMap.get(player.id) || null;
     const enemyEvents = enemies.map(enemy => ({
@@ -63,7 +63,7 @@ export default function BattleViewer({
                 playerState={playerState}
                 enemyStates={enemyStates}
                 environment={environment}
-                currentTurn={currentTurn}
+                currentTimestamp={currentTimestamp}
                 logs={logs}
             />
         </div>

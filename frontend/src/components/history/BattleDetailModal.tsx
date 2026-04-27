@@ -23,7 +23,7 @@ export default function BattleDetailModal({
   mobileSuits,
   onClose,
 }: BattleDetailModalProps) {
-  const [currentTurn, setCurrentTurn] = useState(0);
+  const [currentTimestamp, setCurrentTimestamp] = useState(0);
   const [isFiltered, setIsFiltered] = useState(IS_PRODUCTION);
   // 開発環境専用: 本番ログの抽象化をプレビューするトグル
   const [isProductionPreview, setIsProductionPreview] = useState(false);
@@ -34,8 +34,8 @@ export default function BattleDetailModal({
     isFiltered
   );
 
-  const maxTurn = battle.logs.length
-    ? battle.logs[battle.logs.length - 1].turn
+  const maxTimestamp = battle.logs.length
+    ? battle.logs[battle.logs.length - 1].timestamp
     : 0;
 
   const hasReplayData = !!(
@@ -65,13 +65,13 @@ export default function BattleDetailModal({
                   logs={battle.logs}
                   player={battle.player_info as MobileSuit}
                   enemies={battle.enemies_info as MobileSuit[]}
-                  currentTurn={currentTurn}
+                  currentTimestamp={currentTimestamp}
                   environment={battle.environment || "SPACE"}
                 />
                 <TurnController
-                  currentTurn={currentTurn}
-                  maxTurn={maxTurn}
-                  onTurnChange={setCurrentTurn}
+                  currentTimestamp={currentTimestamp}
+                  maxTimestamp={maxTimestamp}
+                  onTimestampChange={setCurrentTimestamp}
                 />
               </>
             ) : (
@@ -86,7 +86,7 @@ export default function BattleDetailModal({
           {/* 下部スクロール: ログ一覧 */}
           <BattleLogViewer
             logs={battle.logs}
-            currentTurn={currentTurn}
+            currentTimestamp={currentTimestamp}
             isFiltered={isFiltered}
             isProductionPreview={isProductionPreview}
             hasReplayData={hasReplayData}

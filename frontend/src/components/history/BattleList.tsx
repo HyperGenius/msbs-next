@@ -84,7 +84,7 @@ export default function BattleList({
                 {new Date(battle.created_at).toLocaleString("ja-JP")}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Turns: {battle.logs.length > 0 ? battle.logs[battle.logs.length - 1].turn : 0}
+                Time: {battle.logs.length > 0 ? battle.logs[battle.logs.length - 1].timestamp.toFixed(1) : "0.0"}s
               </p>
             </button>
           ))}

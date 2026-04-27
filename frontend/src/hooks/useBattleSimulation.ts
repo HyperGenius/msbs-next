@@ -24,9 +24,9 @@ interface UseBattleSimulationReturn {
   isLoading: boolean;
   winner: string | null;
   winLoss: "WIN" | "LOSE" | "DRAW" | null;
-  currentTurn: number;
-  setCurrentTurn: (turn: number) => void;
-  maxTurn: number;
+  currentTimestamp: number;
+  setCurrentTimestamp: (timestamp: number) => void;
+  maxTimestamp: number;
   selectedMissionId: number;
   setSelectedMissionId: (id: number) => void;
   playerData: MobileSuit | null;
@@ -51,8 +51,8 @@ export function useBattleSimulation({
   const [isLoading, setIsLoading] = useState(false);
   const [winner, setWinner] = useState<string | null>(null);
   const [winLoss, setWinLoss] = useState<"WIN" | "LOSE" | "DRAW" | null>(null);
-  const [currentTurn, setCurrentTurn] = useState(0);
-  const [maxTurn, setMaxTurn] = useState(0);
+  const [currentTimestamp, setCurrentTimestamp] = useState(0);
+  const [maxTimestamp, setMaxTimestamp] = useState(0);
   const [selectedMissionId, setSelectedMissionId] = useState<number>(1);
   const [playerData, setPlayerData] = useState<MobileSuit | null>(null);
   const [enemiesData, setEnemiesData] = useState<MobileSuit[]>([]);
@@ -78,7 +78,7 @@ export function useBattleSimulation({
     setLogs([]);
     setWinner(null);
     setWinLoss(null);
-    setCurrentTurn(0);
+    setCurrentTimestamp(0);
     setRewards(null);
 
     try {
@@ -136,7 +136,7 @@ export function useBattleSimulation({
 
       const lastTimestamp =
         data.logs.length > 0 ? data.logs[data.logs.length - 1].timestamp : 0;
-      setMaxTurn(lastTimestamp);
+      setMaxTimestamp(lastTimestamp);
     } catch (error) {
       console.error("Error fetching battle logs:", error);
       alert(
@@ -152,9 +152,9 @@ export function useBattleSimulation({
     isLoading,
     winner,
     winLoss,
-    currentTurn,
-    setCurrentTurn,
-    maxTurn,
+    currentTimestamp,
+    setCurrentTimestamp,
+    maxTimestamp,
     selectedMissionId,
     setSelectedMissionId,
     playerData,
