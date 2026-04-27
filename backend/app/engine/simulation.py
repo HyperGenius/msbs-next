@@ -769,7 +769,6 @@ class BattleSimulator:
                         "inputs": fuzzy_inputs,
                         "fuzzified": debug.get("fuzzified", {}),
                         "activations": debug.get("activations", {}),
-                        "all_scores": all_scores,
                     }
 
             if best_target is None:
@@ -789,7 +788,7 @@ class BattleSimulator:
                 )
                 return best_target
 
-            # all_scores を最終状態で更新
+            # ループ完了後に全候補スコアを記録
             if best_fuzzy_scores is not None:
                 best_fuzzy_scores["all_scores"] = all_scores
 
@@ -802,7 +801,7 @@ class BattleSimulator:
             )
             return best_target
 
-        except Exception:
+        except (KeyError, ValueError, ZeroDivisionError, AttributeError):
             # 推論失敗時は CLOSEST フォールバック
             fallback = min(
                 detected_targets,
