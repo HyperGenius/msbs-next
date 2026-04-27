@@ -42,9 +42,9 @@ class TestTriangleMF:
         assert mf.evaluate(0.0) == pytest.approx(0.0)
 
     def test_right_boundary_returns_zero(self) -> None:
-        """右端でメンバーシップ度が 0.0 になる."""
+        """右端より大きい値でメンバーシップ度が 0.0 になる."""
         mf = TriangleMF(0.0, 0.5, 1.0)
-        assert mf.evaluate(1.0) == pytest.approx(0.0)
+        assert mf.evaluate(1.1) == pytest.approx(0.0)
 
     def test_outside_left_returns_zero(self) -> None:
         """左端より小さい値でメンバーシップ度が 0.0 になる."""
@@ -97,9 +97,9 @@ class TestTrapezoidMF:
         assert mf.evaluate(0.0) == pytest.approx(0.0)
 
     def test_right_boundary_returns_zero(self) -> None:
-        """右端でメンバーシップ度が 0.0 になる."""
+        """右端より大きい値でメンバーシップ度が 0.0 になる."""
         mf = TrapezoidMF(0.0, 0.25, 0.75, 1.0)
-        assert mf.evaluate(1.0) == pytest.approx(0.0)
+        assert mf.evaluate(1.1) == pytest.approx(0.0)
 
     def test_outside_left_returns_zero(self) -> None:
         """左端より外でメンバーシップ度が 0.0 になる."""
@@ -131,13 +131,15 @@ class TestTrapezoidMF:
     def test_degenerate_trapezoid_with_same_cd(self) -> None:
         """c=d（右側スロープが垂直）でも正しく動作する."""
         mf = TrapezoidMF(0.0, 1.0, 2.0, 2.0)
-        assert mf.evaluate(1.5) == pytest.approx(1.0)
-        assert mf.evaluate(2.0) == pytest.approx(0.0)
+        assert mf.evaluate(1.5) == pytest.approx(1.0)    # フラットトップ内
+        assert mf.evaluate(2.0) == pytest.approx(1.0)    # c=d=2.0 のフラットトップ末端
+        assert mf.evaluate(2.1) == pytest.approx(0.0)    # 範囲外（右）
 
     def test_spike_a_eq_b_eq_c_eq_d(self) -> None:
         """a=b=c=d のとき、その点以外はすべて 0.0 になる."""
         mf = TrapezoidMF(1.0, 1.0, 1.0, 1.0)
         assert mf.evaluate(0.9) == pytest.approx(0.0)
+        assert mf.evaluate(1.0) == pytest.approx(1.0)   # 唯一の点: フラットトップ [1,1]
         assert mf.evaluate(1.1) == pytest.approx(0.0)
 
     def test_invalid_params_raises(self) -> None:
@@ -163,10 +165,12 @@ class TestTrapezoidMF:
     def test_hp_ratio_high_boundary(self) -> None:
         """aggressive.json の hp_ratio HIGH（台形）の境界値テスト."""
         # HIGH: trapezoid [0.65, 0.80, 1.0, 1.0]
+        # c=d=1.0 の縮退ケース: x=1.0 はフラットトップの末端として 1.0 を返す
         mf = TrapezoidMF(0.65, 0.80, 1.0, 1.0)
-        assert mf.evaluate(0.65) == pytest.approx(0.0)  # 左端
-        assert mf.evaluate(0.80) == pytest.approx(1.0)  # フラット開始
-        assert mf.evaluate(1.0) == pytest.approx(0.0)  # 右端 = 1.0 → 0
+        assert mf.evaluate(0.65) == pytest.approx(0.0)   # 左端
+        assert mf.evaluate(0.80) == pytest.approx(1.0)   # フラットトップ開始
+        assert mf.evaluate(1.0) == pytest.approx(1.0)    # c=d=1.0 のフラットトップ末端
+        assert mf.evaluate(1.1) == pytest.approx(0.0)    # 範囲外（右）
 
 
 # ---------------------------------------------------------------------------

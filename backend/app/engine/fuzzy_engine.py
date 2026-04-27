@@ -62,8 +62,8 @@ class TriangleMF(MembershipFunction):
     def evaluate(self, x: float) -> float:
         """三角形メンバーシップ関数の評価."""
         a, b, c = self.a, self.b, self.c
-        # 左端は open（x < a で 0）、右端は closed（x >= c で 0）
-        if x < a or x >= c:
+        # 左端は open（x < a で 0）、右端は open（x > c で 0）
+        if x < a or x > c:
             return 0.0
         if x <= b:
             return (x - a) / (b - a) if b != a else 1.0
@@ -96,14 +96,14 @@ class TrapezoidMF(MembershipFunction):
     def evaluate(self, x: float) -> float:
         """台形メンバーシップ関数の評価."""
         a, b, c, d = self.a, self.b, self.c, self.d
-        # 左端は open（x < a で 0）、右端は closed（x >= d で 0）
-        if x < a or x >= d:
+        # 左端は open（x < a で 0）、右端は open（x > d で 0）
+        if x < a or x > d:
             return 0.0
         if b <= x <= c:
             return 1.0
         if x < b:
             return (x - a) / (b - a) if b != a else 1.0
-        # c < x < d
+        # c < x <= d
         return (d - x) / (d - c) if d != c else 1.0
 
     def support_range(self) -> tuple[float, float]:
