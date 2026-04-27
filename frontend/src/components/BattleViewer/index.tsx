@@ -7,7 +7,7 @@ import { getBattleSnapshot } from "./hooks/useBattleSnapshot";
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
-import { getEnvironmentColor } from "./utils";
+import { getEnvironmentColor, SIMULATION_STEP_S } from "./utils";
 
 interface BattleViewerProps {
     logs: BattleLog[];
@@ -26,12 +26,12 @@ export default function BattleViewer({
 }: BattleViewerProps) {
     // 状態計算（純粋関数として抽出）
     const playerSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp);
-    const playerPrevSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp - 0.1);
+    const playerPrevSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp - SIMULATION_STEP_S);
     const playerState = { ...playerSnapshot, prevHp: playerPrevSnapshot.hp };
 
     const enemyStates = enemies.map(enemy => {
         const snapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp);
-        const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp - 0.1);
+        const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp - SIMULATION_STEP_S);
         return { enemy, state: { ...snapshot, prevHp: prevSnapshot.hp } };
     });
     
