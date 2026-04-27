@@ -76,7 +76,7 @@
         {
             "label": "Pytest all tests",
             "type": "shell",
-            "command": "source venv/bin/activate && pytest",
+            "command": "source .venv/bin/activate && pytest",
             "problemMatcher": [],
             "options": {
                 "cwd": "${workspaceFolder}/backend"
