@@ -4,7 +4,10 @@
         "**/.svn": true,
         "**/.hg": true,
         "**/.DS_Store": true,
-        "**/Thumbs.db": true
+        "**/Thumbs.db": true,
+        "**/.*_cache": true,
+        "**/__pycache__": true,
+        "backend/.venv": true,
     },
     "editor.definitionLinkOpensInPeek": true, // 定義をポップアップで表示
     "editor.cursorSmoothCaretAnimation": "on", // カーソルの動きを滑らかにして視認性UP
