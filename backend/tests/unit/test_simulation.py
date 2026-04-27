@@ -1017,3 +1017,217 @@ def test_detection_shared_within_team() -> None:
     target = sim._select_target(rear_guard)
     assert target is not None
     assert target.name == "Enemy"
+
+
+# ---------------------------------------------------------------------------
+# 中階層ファジィ推論統合テスト
+# ---------------------------------------------------------------------------
+
+
+def create_fuzzy_test_player() -> MobileSuit:
+    """ファジィ統合テスト用のプレイヤー機体を作成する."""
+    return MobileSuit(
+        name="Test Player",
+        max_hp=100,
+        current_hp=100,
+        armor=10,
+        mobility=2.0,
+        sensor_range=600.0,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[
+            Weapon(
+                id="br_01",
+                name="Beam Rifle",
+                power=30,
+                range=500,
+                accuracy=85,
+            )
+        ],
+        side="PLAYER",
+        team_id="PLAYER_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+
+
+def create_fuzzy_test_enemy(name: str, position: Vector3) -> MobileSuit:
+    """ファジィ統合テスト用の敵機体を作成する."""
+    return MobileSuit(
+        name=name,
+        max_hp=80,
+        current_hp=80,
+        armor=5,
+        mobility=1.2,
+        sensor_range=500.0,
+        position=position,
+        weapons=[
+            Weapon(
+                id=f"zmg_{name}",
+                name="Zaku Machine Gun",
+                power=15,
+                range=400,
+                accuracy=70,
+            )
+        ],
+        side="ENEMY",
+        team_id="ENEMY_TEAM",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+
+
+def test_ai_decision_phase_no_detected_enemies_returns_move() -> None:
+    """索敵済みの敵が0体の場合、ファジィ推論をスキップして MOVE を選択する."""
+    player = create_fuzzy_test_player()
+    # 遠くに配置して索敵範囲外にする
+    enemies = [create_fuzzy_test_enemy("Far Enemy", Vector3(x=5000, y=0, z=0))]
+
+    sim = BattleSimulator(player, enemies)
+    # 索敵フェーズをスキップ（敵を発見しない状態）
+    sim._ai_decision_phase(player)
+
+    assert sim.unit_resources[str(player.id)]["current_action"] == "MOVE"
+
+
+def test_ai_decision_phase_with_detected_enemies() -> None:
+    """索敵済みの敵がいる場合、ファジィ推論が実行されて行動が決定される."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=300, y=0, z=0))
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    # 敵を索敵済みにする
+    sim._detection_phase()
+
+    sim._ai_decision_phase(player)
+
+    action = sim.unit_resources[str(player.id)]["current_action"]
+    assert action in ("ATTACK", "MOVE", "RETREAT")
+
+
+def test_ai_decision_phase_logs_ai_decision() -> None:
+    """ファジィ推論の結果が AI_DECISION ログとして記録される."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=200, y=0, z=0))
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    sim._detection_phase()
+    sim._ai_decision_phase(player)
+
+    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
+    assert len(ai_logs) >= 1
+
+    player_log = next((log for log in ai_logs if log.actor_id == player.id), None)
+    assert player_log is not None
+    assert player_log.fuzzy_scores is not None
+    assert player_log.strategy_mode == "AGGRESSIVE"
+
+
+def test_ai_decision_phase_fuzzy_scores_recorded() -> None:
+    """fuzzy_scores に action の活性化度が記録される."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=200, y=0, z=0))
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    sim._detection_phase()
+    sim._ai_decision_phase(player)
+
+    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
+    player_log = next((log for log in ai_logs if log.actor_id == player.id), None)
+    assert player_log is not None
+    # fuzzy_scores には activations が記録されている
+    assert "action" in player_log.fuzzy_scores
+
+
+def test_ai_decision_phase_retreat_fallback_to_move() -> None:
+    """RETREAT が出力されるシナリオで MOVE にフォールバックすることを確認する."""
+    # HP 低く、敵多い → RETREAT が最優勢になるシナリオ
+    player = create_fuzzy_test_player()
+    player.current_hp = 5  # HP 非常に低い (LOW ゾーン)
+    player.max_hp = 100
+
+    # 近接敵を大量配置（MANY になるよう）
+    enemies = [
+        create_fuzzy_test_enemy(f"Enemy{i}", Vector3(x=100 + i * 20, y=i * 10, z=0))
+        for i in range(8)
+    ]
+
+    sim = BattleSimulator(player, enemies=enemies)
+    sim._detection_phase()
+    sim._ai_decision_phase(player)
+
+    # RETREAT フォールバックで MOVE になっている（または ATTACK の場合もあり得る）
+    action = sim.unit_resources[str(player.id)]["current_action"]
+    # RETREAT は MOVE にフォールバックするため、"RETREAT" は絶対に出力されない
+    assert action != "RETREAT"
+    assert action in ("ATTACK", "MOVE")
+
+
+def test_step_includes_ai_decision_phase() -> None:
+    """step() 実行後に AI_DECISION ログが生成されることを確認する."""
+    player = create_fuzzy_test_player()
+    # 近くに敵を配置して索敵で発見できるようにする
+    enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=200, y=0, z=0))
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    sim.step()
+
+    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
+    assert len(ai_logs) >= 1
+
+
+def test_current_action_initialized_as_move() -> None:
+    """unit_resources の current_action がデフォルト MOVE で初期化される."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=500, y=0, z=0))
+
+    sim = BattleSimulator(player, enemies=[enemy])
+
+    # 初期値は MOVE
+    assert sim.unit_resources[str(player.id)]["current_action"] == "MOVE"
+    assert sim.unit_resources[str(enemy.id)]["current_action"] == "MOVE"
+
+
+def test_action_phase_respects_move_action() -> None:
+    """current_action=MOVE のとき、攻撃射程内でも攻撃しないことを確認する."""
+    player = create_fuzzy_test_player()
+    # 攻撃射程内に敵を配置
+    enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    sim._detection_phase()
+
+    # MOVE に設定して行動フェーズを実行
+    sim.unit_resources[str(player.id)]["current_action"] = "MOVE"
+    initial_enemy_hp = enemy.current_hp
+    sim._action_phase(player)
+
+    # MOVE なので攻撃せず、敵のHPが変わっていない
+    assert enemy.current_hp == initial_enemy_hp
+    # MOVE ログが出力される
+    move_logs = [
+        log
+        for log in sim.logs
+        if log.action_type == "MOVE" and log.actor_id == player.id
+    ]
+    assert len(move_logs) >= 1
+
+
+def test_action_phase_respects_attack_action() -> None:
+    """current_action=ATTACK のとき、射程内で攻撃を試みることを確認する."""
+    player = create_fuzzy_test_player()
+    player.weapons[0].accuracy = 100  # 必ず命中するように
+    # 攻撃射程内に敵を配置
+    enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    sim._detection_phase()
+
+    # ATTACK に設定して行動フェーズを実行
+    sim.unit_resources[str(player.id)]["current_action"] = "ATTACK"
+    sim._action_phase(player)
+
+    # ATTACK または MISS ログが出力される（攻撃を試みた）
+    attack_logs = [
+        log
+        for log in sim.logs
+        if log.action_type in ("ATTACK", "MISS", "WAIT") and log.actor_id == player.id
+    ]
+    assert len(attack_logs) >= 1

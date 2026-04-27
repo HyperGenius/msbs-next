@@ -1,5 +1,6 @@
 # backend/app/engine/simulation.py
 import random
+from pathlib import Path
 
 import numpy as np
 
@@ -14,9 +15,15 @@ from app.engine.constants import (
     SPECIAL_ENVIRONMENT_EFFECTS,
     TERRAIN_ADAPTABILITY_MODIFIERS,
 )
+from app.engine.fuzzy_engine import FuzzyEngine
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 
 _MAX_STEPS = 5000
+_FUZZY_RULES_PATH = (
+    Path(__file__).parent.parent.parent / "data" / "fuzzy_rules" / "aggressive.json"
+)
+# 近隣ユニット検索半径 (m)
+_FUZZY_NEIGHBOR_RADIUS = 500.0
 
 
 class BattleSimulator:
@@ -74,6 +81,7 @@ class BattleSimulator:
                 "current_en": unit.max_en,
                 "current_propellant": unit.max_propellant,
                 "weapon_states": {},
+                "current_action": "MOVE",  # 中階層ファジィ推論で決定した行動
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:
@@ -84,6 +92,11 @@ class BattleSimulator:
                     else None,
                     "current_cool_down": 0,
                 }
+
+        # 中階層ファジィ推論エンジン（AGGRESSIVEルールセット）
+        self._fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
+            _FUZZY_RULES_PATH, default_output={"action": 0.0}
+        )
 
     def _generate_chatter(self, unit: MobileSuit, chatter_type: str) -> str | None:
         """NPCのセリフを生成する.
@@ -213,19 +226,133 @@ class BattleSimulator:
         # 1. 索敵フェーズ
         self._detection_phase()
 
-        # 2. 行動フェーズ（全ユニットを同一ステップで並列処理）
+        # 2. AI意思決定フェーズ（中階層ファジィ推論）
+        alive_units = [u for u in self.units if u.current_hp > 0]
+        for unit in alive_units:
+            self._ai_decision_phase(unit)
+
+        # 3. 行動フェーズ（全ユニットを同一ステップで並列処理）
         alive_units = [u for u in self.units if u.current_hp > 0]
         for unit in alive_units:
             if self.is_finished:
                 break
             self._action_phase(unit)
 
-        # 3. リソース更新フェーズ（EN回復・クールダウン減少）
+        # 4. リソース更新フェーズ（EN回復・クールダウン減少）
         self._refresh_phase()
 
-        # 4. 時間を進める
+        # 5. 時間を進める
         self.elapsed_time += dt
         self._step_count += 1
+
+    def _ai_decision_phase(self, unit: MobileSuit) -> None:
+        """中階層ファジィ推論フェーズ: 各ユニットの行動を決定する.
+
+        入力変数（hp_ratio, enemy_count_near, ally_count_near, distance_to_nearest_enemy）
+        を FuzzyEngine に渡し、行動（ATTACK / MOVE / RETREAT）を決定する。
+        決定した行動は unit_resources[unit_id]["current_action"] に保存される。
+
+        Args:
+            unit: 行動を決定するユニット
+        """
+        if unit.current_hp <= 0:
+            return
+
+        unit_id = str(unit.id)
+        pos_unit = unit.position.to_numpy()
+
+        # 索敵済みの敵ユニットを取得
+        if unit.team_id is None:
+            self.unit_resources[unit_id]["current_action"] = "MOVE"
+            return
+
+        detected_enemy_ids = self.team_detected_units.get(unit.team_id, set())
+        detected_enemies = [
+            u
+            for u in self.units
+            if u.current_hp > 0
+            and u.team_id != unit.team_id
+            and u.id in detected_enemy_ids
+        ]
+
+        # 索敵済みの敵が0体の場合はファジィ推論をスキップして MOVE を選択
+        if not detected_enemies:
+            self.unit_resources[unit_id]["current_action"] = "MOVE"
+            return
+
+        # --- ファジィ入力変数の計算 ---
+        # hp_ratio: 現在HP / 最大HP
+        hp_ratio = unit.current_hp / max(1, unit.max_hp)
+
+        # 最近敵との距離を計算
+        distances_to_detected = [
+            float(np.linalg.norm(e.position.to_numpy() - pos_unit))
+            for e in detected_enemies
+        ]
+        distance_to_nearest_enemy = (
+            min(distances_to_detected) if distances_to_detected else 9999.0
+        )
+
+        # enemy_count_near: 索敵済みの敵ユニット数（半径 _FUZZY_NEIGHBOR_RADIUS 以内）
+        enemy_count_near = float(
+            sum(1 for d in distances_to_detected if d <= _FUZZY_NEIGHBOR_RADIUS)
+        )
+
+        # ally_count_near: 同一チームの生存ユニット数（半径 _FUZZY_NEIGHBOR_RADIUS 以内、自分を除く）
+        ally_count_near = float(
+            sum(
+                1
+                for u in self.units
+                if u.current_hp > 0
+                and u.team_id == unit.team_id
+                and u.id != unit.id
+                and float(np.linalg.norm(u.position.to_numpy() - pos_unit))
+                <= _FUZZY_NEIGHBOR_RADIUS
+            )
+        )
+
+        fuzzy_inputs = {
+            "hp_ratio": hp_ratio,
+            "enemy_count_near": enemy_count_near,
+            "ally_count_near": ally_count_near,
+            "distance_to_nearest_enemy": distance_to_nearest_enemy,
+        }
+
+        # --- ファジィ推論 ---
+        _, debug = self._fuzzy_engine.infer_with_debug(fuzzy_inputs)
+        fuzzy_scores: dict = debug.get("activations", {})
+
+        # 行動を決定: action の活性化度が最も高いラベルを選択
+        action_activations: dict[str, float] = fuzzy_scores.get("action", {})
+        if action_activations:
+            action = max(action_activations, key=lambda k: action_activations[k])
+        else:
+            action = "MOVE"
+
+        # RETREAT が出力されたが撤退ポイントが未設定の場合は MOVE にフォールバック
+        if action == "RETREAT":
+            action = "MOVE"
+
+        # 決定した行動を保存
+        self.unit_resources[unit_id]["current_action"] = action
+
+        # ファジィ推論結果をログに記録
+        self.logs.append(
+            BattleLog(
+                timestamp=self.elapsed_time,
+                actor_id=unit.id,
+                action_type="AI_DECISION",
+                message=(
+                    f"{self._format_actor_name(unit)} がファジィ推論により"
+                    f" [{action}] を選択"
+                    f" (HP率:{hp_ratio:.2f} 近敵:{enemy_count_near:.0f}"
+                    f" 近味:{ally_count_near:.0f} 近距:{distance_to_nearest_enemy:.0f}m)"
+                ),
+                position_snapshot=unit.position,
+                fuzzy_scores=fuzzy_scores,
+                strategy_mode="AGGRESSIVE",
+            )
+        )
 
     def _refresh_phase(self) -> None:
         """リフレッシュフェーズ: ENの回復とクールダウンの減少."""
@@ -254,6 +381,10 @@ class BattleSimulator:
         if actor.current_hp <= 0:
             return
 
+        # ファジィ推論で決定した行動を取得
+        unit_id = str(actor.id)
+        current_action = self.unit_resources[unit_id].get("current_action", "MOVE")
+
         # ターゲット選択
         target = self._select_target(actor)
         if not target:
@@ -268,10 +399,16 @@ class BattleSimulator:
 
         weapon = actor.get_active_weapon()
 
-        # 攻撃可能なら攻撃、そうでなければ移動
-        if weapon and distance <= weapon.range:
-            self._process_attack(actor, target, distance, pos_actor)
+        if current_action == "ATTACK":
+            # 攻撃行動: 攻撃可能なら攻撃、そうでなければ移動
+            if weapon and distance <= weapon.range:
+                self._process_attack(actor, target, distance, pos_actor)
+            else:
+                self._process_movement(
+                    actor, pos_actor, pos_target, diff_vector, distance
+                )
         else:
+            # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ
             self._process_movement(actor, pos_actor, pos_target, diff_vector, distance)
 
     def _log_target_selection(
