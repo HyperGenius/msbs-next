@@ -175,14 +175,12 @@ def _run_simulation(
     simulator = BattleSimulator(player_unit, enemy_units)
 
     max_steps = 100
-    for step_count in range(max_steps):
+    for _step_count in range(max_steps):
         if simulator.is_finished:
             break
         simulator.step()
-    else:
-        step_count = max_steps
 
-    print(f"  戦闘終了: {step_count + 1} ステップ (経過時間: {simulator.elapsed_time:.1f}s)")
+    print(f"  戦闘終了 (経過時間: {simulator.elapsed_time:.1f}s)")
 
     # 勝敗判定 (team_idベース: プレイヤーのteam_idが生存していれば勝利)
     alive_team_ids = {u.team_id for u in simulator.units if u.current_hp > 0}

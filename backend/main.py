@@ -94,6 +94,39 @@ class BattleResponse(BaseModel):
 # --- API Endpoints ---
 
 
+def _build_enemies_from_config(enemy_configs: list[dict]) -> list[MobileSuit]:
+    """ミッション設定から敵ユニットリストを生成する."""
+    enemies = []
+    for enemy_config in enemy_configs:
+        pos_dict = enemy_config.get("position", {"x": 500, "y": 0, "z": 0})
+        weapon_dict = enemy_config.get("weapon", {})
+        terrain_adapt = enemy_config.get(
+            "terrain_adaptability",
+            {"SPACE": "A", "GROUND": "A", "COLONY": "A", "UNDERWATER": "C"},
+        )
+        enemy = MobileSuit(
+            name=enemy_config.get("name", "ザクII"),
+            max_hp=enemy_config.get("max_hp", 80),
+            current_hp=enemy_config.get("max_hp", 80),
+            armor=enemy_config.get("armor", 5),
+            mobility=enemy_config.get("mobility", 1.2),
+            position=Vector3(**pos_dict),
+            terrain_adaptability=terrain_adapt,
+            weapons=[
+                Weapon(
+                    id=weapon_dict.get("id", "weapon"),
+                    name=weapon_dict.get("name", "Weapon"),
+                    power=weapon_dict.get("power", 15),
+                    range=weapon_dict.get("range", 400),
+                    accuracy=weapon_dict.get("accuracy", 70),
+                )
+            ],
+            side="ENEMY",
+        )
+        enemies.append(enemy)
+    return enemies
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     """ヘルスチェック."""
@@ -160,37 +193,8 @@ async def simulate_battle(
             )
 
     # 4. ミッション設定から敵機を生成
-    enemies = []
     enemy_configs = mission.enemy_config.get("enemies", [])
-
-    for enemy_config in enemy_configs:
-        pos_dict = enemy_config.get("position", {"x": 500, "y": 0, "z": 0})
-        weapon_dict = enemy_config.get("weapon", {})
-        terrain_adapt = enemy_config.get(
-            "terrain_adaptability",
-            {"SPACE": "A", "GROUND": "A", "COLONY": "A", "UNDERWATER": "C"},
-        )
-
-        enemy = MobileSuit(
-            name=enemy_config.get("name", "ザクII"),
-            max_hp=enemy_config.get("max_hp", 80),
-            current_hp=enemy_config.get("max_hp", 80),
-            armor=enemy_config.get("armor", 5),
-            mobility=enemy_config.get("mobility", 1.2),
-            position=Vector3(**pos_dict),
-            terrain_adaptability=terrain_adapt,
-            weapons=[
-                Weapon(
-                    id=weapon_dict.get("id", "weapon"),
-                    name=weapon_dict.get("name", "Weapon"),
-                    power=weapon_dict.get("power", 15),
-                    range=weapon_dict.get("range", 400),
-                    accuracy=weapon_dict.get("accuracy", 70),
-                )
-            ],
-            side="ENEMY",
-        )
-        enemies.append(enemy)
+    enemies = _build_enemies_from_config(enemy_configs)
 
     # 5. シミュレーション実行（スキルと環境を渡す）
     sim = BattleSimulator(
