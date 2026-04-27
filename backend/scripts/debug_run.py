@@ -46,12 +46,15 @@ def run():
     sim = BattleSimulator(gundam, zaku)
 
     # 3. ループ実行
-    while not sim.is_finished and sim.turn < 20:  # 最大20ターンで打ち切り
-        sim.process_turn()
+    max_steps = 20
+    for _ in range(max_steps):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # 4. ログ出力
     for log in sim.logs:
-        print(f"[Turn {log.turn}] {log.message}")
+        print(f"[t={log.timestamp:.1f}s] {log.message}")
 
 
 if __name__ == "__main__":

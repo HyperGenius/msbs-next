@@ -65,26 +65,26 @@ def test_simulator_initialization() -> None:
     assert sim.player == player
     assert len(sim.enemies) == 2
     assert len(sim.units) == 3
-    assert sim.turn == 0
+    assert sim.elapsed_time == 0.0
     assert not sim.is_finished
 
 
-def test_process_turn_order() -> None:
-    """Test that units act in mobility order."""
+def test_step_advances_time() -> None:
+    """Test that step() advances elapsed_time."""
     player = create_test_player()
-    player.mobility = 1.0  # Lower mobility
+    player.mobility = 1.0
     enemies = [
         create_test_enemy("Fast Enemy", Vector3(x=500, y=0, z=0)),
     ]
-    enemies[0].mobility = 2.0  # Higher mobility
+    enemies[0].mobility = 2.0
 
     sim = BattleSimulator(player, enemies)
-    sim.process_turn()
+    sim.step()
 
     # First log should be from the faster unit (enemy in this case)
     # They might move or attack depending on distance
     assert len(sim.logs) > 0
-    assert sim.turn == 1
+    assert sim.elapsed_time > 0.0
 
 
 def test_player_vs_enemies_victory() -> None:
@@ -102,8 +102,10 @@ def test_player_vs_enemies_victory() -> None:
 
     # Run simulation
     max_turns = 50
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # Player should win
     assert player.current_hp > 0
@@ -129,8 +131,10 @@ def test_player_defeat() -> None:
 
     # Run simulation
     max_turns = 50
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # Player should lose
     assert player.current_hp == 0
@@ -150,8 +154,10 @@ def test_multiple_enemies() -> None:
 
     # Run simulation
     max_turns = 50
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # Battle should finish one way or another
     # Either player wins or loses
@@ -174,13 +180,13 @@ def test_logs_generated() -> None:
     # Run a few turns
     for _ in range(5):
         if not sim.is_finished:
-            sim.process_turn()
+            sim.step()
 
     # Should have some logs
     assert len(sim.logs) > 0
-    # All logs should have turn numbers
+    # All logs should have timestamps
     for log in sim.logs:
-        assert log.turn > 0
+        assert log.timestamp >= 0.0
         assert log.message != ""
 
 
@@ -226,7 +232,7 @@ def test_tactics_ranged_behavior() -> None:
     sim = BattleSimulator(player, enemies)
 
     # Run one turn
-    sim.process_turn()
+    sim.step()
 
     # Player should try to maintain distance (not rush forward)
     # Check that there's a movement log indicating distance maintenance
@@ -256,7 +262,7 @@ def test_tactics_flee_behavior() -> None:
     sim = BattleSimulator(player, enemies)
 
     # Run one turn
-    sim.process_turn()
+    sim.step()
 
     # Player should be moving away from enemy
     move_logs = [
@@ -610,8 +616,10 @@ def test_battle_royale_three_solo_units() -> None:
 
     # バトルを実行
     max_turns = 100
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # 戦闘が正常に終了すること
     assert sim.is_finished
@@ -687,8 +695,10 @@ def test_team_battle_finishes_correctly() -> None:
     sim = BattleSimulator(team_a_1, [team_a_2, team_b_1])
 
     max_turns = 50
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # 戦闘が終了すること
     assert sim.is_finished
@@ -844,7 +854,7 @@ def test_attack_log_includes_pilot_name() -> None:
     )
     sim = BattleSimulator(player, [enemy])
     sim._detection_phase()
-    sim.process_turn()
+    sim.step()
 
     attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS")]
     player_attack_logs = [log for log in attack_logs if log.actor_id == player.id]
@@ -893,7 +903,7 @@ def test_enemy_log_shows_unknown_before_detection() -> None:
     sim.team_detected_units["ENEMY_TEAM"].add(player.id)
 
     # ターゲット選択ログを生成
-    sim.turn = 1
+    sim.elapsed_time = 0.1
     sim._log_target_selection(enemy, player, "CLOSEST", "距離: 100m")
 
     target_logs = [log for log in sim.logs if log.action_type == "TARGET_SELECTION"]
@@ -942,7 +952,7 @@ def test_skill_activated_flag_set_when_skill_changes_outcome() -> None:
     _random.seed(12345)
     for _ in range(20):
         if not sim.is_finished:
-            sim.process_turn()
+            sim.step()
 
     attack_and_miss_logs = [
         log
@@ -997,7 +1007,7 @@ def test_detection_shared_within_team() -> None:
     )
 
     sim = BattleSimulator(scout, [rear_guard, enemy])
-    sim.turn = 1
+    sim.elapsed_time = 0.1
     sim._detection_phase()
 
     # Scoutが敵を発見 → TEAM_Aの索敵情報に共有される

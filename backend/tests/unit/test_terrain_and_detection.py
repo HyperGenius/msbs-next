@@ -138,7 +138,7 @@ def test_terrain_affects_movement_distance() -> None:
 
     # Simulate in SPACE
     sim_space = BattleSimulator(player_space_specialist, enemies1, environment="SPACE")
-    sim_space.process_turn()
+    sim_space.step()
 
     # Space specialist should move further
     # space_specialist_distance = player_space_specialist.position.x
@@ -147,7 +147,7 @@ def test_terrain_affects_movement_distance() -> None:
     sim_ground = BattleSimulator(
         player_ground_specialist, enemies2, environment="GROUND"
     )
-    sim_ground.process_turn()
+    sim_ground.step()
 
     # Ground specialist should move further in ground
     # (But since we're comparing space specialist in space vs ground specialist in ground,
@@ -165,7 +165,7 @@ def test_terrain_affects_movement_distance() -> None:
     sim_ground2 = BattleSimulator(
         player_space_in_ground, enemies3, environment="GROUND"
     )
-    sim_ground2.process_turn()
+    sim_ground2.step()
 
     # Space specialist in ground should move less than ground specialist in ground
     space_in_ground_distance = player_space_in_ground.position.x
@@ -207,7 +207,7 @@ def test_detection_logs_generated() -> None:
     enemy = create_test_enemy("Enemy", Vector3(x=400, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
-    sim.turn = 1
+    sim.elapsed_time = 0.1
 
     # Run detection phase
     sim._detection_phase()
@@ -298,7 +298,7 @@ def test_detection_log_shows_distance() -> None:
     enemy = create_test_enemy("Enemy", Vector3(x=400, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
-    sim.turn = 1
+    sim.elapsed_time = 0.1
 
     # Run detection phase
     sim._detection_phase()
@@ -323,13 +323,15 @@ def test_full_battle_with_detection() -> None:
     sim = BattleSimulator(player, [enemy], environment="SPACE")
 
     # Run simulation
-    max_turns = 50
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    max_steps = 50
+    for _ in range(max_steps):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # Check that detection occurred at some point
     detection_logs = [log for log in sim.logs if log.action_type == "DETECTION"]
     assert len(detection_logs) > 0, "Detection should have occurred during the battle"
 
     # Battle should complete
-    assert sim.turn < max_turns or sim.is_finished
+    assert sim._step_count < max_steps or sim.is_finished

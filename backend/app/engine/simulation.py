@@ -9,13 +9,14 @@ from app.engine.calculator import (
     calculate_critical_chance,
     calculate_damage_variance,
     calculate_hit_chance,
-    calculate_initiative,
 )
 from app.engine.constants import (
     SPECIAL_ENVIRONMENT_EFFECTS,
     TERRAIN_ADAPTABILITY_MODIFIERS,
 )
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
+
+_MAX_STEPS = 5000
 
 
 class BattleSimulator:
@@ -47,7 +48,8 @@ class BattleSimulator:
         self.enemies = enemies
         self.units: list[MobileSuit] = [player] + enemies
         self.logs: list[BattleLog] = []
-        self.turn = 0
+        self.elapsed_time: float = 0.0
+        self._step_count: int = 0
         self.is_finished = False
         self.player_skills = player_skills or {}
         self.environment = environment
@@ -194,35 +196,36 @@ class BattleSimulator:
             return " — 戦闘継続能力が低下"
         return ""
 
-    def process_turn(self) -> None:
-        """1ターン分の処理を実行."""
-        self.turn += 1
+    def step(self, dt: float = 0.1) -> None:
+        """1時間ステップ分の処理を実行.
 
-        # リフレッシュフェーズ（EN回復、クールダウン減少）
-        self._refresh_phase()
+        Args:
+            dt: 時間ステップ幅（秒）。デフォルト 0.1s。
+        """
+        if self.is_finished:
+            return
 
-        # 生存している全ユニットを機動性の降順でソート
-        alive_units = [u for u in self.units if u.current_hp > 0]
-        # 機動性が同じ場合のためにランダム値を事前に付与
-        units_with_random = [(u, random.random()) for u in alive_units]
+        # 最大ステップ数超過 → 引き分けとして終了
+        if self._step_count >= _MAX_STEPS:
+            self.is_finished = True
+            return
 
-        # REF ステータスを考慮したイニシアチブ値でソート（高い方が先行）
-        def _get_initiative(unit: MobileSuit) -> float:
-            ref = self.player_pilot_stats.ref if unit.side == "PLAYER" else 0
-            return calculate_initiative(unit.mobility, ref)
-
-        units_with_random.sort(
-            key=lambda x: (_get_initiative(x[0]), x[1]), reverse=True
-        )
-
-        # 索敵フェーズ（ターン開始時）
+        # 1. 索敵フェーズ
         self._detection_phase()
 
-        # 各ユニットの行動を順次実行
-        for unit, _ in units_with_random:
+        # 2. 行動フェーズ（全ユニットを同一ステップで並列処理）
+        alive_units = [u for u in self.units if u.current_hp > 0]
+        for unit in alive_units:
             if self.is_finished:
                 break
             self._action_phase(unit)
+
+        # 3. リソース更新フェーズ（EN回復・クールダウン減少）
+        self._refresh_phase()
+
+        # 4. 時間を進める
+        self.elapsed_time += dt
+        self._step_count += 1
 
     def _refresh_phase(self) -> None:
         """リフレッシュフェーズ: ENの回復とクールダウンの減少."""
@@ -327,7 +330,7 @@ class BattleSimulator:
 
         self.logs.append(
             BattleLog(
-                turn=self.turn,
+                timestamp=self.elapsed_time,
                 actor_id=actor.id,
                 action_type="TARGET_SELECTION",
                 target_id=target.id,
@@ -383,7 +386,7 @@ class BattleSimulator:
                         )
                     self.logs.append(
                         BattleLog(
-                            turn=self.turn,
+                            timestamp=self.elapsed_time,
                             actor_id=unit.id,
                             action_type="DETECTION",
                             target_id=target.id,
@@ -661,7 +664,7 @@ class BattleSimulator:
                 )
             self.logs.append(
                 BattleLog(
-                    turn=self.turn,
+                    timestamp=self.elapsed_time,
                     actor_id=actor.id,
                     action_type="WAIT",
                     message=wait_message,
@@ -773,7 +776,7 @@ class BattleSimulator:
             hit_chatter = self._generate_chatter(target, "hit")
             self.logs.append(
                 BattleLog(
-                    turn=self.turn,
+                    timestamp=self.elapsed_time,
                     actor_id=actor.id,
                     action_type="MISS",
                     target_id=target.id,
@@ -822,7 +825,7 @@ class BattleSimulator:
 
         self.logs.append(
             BattleLog(
-                turn=self.turn,
+                timestamp=self.elapsed_time,
                 actor_id=actor.id,
                 action_type="ATTACK",
                 target_id=target.id,
@@ -933,7 +936,7 @@ class BattleSimulator:
 
         self.logs.append(
             BattleLog(
-                turn=self.turn,
+                timestamp=self.elapsed_time,
                 actor_id=actor.id,
                 action_type="MISS",
                 target_id=target.id,
@@ -960,7 +963,7 @@ class BattleSimulator:
 
         self.logs.append(
             BattleLog(
-                turn=self.turn,
+                timestamp=self.elapsed_time,
                 actor_id=target.id,
                 action_type="DESTROYED",
                 message=f"{self._format_actor_name(target)} は爆散した...{ace_msg}",
@@ -1003,7 +1006,7 @@ class BattleSimulator:
 
             self.logs.append(
                 BattleLog(
-                    turn=self.turn,
+                    timestamp=self.elapsed_time,
                     actor_id=actor.id,
                     action_type="MOVE",
                     message=f"{self._format_actor_name(actor)}が後退中 (距離: {int(distance)}m)",
@@ -1024,7 +1027,7 @@ class BattleSimulator:
 
                 self.logs.append(
                     BattleLog(
-                        turn=self.turn,
+                        timestamp=self.elapsed_time,
                         actor_id=actor.id,
                         action_type="MOVE",
                         message=f"{self._format_actor_name(actor)}が距離を取る (距離: {int(distance)}m)",
@@ -1046,7 +1049,7 @@ class BattleSimulator:
 
                 self.logs.append(
                     BattleLog(
-                        turn=self.turn,
+                        timestamp=self.elapsed_time,
                         actor_id=actor.id,
                         action_type="MOVE",
                         message=f"{self._format_actor_name(actor)}が射程内に移動中 (残距離: {int(distance)}m)",
@@ -1069,7 +1072,7 @@ class BattleSimulator:
 
             self.logs.append(
                 BattleLog(
-                    turn=self.turn,
+                    timestamp=self.elapsed_time,
                     actor_id=actor.id,
                     action_type="MOVE",
                     message=f"{self._format_actor_name(actor)}が接近中 (残距離: {int(distance)}m)",
@@ -1135,7 +1138,7 @@ class BattleSimulator:
 
         self.logs.append(
             BattleLog(
-                turn=self.turn,
+                timestamp=self.elapsed_time,
                 actor_id=actor.id,
                 action_type="MOVE",
                 message=f"{self._format_actor_name(actor)}が索敵中 (残距離: {int(distance)}m)",

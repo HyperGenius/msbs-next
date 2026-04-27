@@ -109,8 +109,10 @@ def test_beam_weapon_vs_beam_resistance() -> None:
 
     # Run multiple turns to ensure at least one hit
     max_turns = 10
-    while sim.turn < max_turns and not sim.is_finished:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # Check that damage was dealt
     attack_logs = [
@@ -138,8 +140,10 @@ def test_physical_weapon_vs_physical_resistance() -> None:
 
     # Run multiple turns to ensure at least one hit
     max_turns = 10
-    while sim.turn < max_turns and not sim.is_finished:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # Check for physical resistance message
     attack_logs = [
@@ -170,8 +174,10 @@ def test_optimal_range_hit_bonus() -> None:
 
     # Run multiple turns to ensure at least one non-crit hit at optimal range
     max_turns = 10
-    while sim.turn < max_turns and not sim.is_finished:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # Check for optimal distance message
     optimal_logs = [log for log in sim.logs if "最適射程" in log.message]
@@ -188,7 +194,7 @@ def test_suboptimal_range_penalty() -> None:
     enemy.position = Vector3(x=600, y=0, z=0)
 
     sim = BattleSimulator(player, [enemy])
-    sim.process_turn()
+    sim.step()
 
     # Check for distance penalty message
     # penalty_logs = [log for log in sim.logs if "距離不利" in log.message]
@@ -236,11 +242,13 @@ def test_battle_with_mixed_weapon_types() -> None:
 
     # Run simulation
     max_turns = 20
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    for _ in range(max_turns):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # Battle should finish
-    assert sim.is_finished or sim.turn >= max_turns
+    assert sim.is_finished or sim._step_count >= max_turns
 
     # Check that logs contain weapon type information
     attack_logs = [log for log in sim.logs if log.action_type == "ATTACK"]
@@ -332,8 +340,8 @@ def test_decay_rate_affects_hit_chance() -> None:
     sim1 = BattleSimulator(player1, [enemy1])
     sim2 = BattleSimulator(player2, [enemy2])
 
-    sim1.process_turn()
-    sim2.process_turn()
+    sim1.step()
+    sim2.step()
 
     # Both should have logs
     assert len(sim1.logs) > 0

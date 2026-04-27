@@ -77,11 +77,11 @@ def run_beam_vs_beam_resistant():
     for _ in range(5):
         if sim.is_finished:
             break
-        sim.process_turn()
+        sim.step()
 
     # ログ出力
     for log in sim.logs:
-        print(f"[Turn {log.turn}] {log.message}")
+        print(f"[t={log.timestamp:.1f}s] {log.message}")
 
     print(f"\n残りHP: {gundam.name}={gundam.current_hp}, {zaku.name}={zaku.current_hp}")
     print()
@@ -154,11 +154,11 @@ def run_physical_vs_physical_resistant():
     for _ in range(5):
         if sim.is_finished:
             break
-        sim.process_turn()
+        sim.step()
 
     # ログ出力
     for log in sim.logs:
-        print(f"[Turn {log.turn}] {log.message}")
+        print(f"[t={log.timestamp:.1f}s] {log.message}")
 
     print(
         f"\n残りHP: {zaku_attacker.name}={zaku_attacker.current_hp}, {gundam_defender.name}={gundam_defender.current_hp}"

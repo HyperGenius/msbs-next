@@ -200,9 +200,11 @@ async def simulate_battle(
         environment=mission.environment,
         player_pilot_stats=player_pilot_stats,
     )
-    max_turns = 50
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    max_steps = 50
+    for _ in range(max_steps):
+        if sim.is_finished:
+            break
+        sim.step()
 
     # 6. 勝者判定と撃墜数カウント
     winner_id = None

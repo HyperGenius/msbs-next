@@ -137,7 +137,7 @@ def test_en_depletion_blocks_attack():
 
     # Run several turns
     for _ in range(5):
-        sim.process_turn()
+        sim.step()
         if sim.is_finished:
             break
 
@@ -191,7 +191,7 @@ def test_ammo_depletion_blocks_attack():
 
     # Run several turns
     for _ in range(8):
-        sim.process_turn()
+        sim.step()
         if sim.is_finished:
             break
 
@@ -245,7 +245,7 @@ def test_cooldown_blocks_attack():
 
     # Run several turns
     for _ in range(6):
-        sim.process_turn()
+        sim.step()
         if sim.is_finished:
             break
 
@@ -301,7 +301,7 @@ def test_en_recovery():
     assert initial_en == 200
 
     # Run one turn (detection only, no attack)
-    sim.process_turn()
+    sim.step()
 
     # EN should still be at max (no attack yet)
     turn1_en = sim.unit_resources[player_id]["current_en"]
@@ -309,7 +309,7 @@ def test_en_recovery():
 
     # Run more turns and check that EN recovers
     for _ in range(5):
-        sim.process_turn()
+        sim.step()
         if sim.is_finished:
             break
 
@@ -348,7 +348,7 @@ def test_propellant_is_initialized():
 
     # Run a few turns
     for _ in range(3):
-        sim.process_turn()
+        sim.step()
         if sim.is_finished:
             break
 

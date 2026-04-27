@@ -86,7 +86,7 @@ export interface MobileSuit {
  * バトルログ
  */
 export interface BattleLog {
-    turn: number;
+    timestamp: number;
     actor_id: string;
     action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT";
     target_id?: string;
@@ -98,6 +98,12 @@ export interface BattleLog {
     target_max_hp?: number;
     /** スキルが命中/回避の判定を変えた場合 true */
     skill_activated?: boolean;
+    /** 行動時点の速度ベクトル */
+    velocity_snapshot?: Vector3;
+    /** ファジィ推論の中間スコア（デバッグ用） */
+    fuzzy_scores?: Record<string, unknown>;
+    /** 行動決定時の戦略モード */
+    strategy_mode?: string;
 }
 
 /**

@@ -286,7 +286,7 @@ class MobileSuitResponse(SQLModel):
 class BattleLog(SQLModel):
     """戦闘ログ1行分."""
 
-    turn: int
+    timestamp: float  # バトル内経過時間 (s)
     actor_id: uuid.UUID
     action_type: str  # "MOVE", "ATTACK", "DAMAGE", "DESTROYED", "MISS"
     target_id: uuid.UUID | None = None
@@ -298,6 +298,9 @@ class BattleLog(SQLModel):
     weapon_name: str | None = None  # 使用した武器名（フロントエンド表示用）
     target_max_hp: int | None = None  # ターゲットの最大HP（ダメージ割合計算用）
     skill_activated: bool | None = None  # スキルが命中/回避の判定を変えた場合True
+    velocity_snapshot: Vector3 | None = None  # 行動時点の速度ベクトル
+    fuzzy_scores: dict | None = None  # ファジィ推論の中間スコア（デバッグ用）
+    strategy_mode: str | None = None  # 行動決定時の戦略モード
 
 
 class Mission(SQLModel, table=True):

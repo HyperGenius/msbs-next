@@ -183,11 +183,13 @@ def test_full_battle_simulation():
     sim = BattleSimulator(player, [enemy], environment="GROUND")
 
     # Run simulation
-    max_turns = 30
-    while not sim.is_finished and sim.turn < max_turns:
-        sim.process_turn()
+    max_steps = 30
+    for _ in range(max_steps):
+        if sim.is_finished:
+            break
+        sim.step()
 
-    print(f"\n  Battle duration: {sim.turn} turns")
+    print(f"\n  Battle duration: {sim.elapsed_time:.1f}s ({sim._step_count} steps)")
     print(f"  Player HP: {player.current_hp}/{player.max_hp}")
     print(f"  Enemy HP: {enemy.current_hp}/{enemy.max_hp}")
 
@@ -201,7 +203,7 @@ def test_full_battle_simulation():
     # Show some sample logs
     print("\n  Sample logs:")
     for log in sim.logs[:5]:
-        print(f"    Turn {log.turn}: {log.message}")
+        print(f"    t={log.timestamp:.1f}s: {log.message}")
 
     print("\n✓ Full battle simulation test completed")
 

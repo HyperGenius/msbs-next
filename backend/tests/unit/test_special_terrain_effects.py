@@ -129,7 +129,7 @@ def test_minovsky_detection_log_includes_message() -> None:
     sim = BattleSimulator(
         player, [enemy], environment="SPACE", special_effects=["MINOVSKY"]
     )
-    sim.turn = 1
+    sim.elapsed_time = 0.1
     sim._detection_phase()
 
     detection_logs = [log for log in sim.logs if log.action_type == "DETECTION"]
@@ -143,7 +143,7 @@ def test_no_minovsky_no_message() -> None:
     enemy = create_test_enemy("Enemy", Vector3(x=200, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
-    sim.turn = 1
+    sim.elapsed_time = 0.1
     sim._detection_phase()
 
     detection_logs = [log for log in sim.logs if log.action_type == "DETECTION"]
@@ -163,7 +163,7 @@ def test_gravity_well_reduces_movement() -> None:
     enemy_normal = create_test_enemy("Enemy", enemy_pos)
     sim_normal = BattleSimulator(player_normal, [enemy_normal], environment="GROUND")
     sim_normal._detection_phase()
-    sim_normal.process_turn()
+    sim_normal.step()
     normal_x = player_normal.position.x
 
     # 重力井戸環境
@@ -176,7 +176,7 @@ def test_gravity_well_reduces_movement() -> None:
         special_effects=["GRAVITY_WELL"],
     )
     sim_gravity._detection_phase()
-    sim_gravity.process_turn()
+    sim_gravity.step()
     gravity_x = player_gravity.position.x
 
     # 重力井戸下では通常より移動距離が少ないはず
