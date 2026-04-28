@@ -124,22 +124,19 @@ def test_tactics_integration() -> None:
             "Player with WEAKEST priority should have targeted the damaged Gouf"
         )
 
-    # Check that various movement patterns were used
-    flee_logs = [log for log in sim.logs if "後退中" in log.message]
-    ranged_logs = [log for log in sim.logs if "距離を取る" in log.message]
-    melee_logs = [log for log in sim.logs if "接近中" in log.message]
+    # Check that movement occurred (potential field-based movement uses "移動中" message)
+    move_logs = [
+        log for log in sim.logs if log.action_type == "MOVE" and "移動中" in log.message
+    ]
 
-    # At least some tactical movement should have occurred
-    total_tactical_moves = len(flee_logs) + len(ranged_logs) + len(melee_logs)
-    assert total_tactical_moves > 0, "Tactical movements should have been executed"
+    # At least some movement should have occurred
+    assert len(move_logs) > 0, "Movement should have been executed"
 
     print("✓ Integration test passed!")
     print(f"  - Turns executed: {turns_executed}")
     print(f"  - Total logs: {len(sim.logs)}")
     print(f"  - Player attacks: {len(player_attack_logs)}")
-    print(f"  - Flee movements: {len(flee_logs)}")
-    print(f"  - Ranged movements: {len(ranged_logs)}")
-    print(f"  - Melee movements: {len(melee_logs)}")
+    print(f"  - Move logs: {len(move_logs)}")
 
 
 if __name__ == "__main__":

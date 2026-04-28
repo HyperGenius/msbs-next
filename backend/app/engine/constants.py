@@ -68,3 +68,9 @@ INERTIA_DEFAULTS: dict[str, dict[str, float]] = {
         "max_turn_rate": 90.0,
     },
 }
+
+# ポテンシャルフィールド設定 (Phase 3-2)
+ALLY_REPULSION_RADIUS: float = 150.0  # 味方斥力が働く半径 (m)
+BOUNDARY_MARGIN: float = 200.0  # マップ境界からの斥力発生距離 (m)
+HIGH_THREAT_THRESHOLD: float = 0.5  # 高脅威敵の閾値（脅威度スコア）
+MAP_BOUNDS: tuple[float, float] = (0.0, 5000.0)  # XZ方向のマップ範囲 (m)

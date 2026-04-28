@@ -1,9 +1,9 @@
 # バトルエンジン高度化 機能仕様書
 
-**バージョン:** 0.6.0  
+**バージョン:** 0.7.0  
 **作成日:** 2026-04-27  
 **更新日:** 2026-04-28  
-**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 実装済み
+**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 実装済み
 
 ---
 
@@ -192,17 +192,37 @@ MSの機動戦をリアルに再現するため、各ユニットは以下の物
 | MA（モビルアーマー） | 300 m/s | 15 m/s² | 8 m/s² | 30 deg/s |
 | 大型機（ビグ・ザム等） | 40 m/s | 10 m/s² | 20 m/s² | 90 deg/s |
 
-#### 2.3.2 ポテンシャルフィールド
+#### 2.3.2 ポテンシャルフィールド（Phase 3-2 実装済み）
 
 ポテンシャルフィールド法で「目標方向ベクトル」を算出し、慣性モデルで実際の速度・位置を更新する。
 
-| ソース | 種別 | 効果 |
-|--------|------|------|
-| 攻撃対象の敵 | 引力 | 近づく |
-| 攻撃範囲外の敵（高脅威） | 斥力 | 離れる |
-| 味方ユニット | 弱い斥力 | 密集を防ぐ |
-| マップ境界 | 斥力 | フィールド外への逸脱防止 |
-| 撤退ポイント | 強引力（RETREAT時） | 撤退経路への誘導 |
+| ソース | 種別 | 係数 | 条件 |
+|--------|------|------|------|
+| 攻撃対象の敵 | 引力 | `+2.0` | `current_action == "ATTACK"` かつターゲット選択済み |
+| MOVE / RETREAT 行動時の最近敵 | 引力 | `+1.5` | `current_action in ("MOVE", "RETREAT")` |
+| 攻撃範囲外の高脅威敵 | 斥力 | `1.5` | 脅威スコア（攻撃力/自機最大HP）> `HIGH_THREAT_THRESHOLD(0.5)` かつ射程外 |
+| 味方ユニット | 弱い斥力 | `0.8` | 距離 ≤ `ALLY_REPULSION_RADIUS(150m)` |
+| マップ境界 | 斥力 | `3.0` | 境界からの距離 < `BOUNDARY_MARGIN(200m)` |
+| 撤退ポイント | 強引力 | `+5.0` | `current_action == "RETREAT"` かつ撤退ポイント設定済み（Phase 3-3） |
+
+**実装クラス:** `BattleSimulator._calculate_potential_field(unit, target, retreat_points)`
+
+**ポテンシャル計算式:**
+```
+引力: contribution = coeff × (pos_s - pos_unit) / ‖pos_s - pos_unit‖
+斥力: contribution = coeff × (pos_unit - pos_s) / max(‖pos_unit - pos_s‖, 1.0)
+合計ベクトルを XZ 平面に投影して正規化 → desired_direction を得る
+```
+
+**ローカルミニマム対策:** 合算後のベクトルが `1e-6` 以下ならランダム単位ベクトルを返す。
+
+**関連定数（`backend/app/engine/constants.py`）:**
+- `ALLY_REPULSION_RADIUS = 150.0` m
+- `BOUNDARY_MARGIN = 200.0` m
+- `HIGH_THREAT_THRESHOLD = 0.5`
+- `MAP_BOUNDS = (0.0, 5000.0)` m
+
+**移動ログの間引き:** `MOVE_LOG_MIN_DIST = 100.0` m — 残距離がこの値未満のステップでは MOVE ログを抑制し、ログ量を削減する。
 
 #### 2.3.3 撤退行動の制約
 
