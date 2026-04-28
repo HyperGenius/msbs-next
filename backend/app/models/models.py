@@ -295,6 +295,16 @@ class MobileSuitResponse(SQLModel):
         )
 
 
+class RetreatPoint(SQLModel):
+    """撤退ポイント定義 (Phase 3-3)."""
+
+    position: Vector3  # 撤退ポイントの座標
+    radius: float  # 有効半径 (m)。この範囲に入ると離脱扱い
+    team_id: str | None = (
+        None  # チームIDを指定すると特定チーム専用。None は全チーム共通
+    )
+
+
 class BattleLog(SQLModel):
     """戦闘ログ1行分."""
 

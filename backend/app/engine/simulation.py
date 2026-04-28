@@ -18,12 +18,13 @@ from app.engine.constants import (
     BOUNDARY_MARGIN,
     HIGH_THREAT_THRESHOLD,
     MAP_BOUNDS,
+    RETREAT_ATTRACTION_COEFF,
     SPECIAL_ENVIRONMENT_EFFECTS,
     TERRAIN_ADAPTABILITY_MODIFIERS,
     VALID_STRATEGY_MODES,
 )
 from app.engine.fuzzy_engine import FuzzyEngine
-from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
+from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ class BattleSimulator:
         environment: str = "SPACE",
         special_effects: list[str] | None = None,
         player_pilot_stats: PilotStats | None = None,
+        retreat_points: list[RetreatPoint] | None = None,
     ):
         """初期化.
 
@@ -79,6 +81,7 @@ class BattleSimulator:
             environment: 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)
             special_effects: 特殊環境効果リスト (MINOVSKY/GRAVITY_WELL/OBSTACLE)
             player_pilot_stats: プレイヤーのパイロットステータス (DEX/INT/REF/TOU/LUK)
+            retreat_points: 撤退ポイントのリスト (Phase 3-3)
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -94,6 +97,7 @@ class BattleSimulator:
         self.environment = environment
         self.special_effects: list[str] = special_effects or []
         self.player_pilot_stats: PilotStats = player_pilot_stats or PilotStats()
+        self.retreat_points: list[RetreatPoint] = retreat_points or []
 
         # team_id が未設定のユニットにはソロ参加用のIDを自動付与
         for unit in self.units:
@@ -116,6 +120,7 @@ class BattleSimulator:
                 "current_action": "MOVE",  # 中階層ファジィ推論で決定した行動
                 "velocity_vec": np.zeros(3),  # 現在の速度ベクトル (3D, m/s)
                 "heading_deg": 0.0,  # 現在の向き (XZ平面, 度)
+                "status": "ACTIVE",  # ユニット状態: ACTIVE / RETREATED / DESTROYED (Phase 3-3)
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:
@@ -347,10 +352,14 @@ class BattleSimulator:
                 break
             self._action_phase(unit, dt)
 
-        # 4. リソース更新フェーズ（EN回復・クールダウン減少）
+        # 4. 撤退離脱判定フェーズ (Phase 3-3)
+        if self.retreat_points:
+            self._retreat_check_phase()
+
+        # 5. リソース更新フェーズ（EN回復・クールダウン減少）
         self._refresh_phase()
 
-        # 5. 時間を進める
+        # 6. 時間を進める
         self.elapsed_time += dt
         self._step_count += 1
 
@@ -368,6 +377,11 @@ class BattleSimulator:
             return
 
         unit_id = str(unit.id)
+
+        # 撤退完了済みのユニットは意思決定しない
+        if self.unit_resources[unit_id].get("status") == "RETREATED":
+            return
+
         pos_unit = unit.position.to_numpy()
 
         # 索敵済みの敵ユニットを取得
@@ -445,7 +459,7 @@ class BattleSimulator:
             action = "MOVE"
 
         # RETREAT が出力されたが撤退ポイントが未設定の場合は MOVE にフォールバック
-        if action == "RETREAT":
+        if action == "RETREAT" and not self.retreat_points:
             action = "MOVE"
 
         # 決定した行動を保存
@@ -468,6 +482,61 @@ class BattleSimulator:
                 strategy_mode=strategy_mode,
             )
         )
+
+    def _retreat_check_phase(self) -> None:
+        """撤退離脱判定フェーズ (Phase 3-3).
+
+        RETREAT 行動中のユニットが撤退ポイントの有効半径内に入ったかどうかをチェックする。
+        半径内に入った場合は RETREATED ステータスを設定し、RETREAT_COMPLETE ログを記録する。
+        全ユニットが DESTROYED / RETREATED になった場合は戦闘終了とする。
+        """
+        retreating_units = [
+            u
+            for u in self.units
+            if u.current_hp > 0
+            and self.unit_resources[str(u.id)]["status"] == "ACTIVE"
+            and self.unit_resources[str(u.id)].get("current_action") == "RETREAT"
+        ]
+
+        for unit in retreating_units:
+            unit_id = str(unit.id)
+            pos_unit = unit.position.to_numpy()
+
+            # 対象ユニットに適用可能な撤退ポイントを抽出
+            applicable_rps = [
+                rp
+                for rp in self.retreat_points
+                if rp.team_id is None or rp.team_id == unit.team_id
+            ]
+
+            for rp in applicable_rps:
+                rp_pos = rp.position.to_numpy()
+                dist = float(np.linalg.norm(rp_pos - pos_unit))
+                if dist <= rp.radius:
+                    # 撤退完了
+                    self.unit_resources[unit_id]["status"] = "RETREATED"
+                    self.logs.append(
+                        BattleLog(
+                            timestamp=self.elapsed_time,
+                            actor_id=unit.id,
+                            action_type="RETREAT_COMPLETE",
+                            message=(
+                                f"{self._format_actor_name(unit)} が撤退ポイントに到達し、"
+                                f"戦線から離脱した。"
+                            ),
+                            position_snapshot=unit.position,
+                        )
+                    )
+                    break
+
+        # 勝利判定: ACTIVE な生存ユニットのチームが 1 つ以下なら戦闘終了
+        active_teams = {
+            u.team_id
+            for u in self.units
+            if u.current_hp > 0 and self.unit_resources[str(u.id)]["status"] == "ACTIVE"
+        }
+        if len(active_teams) <= 1:
+            self.is_finished = True
 
     def _refresh_phase(self) -> None:
         """リフレッシュフェーズ: ENの回復とクールダウンの減少."""
@@ -496,8 +565,12 @@ class BattleSimulator:
         if actor.current_hp <= 0:
             return
 
-        # ファジィ推論で決定した行動を取得
+        # 撤退完了済みのユニットは行動しない
         unit_id = str(actor.id)
+        if self.unit_resources[unit_id].get("status") == "RETREATED":
+            return
+
+        # ファジィ推論で決定した行動を取得
         current_action = self.unit_resources[unit_id].get("current_action", "MOVE")
 
         # ターゲット選択
@@ -1491,6 +1564,10 @@ class BattleSimulator:
         """撃破時の処理."""
         target.current_hp = 0
 
+        # ステータスを DESTROYED に更新 (Phase 3-3)
+        target_id = str(target.id)
+        self.unit_resources[target_id]["status"] = "DESTROYED"
+
         # 撃破時のセリフ生成
         destroyed_chatter = self._generate_chatter(target, "destroyed")
 
@@ -1511,9 +1588,13 @@ class BattleSimulator:
                 chatter=destroyed_chatter,
             )
         )
-        # 勝利判定 (生存ユニットのteam_idの種類が1つ以下なら戦闘終了)
-        alive_teams = {u.team_id for u in self.units if u.current_hp > 0}
-        if len(alive_teams) <= 1:
+        # 勝利判定 (ACTIVE な生存ユニットのteam_idの種類が1つ以下なら戦闘終了)
+        active_teams = {
+            u.team_id
+            for u in self.units
+            if u.current_hp > 0 and self.unit_resources[str(u.id)]["status"] == "ACTIVE"
+        }
+        if len(active_teams) <= 1:
             self.is_finished = True
 
     def _threat_enemy_repulsion(
@@ -1566,11 +1647,55 @@ class BattleSimulator:
                 force += 3.0 * (-direction) / max(dist_max, 1.0)
         return force
 
+    def _attack_target_attraction(
+        self, unit: MobileSuit, pos_unit: np.ndarray, target: MobileSuit | None = None
+    ) -> np.ndarray:
+        """攻撃ターゲットへの引力ベクトルを返す（ATTACK行動時）."""
+        force = np.zeros(3)
+        if target is not None:
+            vec = target.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec))
+            if dist > 0:
+                force += 2.0 * vec / dist
+        return force
+
+    def _closest_enemy_attraction(
+        self, unit: MobileSuit, pos_unit: np.ndarray
+    ) -> np.ndarray:
+        """最近敵への引力ベクトルを返す（MOVE行動時）."""
+        force = np.zeros(3)
+        enemies = [
+            u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
+        ]
+        if enemies:
+            closest_enemy = min(
+                enemies,
+                key=lambda e: float(np.linalg.norm(e.position.to_numpy() - pos_unit)),
+            )
+            vec = closest_enemy.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec))
+            if dist > 0:
+                force += 1.5 * vec / dist
+        return force
+
+    def _retreat_points_attraction(
+        self, pos_unit: np.ndarray, retreat_points: list[RetreatPoint]
+    ) -> np.ndarray:
+        """撤退ポイントへの強引力ベクトルを返す（RETREAT行動時）."""
+        force = np.zeros(3)
+        for rp in retreat_points:
+            rp_pos = rp.position.to_numpy()
+            vec = rp_pos - pos_unit
+            dist = float(np.linalg.norm(vec))
+            if dist > 0:
+                force += RETREAT_ATTRACTION_COEFF * vec / dist
+        return force
+
     def _calculate_potential_field(
         self,
         unit: MobileSuit,
         target: MobileSuit | None = None,
-        retreat_points: list | None = None,
+        retreat_points: list[RetreatPoint] | None = None,
     ) -> np.ndarray:
         """ポテンシャルフィールド法による目標方向ベクトルを計算する.
 
@@ -1582,7 +1707,7 @@ class BattleSimulator:
         Args:
             unit: 移動するユニット
             target: 攻撃対象ユニット（ATTACK 行動時に強引力を与える）
-            retreat_points: 撤退ポイントの位置リスト（Phase 3-3 用）
+            retreat_points: 撤退ポイントのリスト（Phase 3-3 用）
 
         Returns:
             3D 単位ベクトル（XZ 平面）
@@ -1596,28 +1721,12 @@ class BattleSimulator:
         total_force = np.zeros(3)
 
         # 1. 攻撃ターゲットへの引力 (ATTACK 行動かつターゲット選択済みの場合)
-        if current_action == "ATTACK" and target is not None:
-            vec = target.position.to_numpy() - pos_unit
-            dist = float(np.linalg.norm(vec))
-            if dist > 0:
-                total_force += 2.0 * vec / dist
+        if current_action == "ATTACK":
+            total_force += self._attack_target_attraction(unit, pos_unit, target)
 
-        # 2. MOVE / RETREAT 行動時の最近敵への引力
-        if current_action in ("MOVE", "RETREAT"):
-            enemies = [
-                u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
-            ]
-            if enemies:
-                closest_enemy = min(
-                    enemies,
-                    key=lambda e: float(
-                        np.linalg.norm(e.position.to_numpy() - pos_unit)
-                    ),
-                )
-                vec = closest_enemy.position.to_numpy() - pos_unit
-                dist = float(np.linalg.norm(vec))
-                if dist > 0:
-                    total_force += 1.5 * vec / dist
+        # 2. MOVE 行動時の最近敵への引力（RETREAT 時は撤退ポイントへ向かうため除外）
+        if current_action == "MOVE":
+            total_force += self._closest_enemy_attraction(unit, pos_unit)
 
         # 3. 高脅威敵（自機射程外）への斥力
         weapon = unit.get_active_weapon()
@@ -1630,13 +1739,14 @@ class BattleSimulator:
         # 5. マップ境界への斥力 (BOUNDARY_MARGIN 以内)
         total_force += self._boundary_repulsion(pos_unit)
 
-        # 6. 撤退ポイントへの強引力 (Phase 3-3 で活用)
-        for rp in retreat_points:
-            rp_pos = np.asarray(rp, dtype=float)
-            vec = rp_pos - pos_unit
-            dist = float(np.linalg.norm(vec))
-            if dist > 0:
-                total_force += 5.0 * vec / dist
+        # 6. 撤退ポイントへの強引力 (RETREAT 行動時のみ、Phase 3-3)
+        if current_action == "RETREAT":
+            applicable_rps = [
+                rp
+                for rp in retreat_points
+                if rp.team_id is None or rp.team_id == unit.team_id
+            ]
+            total_force += self._retreat_points_attraction(pos_unit, applicable_rps)
 
         # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
         total_force[1] = 0.0  # Y 成分を XZ 平面に固定
@@ -1661,7 +1771,9 @@ class BattleSimulator:
             return
 
         # ポテンシャルフィールドで目標方向を算出し、慣性モデルで位置・速度を更新
-        desired_direction = self._calculate_potential_field(actor, target)
+        desired_direction = self._calculate_potential_field(
+            actor, target, self.retreat_points
+        )
         self._apply_inertia(actor, desired_direction, dt)
 
         # MOVE_LOG_MIN_DIST 以上の残距離のステップのみログ出力（ログ量削減）
@@ -1782,7 +1894,9 @@ class BattleSimulator:
             return
 
         # ポテンシャルフィールドで目標方向を算出し、慣性モデルで移動
-        desired_direction = self._calculate_potential_field(actor, target=None)
+        desired_direction = self._calculate_potential_field(
+            actor, target=None, retreat_points=self.retreat_points
+        )
         self._apply_inertia(actor, desired_direction, dt)
 
         # MOVE_LOG_MIN_DIST 以上の残距離のステップのみログ出力

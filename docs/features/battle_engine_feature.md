@@ -1,9 +1,9 @@
 # バトルエンジン高度化 機能仕様書
 
-**バージョン:** 0.7.0  
+**バージョン:** 0.8.0  
 **作成日:** 2026-04-27  
 **更新日:** 2026-04-28  
-**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 実装済み
+**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 実装済み
 
 ---
 
@@ -221,12 +221,34 @@ MSの機動戦をリアルに再現するため、各ユニットは以下の物
 - `BOUNDARY_MARGIN = 200.0` m
 - `HIGH_THREAT_THRESHOLD = 0.5`
 - `MAP_BOUNDS = (0.0, 5000.0)` m
+- `RETREAT_ATTRACTION_COEFF = 5.0`（Phase 3-3）
 
 **移動ログの間引き:** `MOVE_LOG_MIN_DIST = 100.0` m — 残距離がこの値未満のステップでは MOVE ログを抑制し、ログ量を削減する。
 
-#### 2.3.3 撤退行動の制約
+#### 2.3.3 撤退行動の制約（Phase 3-3 実装済み）
 
-`RETREAT` 行動を選択したユニットは、フィールド上に設定された**撤退ポイント**（`RetreatPoint`）を目標引力として移動する。撤退ポイントが未設定のフィールドでは `RETREAT` はファジィルールの出力から除外される。
+`RETREAT` 行動を選択したユニットは、フィールド上に設定された**撤退ポイント**（`RetreatPoint`）への強引力（係数 `RETREAT_ATTRACTION_COEFF = 5.0`）によって撤退経路へ誘導される。撤退ポイントが未設定（`retreat_points=[]`）のフィールドでは `RETREAT` はファジィルールの出力から除外され、`MOVE` にフォールバックされる。
+
+**撤退フロー:**
+
+```
+1. ファジィ推論で RETREAT が出力
+2. retreat_points が空 → MOVE にフォールバック（殲滅戦）
+3. retreat_points が設定されている → RETREAT を確定
+4. _calculate_potential_field() が RETREAT 中ユニットに撤退ポイントへの強引力を適用
+5. ステップ末に _retreat_check_phase() を実行
+6. 撤退ポイントの radius 内に入ったユニットを RETREATED ステータスに変更
+7. BattleLog に action_type="RETREAT_COMPLETE" を記録
+8. ACTIVE な生存ユニットが 1 チーム以下 → 戦闘終了
+```
+
+**ユニットステータス管理（`unit_resources[unit_id]["status"]`）:**
+
+| ステータス | 説明 |
+|---|---|
+| `ACTIVE` | 通常の戦闘参加状態 |
+| `RETREATED` | 撤退ポイントから離脱完了 |
+| `DESTROYED` | 撃破済み（HP=0） |
 
 撤退ポイントの詳細は「2.5 バトルフィールド定義」を参照。
 
