@@ -1628,5 +1628,7 @@ def test_action_phase_uses_fuzzy_weapon_selection() -> None:
     sim._action_phase(player)
 
     # 攻撃ログが生成されていること
-    attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS", "WAIT")]
+    attack_logs = [
+        log for log in sim.logs if log.action_type in ("ATTACK", "MISS", "WAIT")
+    ]
     assert len(attack_logs) > 0

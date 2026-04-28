@@ -1048,6 +1048,36 @@ class BattleSimulator:
         if weapon.cool_down_turn > 0:
             weapon_state["current_cool_down"] = weapon.cool_down_turn
 
+    def _log_attack_wait(
+        self,
+        actor: MobileSuit,
+        weapon: Weapon,
+        weapon_state: dict,
+        failure_reason: str,
+        snapshot: Vector3,
+    ) -> None:
+        """攻撃リソース不足時の待機ログを追記する."""
+        actor_name = self._format_actor_name(actor)
+        weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
+        if "弾切れ" in failure_reason:
+            wait_message = f"{actor_name}は{weapon_display}の弾薬が尽き、攻撃手段がない"
+        elif "EN不足" in failure_reason:
+            wait_message = f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
+        elif "クールダウン" in failure_reason:
+            remaining_turns = weapon_state.get("current_cool_down", 0)
+            wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_turns}ターン）、やむなく待機"
+        else:
+            wait_message = f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
+        self.logs.append(
+            BattleLog(
+                timestamp=self.elapsed_time,
+                actor_id=actor.id,
+                action_type="WAIT",
+                message=wait_message,
+                position_snapshot=snapshot,
+            )
+        )
+
     def _process_attack(
         self,
         actor: MobileSuit,
@@ -1075,33 +1105,7 @@ class BattleSimulator:
         )
 
         if not can_attack:
-            actor_name = self._format_actor_name(actor)
-            weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
-            if "弾切れ" in failure_reason:
-                wait_message = (
-                    f"{actor_name}は{weapon_display}の弾薬が尽き、攻撃手段がない"
-                )
-            elif "EN不足" in failure_reason:
-                wait_message = (
-                    f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
-                )
-            elif "クールダウン" in failure_reason:
-                # failure_reason 例: "クールダウン中 (残りNターン)"
-                remaining_turns = weapon_state.get("current_cool_down", 0)
-                wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_turns}ターン）、やむなく待機"
-            else:
-                wait_message = (
-                    f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
-                )
-            self.logs.append(
-                BattleLog(
-                    timestamp=self.elapsed_time,
-                    actor_id=actor.id,
-                    action_type="WAIT",
-                    message=wait_message,
-                    position_snapshot=snapshot,
-                )
-            )
+            self._log_attack_wait(actor, weapon, weapon_state, failure_reason, snapshot)
             return
 
         # 命中率計算
