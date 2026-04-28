@@ -1337,3 +1337,296 @@ def test_calculate_attack_power_returns_zero_for_no_weapons() -> None:
 
     power = sim._calculate_attack_power(player)
     assert power == 0.0
+
+
+# ---- 武器選択ファジィ推論テスト (_select_weapon_fuzzy / _is_weapon_usable) ----
+
+
+def create_ms_with_weapons(
+    weapons: list[Weapon],
+    position: Vector3 | None = None,
+    max_en: int = 1000,
+    side: str = "PLAYER",
+) -> MobileSuit:
+    """武器付きのMobileSuitを生成するヘルパー."""
+    return MobileSuit(
+        name="Test MS",
+        max_hp=100,
+        current_hp=100,
+        armor=5,
+        mobility=1.5,
+        position=position or Vector3(x=0, y=0, z=0),
+        weapons=weapons,
+        side=side,
+        team_id="PLAYER_TEAM" if side == "PLAYER" else "ENEMY_TEAM",
+        max_en=max_en,
+        en_recovery=50,
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+    )
+
+
+def test_is_weapon_usable_with_ready_weapon() -> None:
+    """クールダウン・EN・弾薬すべて問題ない武器は使用可能と判定されること."""
+    beam_rifle = Weapon(
+        id="beam_rifle",
+        name="Beam Rifle",
+        type="BEAM",
+        power=30,
+        range=500,
+        accuracy=85,
+        en_cost=50,
+        max_ammo=10,
+    )
+    player = create_ms_with_weapons([beam_rifle], max_en=500)
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+
+    assert sim._is_weapon_usable(player, beam_rifle) is True
+
+
+def test_is_weapon_usable_en_insufficient() -> None:
+    """EN不足の場合は使用不可と判定されること."""
+    beam_rifle = Weapon(
+        id="beam_rifle",
+        name="Beam Rifle",
+        type="BEAM",
+        power=30,
+        range=500,
+        accuracy=85,
+        en_cost=500,
+    )
+    player = create_ms_with_weapons([beam_rifle], max_en=100)
+    # ENを10まで消費させる
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    sim.unit_resources[str(player.id)]["current_en"] = 10  # EN残量を手動で設定
+
+    assert sim._is_weapon_usable(player, beam_rifle) is False
+
+
+def test_is_weapon_usable_cooldown() -> None:
+    """クールダウン中の武器は使用不可と判定されること."""
+    cannon = Weapon(
+        id="cannon",
+        name="Cannon",
+        power=60,
+        range=800,
+        accuracy=75,
+        cool_down_turn=3,
+    )
+    player = create_ms_with_weapons([cannon])
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    # クールダウンを手動で設定
+    sim.unit_resources[str(player.id)]["weapon_states"][cannon.id] = {
+        "current_ammo": None,
+        "current_cool_down": 2,
+    }
+
+    assert sim._is_weapon_usable(player, cannon) is False
+
+
+def test_is_weapon_usable_ammo_depleted() -> None:
+    """弾薬切れの武器は使用不可と判定されること."""
+    missile = Weapon(
+        id="missile",
+        name="Missile",
+        power=50,
+        range=600,
+        accuracy=80,
+        max_ammo=4,
+    )
+    player = create_ms_with_weapons([missile])
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    # 弾薬を0に設定
+    sim.unit_resources[str(player.id)]["weapon_states"][missile.id] = {
+        "current_ammo": 0,
+        "current_cool_down": 0,
+    }
+
+    assert sim._is_weapon_usable(player, missile) is False
+
+
+def test_select_weapon_fuzzy_returns_none_when_no_usable_weapons() -> None:
+    """使用可能な武器が0件のとき None を返すこと."""
+    cannon = Weapon(
+        id="cannon",
+        name="Cannon",
+        power=60,
+        range=800,
+        accuracy=75,
+        en_cost=200,
+    )
+    player = create_ms_with_weapons([cannon], max_en=100)
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    sim.unit_resources[str(player.id)]["current_en"] = 0  # EN枯渇
+
+    result = sim._select_weapon_fuzzy(player, enemy)
+    assert result is None
+
+
+def test_select_weapon_fuzzy_returns_weapon_from_usable_list() -> None:
+    """使用可能な武器が存在するとき、その中の武器を返すこと."""
+    beam_rifle = Weapon(
+        id="beam_rifle",
+        name="Beam Rifle",
+        type="BEAM",
+        power=30,
+        range=500,
+        accuracy=85,
+        en_cost=50,
+    )
+    machinegun = Weapon(
+        id="machinegun",
+        name="Machine Gun",
+        type="PHYSICAL",
+        power=15,
+        range=400,
+        accuracy=75,
+        max_ammo=20,
+    )
+    player = create_ms_with_weapons([beam_rifle, machinegun], max_en=1000)
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    sim._detection_phase()
+
+    result = sim._select_weapon_fuzzy(player, enemy)
+    assert result is not None
+    assert result.id in {beam_rifle.id, machinegun.id}
+
+
+def test_select_weapon_fuzzy_prefers_beam_vs_low_beam_resistance() -> None:
+    """ターゲットのビーム耐性が低いとき、ビーム武器が選択されやすいこと."""
+    beam_rifle = Weapon(
+        id="beam_rifle",
+        name="Beam Rifle",
+        type="BEAM",
+        power=30,
+        range=500,
+        accuracy=85,
+        en_cost=50,
+    )
+    machinegun = Weapon(
+        id="machinegun",
+        name="Machine Gun",
+        type="PHYSICAL",
+        power=30,
+        range=400,
+        accuracy=75,
+        max_ammo=20,
+    )
+    player = create_ms_with_weapons([beam_rifle, machinegun], max_en=1000)
+    # ビーム耐性が低い（0.0）・近距離
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=150, y=0, z=0),
+        side="ENEMY",
+    )
+    enemy.beam_resistance = 0.0
+    enemy.physical_resistance = 0.5
+    sim = BattleSimulator(player, [enemy])
+    sim._detection_phase()
+
+    result = sim._select_weapon_fuzzy(player, enemy)
+    assert result is not None
+    assert result.type == "BEAM"
+
+
+def test_select_weapon_fuzzy_excludes_cooldown_weapons() -> None:
+    """クールダウン中の武器は候補から除外されること."""
+    beam_rifle = Weapon(
+        id="beam_rifle",
+        name="Beam Rifle",
+        type="BEAM",
+        power=30,
+        range=500,
+        accuracy=85,
+        en_cost=50,
+        cool_down_turn=3,
+    )
+    machinegun = Weapon(
+        id="machinegun",
+        name="Machine Gun",
+        type="PHYSICAL",
+        power=15,
+        range=400,
+        accuracy=75,
+        max_ammo=20,
+    )
+    player = create_ms_with_weapons([beam_rifle, machinegun], max_en=1000)
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    # ビームライフルをクールダウン中に設定
+    sim.unit_resources[str(player.id)]["weapon_states"][beam_rifle.id] = {
+        "current_ammo": None,
+        "current_cool_down": 2,
+    }
+    sim._detection_phase()
+
+    result = sim._select_weapon_fuzzy(player, enemy)
+    assert result is not None
+    assert result.id == machinegun.id  # Machine Gun のみが候補
+
+
+def test_action_phase_uses_fuzzy_weapon_selection() -> None:
+    """_action_phase() がファジィ推論で選択した武器を使って攻撃すること."""
+    beam_rifle = Weapon(
+        id="beam_rifle",
+        name="Beam Rifle",
+        type="BEAM",
+        power=30,
+        range=500,
+        accuracy=100,
+        en_cost=50,
+    )
+    player = create_ms_with_weapons(
+        [beam_rifle],
+        position=Vector3(x=0, y=0, z=0),
+        max_en=1000,
+    )
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=150, y=0, z=0),
+        side="ENEMY",
+    )
+    enemy.sensor_range = 1000
+    sim = BattleSimulator(player, [enemy])
+    sim._detection_phase()
+    # プレイヤーを ATTACK モードに設定
+    sim.unit_resources[str(player.id)]["current_action"] = "ATTACK"
+
+    sim._action_phase(player)
+
+    # 攻撃ログが生成されていること
+    attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS", "WAIT")]
+    assert len(attack_logs) > 0
