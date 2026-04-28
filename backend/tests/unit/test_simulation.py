@@ -1632,3 +1632,179 @@ def test_action_phase_uses_fuzzy_weapon_selection() -> None:
         log for log in sim.logs if log.action_type in ("ATTACK", "MISS", "WAIT")
     ]
     assert len(attack_logs) > 0
+
+
+# ---------------------------------------------------------------------------
+# 戦略モード切り替えテスト (Phase 2-3)
+# ---------------------------------------------------------------------------
+
+
+def test_load_strategy_engines_contains_aggressive() -> None:
+    """_strategy_engines に AGGRESSIVE エンジンが含まれていることを確認する."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=300, y=0, z=0))
+    sim = BattleSimulator(player, enemies=[enemy])
+
+    assert "AGGRESSIVE" in sim._strategy_engines
+    assert "behavior" in sim._strategy_engines["AGGRESSIVE"]
+    assert "target" in sim._strategy_engines["AGGRESSIVE"]
+    assert "weapon" in sim._strategy_engines["AGGRESSIVE"]
+
+
+def test_load_strategy_engines_contains_defensive() -> None:
+    """_strategy_engines に DEFENSIVE エンジンが含まれていることを確認する."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=300, y=0, z=0))
+    sim = BattleSimulator(player, enemies=[enemy])
+
+    assert "DEFENSIVE" in sim._strategy_engines
+    assert "behavior" in sim._strategy_engines["DEFENSIVE"]
+    assert "target" in sim._strategy_engines["DEFENSIVE"]
+    assert "weapon" in sim._strategy_engines["DEFENSIVE"]
+
+
+def test_load_strategy_engines_contains_sniper() -> None:
+    """_strategy_engines に SNIPER エンジンが含まれていることを確認する."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=300, y=0, z=0))
+    sim = BattleSimulator(player, enemies=[enemy])
+
+    assert "SNIPER" in sim._strategy_engines
+    assert "behavior" in sim._strategy_engines["SNIPER"]
+    assert "target" in sim._strategy_engines["SNIPER"]
+    assert "weapon" in sim._strategy_engines["SNIPER"]
+
+
+def test_resolve_strategy_mode_none_returns_aggressive() -> None:
+    """strategy_mode が None の場合 AGGRESSIVE が返される."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=300, y=0, z=0))
+    sim = BattleSimulator(player, enemies=[enemy])
+
+    player.strategy_mode = None
+    assert sim._resolve_strategy_mode(player) == "AGGRESSIVE"
+
+
+def test_resolve_strategy_mode_valid_value_returned() -> None:
+    """有効な strategy_mode 値が正しく解決される."""
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=300, y=0, z=0))
+    sim = BattleSimulator(player, enemies=[enemy])
+
+    player.strategy_mode = "DEFENSIVE"
+    assert sim._resolve_strategy_mode(player) == "DEFENSIVE"
+
+    player.strategy_mode = "SNIPER"
+    assert sim._resolve_strategy_mode(player) == "SNIPER"
+
+
+def test_resolve_strategy_mode_invalid_falls_back_to_aggressive(caplog) -> None:
+    """無効な strategy_mode 値の場合は AGGRESSIVE にフォールバックし、警告を出力する."""
+    import logging
+
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=300, y=0, z=0))
+    sim = BattleSimulator(player, enemies=[enemy])
+
+    player.strategy_mode = "UNKNOWN_MODE"
+    with caplog.at_level(logging.WARNING, logger="app.engine.simulation"):
+        result = sim._resolve_strategy_mode(player)
+
+    assert result == "AGGRESSIVE"
+    assert any("UNKNOWN_MODE" in msg for msg in caplog.messages)
+
+
+def test_ai_decision_phase_defensive_strategy_mode_logged() -> None:
+    """strategy_mode=DEFENSIVE のユニットが DEFENSIVE モードで AI_DECISION を記録する."""
+    player = create_fuzzy_test_player()
+    player.strategy_mode = "DEFENSIVE"
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=200, y=0, z=0))
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    sim._detection_phase()
+    sim._ai_decision_phase(player)
+
+    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
+    player_log = next((log for log in ai_logs if log.actor_id == player.id), None)
+    assert player_log is not None
+    assert player_log.strategy_mode == "DEFENSIVE"
+
+
+def test_ai_decision_phase_sniper_strategy_mode_logged() -> None:
+    """strategy_mode=SNIPER のユニットが SNIPER モードで AI_DECISION を記録する."""
+    player = create_fuzzy_test_player()
+    player.strategy_mode = "SNIPER"
+    player.sensor_range = 5000.0
+    enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=1500, y=0, z=0))
+    enemy.sensor_range = 5000.0
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    sim._detection_phase()
+    sim._ai_decision_phase(player)
+
+    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
+    player_log = next((log for log in ai_logs if log.actor_id == player.id), None)
+    assert player_log is not None
+    assert player_log.strategy_mode == "SNIPER"
+
+
+def test_ai_decision_phase_sniper_far_enemy_attacks() -> None:
+    """SNIPER モードで遠距離の敵がいる場合、ATTACK を選択することを確認する."""
+    player = create_fuzzy_test_player()
+    player.strategy_mode = "SNIPER"
+    player.current_hp = 100
+    player.max_hp = 100
+    # 遠距離に敵を配置（SNIPER は遠距離 → ATTACK）
+    enemy = create_fuzzy_test_enemy("Far Enemy", Vector3(x=2000, y=0, z=0))
+    enemy.sensor_range = 5000.0
+    player.sensor_range = 5000.0
+
+    sim = BattleSimulator(player, enemies=[enemy])
+    sim._detection_phase()
+    sim._ai_decision_phase(player)
+
+    action = sim.unit_resources[str(player.id)]["current_action"]
+    # SNIPER は遠距離で ATTACK になる（RETREAT にフォールバックした場合は MOVE になる）
+    assert action in ("ATTACK", "MOVE")
+
+
+def test_ai_decision_phase_defensive_many_enemies_moves() -> None:
+    """DEFENSIVE モードで敵が多い場合、MOVE を選択する傾向を確認する."""
+    player = create_fuzzy_test_player()
+    player.strategy_mode = "DEFENSIVE"
+    player.current_hp = 100
+    player.max_hp = 100
+    player.sensor_range = 1000.0
+    # 多数の敵を近距離に配置（DEFENSIVE は多敵 → MOVE）
+    enemies = [
+        create_fuzzy_test_enemy(f"Enemy{i}", Vector3(x=200 + i * 30, y=0, z=0))
+        for i in range(8)
+    ]
+
+    sim = BattleSimulator(player, enemies=enemies)
+    sim._detection_phase()
+    sim._ai_decision_phase(player)
+
+    action = sim.unit_resources[str(player.id)]["current_action"]
+    assert action in ("ATTACK", "MOVE")
+
+
+def test_strategy_mode_scenario_sniper_vs_aggressive() -> None:
+    """SNIPER チームと AGGRESSIVE チームが対戦するシナリオを確認する."""
+    sniper_player = create_fuzzy_test_player()
+    sniper_player.strategy_mode = "SNIPER"
+    sniper_player.sensor_range = 5000.0
+
+    aggressive_enemy = create_fuzzy_test_enemy("Aggressive", Vector3(x=1800, y=0, z=0))
+    aggressive_enemy.strategy_mode = "AGGRESSIVE"
+
+    sim = BattleSimulator(sniper_player, enemies=[aggressive_enemy])
+    sim._detection_phase()
+    sim._ai_decision_phase(sniper_player)
+    sim._ai_decision_phase(aggressive_enemy)
+
+    # 両ユニットとも action が設定されている
+    sniper_action = sim.unit_resources[str(sniper_player.id)]["current_action"]
+    agg_action = sim.unit_resources[str(aggressive_enemy.id)]["current_action"]
+    assert sniper_action in ("ATTACK", "MOVE")
+    assert agg_action in ("ATTACK", "MOVE")

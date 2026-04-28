@@ -105,13 +105,14 @@ def _serialize_log_entry(log_entry) -> dict:
     return data
 
 
-def run(mission_id: int, max_steps: int = 5000, output_path: str | None = None) -> None:
+def run(mission_id: int, max_steps: int = 5000, output_path: str | None = None, strategy: str | None = None) -> None:
     """シミュレーションを実行して結果を JSON に出力する.
 
     Args:
         mission_id: 実行するミッションID
         max_steps: 最大ステップ数（デフォルト 5000）
         output_path: 出力先 JSON ファイルパス。None の場合は自動生成。
+        strategy: プレイヤー機体の戦略モード (AGGRESSIVE/DEFENSIVE/SNIPER 等)。None の場合は未設定。
     """
     print("=" * 60)
     print(f"ミッション {mission_id} のシミュレーションを開始")
@@ -150,6 +151,8 @@ def run(mission_id: int, max_steps: int = 5000, output_path: str | None = None) 
         player.position = Vector3(x=0, y=0, z=0)
         player.side = "PLAYER"
         player.team_id = "PLAYER_TEAM"
+        if strategy is not None:
+            player.strategy_mode = strategy.upper()
 
         print(f"プレイヤー機体: {player.name} (HP: {player.max_hp})")
 
@@ -276,6 +279,14 @@ def parse_args() -> argparse.Namespace:
         metavar="N",
         help="最大ステップ数（デフォルト: 5000）",
     )
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        default=None,
+        choices=["AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"],
+        metavar="MODE",
+        help="プレイヤー機体の戦略モード (AGGRESSIVE/DEFENSIVE/SNIPER/ASSAULT/RETREAT)。省略時はAGGRESSIVE。",
+    )
     return parser.parse_args()
 
 
@@ -285,4 +296,5 @@ if __name__ == "__main__":
         mission_id=args.mission_id,
         max_steps=args.steps,
         output_path=args.output,
+        strategy=args.strategy,
     )

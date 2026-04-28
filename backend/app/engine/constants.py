@@ -35,3 +35,8 @@ SPECIAL_ENVIRONMENT_EFFECTS: dict[str, dict] = {
 
 # 武器スロットの最大数
 MAX_WEAPON_SLOTS = 2
+
+# 有効な戦略モードのセット
+VALID_STRATEGY_MODES: frozenset[str] = frozenset(
+    {"AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"}
+)

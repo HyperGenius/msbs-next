@@ -1,8 +1,9 @@
 # バトルエンジン高度化 機能仕様書
 
-**バージョン:** 0.3.0  
+**バージョン:** 0.5.0  
 **作成日:** 2026-04-27  
-**ステータス:** Phase 1-1 実装済み
+**更新日:** 2026-04-28  
+**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 実装済み
 
 ---
 
@@ -434,4 +435,66 @@ python scripts/run_simulation.py \
 - [battle_simulation_roadmap.md](../roadmaps/battle_simulation_roadmap.md) — これまでの実装履歴
 - [BATCH_ARCHITECTURE.md](../BATCH_ARCHITECTURE.md) — バッチ実行基盤
 - [TACTICS_IMPLEMENTATION.md](../TACTICS_IMPLEMENTATION.md) — 現在の戦術実装詳細
-- [ADVANCED_BATTLE_LOGIC_REPORT.md](../reports/ADVANCED_BATTLE_LOGIC_REPORT.md) — Phase 2.5 実装レポート
+
+---
+
+## 8. Phase 2-3: 戦略モード拡張 (DEFENSIVE / SNIPER)
+
+### 8.1 概要
+
+Phase 2-3 では、AGGRESSIVE のみだった戦略モードを拡張し、**DEFENSIVE** と **SNIPER** の2戦略向けファジィルールセットを追加した。ユニットの `strategy_mode` フィールドにより、行動選択・ターゲット選択・武器選択の全3レイヤーで動的にルールセットを切り替えられる。
+
+### 8.2 実装ファイル一覧
+
+| ファイル | 戦略 | レイヤー | ルール数 |
+|---------|------|---------|---------|
+| `backend/data/fuzzy_rules/defensive.json` | DEFENSIVE | behavior_selection | 12 |
+| `backend/data/fuzzy_rules/defensive_target_selection.json` | DEFENSIVE | target_selection | 12 |
+| `backend/data/fuzzy_rules/defensive_weapon_selection.json` | DEFENSIVE | weapon_selection | 12 |
+| `backend/data/fuzzy_rules/sniper.json` | SNIPER | behavior_selection | 12 |
+| `backend/data/fuzzy_rules/sniper_target_selection.json` | SNIPER | target_selection | 12 |
+| `backend/data/fuzzy_rules/sniper_weapon_selection.json` | SNIPER | weapon_selection | 12 |
+
+### 8.3 MobileSuit.strategy_mode フィールド
+
+`MobileSuit` モデルに `strategy_mode: str | None` フィールドを追加した（DBマイグレーション: `m7n8o9p0q1r2`）。
+
+| 値 | 説明 |
+|----|------|
+| `None` (未設定) | AGGRESSIVE にフォールバック |
+| `AGGRESSIVE` | 積極的な攻撃重視 |
+| `DEFENSIVE` | 防衛ライン維持、継戦能力優先 |
+| `SNIPER` | 遠距離維持、確実撃破重視 |
+| `ASSAULT` | 近距離突撃（JSONファイル未追加時は AGGRESSIVE フォールバック） |
+| `RETREAT` | 撤退重視（JSONファイル未追加時は AGGRESSIVE フォールバック） |
+
+無効な値が設定された場合は `AGGRESSIVE` にフォールバックし、警告ログを出力する。
+
+### 8.4 BattleSimulator の変更点
+
+- `_strategy_engines: dict[str, dict[str, FuzzyEngine]]` を追加
+  - キー構造: `{"AGGRESSIVE": {"behavior": ..., "target": ..., "weapon": ...}, "DEFENSIVE": {...}, "SNIPER": {...}}`
+  - `_load_strategy_engines()` がディレクトリを走査し自動ロード
+- `_resolve_strategy_mode(unit)` ヘルパーメソッドを追加
+  - 無効モードは AGGRESSIVE にフォールバック + 警告ログ
+- `_ai_decision_phase()`: unit の strategy_mode に応じた behavior エンジンを選択
+- `_select_target_fuzzy()`: unit の strategy_mode に応じた target エンジンを選択
+- `_select_weapon_fuzzy()`: unit の strategy_mode に応じた weapon エンジンを選択
+- `BattleLog.strategy_mode` に実際に使用した戦略モード名を記録
+
+### 8.5 VALID_STRATEGY_MODES 定数
+
+`backend/app/engine/constants.py` に追加:
+
+```python
+VALID_STRATEGY_MODES: frozenset[str] = frozenset(
+    {"AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"}
+)
+```
+
+### 8.6 run_simulation.py の変更
+
+`--strategy` オプションを追加。例:
+```bash
+python scripts/run_simulation.py --mission-id 1 --strategy SNIPER
+```
