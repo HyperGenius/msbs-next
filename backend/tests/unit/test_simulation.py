@@ -1259,7 +1259,7 @@ def test_select_target_fuzzy_returns_target_when_single_enemy_detected() -> None
 
 
 def test_select_target_fuzzy_returns_none_for_no_team_id() -> None:
-    """actor に team_id が未設定の場合は None を返すこと."""
+    """Actor に team_id が未設定の場合は None を返すこと."""
     player = create_test_player()
     player.team_id = None
     enemy = create_test_enemy("Enemy", Vector3(x=100, y=0, z=0))

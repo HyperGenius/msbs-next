@@ -439,6 +439,7 @@ class BattleSimulator:
             target: 選択されたターゲット
             reason: 選択理由（戦術名）
             details: 詳細情報（スコア値など）
+            fuzzy_scores: ファジィ推論のスコア（reason が "FUZZY" の場合に提供される）
         """
         _tactics_label: dict[str, str] = {
             "CLOSEST": "近距離優先",
