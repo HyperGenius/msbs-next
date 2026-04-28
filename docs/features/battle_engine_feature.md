@@ -439,9 +439,9 @@ python scripts/run_simulation.py \
 
 ### Phase 4：戦略・戦術階層
 
-- [ ] チームレベルの戦略モード切り替えロジック
-- [ ] 戦況に応じた動的 `StrategyMode` 変更（劣勢時に `RETREAT` へ移行等）
-- [ ] `assault.json` / `retreat.json` ルールセット追加
+- [x] チームレベルの戦略モード切り替えロジック（Phase 4-2 対応予定）
+- [ ] 戦況に応じた動的 `StrategyMode` 変更（劣勢時に `RETREAT` へ移行等）（Phase 4-3 対応予定）
+- [x] `assault.json` / `retreat.json` ルールセット追加（Phase 4-1）
 
 ### Phase 5：スケールアウト・最適化
 
@@ -522,8 +522,8 @@ Phase 2-3 では、AGGRESSIVE のみだった戦略モードを拡張し、**DEF
 | `AGGRESSIVE` | 積極的な攻撃重視 |
 | `DEFENSIVE` | 防衛ライン維持、継戦能力優先 |
 | `SNIPER` | 遠距離維持、確実撃破重視 |
-| `ASSAULT` | 近距離突撃（JSONファイル未追加時は AGGRESSIVE フォールバック） |
-| `RETREAT` | 撤退重視（JSONファイル未追加時は AGGRESSIVE フォールバック） |
+| `ASSAULT` | 近距離突撃特化。格闘・近距離高火力武器優先（Phase 4-1 実装済み） |
+| `RETREAT` | 撤退重視。遠距離牽制優先（Phase 4-1 実装済み） |
 
 無効な値が設定された場合は `AGGRESSIVE` にフォールバックし、警告ログを出力する。
 
@@ -555,3 +555,41 @@ VALID_STRATEGY_MODES: frozenset[str] = frozenset(
 ```bash
 python scripts/run_simulation.py --mission-id 1 --strategy SNIPER
 ```
+
+---
+
+## 9. Phase 4-1: ルールセット拡張 (ASSAULT / RETREAT)
+
+### 9.1 概要
+
+Phase 4-1 では、**ASSAULT** と **RETREAT** の2戦略向けファジィルールセット（各3レイヤー）を追加した。
+Phase 2-3 で確立した「JSONファイルを追加するだけで新戦略を組み込めるアーキテクチャ」を活用し、コード変更なしに2戦略を追加している。
+
+### 9.2 実装ファイル一覧
+
+| ファイル | 戦略 | レイヤー | ルール数 |
+|---------|------|---------|---------|
+| `backend/data/fuzzy_rules/assault.json` | ASSAULT | behavior_selection | 12 |
+| `backend/data/fuzzy_rules/assault_target_selection.json` | ASSAULT | target_selection | 12 |
+| `backend/data/fuzzy_rules/assault_weapon_selection.json` | ASSAULT | weapon_selection | 12 |
+| `backend/data/fuzzy_rules/retreat.json` | RETREAT | behavior_selection | 12 |
+| `backend/data/fuzzy_rules/retreat_target_selection.json` | RETREAT | target_selection | 12 |
+| `backend/data/fuzzy_rules/retreat_weapon_selection.json` | RETREAT | weapon_selection | 12 |
+
+### 9.3 ASSAULT 戦略の特性
+
+- **行動選択**: 近距離の敵に対して積極的に ATTACK を選択。HP LOW でも CLOSE 距離では ATTACK を継続（AGGRESSIVEよりも低HP閾値まで攻撃）
+- **ターゲット選択**: CLOSE 距離の敵を HIGH 優先度で選択。FAR 距離の敵は LOW 優先度
+- **武器選択**: CLOSE 距離での武器スコアを HIGH に設定。FAR 距離での武器スコアは LOW に設定
+
+### 9.4 RETREAT 戦略の特性
+
+- **行動選択**: HP LOW 時や敵数 MANY 時に RETREAT を最優先。撤退ポイント未設定時は MOVE にフォールバック
+- **ターゲット選択**: 基本的に脅威度低く設定。近距離高火力敵のみ HIGH 優先度
+- **武器選択**: FAR/MID 距離での武器スコアを HIGH に設定。遠距離から牽制しながら撤退
+
+### 9.5 自動ロードの仕組み
+
+`_STRATEGY_FILE_PREFIXES` に `"ASSAULT": "assault"` / `"RETREAT": "retreat"` が登録済みであり、
+`_load_strategy_engines()` が `assault.json` / `assault_target_selection.json` / `assault_weapon_selection.json`
+（および `retreat*` 系）を自動検出してロードする。追加のコード変更は不要。

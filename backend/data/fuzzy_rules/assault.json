@@ -1,0 +1,138 @@
+{
+  "strategy": "ASSAULT",
+  "layer": "behavior_selection",
+  "rules": [
+    {
+      "id": "asl_rule_001",
+      "conditions": [
+        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" }
+    },
+    {
+      "id": "asl_rule_002",
+      "conditions": [
+        { "variable": "distance_to_nearest_enemy", "set": "MID" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "MOVE" }
+    },
+    {
+      "id": "asl_rule_003",
+      "conditions": [
+        { "variable": "distance_to_nearest_enemy", "set": "FAR" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "MOVE" }
+    },
+    {
+      "id": "asl_rule_004",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "HIGH" },
+        { "variable": "enemy_count_near", "set": "FEW" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" }
+    },
+    {
+      "id": "asl_rule_005",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "HIGH" },
+        { "variable": "enemy_count_near", "set": "MANY" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" }
+    },
+    {
+      "id": "asl_rule_006",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "MEDIUM" },
+        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" }
+    },
+    {
+      "id": "asl_rule_007",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "LOW" },
+        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" }
+    },
+    {
+      "id": "asl_rule_008",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "LOW" },
+        { "variable": "distance_to_nearest_enemy", "set": "FAR" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "RETREAT" }
+    },
+    {
+      "id": "asl_rule_009",
+      "conditions": [
+        { "variable": "ally_count_near", "set": "MANY" },
+        { "variable": "hp_ratio", "set": "MEDIUM" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" }
+    },
+    {
+      "id": "asl_rule_010",
+      "conditions": [
+        { "variable": "enemy_count_near", "set": "MANY" },
+        { "variable": "hp_ratio", "set": "HIGH" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" }
+    },
+    {
+      "id": "asl_rule_011",
+      "conditions": [
+        { "variable": "distance_to_nearest_enemy", "set": "MID" },
+        { "variable": "hp_ratio", "set": "LOW" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "MOVE" }
+    },
+    {
+      "id": "asl_rule_012",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "HIGH" },
+        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" }
+    }
+  ],
+  "membership_functions": {
+    "hp_ratio": {
+      "LOW":    { "type": "trapezoid", "params": [0.0, 0.0, 0.15, 0.30] },
+      "MEDIUM": { "type": "triangle",  "params": [0.20, 0.45, 0.70] },
+      "HIGH":   { "type": "trapezoid", "params": [0.60, 0.75, 1.0, 1.0] }
+    },
+    "enemy_count_near": {
+      "FEW":    { "type": "trapezoid", "params": [0, 0, 1, 2] },
+      "SEVERAL":{ "type": "triangle",  "params": [1, 3, 5] },
+      "MANY":   { "type": "trapezoid", "params": [4, 6, 99, 99] }
+    },
+    "ally_count_near": {
+      "FEW":    { "type": "trapezoid", "params": [0, 0, 1, 2] },
+      "SEVERAL":{ "type": "triangle",  "params": [1, 3, 5] },
+      "MANY":   { "type": "trapezoid", "params": [4, 6, 99, 99] }
+    },
+    "distance_to_nearest_enemy": {
+      "CLOSE": { "type": "trapezoid", "params": [0, 0, 150, 250] },
+      "MID":   { "type": "triangle",  "params": [150, 350, 550] },
+      "FAR":   { "type": "trapezoid", "params": [400, 600, 9999, 9999] }
+    },
+    "action": {
+      "ATTACK":  { "type": "trapezoid", "params": [0.0, 0.0, 0.15, 0.30] },
+      "MOVE":    { "type": "triangle",  "params": [0.25, 0.50, 0.75] },
+      "RETREAT": { "type": "trapezoid", "params": [0.70, 0.85, 1.0, 1.0] }
+    }
+  }
+}

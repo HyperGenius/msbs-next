@@ -25,8 +25,20 @@ backend/
 └── data/fuzzy_rules/
     ├── schema.json              # JSON スキーマ定義
     ├── aggressive.json          # AGGRESSIVE モード用ルールセット（behavior_selection レイヤー）
-    ├── aggressive_target_selection.json  # AGGRESSIVE モード用ターゲット選択ルールセット（target_selection レイヤー）
-    └── aggressive_weapon_selection.json  # AGGRESSIVE モード用武器選択ルールセット（weapon_selection レイヤー）
+    ├── aggressive_target_selection.json  # AGGRESSIVE モード用ターゲット選択ルールセット
+    ├── aggressive_weapon_selection.json  # AGGRESSIVE モード用武器選択ルールセット
+    ├── defensive.json           # DEFENSIVE モード用ルールセット（behavior_selection レイヤー）
+    ├── defensive_target_selection.json   # DEFENSIVE モード用ターゲット選択ルールセット
+    ├── defensive_weapon_selection.json   # DEFENSIVE モード用武器選択ルールセット
+    ├── sniper.json              # SNIPER モード用ルールセット（behavior_selection レイヤー）
+    ├── sniper_target_selection.json      # SNIPER モード用ターゲット選択ルールセット
+    ├── sniper_weapon_selection.json      # SNIPER モード用武器選択ルールセット
+    ├── assault.json             # ASSAULT モード用ルールセット（behavior_selection レイヤー）
+    ├── assault_target_selection.json     # ASSAULT モード用ターゲット選択ルールセット
+    ├── assault_weapon_selection.json     # ASSAULT モード用武器選択ルールセット
+    ├── retreat.json             # RETREAT モード用ルールセット（behavior_selection レイヤー）
+    ├── retreat_target_selection.json     # RETREAT モード用ターゲット選択ルールセット
+    └── retreat_weapon_selection.json     # RETREAT モード用武器選択ルールセット
 ```
 
 ---
@@ -447,5 +459,8 @@ cd backend && python -m pytest tests/unit/test_fuzzy_engine.py -v
 - AND / OR ルール評価テスト
 - 全ルール不発火時のフォールバックテスト
 - `aggressive.json` のロード・推論統合テスト
+- `defensive.json` / `sniper.json` / `assault.json` / `retreat.json` のロードテスト
 - `_select_target_fuzzy()` のターゲット選択テスト（`backend/tests/unit/test_simulation.py`）
 - `_select_weapon_fuzzy()` / `_is_weapon_usable()` の武器選択テスト（`backend/tests/unit/test_simulation.py`）
+- ASSAULT 近距離攻撃行動・近距離武器優先テスト（`backend/tests/unit/test_simulation.py`）
+- RETREAT HP LOW 撤退行動・遠距離武器優先テスト（`backend/tests/unit/test_simulation.py`）
