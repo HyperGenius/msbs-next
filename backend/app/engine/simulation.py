@@ -2,6 +2,7 @@
 import logging
 import math
 import random
+import uuid
 from pathlib import Path
 
 import numpy as np
@@ -20,10 +21,12 @@ from app.engine.constants import (
     MAP_BOUNDS,
     RETREAT_ATTRACTION_COEFF,
     SPECIAL_ENVIRONMENT_EFFECTS,
+    STRATEGY_UPDATE_INTERVAL,
     TERRAIN_ADAPTABILITY_MODIFIERS,
     VALID_STRATEGY_MODES,
 )
 from app.engine.fuzzy_engine import FuzzyEngine
+from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
 
 logger = logging.getLogger(__name__)
@@ -38,6 +41,8 @@ _TARGET_SELECTION_MAX_DIST = 3000.0
 _WEAPON_SELECTION_MAX_DIST = 3000.0
 # MOVE ログを出力する最小残距離 (m) — これ未満の残距離では MOVE ログを抑制する
 MOVE_LOG_MIN_DIST: float = 100.0
+# チームレベルイベントのダミー actor_id (Phase 4-2)
+_TEAM_EVENT_ACTOR_ID: uuid.UUID = uuid.UUID(int=0)
 
 # 戦略モードとJSONファイルのレイヤーマッピング
 _STRATEGY_FILE_PREFIXES: dict[str, str] = {
@@ -71,6 +76,7 @@ class BattleSimulator:
         special_effects: list[str] | None = None,
         player_pilot_stats: PilotStats | None = None,
         retreat_points: list[RetreatPoint] | None = None,
+        strategy_update_interval: int = STRATEGY_UPDATE_INTERVAL,
     ):
         """初期化.
 
@@ -82,6 +88,7 @@ class BattleSimulator:
             special_effects: 特殊環境効果リスト (MINOVSKY/GRAVITY_WELL/OBSTACLE)
             player_pilot_stats: プレイヤーのパイロットステータス (DEX/INT/REF/TOU/LUK)
             retreat_points: 撤退ポイントのリスト (Phase 3-3)
+            strategy_update_interval: 何ステップごとに戦略評価を行うか (Phase 4-2)
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -151,6 +158,19 @@ class BattleSimulator:
         self._strategy_engines: dict[str, dict[str, FuzzyEngine]] = (
             self._load_strategy_engines()
         )
+
+        # チームレベル戦略コントローラ (Phase 4-2)
+        team_ids = {
+            unit.team_id for unit in self.units if unit.team_id is not None
+        }
+        self._strategy_controllers: dict[str, TeamStrategyController] = {
+            team_id: TeamStrategyController(
+                team_id=team_id,
+                initial_strategy="AGGRESSIVE",
+                update_interval=strategy_update_interval,
+            )
+            for team_id in team_ids
+        }
 
     def _load_strategy_engines(self) -> dict[str, dict[str, FuzzyEngine]]:
         """戦略モード別ファジィ推論エンジン辞書を構築する.
@@ -340,28 +360,140 @@ class BattleSimulator:
         # 1. 索敵フェーズ
         self._detection_phase()
 
-        # 2. AI意思決定フェーズ（中階層ファジィ推論）
+        # 2. 戦略評価フェーズ (Phase 4-2)
+        self._strategy_phase()
+
+        # 3. AI意思決定フェーズ（中階層ファジィ推論）
         alive_units = [u for u in self.units if u.current_hp > 0]
         for unit in alive_units:
             self._ai_decision_phase(unit)
 
-        # 3. 行動フェーズ（全ユニットを同一ステップで並列処理）
+        # 4. 行動フェーズ（全ユニットを同一ステップで並列処理）
         alive_units = [u for u in self.units if u.current_hp > 0]
         for unit in alive_units:
             if self.is_finished:
                 break
             self._action_phase(unit, dt)
 
-        # 4. 撤退離脱判定フェーズ (Phase 3-3)
+        # 5. 撤退離脱判定フェーズ (Phase 3-3)
         if self.retreat_points:
             self._retreat_check_phase()
 
-        # 5. リソース更新フェーズ（EN回復・クールダウン減少）
+        # 6. リソース更新フェーズ（EN回復・クールダウン減少）
         self._refresh_phase()
 
-        # 6. 時間を進める
+        # 7. 時間を進める
         self.elapsed_time += dt
         self._step_count += 1
+
+    def _collect_team_metrics(self, team_id: str) -> TeamMetrics:
+        """チームのバトルメトリクスを収集する (Phase 4-2).
+
+        ACTIVE ステータスのユニットのみを対象に HP 割合を計算する。
+
+        Args:
+            team_id: 対象チームID
+
+        Returns:
+            TeamMetrics: チームの現在のメトリクス
+        """
+        controller = self._strategy_controllers.get(team_id)
+        current_strategy = controller.current_strategy if controller else "AGGRESSIVE"
+
+        team_units = [u for u in self.units if u.team_id == team_id]
+        total_count = len(team_units)
+
+        active_units = [
+            u
+            for u in team_units
+            if self.unit_resources[str(u.id)].get("status") == "ACTIVE"
+            and u.current_hp > 0
+        ]
+        alive_count = len(active_units)
+
+        alive_ratio = alive_count / total_count if total_count > 0 else 0.0
+
+        if active_units:
+            hp_ratios = [
+                float(u.current_hp) / float(max(1, u.max_hp)) for u in active_units
+            ]
+            avg_hp_ratio = float(sum(hp_ratios) / len(hp_ratios))
+            min_hp_ratio = float(min(hp_ratios))
+        else:
+            avg_hp_ratio = 0.0
+            min_hp_ratio = 0.0
+
+        return TeamMetrics(
+            team_id=team_id,
+            alive_count=alive_count,
+            total_count=total_count,
+            alive_ratio=float(alive_ratio),
+            avg_hp_ratio=avg_hp_ratio,
+            min_hp_ratio=min_hp_ratio,
+            current_strategy=current_strategy,
+            elapsed_time=float(self.elapsed_time),
+        )
+
+    def _strategy_phase(self) -> None:
+        """戦略評価フェーズ: チームレベルの戦略モードを評価・更新する (Phase 4-2).
+
+        STRATEGY_UPDATE_INTERVAL ステップごとに各チームの TeamStrategyController を
+        呼び出してメトリクスを評価し、戦略変更が発生した場合はユニットの strategy_mode
+        を一括更新して STRATEGY_CHANGED ログを記録する。
+        """
+        # 全チームのメトリクスを収集
+        team_ids = list(self._strategy_controllers.keys())
+        team_metrics_map: dict[str, TeamMetrics] = {
+            team_id: self._collect_team_metrics(team_id) for team_id in team_ids
+        }
+
+        for team_id, controller in self._strategy_controllers.items():
+            if not controller.should_evaluate():
+                continue
+
+            metrics = team_metrics_map[team_id]
+            previous_strategy = controller.current_strategy
+            new_strategy = controller.evaluate(metrics)
+
+            if new_strategy is None or new_strategy == previous_strategy:
+                continue
+
+            # ACTIVE ユニットの strategy_mode を一括更新
+            team_unit_resources = [
+                (u, self.unit_resources[str(u.id)])
+                for u in self.units
+                if u.team_id == team_id
+            ]
+            controller.apply(new_strategy, team_unit_resources)
+
+            # STRATEGY_CHANGED ログを記録
+            # trigger_metrics の float キャストで numpy 型を回避
+            trigger_metrics = {
+                "alive_ratio": float(metrics.alive_ratio),
+                "avg_hp_ratio": float(metrics.avg_hp_ratio),
+                "min_hp_ratio": float(metrics.min_hp_ratio),
+                "alive_count": int(metrics.alive_count),
+                "total_count": int(metrics.total_count),
+            }
+
+            self.logs.append(
+                BattleLog(
+                    timestamp=float(self.elapsed_time),
+                    actor_id=_TEAM_EVENT_ACTOR_ID,
+                    action_type="STRATEGY_CHANGED",
+                    message=(
+                        f"チーム [{team_id}] の戦略が "
+                        f"[{previous_strategy}] → [{new_strategy}] に変更された。"
+                    ),
+                    position_snapshot=Vector3(),
+                    team_id=team_id,
+                    strategy_mode=new_strategy,
+                    details={
+                        "previous_strategy": previous_strategy,
+                        "trigger_metrics": trigger_metrics,
+                    },
+                )
+            )
 
     def _ai_decision_phase(self, unit: MobileSuit) -> None:
         """中階層ファジィ推論フェーズ: 各ユニットの行動を決定する.

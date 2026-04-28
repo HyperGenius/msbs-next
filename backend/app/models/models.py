@@ -305,6 +305,15 @@ class RetreatPoint(SQLModel):
     )
 
 
+class BattleTeam(SQLModel):
+    """バトルチーム定義 (Phase 4-2)."""
+
+    team_id: str
+    units: list[str] = []  # ユニットIDリスト
+    default_strategy: str = "AGGRESSIVE"  # チームの初期StrategyMode
+    retreat_point_ids: list[str] = []
+
+
 class BattleLog(SQLModel):
     """戦闘ログ1行分."""
 
@@ -323,6 +332,8 @@ class BattleLog(SQLModel):
     velocity_snapshot: Vector3 | None = None  # 行動時点の速度ベクトル
     fuzzy_scores: dict | None = None  # ファジィ推論の中間スコア（デバッグ用）
     strategy_mode: str | None = None  # 行動決定時の戦略モード
+    team_id: str | None = None  # チームレベルイベント用チームID (Phase 4-2)
+    details: dict | None = None  # 追加詳細情報（STRATEGY_CHANGED 等）(Phase 4-2)
 
 
 class Mission(SQLModel, table=True):
