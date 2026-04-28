@@ -13,7 +13,7 @@ from app.engine.constants import (
     MAP_BOUNDS,
 )
 from app.engine.simulation import MOVE_LOG_MIN_DIST, BattleSimulator
-from app.models.models import MobileSuit, Vector3, Weapon
+from app.models.models import MobileSuit, RetreatPoint, Vector3, Weapon
 
 # ---------------------------------------------------------------------------
 # ヘルパー
@@ -587,7 +587,9 @@ def test_potential_field_retreat_points_attract() -> None:
     sim.unit_resources[str(player.id)]["current_action"] = "RETREAT"
 
     # 撤退ポイントを +x 方向に設定
-    retreat_point = [4000.0, 0.0, 2500.0]
+    retreat_point = RetreatPoint(
+        position=Vector3(x=4000.0, y=0.0, z=2500.0), radius=100.0
+    )
     direction = sim._calculate_potential_field(
         player, target=None, retreat_points=[retreat_point]
     )

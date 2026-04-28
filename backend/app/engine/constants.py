@@ -74,3 +74,6 @@ ALLY_REPULSION_RADIUS: float = 150.0  # 味方斥力が働く半径 (m)
 BOUNDARY_MARGIN: float = 200.0  # マップ境界からの斥力発生距離 (m)
 HIGH_THREAT_THRESHOLD: float = 0.5  # 高脅威敵の閾値（脅威度スコア）
 MAP_BOUNDS: tuple[float, float] = (0.0, 5000.0)  # XZ方向のマップ範囲 (m)
+
+# 撤退ポイント引力係数 (Phase 3-3)
+RETREAT_ATTRACTION_COEFF: float = 5.0  # 撤退ポイントへの強引力係数
