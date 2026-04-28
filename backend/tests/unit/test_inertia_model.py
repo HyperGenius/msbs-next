@@ -3,10 +3,7 @@
 慣性モデルの旋回制限・加速制限・位置更新を検証する。
 """
 
-import math
-
 import numpy as np
-import pytest
 
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
@@ -79,8 +76,12 @@ def test_unit_resources_initialized_with_velocity_and_heading() -> None:
 def test_apply_inertia_accelerates_from_rest() -> None:
     """静止状態から加速すること."""
     player = _make_unit(
-        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-        acceleration=30.0, max_speed=80.0,
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        acceleration=30.0,
+        max_speed=80.0,
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
@@ -98,8 +99,12 @@ def test_apply_inertia_accelerates_from_rest() -> None:
 def test_apply_inertia_does_not_exceed_max_speed() -> None:
     """速度が max_speed を超えないこと."""
     player = _make_unit(
-        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-        acceleration=30.0, max_speed=80.0,
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        acceleration=30.0,
+        max_speed=80.0,
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
@@ -119,8 +124,12 @@ def test_apply_inertia_does_not_exceed_max_speed() -> None:
 def test_apply_inertia_position_updates_correctly() -> None:
     """位置が velocity_vec * dt だけ更新されること."""
     player = _make_unit(
-        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-        acceleration=300.0, max_speed=80.0,  # 大きい加速度で1ステップで max_speed へ
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        acceleration=300.0,
+        max_speed=80.0,  # 大きい加速度で1ステップで max_speed へ
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
@@ -148,8 +157,13 @@ def test_apply_inertia_position_updates_correctly() -> None:
 def test_ma_turn_rate_limited() -> None:
     """MA (max_turn_rate=30) が 1ステップで 3° 以上旋回しないこと."""
     ma = _make_unit(
-        "MA", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-        max_turn_rate=30.0, acceleration=15.0, max_speed=300.0,
+        "MA",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        max_turn_rate=30.0,
+        acceleration=15.0,
+        max_speed=300.0,
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=1000))
     sim = BattleSimulator(ma, [enemy])
@@ -173,12 +187,22 @@ def test_ma_turn_rate_limited() -> None:
 def test_normal_ms_turn_rate_larger_than_ma() -> None:
     """通常MS (max_turn_rate=360) が MA (max_turn_rate=30) より多く旋回できること."""
     normal_ms = _make_unit(
-        "NormalMS", "PLAYER", "PT1", Vector3(x=0, y=0, z=0),
-        max_turn_rate=360.0, acceleration=30.0, max_speed=80.0,
+        "NormalMS",
+        "PLAYER",
+        "PT1",
+        Vector3(x=0, y=0, z=0),
+        max_turn_rate=360.0,
+        acceleration=30.0,
+        max_speed=80.0,
     )
     ma = _make_unit(
-        "MA", "ENEMY", "ET1", Vector3(x=100, y=0, z=0),
-        max_turn_rate=30.0, acceleration=15.0, max_speed=300.0,
+        "MA",
+        "ENEMY",
+        "ET1",
+        Vector3(x=100, y=0, z=0),
+        max_turn_rate=30.0,
+        acceleration=15.0,
+        max_speed=300.0,
     )
     enemy_normal = _make_unit("Enemy", "ENEMY", "ET1", Vector3(x=100, y=0, z=0))
     enemy_ma = _make_unit("Enemy2", "PLAYER", "PT2", Vector3(x=100, y=0, z=0))
@@ -213,12 +237,19 @@ def test_normal_ms_turn_rate_larger_than_ma() -> None:
 def test_velocity_snapshot_recorded_in_move_log() -> None:
     """移動ログに velocity_snapshot が記録されること."""
     player = _make_unit(
-        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-        acceleration=30.0, max_speed=80.0,
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        acceleration=30.0,
+        max_speed=80.0,
     )
     # 射程外の敵（移動が発生するように遠距離に配置）
     enemy = _make_unit(
-        "Enemy", "ENEMY", "ET", Vector3(x=2000, y=0, z=0),
+        "Enemy",
+        "ENEMY",
+        "ET",
+        Vector3(x=2000, y=0, z=0),
         weapon_range=50.0,
     )
     sim = BattleSimulator(player, [enemy])
@@ -243,8 +274,12 @@ def test_velocity_snapshot_recorded_in_move_log() -> None:
 def test_process_movement_uses_inertia() -> None:
     """_process_movement が慣性モデルを使って位置更新すること."""
     player = _make_unit(
-        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-        acceleration=30.0, max_speed=80.0,
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        acceleration=30.0,
+        max_speed=80.0,
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=500, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
@@ -267,8 +302,12 @@ def test_process_movement_uses_inertia() -> None:
 def test_search_movement_uses_inertia() -> None:
     """_search_movement が慣性モデルを使って位置更新すること."""
     player = _make_unit(
-        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-        acceleration=30.0, max_speed=80.0,
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        acceleration=30.0,
+        max_speed=80.0,
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=2000, y=0, z=0))
     sim = BattleSimulator(player, [enemy])

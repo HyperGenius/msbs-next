@@ -520,7 +520,9 @@ class BattleSimulator:
                 )
         else:
             # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ
-            self._process_movement(actor, pos_actor, pos_target, diff_vector, distance, dt)
+            self._process_movement(
+                actor, pos_actor, pos_target, diff_vector, distance, dt
+            )
 
     def _log_target_selection(
         self,
@@ -1628,15 +1630,15 @@ class BattleSimulator:
         effective_max_speed = actor.max_speed * terrain_modifier
 
         if current_speed < effective_max_speed:
-            new_speed = min(current_speed + actor.acceleration * dt, effective_max_speed)
+            new_speed = min(
+                current_speed + actor.acceleration * dt, effective_max_speed
+            )
         else:
             new_speed = max(current_speed - actor.deceleration * dt, 0.0)
 
         # 新しい方向ベクトルと速度ベクトルを計算 (XZ 平面、Y=0)
         heading_rad = math.radians(new_heading)
-        new_direction = np.array(
-            [math.cos(heading_rad), 0.0, math.sin(heading_rad)]
-        )
+        new_direction = np.array([math.cos(heading_rad), 0.0, math.sin(heading_rad)])
         new_velocity = new_direction * new_speed
 
         # 3. 位置更新
