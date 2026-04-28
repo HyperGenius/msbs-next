@@ -118,7 +118,13 @@ def test_potential_field_move_attracts_to_nearest_enemy() -> None:
 
 
 def test_potential_field_attack_no_attraction_without_target() -> None:
-    """ATTACK 行動でも target=None の場合は攻撃引力が 0 であること."""
+    """ATTACK 行動でも target=None の場合は攻撃引力が 0 であること.
+
+    current_action="ATTACK" かつ target=None の場合:
+    - ATTACK 引力ブロック: スキップ (target is None のため)
+    - MOVE/RETREAT 引力ブロック: スキップ (current_action が "ATTACK" のため)
+    → 脅威斥力・味方斥力・境界斥力のみが合成される。
+    """
     player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
     enemy = _make_unit(
         "Enemy", "ENEMY", "ET", Vector3(x=3000, y=0, z=2500), weapon_power=10.0

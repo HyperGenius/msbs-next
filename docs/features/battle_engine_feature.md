@@ -196,13 +196,13 @@ MSの機動戦をリアルに再現するため、各ユニットは以下の物
 
 ポテンシャルフィールド法で「目標方向ベクトル」を算出し、慣性モデルで実際の速度・位置を更新する。
 
-| ソース | 種別 | 係数 | 条件 |
+| ソース | 種別 | 係数（絶対値）| 条件 |
 |--------|------|------|------|
 | 攻撃対象の敵 | 引力 | `+2.0` | `current_action == "ATTACK"` かつターゲット選択済み |
 | MOVE / RETREAT 行動時の最近敵 | 引力 | `+1.5` | `current_action in ("MOVE", "RETREAT")` |
-| 攻撃範囲外の高脅威敵 | 斥力 | `1.5` | 脅威スコア（攻撃力/自機最大HP）> `HIGH_THREAT_THRESHOLD(0.5)` かつ射程外 |
-| 味方ユニット | 弱い斥力 | `0.8` | 距離 ≤ `ALLY_REPULSION_RADIUS(150m)` |
-| マップ境界 | 斥力 | `3.0` | 境界からの距離 < `BOUNDARY_MARGIN(200m)` |
+| 攻撃範囲外の高脅威敵 | 斥力（away_vec 方向に加算） | `1.5` | 脅威スコア（攻撃力/自機最大HP）> `HIGH_THREAT_THRESHOLD(0.5)` かつ射程外 |
+| 味方ユニット | 弱い斥力（away_vec 方向に加算） | `0.8` | 距離 ≤ `ALLY_REPULSION_RADIUS(150m)` |
+| マップ境界 | 斥力（境界から離れる方向に加算） | `3.0` | 境界からの距離 < `BOUNDARY_MARGIN(200m)` |
 | 撤退ポイント | 強引力 | `+5.0` | `current_action == "RETREAT"` かつ撤退ポイント設定済み（Phase 3-3） |
 
 **実装クラス:** `BattleSimulator._calculate_potential_field(unit, target, retreat_points)`
