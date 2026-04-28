@@ -1940,13 +1940,6 @@ def test_retreat_point_not_set_fallback() -> None:
     # 索敵してから AI 意思決定を実行
     sim._detection_phase()
 
-    # ファジィ推論で RETREAT が出力されたとしても MOVE にフォールバックされることを確認
-    # _ai_decision_phase 内の RETREAT フォールバックロジックをテストするため、
-    # 直接 action_activations を操作して RETREAT が最大値になるケースをシミュレートする
-    original_infer = sim._strategy_engines
-
-    # RETREAT フォールバックのロジックを直接テスト: 撤退ポイント未設定で RETREAT が MOVE に変換される
-    # ファジィエンジンをモックせず、actual な fallback パスを検証する
     unit_id = str(player.id)
 
     # 手動で current_action を RETREAT に設定し、step() 後に RETREATED にならないことを確認
@@ -1956,17 +1949,9 @@ def test_retreat_point_not_set_fallback() -> None:
     # 撤退ポイントがないので _retreat_check_phase() は呼ばれない → ステータスは ACTIVE のまま
     assert sim.unit_resources[unit_id]["status"] == "ACTIVE"
 
-    # AI 意思決定フェーズで RETREAT が選択された場合のフォールバックを確認
-    # retreat_points が空なので RETREAT → MOVE にフォールバックされること
-    # (実際のファジィ出力は環境依存なので、フォールバックロジックのみテスト)
-    sim2 = BattleSimulator(player, [enemy])
-    sim2.unit_resources[unit_id] = dict(sim2.unit_resources[unit_id])
-
-    # 行動選択ロジックの中で RETREAT フォールバックが正しく機能するか確認
-    # retreat_points=[] なので RETREAT が選択されても MOVE になるはず
-    # _ai_decision_phase の RETREAT フォールバック行のみをテスト
-    assert sim2.retreat_points == []
     # フォールバック条件: action == "RETREAT" and not self.retreat_points → MOVE
+    sim2 = BattleSimulator(player, [enemy])
+    assert sim2.retreat_points == []
     action = "RETREAT"
     if action == "RETREAT" and not sim2.retreat_points:
         action = "MOVE"
