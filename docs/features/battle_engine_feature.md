@@ -432,10 +432,10 @@ python scripts/run_simulation.py \
   - `_process_movement()` / `_search_movement()` を `_apply_inertia()` 呼び出しに改修
   - `BattleLog.velocity_snapshot` に速度ベクトルを記録
   - DB マイグレーション追加（`n8o9p0q1r2s3`）
-- [ ] ポテンシャルフィールドによる移動実装（Phase 3-2：目標方向ベクトル算出）
-- [ ] `RETREAT` モード時の撤退ポイント引力計算（Phase 3-3）
-- [ ] バトルフィールドへの `RetreatPoint` 定義の追加（Phase 3-3）
-- [ ] 複数チーム（3チーム以上）対応の確認テスト（Phase 3-3）
+- [x] ポテンシャルフィールドによる移動実装（Phase 3-2：目標方向ベクトル算出）
+- [x] `RETREAT` モード時の撤退ポイント引力計算（Phase 3-3）
+- [x] バトルフィールドへの `RetreatPoint` 定義の追加（Phase 3-3）
+- [x] 複数チーム（3チーム以上）対応の確認テスト（Phase 3-3）
 
 ### Phase 4：戦略・戦術階層
 
