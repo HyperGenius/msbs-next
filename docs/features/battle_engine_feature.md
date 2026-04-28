@@ -368,9 +368,9 @@ python scripts/run_simulation.py \
 
 ### Phase 2：低階層ファジィ推論
 
-- [ ] ターゲット選択ファジィルール実装
-- [ ] 武器選択ファジィルール実装
-- [ ] `defensive.json` / `sniper.json` ルールセット追加
+- [x] ターゲット選択ファジィルール実装
+- [x] 武器選択ファジィルール実装
+- [x] `defensive.json` / `sniper.json` ルールセット追加
 
 ### Phase 3：移動の高度化
 
