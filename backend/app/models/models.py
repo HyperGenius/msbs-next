@@ -107,6 +107,12 @@ class MobileSuit(SQLModel, table=True):
         default=1.0, description="旋回補正 (基準値: 1.0, 将来の向き・旋回速度用)"
     )
 
+    # Physics Parameters for Inertia Model (Phase 3-1)
+    max_speed: float = Field(default=80.0, description="最大速度 (m/s)")
+    acceleration: float = Field(default=30.0, description="加速度 (m/s²)")
+    deceleration: float = Field(default=50.0, description="減速度 (m/s²)")
+    max_turn_rate: float = Field(default=360.0, description="最大旋回速度 (deg/s)")
+
     terrain_adaptability: dict[str, str] = Field(
         default_factory=lambda: {
             "SPACE": "A",

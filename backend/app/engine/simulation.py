@@ -1,5 +1,6 @@
 # backend/app/engine/simulation.py
 import logging
+import math
 import random
 from pathlib import Path
 
@@ -107,6 +108,8 @@ class BattleSimulator:
                 "current_propellant": unit.max_propellant,
                 "weapon_states": {},
                 "current_action": "MOVE",  # 中階層ファジィ推論で決定した行動
+                "velocity_vec": np.zeros(3),  # 現在の速度ベクトル (3D, m/s)
+                "heading_deg": 0.0,  # 現在の向き (XZ平面, 度)
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:
@@ -336,7 +339,7 @@ class BattleSimulator:
         for unit in alive_units:
             if self.is_finished:
                 break
-            self._action_phase(unit)
+            self._action_phase(unit, dt)
 
         # 4. リソース更新フェーズ（EN回復・クールダウン減少）
         self._refresh_phase()
@@ -481,7 +484,7 @@ class BattleSimulator:
                 if weapon_state["current_cool_down"] > 0:
                     weapon_state["current_cool_down"] -= 1
 
-    def _action_phase(self, actor: MobileSuit) -> None:
+    def _action_phase(self, actor: MobileSuit, dt: float = 0.1) -> None:
         """片方のユニットの行動処理."""
         # 既に撃墜されていたら何もしない
         if actor.current_hp <= 0:
@@ -495,7 +498,7 @@ class BattleSimulator:
         target = self._select_target_fuzzy(actor)
         if not target:
             # 発見済みの敵がいない場合、最も近い未発見の敵の方向へ移動
-            self._search_movement(actor)
+            self._search_movement(actor, dt)
             return
 
         pos_actor = actor.position.to_numpy()
@@ -513,11 +516,13 @@ class BattleSimulator:
                 self._process_attack(actor, target, distance, pos_actor, weapon)
             else:
                 self._process_movement(
-                    actor, pos_actor, pos_target, diff_vector, distance
+                    actor, pos_actor, pos_target, diff_vector, distance, dt
                 )
         else:
             # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ
-            self._process_movement(actor, pos_actor, pos_target, diff_vector, distance)
+            self._process_movement(
+                actor, pos_actor, pos_target, diff_vector, distance, dt
+            )
 
     def _log_target_selection(
         self,
@@ -1506,14 +1511,11 @@ class BattleSimulator:
         pos_target: np.ndarray,
         diff_vector: np.ndarray,
         distance: float,
+        dt: float = 0.1,
     ) -> None:
         """移動処理を実行する（戦術に基づく）."""
         if distance == 0:
             return
-
-        # 地形適正による補正を適用
-        terrain_modifier = self._get_terrain_modifier(actor)
-        effective_mobility = actor.mobility * terrain_modifier
 
         # 戦術に基づいて移動方向を決定
         tactics_range = actor.tactics.get("range", "BALANCED")
@@ -1521,12 +1523,8 @@ class BattleSimulator:
 
         if tactics_range == "FLEE":
             # 敵から逃げる（後退）
-            direction = -diff_vector / distance  # 反対方向
-            speed = effective_mobility * 150
-            move_vector = direction * speed
-            new_pos = pos_actor + move_vector
-            actor.position = Vector3.from_numpy(new_pos)
-
+            desired_direction = -diff_vector / distance  # 反対方向
+            self._apply_inertia(actor, desired_direction, dt)
             self.logs.append(
                 BattleLog(
                     timestamp=self.elapsed_time,
@@ -1534,6 +1532,9 @@ class BattleSimulator:
                     action_type="MOVE",
                     message=f"{self._format_actor_name(actor)}が後退中 (距離: {int(distance)}m)",
                     position_snapshot=actor.position,
+                    velocity_snapshot=Vector3.from_numpy(
+                        self.unit_resources[str(actor.id)]["velocity_vec"]
+                    ),
                 )
             )
         elif tactics_range == "RANGED" and weapon:
@@ -1542,12 +1543,8 @@ class BattleSimulator:
 
             if distance < ideal_distance:
                 # 近すぎる場合は後退
-                direction = -diff_vector / distance
-                speed = effective_mobility * 100
-                move_vector = direction * speed
-                new_pos = pos_actor + move_vector
-                actor.position = Vector3.from_numpy(new_pos)
-
+                desired_direction = -diff_vector / distance
+                self._apply_inertia(actor, desired_direction, dt)
                 self.logs.append(
                     BattleLog(
                         timestamp=self.elapsed_time,
@@ -1555,21 +1552,15 @@ class BattleSimulator:
                         action_type="MOVE",
                         message=f"{self._format_actor_name(actor)}が距離を取る (距離: {int(distance)}m)",
                         position_snapshot=actor.position,
+                        velocity_snapshot=Vector3.from_numpy(
+                            self.unit_resources[str(actor.id)]["velocity_vec"]
+                        ),
                     )
                 )
             elif distance > weapon.range:
                 # 射程外の場合は接近
-                direction = diff_vector / distance
-                speed = effective_mobility * 100
-                move_vector = direction * speed
-                new_pos = pos_actor + move_vector
-
-                # 行き過ぎ防止
-                if np.linalg.norm(new_pos - pos_actor) > distance:
-                    new_pos = pos_target - (direction * ideal_distance)
-
-                actor.position = Vector3.from_numpy(new_pos)
-
+                desired_direction = diff_vector / distance
+                self._apply_inertia(actor, desired_direction, dt)
                 self.logs.append(
                     BattleLog(
                         timestamp=self.elapsed_time,
@@ -1577,22 +1568,15 @@ class BattleSimulator:
                         action_type="MOVE",
                         message=f"{self._format_actor_name(actor)}が射程内に移動中 (残距離: {int(distance)}m)",
                         position_snapshot=actor.position,
+                        velocity_snapshot=Vector3.from_numpy(
+                            self.unit_resources[str(actor.id)]["velocity_vec"]
+                        ),
                     )
                 )
         else:  # MELEE or BALANCED (デフォルト)
             # 敵に接近
-            direction = diff_vector / distance
-            speed = effective_mobility * 150
-            move_vector = direction * speed
-
-            new_pos = pos_actor + move_vector
-
-            # 行き過ぎ防止
-            if np.linalg.norm(new_pos - pos_actor) > distance:
-                new_pos = pos_target - (direction * 50)
-
-            actor.position = Vector3.from_numpy(new_pos)
-
+            desired_direction = diff_vector / distance
+            self._apply_inertia(actor, desired_direction, dt)
             self.logs.append(
                 BattleLog(
                     timestamp=self.elapsed_time,
@@ -1600,8 +1584,73 @@ class BattleSimulator:
                     action_type="MOVE",
                     message=f"{self._format_actor_name(actor)}が接近中 (残距離: {int(distance)}m)",
                     position_snapshot=actor.position,
+                    velocity_snapshot=Vector3.from_numpy(
+                        self.unit_resources[str(actor.id)]["velocity_vec"]
+                    ),
                 )
             )
+
+    def _apply_inertia(
+        self,
+        actor: MobileSuit,
+        desired_direction: np.ndarray,
+        dt: float,
+    ) -> None:
+        """慣性モデルによる速度・位置更新.
+
+        旋回制限・加速制限を適用したうえで速度ベクトルと位置を更新する。
+        `unit_resources` の `velocity_vec` / `heading_deg` を更新し、
+        `actor.position` を書き換える。
+
+        Args:
+            actor: 移動対象ユニット
+            desired_direction: 目標方向の単位ベクトル (3D, XZ平面)
+            dt: 時間ステップ幅 (s)
+        """
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
+
+        current_velocity: np.ndarray = resources["velocity_vec"]
+        current_heading: float = resources["heading_deg"]
+
+        # 目標方向のヘッディング角度を計算 (XZ 平面での atan2)
+        desired_heading = math.degrees(
+            math.atan2(float(desired_direction[2]), float(desired_direction[0]))
+        )
+
+        # 1. 旋回制限
+        max_rotation = actor.max_turn_rate * dt
+        angular_diff = ((desired_heading - current_heading + 180) % 360) - 180
+        actual_rotation = max(-max_rotation, min(max_rotation, angular_diff))
+        new_heading = current_heading + actual_rotation
+
+        # 2. 加速・減速制限
+        current_speed = float(np.linalg.norm(current_velocity))
+        terrain_modifier = self._get_terrain_modifier(actor)
+        effective_max_speed = actor.max_speed * terrain_modifier
+
+        if current_speed < effective_max_speed:
+            new_speed = min(
+                current_speed + actor.acceleration * dt, effective_max_speed
+            )
+        else:
+            new_speed = max(current_speed - actor.deceleration * dt, 0.0)
+
+        # 新しい方向ベクトルと速度ベクトルを計算 (XZ 平面、Y=0)
+        heading_rad = math.radians(new_heading)
+        new_direction = np.array([math.cos(heading_rad), 0.0, math.sin(heading_rad)])
+        new_velocity = new_direction * new_speed
+
+        # 3. 位置更新
+        pos_actor = actor.position.to_numpy()
+        new_pos = pos_actor + new_velocity * dt
+
+        # unit_resources を更新
+        resources["velocity_vec"] = new_velocity
+        resources["heading_deg"] = new_heading
+
+        # 位置を更新
+        actor.position = Vector3.from_numpy(new_pos)
 
     def _get_terrain_modifier(self, unit: MobileSuit) -> float:
         """地形適正による補正係数を取得."""
@@ -1619,7 +1668,7 @@ class BattleSimulator:
 
         return modifier
 
-    def _search_movement(self, actor: MobileSuit) -> None:
+    def _search_movement(self, actor: MobileSuit, dt: float = 0.1) -> None:
         """索敵移動: 未発見の敵を探すための移動."""
         # 敵対勢力を特定 (team_idが異なるユニットが敵)
         potential_targets = [
@@ -1643,21 +1692,9 @@ class BattleSimulator:
         if distance == 0:
             return
 
-        # 地形適正による補正を適用
-        terrain_modifier = self._get_terrain_modifier(actor)
-        effective_mobility = actor.mobility * terrain_modifier
-
-        # 索敵のための移動
-        direction = diff_vector / distance
-        speed = effective_mobility * 150
-        move_vector = direction * speed
-        new_pos = pos_actor + move_vector
-
-        # 行き過ぎ防止
-        if np.linalg.norm(new_pos - pos_actor) > distance:
-            new_pos = pos_target - (direction * 50)
-
-        actor.position = Vector3.from_numpy(new_pos)
+        # 慣性モデルで移動（目標方向ベクトルは敵の方向）
+        desired_direction = diff_vector / distance
+        self._apply_inertia(actor, desired_direction, dt)
 
         self.logs.append(
             BattleLog(
@@ -1666,5 +1703,8 @@ class BattleSimulator:
                 action_type="MOVE",
                 message=f"{self._format_actor_name(actor)}が索敵中 (残距離: {int(distance)}m)",
                 position_snapshot=actor.position,
+                velocity_snapshot=Vector3.from_numpy(
+                    self.unit_resources[str(actor.id)]["velocity_vec"]
+                ),
             )
         )

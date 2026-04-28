@@ -1,9 +1,9 @@
 # バトルエンジン高度化 機能仕様書
 
-**バージョン:** 0.5.0  
+**バージョン:** 0.6.0  
 **作成日:** 2026-04-27  
 **更新日:** 2026-04-28  
-**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 実装済み
+**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 実装済み
 
 ---
 
@@ -297,12 +297,21 @@ backend/data/fuzzy_rules/
 | `strategy_mode` | `str` | 現在の戦略モード（`AGGRESSIVE` 等） |
 | `current_action` | `str` | 現在の行動（`ATTACK / MOVE / USE_SKILL / RETREAT`） |
 | `target_id` | `UUID \| None` | 現在のターゲットID |
-| `max_speed` | `float` | 最大速度 (m/s)。デフォルト: 80.0 |
-| `acceleration` | `float` | 加速度 (m/s²)。デフォルト: 30.0 |
-| `deceleration` | `float` | 減速度 (m/s²)。デフォルト: 50.0 |
-| `max_turn_rate` | `float` | 最大旋回速度 (deg/s)。通常MS: 360、MA: 30 |
+| `max_speed` | `float` | 最大速度 (m/s)。デフォルト: 80.0 ✅ Phase 3-1 実装済み |
+| `acceleration` | `float` | 加速度 (m/s²)。デフォルト: 30.0 ✅ Phase 3-1 実装済み |
+| `deceleration` | `float` | 減速度 (m/s²)。デフォルト: 50.0 ✅ Phase 3-1 実装済み |
+| `max_turn_rate` | `float` | 最大旋回速度 (deg/s)。通常MS: 360、MA: 30 ✅ Phase 3-1 実装済み |
 
 > **Note:** `current_action` / `target_id` は戦闘中の一時状態のため、`unit_resources` の `dict` に含めてDBには保存しない方針を基本とする（要検討）。
+
+### 3.1.1 `unit_resources` への速度状態追加（Phase 3-1 実装済み）
+
+`BattleSimulator.unit_resources[unit_id]` に以下を追加した（DB 非保存・戦闘中一時状態）。
+
+| キー | 型 | 初期値 | 説明 |
+|------|-----|--------|------|
+| `velocity_vec` | `np.ndarray` | `[0, 0, 0]` | 現在の速度ベクトル (3D, m/s) |
+| `heading_deg` | `float` | `0.0` | 現在の向き (XZ平面, 度) |
 
 ### 3.2 `BattleLog` への追加フィールド
 
@@ -374,11 +383,17 @@ python scripts/run_simulation.py \
 
 ### Phase 3：移動の高度化
 
-- [ ] 慣性モデルの実装（`max_speed` / `acceleration` / `deceleration` / `max_turn_rate`）
-- [ ] ポテンシャルフィールドによる移動実装（目標方向ベクトル算出）
-- [ ] `RETREAT` モード時の撤退ポイント引力計算
-- [ ] バトルフィールドへの `RetreatPoint` 定義の追加
-- [ ] 複数チーム（3チーム以上）対応の確認テスト
+- [x] 慣性モデルの実装（Phase 3-1）
+  - `MobileSuit` に `max_speed` / `acceleration` / `deceleration` / `max_turn_rate` フィールドを追加
+  - `unit_resources` に `velocity_vec` / `heading_deg` を追加
+  - `_apply_inertia(unit, desired_direction, dt)` ヘルパーを実装（旋回制限・加速制限・位置更新）
+  - `_process_movement()` / `_search_movement()` を `_apply_inertia()` 呼び出しに改修
+  - `BattleLog.velocity_snapshot` に速度ベクトルを記録
+  - DB マイグレーション追加（`n8o9p0q1r2s3`）
+- [ ] ポテンシャルフィールドによる移動実装（Phase 3-2：目標方向ベクトル算出）
+- [ ] `RETREAT` モード時の撤退ポイント引力計算（Phase 3-3）
+- [ ] バトルフィールドへの `RetreatPoint` 定義の追加（Phase 3-3）
+- [ ] 複数チーム（3チーム以上）対応の確認テスト（Phase 3-3）
 
 ### Phase 4：戦略・戦術階層
 
