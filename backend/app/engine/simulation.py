@@ -14,6 +14,10 @@ from app.engine.calculator import (
     calculate_hit_chance,
 )
 from app.engine.constants import (
+    ALLY_REPULSION_RADIUS,
+    BOUNDARY_MARGIN,
+    HIGH_THREAT_THRESHOLD,
+    MAP_BOUNDS,
     SPECIAL_ENVIRONMENT_EFFECTS,
     TERRAIN_ADAPTABILITY_MODIFIERS,
     VALID_STRATEGY_MODES,
@@ -31,6 +35,8 @@ _FUZZY_NEIGHBOR_RADIUS = 500.0
 _TARGET_SELECTION_MAX_DIST = 3000.0
 # 武器選択ファジィ推論: 距離の最大値 (m)
 _WEAPON_SELECTION_MAX_DIST = 3000.0
+# MOVE ログを出力する最小残距離 (m) — これ未満の残距離では MOVE ログを抑制する
+MOVE_LOG_MIN_DIST: float = 100.0
 
 # 戦略モードとJSONファイルのレイヤーマッピング
 _STRATEGY_FILE_PREFIXES: dict[str, str] = {
@@ -516,10 +522,16 @@ class BattleSimulator:
                 self._process_attack(actor, target, distance, pos_actor, weapon)
             else:
                 self._process_movement(
-                    actor, pos_actor, pos_target, diff_vector, distance, dt
+                    actor,
+                    pos_actor,
+                    pos_target,
+                    diff_vector,
+                    distance,
+                    dt,
+                    target=target,
                 )
         else:
-            # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ
+            # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ（攻撃対象引力なし）
             self._process_movement(
                 actor, pos_actor, pos_target, diff_vector, distance, dt
             )
@@ -1504,6 +1516,136 @@ class BattleSimulator:
         if len(alive_teams) <= 1:
             self.is_finished = True
 
+    def _threat_enemy_repulsion(
+        self,
+        unit: MobileSuit,
+        pos_unit: np.ndarray,
+        weapon_range: float,
+    ) -> np.ndarray:
+        """高脅威敵（自機射程外）への斥力ベクトルを返す."""
+        force = np.zeros(3)
+        all_enemies = [
+            u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
+        ]
+        for enemy in all_enemies:
+            vec_to_enemy = enemy.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec_to_enemy))
+            threat_score = self._calculate_attack_power(enemy) / max(
+                1.0, float(unit.max_hp)
+            )
+            if threat_score > HIGH_THREAT_THRESHOLD and dist > weapon_range:
+                force += 1.5 * (-vec_to_enemy) / max(dist, 1.0)
+        return force
+
+    def _ally_repulsion(self, unit: MobileSuit, pos_unit: np.ndarray) -> np.ndarray:
+        """味方ユニットへの弱い斥力ベクトルを返す（密集防止）."""
+        force = np.zeros(3)
+        allies = [
+            u
+            for u in self.units
+            if u.current_hp > 0 and u.team_id == unit.team_id and u.id != unit.id
+        ]
+        for ally in allies:
+            vec_to_ally = ally.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec_to_ally))
+            if 0 < dist <= ALLY_REPULSION_RADIUS:
+                force += 0.8 * (-vec_to_ally) / max(dist, 1.0)
+        return force
+
+    def _boundary_repulsion(self, pos_unit: np.ndarray) -> np.ndarray:
+        """マップ境界への斥力ベクトルを返す."""
+        force = np.zeros(3)
+        map_min, map_max = MAP_BOUNDS
+        axes = [(0, np.array([1.0, 0.0, 0.0])), (2, np.array([0.0, 0.0, 1.0]))]
+        for axis, direction in axes:
+            dist_min = pos_unit[axis] - map_min
+            if dist_min < BOUNDARY_MARGIN:
+                force += 3.0 * direction / max(dist_min, 1.0)
+            dist_max = map_max - pos_unit[axis]
+            if dist_max < BOUNDARY_MARGIN:
+                force += 3.0 * (-direction) / max(dist_max, 1.0)
+        return force
+
+    def _calculate_potential_field(
+        self,
+        unit: MobileSuit,
+        target: MobileSuit | None = None,
+        retreat_points: list | None = None,
+    ) -> np.ndarray:
+        """ポテンシャルフィールド法による目標方向ベクトルを計算する.
+
+        攻撃ターゲット・脅威敵・味方・マップ境界などの各ソースからの
+        引力・斥力を合成して正規化した 3D 単位ベクトルを返す。
+        合算結果がゼロベクトルになった場合はランダム方向を返し
+        ローカルミニマムを回避する。
+
+        Args:
+            unit: 移動するユニット
+            target: 攻撃対象ユニット（ATTACK 行動時に強引力を与える）
+            retreat_points: 撤退ポイントの位置リスト（Phase 3-3 用）
+
+        Returns:
+            3D 単位ベクトル（XZ 平面）
+        """
+        if retreat_points is None:
+            retreat_points = []
+
+        pos_unit = unit.position.to_numpy()
+        unit_id = str(unit.id)
+        current_action = self.unit_resources[unit_id].get("current_action", "MOVE")
+        total_force = np.zeros(3)
+
+        # 1. 攻撃ターゲットへの引力 (ATTACK 行動かつターゲット選択済みの場合)
+        if current_action == "ATTACK" and target is not None:
+            vec = target.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec))
+            if dist > 0:
+                total_force += 2.0 * vec / dist
+
+        # 2. MOVE / RETREAT 行動時の最近敵への引力
+        if current_action in ("MOVE", "RETREAT"):
+            enemies = [
+                u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
+            ]
+            if enemies:
+                closest_enemy = min(
+                    enemies,
+                    key=lambda e: float(
+                        np.linalg.norm(e.position.to_numpy() - pos_unit)
+                    ),
+                )
+                vec = closest_enemy.position.to_numpy() - pos_unit
+                dist = float(np.linalg.norm(vec))
+                if dist > 0:
+                    total_force += 1.5 * vec / dist
+
+        # 3. 高脅威敵（自機射程外）への斥力
+        weapon = unit.get_active_weapon()
+        weapon_range = float(weapon.range) if weapon else 0.0
+        total_force += self._threat_enemy_repulsion(unit, pos_unit, weapon_range)
+
+        # 4. 味方ユニットへの弱い斥力 (ALLY_REPULSION_RADIUS 以内)
+        total_force += self._ally_repulsion(unit, pos_unit)
+
+        # 5. マップ境界への斥力 (BOUNDARY_MARGIN 以内)
+        total_force += self._boundary_repulsion(pos_unit)
+
+        # 6. 撤退ポイントへの強引力 (Phase 3-3 で活用)
+        for rp in retreat_points:
+            rp_pos = np.asarray(rp, dtype=float)
+            vec = rp_pos - pos_unit
+            dist = float(np.linalg.norm(vec))
+            if dist > 0:
+                total_force += 5.0 * vec / dist
+
+        # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
+        total_force[1] = 0.0  # Y 成分を XZ 平面に固定
+        magnitude = float(np.linalg.norm(total_force))
+        if magnitude < 1e-6:
+            angle = random.uniform(0.0, 2.0 * math.pi)
+            return np.array([math.cos(angle), 0.0, math.sin(angle)])
+        return total_force / magnitude
+
     def _process_movement(
         self,
         actor: MobileSuit,
@@ -1512,77 +1654,24 @@ class BattleSimulator:
         diff_vector: np.ndarray,
         distance: float,
         dt: float = 0.1,
+        target: MobileSuit | None = None,
     ) -> None:
-        """移動処理を実行する（戦術に基づく）."""
+        """移動処理を実行する（ポテンシャルフィールドによる自律移動）."""
         if distance == 0:
             return
 
-        # 戦術に基づいて移動方向を決定
-        tactics_range = actor.tactics.get("range", "BALANCED")
-        weapon = actor.get_active_weapon()
+        # ポテンシャルフィールドで目標方向を算出し、慣性モデルで位置・速度を更新
+        desired_direction = self._calculate_potential_field(actor, target)
+        self._apply_inertia(actor, desired_direction, dt)
 
-        if tactics_range == "FLEE":
-            # 敵から逃げる（後退）
-            desired_direction = -diff_vector / distance  # 反対方向
-            self._apply_inertia(actor, desired_direction, dt)
+        # MOVE_LOG_MIN_DIST 以上の残距離のステップのみログ出力（ログ量削減）
+        if distance >= MOVE_LOG_MIN_DIST:
             self.logs.append(
                 BattleLog(
                     timestamp=self.elapsed_time,
                     actor_id=actor.id,
                     action_type="MOVE",
-                    message=f"{self._format_actor_name(actor)}が後退中 (距離: {int(distance)}m)",
-                    position_snapshot=actor.position,
-                    velocity_snapshot=Vector3.from_numpy(
-                        self.unit_resources[str(actor.id)]["velocity_vec"]
-                    ),
-                )
-            )
-        elif tactics_range == "RANGED" and weapon:
-            # 遠距離維持（射程ギリギリの距離を維持）
-            ideal_distance = weapon.range * 0.8  # 射程の80%の距離を維持
-
-            if distance < ideal_distance:
-                # 近すぎる場合は後退
-                desired_direction = -diff_vector / distance
-                self._apply_inertia(actor, desired_direction, dt)
-                self.logs.append(
-                    BattleLog(
-                        timestamp=self.elapsed_time,
-                        actor_id=actor.id,
-                        action_type="MOVE",
-                        message=f"{self._format_actor_name(actor)}が距離を取る (距離: {int(distance)}m)",
-                        position_snapshot=actor.position,
-                        velocity_snapshot=Vector3.from_numpy(
-                            self.unit_resources[str(actor.id)]["velocity_vec"]
-                        ),
-                    )
-                )
-            elif distance > weapon.range:
-                # 射程外の場合は接近
-                desired_direction = diff_vector / distance
-                self._apply_inertia(actor, desired_direction, dt)
-                self.logs.append(
-                    BattleLog(
-                        timestamp=self.elapsed_time,
-                        actor_id=actor.id,
-                        action_type="MOVE",
-                        message=f"{self._format_actor_name(actor)}が射程内に移動中 (残距離: {int(distance)}m)",
-                        position_snapshot=actor.position,
-                        velocity_snapshot=Vector3.from_numpy(
-                            self.unit_resources[str(actor.id)]["velocity_vec"]
-                        ),
-                    )
-                )
-        else:  # MELEE or BALANCED (デフォルト)
-            # 敵に接近
-            desired_direction = diff_vector / distance
-            self._apply_inertia(actor, desired_direction, dt)
-            self.logs.append(
-                BattleLog(
-                    timestamp=self.elapsed_time,
-                    actor_id=actor.id,
-                    action_type="MOVE",
-                    message=f"{self._format_actor_name(actor)}が接近中 (残距離: {int(distance)}m)",
+                    message=f"{self._format_actor_name(actor)}が移動中 (残距離: {int(distance)}m)",
                     position_snapshot=actor.position,
                     velocity_snapshot=Vector3.from_numpy(
                         self.unit_resources[str(actor.id)]["velocity_vec"]
@@ -1692,19 +1781,21 @@ class BattleSimulator:
         if distance == 0:
             return
 
-        # 慣性モデルで移動（目標方向ベクトルは敵の方向）
-        desired_direction = diff_vector / distance
+        # ポテンシャルフィールドで目標方向を算出し、慣性モデルで移動
+        desired_direction = self._calculate_potential_field(actor, target=None)
         self._apply_inertia(actor, desired_direction, dt)
 
-        self.logs.append(
-            BattleLog(
-                timestamp=self.elapsed_time,
-                actor_id=actor.id,
-                action_type="MOVE",
-                message=f"{self._format_actor_name(actor)}が索敵中 (残距離: {int(distance)}m)",
-                position_snapshot=actor.position,
-                velocity_snapshot=Vector3.from_numpy(
-                    self.unit_resources[str(actor.id)]["velocity_vec"]
-                ),
+        # MOVE_LOG_MIN_DIST 以上の残距離のステップのみログ出力
+        if distance >= MOVE_LOG_MIN_DIST:
+            self.logs.append(
+                BattleLog(
+                    timestamp=self.elapsed_time,
+                    actor_id=actor.id,
+                    action_type="MOVE",
+                    message=f"{self._format_actor_name(actor)}が索敵中 (残距離: {int(distance)}m)",
+                    position_snapshot=actor.position,
+                    velocity_snapshot=Vector3.from_numpy(
+                        self.unit_resources[str(actor.id)]["velocity_vec"]
+                    ),
+                )
             )
-        )

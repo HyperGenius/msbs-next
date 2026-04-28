@@ -322,8 +322,9 @@ def test_full_battle_with_detection() -> None:
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
 
-    # Run simulation
-    max_steps = 50
+    # Run simulation — potential field movement may cause diagonal paths due to boundary
+    # forces, so use a larger step limit to ensure detection
+    max_steps = 200
     for _ in range(max_steps):
         if sim.is_finished:
             break
