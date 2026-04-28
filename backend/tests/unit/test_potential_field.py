@@ -4,10 +4,7 @@
 引力・斥力の各ソースが正しく合成されることを確認する。
 """
 
-import math
-
 import numpy as np
-import pytest
 
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
@@ -17,7 +14,6 @@ from app.engine.constants import (
 )
 from app.engine.simulation import MOVE_LOG_MIN_DIST, BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # ヘルパー
@@ -151,7 +147,9 @@ def test_potential_field_returns_unit_vector() -> None:
 
     direction = sim._calculate_potential_field(player, target=enemy)
     magnitude = float(np.linalg.norm(direction))
-    assert abs(magnitude - 1.0) < 1e-6, f"単位ベクトルを返すこと (magnitude={magnitude})"
+    assert abs(magnitude - 1.0) < 1e-6, (
+        f"単位ベクトルを返すこと (magnitude={magnitude})"
+    )
 
 
 def test_potential_field_y_component_is_zero() -> None:
@@ -177,9 +175,7 @@ def test_potential_field_ally_repulsion_pushes_away() -> None:
     # マップ中央付近に配置
     player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
     # 味方を +x に近距離、かつわずかに z をオフセット（斥力に z 成分を持たせる）
-    ally = _make_unit(
-        "Ally", "PLAYER", "PT", Vector3(x=2600, y=0, z=2510), wid="a1"
-    )
+    ally = _make_unit("Ally", "PLAYER", "PT", Vector3(x=2600, y=0, z=2510), wid="a1")
     ally.current_hp = 100
     # 敵を +x 遠距離に配置
     enemy = _make_unit(
@@ -281,7 +277,12 @@ def test_potential_field_boundary_repulsion_near_edge() -> None:
         "PlayerCenter", "PLAYER", "PT2", Vector3(x=2500, y=0, z=2500), wid="wc"
     )
     enemy_center = _make_unit(
-        "EnemyCenter", "ENEMY", "ET2", Vector3(x=3000, y=0, z=2500), weapon_power=10.0, wid="ec"
+        "EnemyCenter",
+        "ENEMY",
+        "ET2",
+        Vector3(x=3000, y=0, z=2500),
+        weapon_power=10.0,
+        wid="ec",
     )
     sim_center = BattleSimulator(player_center, [enemy_center])
     sim_center.unit_resources[str(player_center.id)]["current_action"] = "MOVE"
@@ -445,7 +446,9 @@ def test_potential_field_no_crash_on_zero_vector() -> None:
     # 例外が発生しないこと、かつ単位ベクトルが返ること
     direction = sim._calculate_potential_field(player)
     magnitude = float(np.linalg.norm(direction))
-    assert abs(magnitude - 1.0) < 1e-6, "ゼロベクトル時もフォールバックで単位ベクトルを返すこと"
+    assert abs(magnitude - 1.0) < 1e-6, (
+        "ゼロベクトル時もフォールバックで単位ベクトルを返すこと"
+    )
 
 
 def test_potential_field_local_minimum_returns_random_direction() -> None:
@@ -493,7 +496,7 @@ def test_process_movement_uses_potential_field() -> None:
 
 
 def test_process_movement_logs_when_distance_sufficient() -> None:
-    """distance >= MOVE_LOG_MIN_DIST のとき MOVE ログが出力されること."""
+    """Distance >= MOVE_LOG_MIN_DIST のとき MOVE ログが出力されること."""
     player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
     enemy = _make_unit(
         "Enemy", "ENEMY", "ET", Vector3(x=3000, y=0, z=2500), weapon_power=10.0
@@ -513,7 +516,7 @@ def test_process_movement_logs_when_distance_sufficient() -> None:
 
 
 def test_process_movement_no_log_when_distance_short() -> None:
-    """distance < MOVE_LOG_MIN_DIST のとき MOVE ログが出力されないこと."""
+    """Distance < MOVE_LOG_MIN_DIST のとき MOVE ログが出力されないこと."""
     player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
     enemy = _make_unit(
         "Enemy", "ENEMY", "ET", Vector3(x=2550, y=0, z=2500), weapon_power=10.0
@@ -550,7 +553,9 @@ def test_search_movement_uses_potential_field() -> None:
     sim._search_movement(player, dt=0.1)
 
     new_pos = player.position.to_numpy()
-    assert not np.allclose(new_pos, initial_pos), "_search_movement 後に位置が変化すること"
+    assert not np.allclose(new_pos, initial_pos), (
+        "_search_movement 後に位置が変化すること"
+    )
 
 
 def test_search_movement_no_log_when_distance_short() -> None:

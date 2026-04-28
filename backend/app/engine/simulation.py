@@ -522,7 +522,13 @@ class BattleSimulator:
                 self._process_attack(actor, target, distance, pos_actor, weapon)
             else:
                 self._process_movement(
-                    actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+                    actor,
+                    pos_actor,
+                    pos_target,
+                    diff_vector,
+                    distance,
+                    dt,
+                    target=target,
                 )
         else:
             # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ（攻撃対象引力なし）
@@ -1510,6 +1516,56 @@ class BattleSimulator:
         if len(alive_teams) <= 1:
             self.is_finished = True
 
+    def _threat_enemy_repulsion(
+        self,
+        unit: MobileSuit,
+        pos_unit: np.ndarray,
+        weapon_range: float,
+    ) -> np.ndarray:
+        """高脅威敵（自機射程外）への斥力ベクトルを返す."""
+        force = np.zeros(3)
+        all_enemies = [
+            u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
+        ]
+        for enemy in all_enemies:
+            vec_to_enemy = enemy.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec_to_enemy))
+            threat_score = self._calculate_attack_power(enemy) / max(
+                1.0, float(unit.max_hp)
+            )
+            if threat_score > HIGH_THREAT_THRESHOLD and dist > weapon_range:
+                force += 1.5 * (-vec_to_enemy) / max(dist, 1.0)
+        return force
+
+    def _ally_repulsion(self, unit: MobileSuit, pos_unit: np.ndarray) -> np.ndarray:
+        """味方ユニットへの弱い斥力ベクトルを返す（密集防止）."""
+        force = np.zeros(3)
+        allies = [
+            u
+            for u in self.units
+            if u.current_hp > 0 and u.team_id == unit.team_id and u.id != unit.id
+        ]
+        for ally in allies:
+            vec_to_ally = ally.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec_to_ally))
+            if 0 < dist <= ALLY_REPULSION_RADIUS:
+                force += 0.8 * (-vec_to_ally) / max(dist, 1.0)
+        return force
+
+    def _boundary_repulsion(self, pos_unit: np.ndarray) -> np.ndarray:
+        """マップ境界への斥力ベクトルを返す."""
+        force = np.zeros(3)
+        map_min, map_max = MAP_BOUNDS
+        axes = [(0, np.array([1.0, 0.0, 0.0])), (2, np.array([0.0, 0.0, 1.0]))]
+        for axis, direction in axes:
+            dist_min = pos_unit[axis] - map_min
+            if dist_min < BOUNDARY_MARGIN:
+                force += 3.0 * direction / max(dist_min, 1.0)
+            dist_max = map_max - pos_unit[axis]
+            if dist_max < BOUNDARY_MARGIN:
+                force += 3.0 * (-direction) / max(dist_max, 1.0)
+        return force
+
     def _calculate_potential_field(
         self,
         unit: MobileSuit,
@@ -1549,9 +1605,7 @@ class BattleSimulator:
         # 2. MOVE / RETREAT 行動時の最近敵への引力
         if current_action in ("MOVE", "RETREAT"):
             enemies = [
-                u
-                for u in self.units
-                if u.current_hp > 0 and u.team_id != unit.team_id
+                u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
             ]
             if enemies:
                 closest_enemy = min(
@@ -1568,51 +1622,13 @@ class BattleSimulator:
         # 3. 高脅威敵（自機射程外）への斥力
         weapon = unit.get_active_weapon()
         weapon_range = float(weapon.range) if weapon else 0.0
-        all_enemies = [
-            u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
-        ]
-        for enemy in all_enemies:
-            enemy_pos = enemy.position.to_numpy()
-            vec_to_enemy = enemy_pos - pos_unit
-            dist = float(np.linalg.norm(vec_to_enemy))
-            # 正規化脅威スコア = 攻撃力 / 自機最大HP
-            threat_score = self._calculate_attack_power(enemy) / max(
-                1.0, float(unit.max_hp)
-            )
-            if threat_score > HIGH_THREAT_THRESHOLD and dist > weapon_range:
-                away_vec = -vec_to_enemy  # 敵から離れる方向
-                safe_dist = max(dist, 1.0)
-                total_force += 1.5 * away_vec / safe_dist
+        total_force += self._threat_enemy_repulsion(unit, pos_unit, weapon_range)
 
         # 4. 味方ユニットへの弱い斥力 (ALLY_REPULSION_RADIUS 以内)
-        allies = [
-            u
-            for u in self.units
-            if u.current_hp > 0 and u.team_id == unit.team_id and u.id != unit.id
-        ]
-        for ally in allies:
-            ally_pos = ally.position.to_numpy()
-            vec_to_ally = ally_pos - pos_unit
-            dist = float(np.linalg.norm(vec_to_ally))
-            if 0 < dist <= ALLY_REPULSION_RADIUS:
-                away_vec = -vec_to_ally
-                safe_dist = max(dist, 1.0)
-                total_force += 0.8 * away_vec / safe_dist
+        total_force += self._ally_repulsion(unit, pos_unit)
 
         # 5. マップ境界への斥力 (BOUNDARY_MARGIN 以内)
-        map_min, map_max = MAP_BOUNDS
-        dist_xmin = pos_unit[0] - map_min
-        if dist_xmin < BOUNDARY_MARGIN:
-            total_force += 3.0 * np.array([1.0, 0.0, 0.0]) / max(dist_xmin, 1.0)
-        dist_xmax = map_max - pos_unit[0]
-        if dist_xmax < BOUNDARY_MARGIN:
-            total_force += 3.0 * np.array([-1.0, 0.0, 0.0]) / max(dist_xmax, 1.0)
-        dist_zmin = pos_unit[2] - map_min
-        if dist_zmin < BOUNDARY_MARGIN:
-            total_force += 3.0 * np.array([0.0, 0.0, 1.0]) / max(dist_zmin, 1.0)
-        dist_zmax = map_max - pos_unit[2]
-        if dist_zmax < BOUNDARY_MARGIN:
-            total_force += 3.0 * np.array([0.0, 0.0, -1.0]) / max(dist_zmax, 1.0)
+        total_force += self._boundary_repulsion(pos_unit)
 
         # 6. 撤退ポイントへの強引力 (Phase 3-3 で活用)
         for rp in retreat_points:
