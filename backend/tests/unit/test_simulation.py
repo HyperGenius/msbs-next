@@ -211,7 +211,7 @@ def test_tactics_weakest_priority() -> None:
     sim._detection_phase()
 
     # Get target selection
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
 
     # Should target the weakest enemy
     assert target is not None
@@ -365,7 +365,7 @@ def test_tactics_strongest_priority() -> None:
     sim._detection_phase()
 
     # Get target selection
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
 
     # Should target the strongest enemy (highest strategic value)
     assert target is not None
@@ -396,7 +396,7 @@ def test_tactics_threat_priority() -> None:
     sim._detection_phase()
 
     # Get target selection
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
 
     # Should target Close Strong (highest threat: closer distance + higher power than Close Weak)
     assert target is not None
@@ -437,7 +437,7 @@ def test_target_selection_with_multiple_tactics() -> None:
     player.tactics = {"priority": "CLOSEST", "range": "BALANCED"}
     sim = BattleSimulator(player, enemies)
     sim._detection_phase()
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Close Zaku"
 
@@ -446,7 +446,7 @@ def test_target_selection_with_multiple_tactics() -> None:
     player.tactics = {"priority": "WEAKEST", "range": "BALANCED"}
     sim = BattleSimulator(player, enemies)
     sim._detection_phase()
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Damaged GM"
 
@@ -455,7 +455,7 @@ def test_target_selection_with_multiple_tactics() -> None:
     player.tactics = {"priority": "STRONGEST", "range": "BALANCED"}
     sim = BattleSimulator(player, enemies)
     sim._detection_phase()
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Far Gundam"
 
@@ -476,7 +476,7 @@ def test_same_team_id_no_attack() -> None:
     sim._detection_phase()
 
     # プレイヤーのターゲット選択 → 同チームなので None
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is None
 
 
@@ -491,7 +491,7 @@ def test_different_team_id_attack() -> None:
     sim = BattleSimulator(player, [enemy])
     sim._detection_phase()
 
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Enemy Zaku"
 
@@ -511,7 +511,7 @@ def test_mixed_side_same_team_no_attack() -> None:
     sim._detection_phase()
 
     # 同チームなので攻撃対象にならない
-    target = sim._select_target(player)
+    target = sim._select_target_legacy(player)
     assert target is None
 
 
@@ -1014,7 +1014,7 @@ def test_detection_shared_within_team() -> None:
     assert enemy.id in sim.team_detected_units["TEAM_A"]
 
     # Rear GuardもTEAM_Aなので同じ索敵情報を使える
-    target = sim._select_target(rear_guard)
+    target = sim._select_target_legacy(rear_guard)
     assert target is not None
     assert target.name == "Enemy"
 
@@ -1231,3 +1231,109 @@ def test_action_phase_respects_attack_action() -> None:
         if log.action_type in ("ATTACK", "MISS", "WAIT") and log.actor_id == player.id
     ]
     assert len(attack_logs) >= 1
+
+
+# === _select_target_fuzzy テスト ===
+
+
+def test_select_target_fuzzy_returns_none_when_no_detected_targets() -> None:
+    """索敵済み候補が0件のとき None を返すこと."""
+    player = create_test_player()
+    enemy = create_test_enemy("Far Enemy", Vector3(x=9999, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+    # 索敵フェーズを実行しない → 発見済みなし
+    target = sim._select_target_fuzzy(player)
+    assert target is None
+
+
+def test_select_target_fuzzy_returns_target_when_single_enemy_detected() -> None:
+    """索敵済み候補が1件のとき、そのユニットを返すこと."""
+    player = create_test_player()
+    enemy = create_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+    sim._detection_phase()
+
+    target = sim._select_target_fuzzy(player)
+    assert target is not None
+    assert target.name == "Close Enemy"
+
+
+def test_select_target_fuzzy_returns_none_for_no_team_id() -> None:
+    """Actor に team_id が未設定の場合は None を返すこと."""
+    player = create_test_player()
+    player.team_id = None
+    enemy = create_test_enemy("Enemy", Vector3(x=100, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+
+    target = sim._select_target_fuzzy(player)
+    assert target is None
+
+
+def test_select_target_fuzzy_logs_fuzzy_scores_in_target_selection() -> None:
+    """TARGET_SELECTION ログに fuzzy_scores が含まれること."""
+    player = create_test_player()
+    enemy = create_test_enemy("Target Enemy", Vector3(x=100, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+    sim._detection_phase()
+
+    sim._select_target_fuzzy(player)
+
+    target_logs = [log for log in sim.logs if log.action_type == "TARGET_SELECTION"]
+    assert len(target_logs) >= 1
+    fuzzy_log = target_logs[-1]
+    assert fuzzy_log.fuzzy_scores is not None
+    assert "layer" in fuzzy_log.fuzzy_scores
+    assert fuzzy_log.fuzzy_scores["layer"] == "target_selection"
+    assert "score" in fuzzy_log.fuzzy_scores
+    assert "all_scores" in fuzzy_log.fuzzy_scores
+
+
+def test_select_target_fuzzy_prefers_high_priority_target() -> None:
+    """近距離・低HP の敵を遠距離・高HP の敵より優先して選択すること."""
+    player = create_test_player()
+    player.position = Vector3(x=0, y=0, z=0)
+
+    # 近距離・低HP → ファジィルールで HIGH priority
+    close_low_hp = create_test_enemy("Close Low HP", Vector3(x=100, y=0, z=0))
+    close_low_hp.max_hp = 100
+    close_low_hp.current_hp = 10  # HP ratio ≈ 0.1 (LOW)
+
+    # 遠距離・高HP → ファジィルールで LOW priority
+    far_high_hp = create_test_enemy("Far High HP", Vector3(x=2500, y=0, z=0))
+    far_high_hp.max_hp = 200
+    far_high_hp.current_hp = 200  # HP ratio = 1.0 (HIGH)
+    far_high_hp.sensor_range = 9999.0  # ensure detection range covers both
+
+    # 索敵範囲を拡大して両ユニットを発見できるようにする
+    player.sensor_range = 9999.0
+
+    sim = BattleSimulator(player, [close_low_hp, far_high_hp])
+    sim._detection_phase()
+
+    target = sim._select_target_fuzzy(player)
+    assert target is not None
+    assert target.name == "Close Low HP"
+
+
+def test_calculate_attack_power_returns_max_weapon_power() -> None:
+    """_calculate_attack_power() が武器の最大威力を返すこと."""
+    player = create_test_player()
+    player.weapons = [
+        Weapon(id="w1", name="Weapon A", power=20, range=400, accuracy=80),
+        Weapon(id="w2", name="Weapon B", power=50, range=300, accuracy=70),
+        Weapon(id="w3", name="Weapon C", power=10, range=500, accuracy=90),
+    ]
+    sim = BattleSimulator(player, [])
+
+    power = sim._calculate_attack_power(player)
+    assert power == 50.0
+
+
+def test_calculate_attack_power_returns_zero_for_no_weapons() -> None:
+    """武器がないユニットの攻撃力は 0.0 を返すこと."""
+    player = create_test_player()
+    player.weapons = []
+    sim = BattleSimulator(player, [])
+
+    power = sim._calculate_attack_power(player)
+    assert power == 0.0

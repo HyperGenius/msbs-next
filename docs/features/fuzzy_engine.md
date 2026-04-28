@@ -24,7 +24,8 @@ backend/
 │   └── fuzzy_engine.py          # FuzzyEngine コアライブラリ
 └── data/fuzzy_rules/
     ├── schema.json              # JSON スキーマ定義
-    └── aggressive.json          # AGGRESSIVE モード用ルールセット
+    ├── aggressive.json          # AGGRESSIVE モード用ルールセット（behavior_selection レイヤー）
+    └── aggressive_target_selection.json  # AGGRESSIVE モード用ターゲット選択ルールセット（target_selection レイヤー）
 ```
 
 ---
@@ -286,7 +287,52 @@ FuzzyEngine.from_json(
 
 ---
 
-## 7. 使用例
+## 7. AGGRESSIVE ターゲット選択ルールセット（`aggressive_target_selection.json`）
+
+**layer:** `target_selection`
+
+### 7.1 入力変数
+
+| 変数 | 範囲 | ファジィ集合 | 説明 |
+|------|------|------------|------|
+| `target_hp_ratio` | 0.0〜1.0 | LOW / MEDIUM / HIGH | 対象の残HP割合 |
+| `target_distance` | 0〜3000 | CLOSE / MID / FAR | アクターから対象への距離 (m) |
+| `target_attack_power` | 0〜∞ | LOW / MEDIUM / HIGH | 対象の武器最大威力 |
+| `is_attacking_ally` | 0.0 or 1.0 | FALSE / TRUE | 対象が現在攻撃行動中か |
+
+### 7.2 出力変数
+
+| 変数 | 範囲 | 説明 |
+|------|------|------|
+| `target_priority` | 0.0〜1.0 | ターゲット優先度スコア。最高スコアの候補を選択する |
+
+### 7.3 主要ルール
+
+| ID | 条件 | 出力 |
+|----|------|------|
+| ts_rule_001 | target_hp_ratio=LOW AND target_distance=CLOSE | target_priority=HIGH |
+| ts_rule_002 | is_attacking_ally=TRUE | target_priority=HIGH |
+| ts_rule_003 | target_attack_power=HIGH AND target_distance=CLOSE | target_priority=HIGH |
+| ts_rule_004 | target_hp_ratio=LOW AND target_distance=MID | target_priority=HIGH |
+| ts_rule_005 | target_attack_power=HIGH AND target_distance=MID | target_priority=HIGH |
+| ts_rule_006 | target_hp_ratio=MEDIUM AND target_distance=CLOSE | target_priority=MEDIUM |
+| ts_rule_007 | target_attack_power=MEDIUM AND target_distance=CLOSE | target_priority=MEDIUM |
+| ts_rule_008 | target_attack_power=LOW AND target_distance=FAR | target_priority=LOW |
+| ts_rule_009 | target_hp_ratio=HIGH AND target_distance=FAR | target_priority=LOW |
+| ts_rule_010 | target_hp_ratio=LOW AND target_distance=FAR | target_priority=LOW |
+| ts_rule_011 | target_attack_power=LOW AND target_hp_ratio=HIGH | target_priority=LOW |
+| ts_rule_012 | is_attacking_ally=FALSE AND target_distance=FAR | target_priority=LOW |
+
+### 7.4 推論結果の利用
+
+`BattleSimulator._select_target_fuzzy()` が全索敵済み候補に対して推論を実行し、  
+最高スコアの候補を選択する。結果は `BattleLog.fuzzy_scores` に記録される。
+
+推論が失敗した場合は `CLOSEST`（最近傍）フォールバックに自動切替する。
+
+---
+
+## 8. 使用例
 
 ```python
 from app.engine.fuzzy_engine import FuzzyEngine
@@ -313,7 +359,7 @@ result, debug = engine.infer_with_debug({
 
 ---
 
-## 8. 拡張ガイド
+## 9. 拡張ガイド
 
 ### 新しい戦略モードの追加
 
@@ -329,7 +375,7 @@ result, debug = engine.infer_with_debug({
 
 ---
 
-## 9. テスト
+## 10. テスト
 
 テストファイル: `backend/tests/unit/test_fuzzy_engine.py`
 
@@ -343,3 +389,4 @@ cd backend && python -m pytest tests/unit/test_fuzzy_engine.py -v
 - AND / OR ルール評価テスト
 - 全ルール不発火時のフォールバックテスト
 - `aggressive.json` のロード・推論統合テスト
+- `_select_target_fuzzy()` のターゲット選択テスト（`backend/tests/unit/test_simulation.py`）
