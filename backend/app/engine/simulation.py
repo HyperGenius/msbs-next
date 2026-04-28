@@ -533,8 +533,7 @@ class BattleSimulator:
         active_teams = {
             u.team_id
             for u in self.units
-            if u.current_hp > 0
-            and self.unit_resources[str(u.id)]["status"] == "ACTIVE"
+            if u.current_hp > 0 and self.unit_resources[str(u.id)]["status"] == "ACTIVE"
         }
         if len(active_teams) <= 1:
             self.is_finished = True
@@ -1593,8 +1592,7 @@ class BattleSimulator:
         active_teams = {
             u.team_id
             for u in self.units
-            if u.current_hp > 0
-            and self.unit_resources[str(u.id)]["status"] == "ACTIVE"
+            if u.current_hp > 0 and self.unit_resources[str(u.id)]["status"] == "ACTIVE"
         }
         if len(active_teams) <= 1:
             self.is_finished = True
@@ -1649,6 +1647,50 @@ class BattleSimulator:
                 force += 3.0 * (-direction) / max(dist_max, 1.0)
         return force
 
+    def _attack_target_attraction(
+        self, unit: MobileSuit, pos_unit: np.ndarray, target: MobileSuit | None = None
+    ) -> np.ndarray:
+        """攻撃ターゲットへの引力ベクトルを返す（ATTACK行動時）."""
+        force = np.zeros(3)
+        if target is not None:
+            vec = target.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec))
+            if dist > 0:
+                force += 2.0 * vec / dist
+        return force
+
+    def _closest_enemy_attraction(
+        self, unit: MobileSuit, pos_unit: np.ndarray
+    ) -> np.ndarray:
+        """最近敵への引力ベクトルを返す（MOVE行動時）."""
+        force = np.zeros(3)
+        enemies = [
+            u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
+        ]
+        if enemies:
+            closest_enemy = min(
+                enemies,
+                key=lambda e: float(np.linalg.norm(e.position.to_numpy() - pos_unit)),
+            )
+            vec = closest_enemy.position.to_numpy() - pos_unit
+            dist = float(np.linalg.norm(vec))
+            if dist > 0:
+                force += 1.5 * vec / dist
+        return force
+
+    def _retreat_points_attraction(
+        self, pos_unit: np.ndarray, retreat_points: list[RetreatPoint]
+    ) -> np.ndarray:
+        """撤退ポイントへの強引力ベクトルを返す（RETREAT行動時）."""
+        force = np.zeros(3)
+        for rp in retreat_points:
+            rp_pos = rp.position.to_numpy()
+            vec = rp_pos - pos_unit
+            dist = float(np.linalg.norm(vec))
+            if dist > 0:
+                force += RETREAT_ATTRACTION_COEFF * vec / dist
+        return force
+
     def _calculate_potential_field(
         self,
         unit: MobileSuit,
@@ -1679,28 +1721,12 @@ class BattleSimulator:
         total_force = np.zeros(3)
 
         # 1. 攻撃ターゲットへの引力 (ATTACK 行動かつターゲット選択済みの場合)
-        if current_action == "ATTACK" and target is not None:
-            vec = target.position.to_numpy() - pos_unit
-            dist = float(np.linalg.norm(vec))
-            if dist > 0:
-                total_force += 2.0 * vec / dist
+        if current_action == "ATTACK":
+            total_force += self._attack_target_attraction(unit, pos_unit, target)
 
         # 2. MOVE 行動時の最近敵への引力（RETREAT 時は撤退ポイントへ向かうため除外）
         if current_action == "MOVE":
-            enemies = [
-                u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id
-            ]
-            if enemies:
-                closest_enemy = min(
-                    enemies,
-                    key=lambda e: float(
-                        np.linalg.norm(e.position.to_numpy() - pos_unit)
-                    ),
-                )
-                vec = closest_enemy.position.to_numpy() - pos_unit
-                dist = float(np.linalg.norm(vec))
-                if dist > 0:
-                    total_force += 1.5 * vec / dist
+            total_force += self._closest_enemy_attraction(unit, pos_unit)
 
         # 3. 高脅威敵（自機射程外）への斥力
         weapon = unit.get_active_weapon()
@@ -1720,12 +1746,7 @@ class BattleSimulator:
                 for rp in retreat_points
                 if rp.team_id is None or rp.team_id == unit.team_id
             ]
-            for rp in applicable_rps:
-                rp_pos = rp.position.to_numpy()
-                vec = rp_pos - pos_unit
-                dist = float(np.linalg.norm(vec))
-                if dist > 0:
-                    total_force += RETREAT_ATTRACTION_COEFF * vec / dist
+            total_force += self._retreat_points_attraction(pos_unit, applicable_rps)
 
         # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
         total_force[1] = 0.0  # Y 成分を XZ 平面に固定

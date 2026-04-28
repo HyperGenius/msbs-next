@@ -1869,8 +1869,7 @@ def test_three_team_battle_runs_without_error() -> None:
     active_teams = {
         u.team_id
         for u in sim.units
-        if u.current_hp > 0
-        and sim.unit_resources[str(u.id)]["status"] == "ACTIVE"
+        if u.current_hp > 0 and sim.unit_resources[str(u.id)]["status"] == "ACTIVE"
     }
     assert len(active_teams) <= 1
 
@@ -1897,9 +1896,7 @@ def test_team_detection_isolation() -> None:
 def test_retreat_point_exit() -> None:
     """RETREAT 行動中のユニットが撤退ポイントの半径内に入ると RETREAT_COMPLETE ログが出ること."""
     # プレイヤーを撤退ポイントのすぐそばに配置
-    player = _make_team_unit(
-        "Player", "PLAYER_TEAM", Vector3(x=100.0, y=0.0, z=100.0)
-    )
+    player = _make_team_unit("Player", "PLAYER_TEAM", Vector3(x=100.0, y=0.0, z=100.0))
     enemy = _make_team_unit("Enemy", "ENEMY_TEAM", Vector3(x=4000.0, y=0.0, z=4000.0))
 
     # 撤退ポイント: プレイヤーの位置から半径 200m 以内
@@ -1918,9 +1915,7 @@ def test_retreat_point_exit() -> None:
     sim._retreat_check_phase()
 
     # RETREAT_COMPLETE ログが記録されていること
-    retreat_logs = [
-        log for log in sim.logs if log.action_type == "RETREAT_COMPLETE"
-    ]
+    retreat_logs = [log for log in sim.logs if log.action_type == "RETREAT_COMPLETE"]
     assert len(retreat_logs) >= 1
     assert retreat_logs[0].actor_id == player.id
 

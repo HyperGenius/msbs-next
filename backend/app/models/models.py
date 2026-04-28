@@ -300,7 +300,9 @@ class RetreatPoint(SQLModel):
 
     position: Vector3  # 撤退ポイントの座標
     radius: float  # 有効半径 (m)。この範囲に入ると離脱扱い
-    team_id: str | None = None  # チームIDを指定すると特定チーム専用。None は全チーム共通
+    team_id: str | None = (
+        None  # チームIDを指定すると特定チーム専用。None は全チーム共通
+    )
 
 
 class BattleLog(SQLModel):
