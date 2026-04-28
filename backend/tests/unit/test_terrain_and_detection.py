@@ -136,18 +136,17 @@ def test_terrain_affects_movement_distance() -> None:
     enemies1 = [create_test_enemy("Enemy 1", enemy_pos)]
     enemies2 = [create_test_enemy("Enemy 2", enemy_pos)]
 
-    # Simulate in SPACE
+    # Simulate in SPACE (multiple steps for inertia model to show terrain difference)
     sim_space = BattleSimulator(player_space_specialist, enemies1, environment="SPACE")
-    sim_space.step()
-
-    # Space specialist should move further
-    # space_specialist_distance = player_space_specialist.position.x
+    for _ in range(20):
+        sim_space.step()
 
     # Simulate in GROUND
     sim_ground = BattleSimulator(
         player_ground_specialist, enemies2, environment="GROUND"
     )
-    sim_ground.step()
+    for _ in range(20):
+        sim_ground.step()
 
     # Ground specialist should move further in ground
     # (But since we're comparing space specialist in space vs ground specialist in ground,
@@ -165,13 +164,14 @@ def test_terrain_affects_movement_distance() -> None:
     sim_ground2 = BattleSimulator(
         player_space_in_ground, enemies3, environment="GROUND"
     )
-    sim_ground2.step()
+    for _ in range(20):
+        sim_ground2.step()
 
     # Space specialist in ground should move less than ground specialist in ground
     space_in_ground_distance = player_space_in_ground.position.x
     ground_specialist_distance = player_ground_specialist.position.x
 
-    # Ground specialist should have moved further
+    # Ground specialist should have moved further (higher max_speed in GROUND)
     assert ground_specialist_distance > space_in_ground_distance
 
 

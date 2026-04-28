@@ -40,3 +40,31 @@ MAX_WEAPON_SLOTS = 2
 VALID_STRATEGY_MODES: frozenset[str] = frozenset(
     {"AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"}
 )
+
+# ユニット種別ごとの慣性パラメータデフォルト値 (Phase 3-1)
+INERTIA_DEFAULTS: dict[str, dict[str, float]] = {
+    "NORMAL_MS": {
+        "max_speed": 80.0,
+        "acceleration": 30.0,
+        "deceleration": 50.0,
+        "max_turn_rate": 360.0,
+    },
+    "HIGH_MOBILITY_MS": {
+        "max_speed": 150.0,
+        "acceleration": 60.0,
+        "deceleration": 80.0,
+        "max_turn_rate": 540.0,
+    },
+    "MA": {
+        "max_speed": 300.0,
+        "acceleration": 15.0,
+        "deceleration": 8.0,
+        "max_turn_rate": 30.0,
+    },
+    "LARGE_MS": {
+        "max_speed": 40.0,
+        "acceleration": 10.0,
+        "deceleration": 20.0,
+        "max_turn_rate": 90.0,
+    },
+}

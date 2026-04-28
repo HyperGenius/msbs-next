@@ -163,7 +163,8 @@ def test_gravity_well_reduces_movement() -> None:
     enemy_normal = create_test_enemy("Enemy", enemy_pos)
     sim_normal = BattleSimulator(player_normal, [enemy_normal], environment="GROUND")
     sim_normal._detection_phase()
-    sim_normal.step()
+    for _ in range(20):
+        sim_normal.step()
     normal_x = player_normal.position.x
 
     # 重力井戸環境
@@ -176,7 +177,8 @@ def test_gravity_well_reduces_movement() -> None:
         special_effects=["GRAVITY_WELL"],
     )
     sim_gravity._detection_phase()
-    sim_gravity.step()
+    for _ in range(20):
+        sim_gravity.step()
     gravity_x = player_gravity.position.x
 
     # 重力井戸下では通常より移動距離が少ないはず
