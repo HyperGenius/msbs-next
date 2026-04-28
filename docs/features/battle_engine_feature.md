@@ -439,7 +439,7 @@ python scripts/run_simulation.py \
 
 ### Phase 4：戦略・戦術階層
 
-- [x] チームレベルの戦略モード切り替えロジック（Phase 4-2 対応予定）
+- [ ] チームレベルの戦略モード切り替えロジック（Phase 4-2 対応予定）
 - [ ] 戦況に応じた動的 `StrategyMode` 変更（劣勢時に `RETREAT` へ移行等）（Phase 4-3 対応予定）
 - [x] `assault.json` / `retreat.json` ルールセット追加（Phase 4-1）
 

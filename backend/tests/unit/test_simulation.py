@@ -2043,30 +2043,34 @@ def test_assault_behavior_close_enemy_attacks() -> None:
 
 def test_assault_weapon_prefers_close_range() -> None:
     """ASSAULT 戦略ユニットが近距離戦で近距離武器（高スコア）を選択する."""
-    from app.engine.simulation import _FUZZY_RULES_DIR
     from app.engine.fuzzy_engine import FuzzyEngine
+    from app.engine.simulation import _FUZZY_RULES_DIR
 
     weapon_engine = FuzzyEngine.from_json(
         _FUZZY_RULES_DIR / "assault_weapon_selection.json",
         default_output={"weapon_score": 0.0},
     )
     # 近距離・EN 十分・通常弾薬 の条件でスコアを推論
-    close_score = weapon_engine.infer({
-        "distance_to_target": 100.0,
-        "current_en_ratio": 0.8,
-        "ammo_ratio": 0.8,
-        "target_beam_resistance": 0.0,
-        "target_physical_resistance": 0.0,
-        "weapon_is_beam": 1.0,
-    })
-    far_score = weapon_engine.infer({
-        "distance_to_target": 2500.0,
-        "current_en_ratio": 0.8,
-        "ammo_ratio": 0.8,
-        "target_beam_resistance": 0.0,
-        "target_physical_resistance": 0.0,
-        "weapon_is_beam": 1.0,
-    })
+    close_score = weapon_engine.infer(
+        {
+            "distance_to_target": 100.0,
+            "current_en_ratio": 0.8,
+            "ammo_ratio": 0.8,
+            "target_beam_resistance": 0.0,
+            "target_physical_resistance": 0.0,
+            "weapon_is_beam": 1.0,
+        }
+    )
+    far_score = weapon_engine.infer(
+        {
+            "distance_to_target": 2500.0,
+            "current_en_ratio": 0.8,
+            "ammo_ratio": 0.8,
+            "target_beam_resistance": 0.0,
+            "target_physical_resistance": 0.0,
+            "weapon_is_beam": 1.0,
+        }
+    )
     # 近距離スコアが遠距離スコアより高いことを確認
     assert close_score.get("weapon_score", 0.0) > far_score.get("weapon_score", 0.0)
 
@@ -2091,29 +2095,33 @@ def test_retreat_behavior_low_hp_retreats() -> None:
 
 def test_retreat_weapon_prefers_long_range() -> None:
     """RETREAT 戦略ユニットが遠距離武器を優先選択する."""
-    from app.engine.simulation import _FUZZY_RULES_DIR
     from app.engine.fuzzy_engine import FuzzyEngine
+    from app.engine.simulation import _FUZZY_RULES_DIR
 
     weapon_engine = FuzzyEngine.from_json(
         _FUZZY_RULES_DIR / "retreat_weapon_selection.json",
         default_output={"weapon_score": 0.0},
     )
     # 遠距離・EN 十分 の条件でスコアを推論
-    far_score = weapon_engine.infer({
-        "distance_to_target": 2000.0,
-        "current_en_ratio": 0.8,
-        "ammo_ratio": 0.8,
-        "target_beam_resistance": 0.0,
-        "target_physical_resistance": 0.0,
-        "weapon_is_beam": 1.0,
-    })
-    close_score = weapon_engine.infer({
-        "distance_to_target": 100.0,
-        "current_en_ratio": 0.8,
-        "ammo_ratio": 0.8,
-        "target_beam_resistance": 0.0,
-        "target_physical_resistance": 0.0,
-        "weapon_is_beam": 1.0,
-    })
+    far_score = weapon_engine.infer(
+        {
+            "distance_to_target": 2000.0,
+            "current_en_ratio": 0.8,
+            "ammo_ratio": 0.8,
+            "target_beam_resistance": 0.0,
+            "target_physical_resistance": 0.0,
+            "weapon_is_beam": 1.0,
+        }
+    )
+    close_score = weapon_engine.infer(
+        {
+            "distance_to_target": 100.0,
+            "current_en_ratio": 0.8,
+            "ammo_ratio": 0.8,
+            "target_beam_resistance": 0.0,
+            "target_physical_resistance": 0.0,
+            "weapon_is_beam": 1.0,
+        }
+    )
     # 遠距離スコアが近距離スコアより高いことを確認
     assert far_score.get("weapon_score", 0.0) > close_score.get("weapon_score", 0.0)
