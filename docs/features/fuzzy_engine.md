@@ -25,7 +25,8 @@ backend/
 └── data/fuzzy_rules/
     ├── schema.json              # JSON スキーマ定義
     ├── aggressive.json          # AGGRESSIVE モード用ルールセット（behavior_selection レイヤー）
-    └── aggressive_target_selection.json  # AGGRESSIVE モード用ターゲット選択ルールセット（target_selection レイヤー）
+    ├── aggressive_target_selection.json  # AGGRESSIVE モード用ターゲット選択ルールセット（target_selection レイヤー）
+    └── aggressive_weapon_selection.json  # AGGRESSIVE モード用武器選択ルールセット（weapon_selection レイヤー）
 ```
 
 ---
@@ -332,7 +333,64 @@ FuzzyEngine.from_json(
 
 ---
 
-## 8. 使用例
+## 8. AGGRESSIVE 武器選択ルールセット（`aggressive_weapon_selection.json`）
+
+**layer:** `weapon_selection`
+
+### 8.1 入力変数
+
+| 変数 | 範囲 | ファジィ集合 | 説明 |
+|------|------|------------|------|
+| `distance_to_target` | 0〜3000 | CLOSE / MID / FAR | アクターからターゲットへの距離 (m) |
+| `current_en_ratio` | 0.0〜1.0 | LOW / MEDIUM / HIGH | アクターの現在EN比率 |
+| `ammo_ratio` | 0.0〜1.0 | LOW / MEDIUM / HIGH | 対象武器の弾薬残量比率（無制限時は 1.0 固定） |
+| `target_beam_resistance` | 0.0〜1.0 | LOW / HIGH | ターゲットのビーム耐性 |
+| `target_physical_resistance` | 0.0〜1.0 | LOW / HIGH | ターゲットの実弾耐性 |
+| `weapon_is_beam` | 0.0 or 1.0 | FALSE / TRUE | 対象武器がビーム武器か実弾武器か |
+
+### 8.2 出力変数
+
+| 変数 | 範囲 | 説明 |
+|------|------|------|
+| `weapon_score` | 0.0〜1.0 | 武器の状況適合度スコア。最高スコアの武器を選択する |
+
+### 8.3 主要ルール
+
+| ID | 条件 | 出力 |
+|----|------|------|
+| ws_rule_001 | CLOSE AND beam_resistance=LOW AND weapon_is_beam=TRUE | weapon_score=HIGH |
+| ws_rule_002 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| ws_rule_003 | ammo_ratio=LOW AND weapon_is_beam=FALSE | weapon_score=LOW |
+| ws_rule_004 | MID AND physical_resistance=LOW AND weapon_is_beam=FALSE | weapon_score=HIGH |
+| ws_rule_005 | en_ratio=HIGH AND CLOSE AND weapon_is_beam=TRUE | weapon_score=HIGH |
+| ws_rule_006 | CLOSE AND beam_resistance=HIGH AND weapon_is_beam=TRUE | weapon_score=LOW |
+| ws_rule_007 | CLOSE AND physical_resistance=LOW AND weapon_is_beam=FALSE | weapon_score=HIGH |
+| ws_rule_008 | en_ratio=HIGH AND beam_resistance=LOW AND weapon_is_beam=TRUE | weapon_score=HIGH |
+| ws_rule_009 | ammo_ratio=HIGH AND physical_resistance=LOW AND weapon_is_beam=FALSE | weapon_score=HIGH |
+| ws_rule_010 | CLOSE AND en_ratio=LOW AND weapon_is_beam=FALSE | weapon_score=HIGH |
+| ws_rule_011 | MID AND en_ratio=MEDIUM AND weapon_is_beam=TRUE | weapon_score=MEDIUM |
+| ws_rule_012 | beam_resistance=HIGH AND weapon_is_beam=TRUE | weapon_score=LOW |
+| ws_rule_013 | physical_resistance=HIGH AND weapon_is_beam=FALSE | weapon_score=LOW |
+| ws_rule_014 | FAR AND beam_resistance=LOW AND weapon_is_beam=TRUE | weapon_score=MEDIUM |
+
+### 8.4 推論結果の利用
+
+`BattleSimulator._select_weapon_fuzzy(actor, target)` が使用可能な全武器に対して推論を実行し、  
+最高スコアの武器を選択する。
+
+**使用可能条件（事前フィルタ）:**
+- クールダウン残りターン = 0
+- 現在EN ≥ 武器の消費EN（`en_cost`）
+- 弾薬残量 > 0（`max_ammo` が `None` または 0 の場合は無制限として扱う）
+
+使用可能な武器が0件の場合は `None` を返し、呼び出し元の `_action_phase()` が  
+`get_active_weapon()` にフォールバックする。
+
+推論が失敗した場合は最初の使用可能武器にフォールバックする。
+
+---
+
+## 9. 使用例
 
 ```python
 from app.engine.fuzzy_engine import FuzzyEngine
@@ -359,7 +417,7 @@ result, debug = engine.infer_with_debug({
 
 ---
 
-## 9. 拡張ガイド
+## 10. 拡張ガイド
 
 ### 新しい戦略モードの追加
 
@@ -375,7 +433,7 @@ result, debug = engine.infer_with_debug({
 
 ---
 
-## 10. テスト
+## 11. テスト
 
 テストファイル: `backend/tests/unit/test_fuzzy_engine.py`
 
@@ -390,3 +448,4 @@ cd backend && python -m pytest tests/unit/test_fuzzy_engine.py -v
 - 全ルール不発火時のフォールバックテスト
 - `aggressive.json` のロード・推論統合テスト
 - `_select_target_fuzzy()` のターゲット選択テスト（`backend/tests/unit/test_simulation.py`）
+- `_select_weapon_fuzzy()` / `_is_weapon_usable()` の武器選択テスト（`backend/tests/unit/test_simulation.py`）

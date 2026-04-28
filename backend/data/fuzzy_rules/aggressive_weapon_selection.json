@@ -1,0 +1,176 @@
+{
+  "strategy": "AGGRESSIVE",
+  "layer": "weapon_selection",
+  "rules": [
+    {
+      "id": "ws_rule_001",
+      "conditions": [
+        { "variable": "distance_to_target", "set": "CLOSE" },
+        { "variable": "target_beam_resistance", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "HIGH" }
+    },
+    {
+      "id": "ws_rule_002",
+      "conditions": [
+        { "variable": "current_en_ratio", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "LOW" }
+    },
+    {
+      "id": "ws_rule_003",
+      "conditions": [
+        { "variable": "ammo_ratio", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "FALSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "LOW" }
+    },
+    {
+      "id": "ws_rule_004",
+      "conditions": [
+        { "variable": "distance_to_target", "set": "MID" },
+        { "variable": "target_physical_resistance", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "FALSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "HIGH" }
+    },
+    {
+      "id": "ws_rule_005",
+      "conditions": [
+        { "variable": "current_en_ratio", "set": "HIGH" },
+        { "variable": "distance_to_target", "set": "CLOSE" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "HIGH" }
+    },
+    {
+      "id": "ws_rule_006",
+      "conditions": [
+        { "variable": "distance_to_target", "set": "CLOSE" },
+        { "variable": "target_beam_resistance", "set": "HIGH" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "LOW" }
+    },
+    {
+      "id": "ws_rule_007",
+      "conditions": [
+        { "variable": "distance_to_target", "set": "CLOSE" },
+        { "variable": "target_physical_resistance", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "FALSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "HIGH" }
+    },
+    {
+      "id": "ws_rule_008",
+      "conditions": [
+        { "variable": "current_en_ratio", "set": "HIGH" },
+        { "variable": "target_beam_resistance", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "HIGH" }
+    },
+    {
+      "id": "ws_rule_009",
+      "conditions": [
+        { "variable": "ammo_ratio", "set": "HIGH" },
+        { "variable": "target_physical_resistance", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "FALSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "HIGH" }
+    },
+    {
+      "id": "ws_rule_010",
+      "conditions": [
+        { "variable": "distance_to_target", "set": "CLOSE" },
+        { "variable": "current_en_ratio", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "FALSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "HIGH" }
+    },
+    {
+      "id": "ws_rule_011",
+      "conditions": [
+        { "variable": "distance_to_target", "set": "MID" },
+        { "variable": "current_en_ratio", "set": "MEDIUM" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "MEDIUM" }
+    },
+    {
+      "id": "ws_rule_012",
+      "conditions": [
+        { "variable": "target_beam_resistance", "set": "HIGH" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "LOW" }
+    },
+    {
+      "id": "ws_rule_013",
+      "conditions": [
+        { "variable": "target_physical_resistance", "set": "HIGH" },
+        { "variable": "weapon_is_beam", "set": "FALSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "LOW" }
+    },
+    {
+      "id": "ws_rule_014",
+      "conditions": [
+        { "variable": "distance_to_target", "set": "FAR" },
+        { "variable": "target_beam_resistance", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "MEDIUM" }
+    }
+  ],
+  "membership_functions": {
+    "distance_to_target": {
+      "CLOSE": { "type": "trapezoid", "params": [0.0, 0.0, 300.0, 600.0] },
+      "MID":   { "type": "triangle",  "params": [400.0, 900.0, 1500.0] },
+      "FAR":   { "type": "trapezoid", "params": [1200.0, 1800.0, 3000.0, 3000.0] }
+    },
+    "current_en_ratio": {
+      "LOW":    { "type": "trapezoid", "params": [0.0, 0.0, 0.20, 0.35] },
+      "MEDIUM": { "type": "triangle",  "params": [0.25, 0.50, 0.75] },
+      "HIGH":   { "type": "trapezoid", "params": [0.65, 0.80, 1.0, 1.0] }
+    },
+    "ammo_ratio": {
+      "LOW":    { "type": "trapezoid", "params": [0.0, 0.0, 0.20, 0.35] },
+      "MEDIUM": { "type": "triangle",  "params": [0.25, 0.50, 0.75] },
+      "HIGH":   { "type": "trapezoid", "params": [0.65, 0.80, 1.0, 1.0] }
+    },
+    "target_beam_resistance": {
+      "LOW":  { "type": "trapezoid", "params": [0.0, 0.0, 0.15, 0.30] },
+      "HIGH": { "type": "trapezoid", "params": [0.50, 0.70, 1.0, 1.0] }
+    },
+    "target_physical_resistance": {
+      "LOW":  { "type": "trapezoid", "params": [0.0, 0.0, 0.15, 0.30] },
+      "HIGH": { "type": "trapezoid", "params": [0.50, 0.70, 1.0, 1.0] }
+    },
+    "weapon_is_beam": {
+      "FALSE": { "type": "trapezoid", "params": [0.0, 0.0, 0.1, 0.5] },
+      "TRUE":  { "type": "trapezoid", "params": [0.5, 0.9, 1.0, 1.0] }
+    },
+    "weapon_score": {
+      "LOW":    { "type": "trapezoid", "params": [0.0, 0.0, 0.15, 0.30] },
+      "MEDIUM": { "type": "triangle",  "params": [0.25, 0.50, 0.75] },
+      "HIGH":   { "type": "trapezoid", "params": [0.70, 0.85, 1.0, 1.0] }
+    }
+  }
+}

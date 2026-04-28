@@ -28,10 +28,18 @@ _TARGET_SELECTION_FUZZY_RULES_PATH = (
     / "fuzzy_rules"
     / "aggressive_target_selection.json"
 )
+_WEAPON_SELECTION_FUZZY_RULES_PATH = (
+    Path(__file__).parent.parent.parent
+    / "data"
+    / "fuzzy_rules"
+    / "aggressive_weapon_selection.json"
+)
 # 近隣ユニット検索半径 (m)
 _FUZZY_NEIGHBOR_RADIUS = 500.0
 # ターゲット選択ファジィ推論: 距離の最大値 (m)
 _TARGET_SELECTION_MAX_DIST = 3000.0
+# 武器選択ファジィ推論: 距離の最大値 (m)
+_WEAPON_SELECTION_MAX_DIST = 3000.0
 
 
 class BattleSimulator:
@@ -109,6 +117,11 @@ class BattleSimulator:
         self._target_selection_fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
             _TARGET_SELECTION_FUZZY_RULES_PATH,
             default_output={"target_priority": 0.0},
+        )
+        # 低階層ファジィ推論エンジン: 武器選択（AGGRESSIVEルールセット）
+        self._weapon_selection_fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
+            _WEAPON_SELECTION_FUZZY_RULES_PATH,
+            default_output={"weapon_score": 0.0},
         )
 
     def _generate_chatter(self, unit: MobileSuit, chatter_type: str) -> str | None:
@@ -410,12 +423,14 @@ class BattleSimulator:
         diff_vector = pos_target - pos_actor
         distance = float(np.linalg.norm(diff_vector))
 
-        weapon = actor.get_active_weapon()
+        weapon = self._select_weapon_fuzzy(actor, target)
+        if weapon is None:
+            weapon = actor.get_active_weapon()
 
         if current_action == "ATTACK":
             # 攻撃行動: 攻撃可能なら攻撃、そうでなければ移動
             if weapon and distance <= weapon.range:
-                self._process_attack(actor, target, distance, pos_actor)
+                self._process_attack(actor, target, distance, pos_actor, weapon)
             else:
                 self._process_movement(
                     actor, pos_actor, pos_target, diff_vector, distance
@@ -816,6 +831,119 @@ class BattleSimulator:
             )
             return fallback
 
+    def _is_weapon_usable(self, actor: MobileSuit, weapon: Weapon) -> bool:
+        """武器が現在使用可能か判定する（クールダウン・EN・弾薬をチェック）.
+
+        Args:
+            actor: 使用するユニット
+            weapon: チェック対象の武器
+
+        Returns:
+            True if the weapon can be used, False otherwise.
+        """
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
+        weapon_state = self._get_or_init_weapon_state(weapon, resources)
+        can_use, _ = self._check_attack_resources(weapon, weapon_state, resources)
+        return can_use
+
+    def _select_weapon_fuzzy(
+        self, actor: MobileSuit, target: MobileSuit
+    ) -> Weapon | None:
+        """武器を選択する（ファジィ推論による動的スコア計算）.
+
+        使用可能な武器（クールダウン=0・EN残量≥コスト・弾薬残量>0）に対して
+        ファジィ推論を実行し、最高 weapon_score の武器を選択する。
+        推論失敗時は最初の使用可能武器にフォールバックする。
+
+        Args:
+            actor: 武器を選択するユニット
+            target: 攻撃対象ユニット
+
+        Returns:
+            選択された武器。使用可能な武器が0件の場合は None。
+        """
+        # 使用可能な武器（クールダウン・EN・弾薬チェック）をリストアップ
+        usable_weapons = [w for w in actor.weapons if self._is_weapon_usable(actor, w)]
+
+        if not usable_weapons:
+            return None
+
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
+
+        # ターゲットの耐性値を取得
+        target_beam_resistance = float(getattr(target, "beam_resistance", 0.0))
+        target_physical_resistance = float(getattr(target, "physical_resistance", 0.0))
+
+        # 距離計算（最大値でクランプ）
+        pos_actor = actor.position.to_numpy()
+        pos_target = target.position.to_numpy()
+        distance = float(np.linalg.norm(pos_target - pos_actor))
+        distance = min(distance, _WEAPON_SELECTION_MAX_DIST)
+
+        # アクターの現在EN比率を計算
+        current_en = float(resources["current_en"])
+        max_en = float(max(1, actor.max_en))
+        current_en_ratio = current_en / max_en
+
+        try:
+            best_weapon: Weapon | None = None
+            best_score: float = -1.0
+            best_fuzzy_scores: dict | None = None
+            all_scores: dict[str, float] = {}
+
+            for weapon in usable_weapons:
+                # 武器の弾薬比率を計算（無制限弾薬の場合は 1.0）
+                weapon_state = resources["weapon_states"].get(weapon.id, {})
+                current_ammo = weapon_state.get("current_ammo")
+                if weapon.max_ammo is not None and weapon.max_ammo > 0:
+                    ammo_ratio = float(current_ammo or 0) / weapon.max_ammo
+                else:
+                    ammo_ratio = 1.0
+
+                # ビーム武器か実弾武器かを数値化（TRUE=1.0 / FALSE=0.0）
+                weapon_is_beam = (
+                    1.0 if getattr(weapon, "type", "PHYSICAL") == "BEAM" else 0.0
+                )
+
+                fuzzy_inputs = {
+                    "distance_to_target": distance,
+                    "current_en_ratio": current_en_ratio,
+                    "ammo_ratio": ammo_ratio,
+                    "target_beam_resistance": target_beam_resistance,
+                    "target_physical_resistance": target_physical_resistance,
+                    "weapon_is_beam": weapon_is_beam,
+                }
+
+                result, debug = self._weapon_selection_fuzzy_engine.infer_with_debug(
+                    fuzzy_inputs
+                )
+                score = result.get("weapon_score", 0.0)
+                all_scores[str(weapon.id)] = score
+
+                if score > best_score:
+                    best_score = score
+                    best_weapon = weapon
+                    best_fuzzy_scores = {
+                        "layer": "weapon_selection",
+                        "selected_weapon_id": str(weapon.id),
+                        "selected_weapon_name": weapon.name,
+                        "score": score,
+                        "inputs": fuzzy_inputs,
+                        "fuzzified": debug.get("fuzzified", {}),
+                        "activations": debug.get("activations", {}),
+                    }
+
+            if best_fuzzy_scores is not None:
+                best_fuzzy_scores["all_scores"] = all_scores
+
+            return best_weapon
+
+        except (KeyError, ValueError, ZeroDivisionError, AttributeError):
+            # 推論失敗時は最初の使用可能武器をフォールバックとして返す
+            return usable_weapons[0]
+
     def _get_or_init_weapon_state(self, weapon: Weapon, resources: dict) -> dict:
         """武器状態を取得または初期化する."""
         weapon_state = resources["weapon_states"].get(weapon.id)
@@ -920,15 +1048,47 @@ class BattleSimulator:
         if weapon.cool_down_turn > 0:
             weapon_state["current_cool_down"] = weapon.cool_down_turn
 
+    def _log_attack_wait(
+        self,
+        actor: MobileSuit,
+        weapon: Weapon,
+        weapon_state: dict,
+        failure_reason: str,
+        snapshot: Vector3,
+    ) -> None:
+        """攻撃リソース不足時の待機ログを追記する."""
+        actor_name = self._format_actor_name(actor)
+        weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
+        if "弾切れ" in failure_reason:
+            wait_message = f"{actor_name}は{weapon_display}の弾薬が尽き、攻撃手段がない"
+        elif "EN不足" in failure_reason:
+            wait_message = f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
+        elif "クールダウン" in failure_reason:
+            remaining_turns = weapon_state.get("current_cool_down", 0)
+            wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_turns}ターン）、やむなく待機"
+        else:
+            wait_message = f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
+        self.logs.append(
+            BattleLog(
+                timestamp=self.elapsed_time,
+                actor_id=actor.id,
+                action_type="WAIT",
+                message=wait_message,
+                position_snapshot=snapshot,
+            )
+        )
+
     def _process_attack(
         self,
         actor: MobileSuit,
         target: MobileSuit,
         distance: float,
         pos_actor: np.ndarray,
+        weapon: Weapon | None = None,
     ) -> None:
         """攻撃処理を実行する."""
-        weapon = actor.get_active_weapon()
+        if weapon is None:
+            weapon = actor.get_active_weapon()
         if not weapon:
             return
 
@@ -945,33 +1105,7 @@ class BattleSimulator:
         )
 
         if not can_attack:
-            actor_name = self._format_actor_name(actor)
-            weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
-            if "弾切れ" in failure_reason:
-                wait_message = (
-                    f"{actor_name}は{weapon_display}の弾薬が尽き、攻撃手段がない"
-                )
-            elif "EN不足" in failure_reason:
-                wait_message = (
-                    f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
-                )
-            elif "クールダウン" in failure_reason:
-                # failure_reason 例: "クールダウン中 (残りNターン)"
-                remaining_turns = weapon_state.get("current_cool_down", 0)
-                wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_turns}ターン）、やむなく待機"
-            else:
-                wait_message = (
-                    f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
-                )
-            self.logs.append(
-                BattleLog(
-                    timestamp=self.elapsed_time,
-                    actor_id=actor.id,
-                    action_type="WAIT",
-                    message=wait_message,
-                    position_snapshot=snapshot,
-                )
-            )
+            self._log_attack_wait(actor, weapon, weapon_state, failure_reason, snapshot)
             return
 
         # 命中率計算
