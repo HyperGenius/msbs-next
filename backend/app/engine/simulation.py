@@ -855,9 +855,7 @@ class BattleSimulator:
                     "is_attacking_ally": is_attacking_ally,
                 }
 
-                result, debug = target_engine.infer_with_debug(
-                    fuzzy_inputs
-                )
+                result, debug = target_engine.infer_with_debug(fuzzy_inputs)
                 score = result.get("target_priority", 0.0)
                 all_scores[str(candidate.id)] = score
 
@@ -1008,9 +1006,7 @@ class BattleSimulator:
                     "weapon_is_beam": weapon_is_beam,
                 }
 
-                result, debug = weapon_engine.infer_with_debug(
-                    fuzzy_inputs
-                )
+                result, debug = weapon_engine.infer_with_debug(fuzzy_inputs)
                 score = result.get("weapon_score", 0.0)
                 all_scores[str(weapon.id)] = score
 

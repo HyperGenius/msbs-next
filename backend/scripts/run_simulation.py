@@ -105,7 +105,12 @@ def _serialize_log_entry(log_entry) -> dict:
     return data
 
 
-def run(mission_id: int, max_steps: int = 5000, output_path: str | None = None, strategy: str | None = None) -> None:
+def run(
+    mission_id: int,
+    max_steps: int = 5000,
+    output_path: str | None = None,
+    strategy: str | None = None,
+) -> None:
     """シミュレーションを実行して結果を JSON に出力する.
 
     Args:
