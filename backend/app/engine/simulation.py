@@ -1,4 +1,5 @@
 # backend/app/engine/simulation.py
+import logging
 import random
 from pathlib import Path
 
@@ -14,32 +15,40 @@ from app.engine.calculator import (
 from app.engine.constants import (
     SPECIAL_ENVIRONMENT_EFFECTS,
     TERRAIN_ADAPTABILITY_MODIFIERS,
+    VALID_STRATEGY_MODES,
 )
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 
+logger = logging.getLogger(__name__)
+
 _MAX_STEPS = 5000
-_FUZZY_RULES_PATH = (
-    Path(__file__).parent.parent.parent / "data" / "fuzzy_rules" / "aggressive.json"
-)
-_TARGET_SELECTION_FUZZY_RULES_PATH = (
-    Path(__file__).parent.parent.parent
-    / "data"
-    / "fuzzy_rules"
-    / "aggressive_target_selection.json"
-)
-_WEAPON_SELECTION_FUZZY_RULES_PATH = (
-    Path(__file__).parent.parent.parent
-    / "data"
-    / "fuzzy_rules"
-    / "aggressive_weapon_selection.json"
-)
+_FUZZY_RULES_DIR = Path(__file__).parent.parent.parent / "data" / "fuzzy_rules"
 # 近隣ユニット検索半径 (m)
 _FUZZY_NEIGHBOR_RADIUS = 500.0
 # ターゲット選択ファジィ推論: 距離の最大値 (m)
 _TARGET_SELECTION_MAX_DIST = 3000.0
 # 武器選択ファジィ推論: 距離の最大値 (m)
 _WEAPON_SELECTION_MAX_DIST = 3000.0
+
+# 戦略モードとJSONファイルのレイヤーマッピング
+_STRATEGY_FILE_PREFIXES: dict[str, str] = {
+    "AGGRESSIVE": "aggressive",
+    "DEFENSIVE": "defensive",
+    "SNIPER": "sniper",
+    "ASSAULT": "assault",
+    "RETREAT": "retreat",
+}
+_LAYER_SUFFIXES: dict[str, str] = {
+    "behavior": "",
+    "target": "_target_selection",
+    "weapon": "_weapon_selection",
+}
+_LAYER_DEFAULTS: dict[str, dict[str, float]] = {
+    "behavior": {"action": 0.0},
+    "target": {"target_priority": 0.0},
+    "weapon": {"weapon_score": 0.0},
+}
 
 
 class BattleSimulator:
@@ -111,18 +120,83 @@ class BattleSimulator:
 
         # 中階層ファジィ推論エンジン（AGGRESSIVEルールセット）
         self._fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
-            _FUZZY_RULES_PATH, default_output={"action": 0.0}
+            _FUZZY_RULES_DIR / "aggressive.json", default_output={"action": 0.0}
         )
         # 低階層ファジィ推論エンジン: ターゲット選択（AGGRESSIVEルールセット）
         self._target_selection_fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
-            _TARGET_SELECTION_FUZZY_RULES_PATH,
+            _FUZZY_RULES_DIR / "aggressive_target_selection.json",
             default_output={"target_priority": 0.0},
         )
         # 低階層ファジィ推論エンジン: 武器選択（AGGRESSIVEルールセット）
         self._weapon_selection_fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
-            _WEAPON_SELECTION_FUZZY_RULES_PATH,
+            _FUZZY_RULES_DIR / "aggressive_weapon_selection.json",
             default_output={"weapon_score": 0.0},
         )
+
+        # 戦略モード別ファジィ推論エンジン辞書 {"MODE": {"behavior": ..., "target": ..., "weapon": ...}}
+        self._strategy_engines: dict[str, dict[str, FuzzyEngine]] = (
+            self._load_strategy_engines()
+        )
+
+    def _load_strategy_engines(self) -> dict[str, dict[str, FuzzyEngine]]:
+        """戦略モード別ファジィ推論エンジン辞書を構築する.
+
+        `data/fuzzy_rules/` ディレクトリを走査し、命名規則 `{prefix}{suffix}.json`
+        に従うファイルを自動検出してロードする。ファイルが存在しない戦略モードは
+        AGGRESSIVE にフォールバックするため、AGGRESSIVE は常にロード済みが保証される。
+
+        Returns:
+            {"MODE": {"behavior": FuzzyEngine, "target": FuzzyEngine, "weapon": FuzzyEngine}}
+        """
+        engines: dict[str, dict[str, FuzzyEngine]] = {}
+
+        for mode, prefix in _STRATEGY_FILE_PREFIXES.items():
+            mode_engines: dict[str, FuzzyEngine] = {}
+            for layer, suffix in _LAYER_SUFFIXES.items():
+                json_path = _FUZZY_RULES_DIR / f"{prefix}{suffix}.json"
+                if json_path.exists():
+                    mode_engines[layer] = FuzzyEngine.from_json(
+                        json_path, default_output=_LAYER_DEFAULTS[layer]
+                    )
+            if mode_engines:
+                engines[mode] = mode_engines
+
+        return engines
+
+    def _resolve_strategy_mode(self, unit: MobileSuit) -> str:
+        """ユニットの戦略モードを解決する.
+
+        unit.strategy_mode が有効な値でない場合は AGGRESSIVE にフォールバックし、
+        ログに警告を出力する。ロードされたエンジンが存在しないモードも AGGRESSIVE へ
+        フォールバックする。
+
+        Args:
+            unit: 対象ユニット
+
+        Returns:
+            使用する戦略モード名（常にロード済みエンジンが存在するモード）
+        """
+        raw = getattr(unit, "strategy_mode", None)
+        if raw is None:
+            return "AGGRESSIVE"
+
+        mode = str(raw).upper()
+        if mode not in VALID_STRATEGY_MODES:
+            logger.warning(
+                "ユニット %s の strategy_mode '%s' は無効な値です。AGGRESSIVE にフォールバックします。",
+                unit.id,
+                raw,
+            )
+            return "AGGRESSIVE"
+
+        if mode not in self._strategy_engines:
+            logger.warning(
+                "戦略モード '%s' のエンジンが未ロードです。AGGRESSIVE にフォールバックします。",
+                mode,
+            )
+            return "AGGRESSIVE"
+
+        return mode
 
     def _generate_chatter(self, unit: MobileSuit, chatter_type: str) -> str | None:
         """NPCのセリフを生成する.
@@ -344,8 +418,14 @@ class BattleSimulator:
             "distance_to_nearest_enemy": distance_to_nearest_enemy,
         }
 
+        # --- 戦略モードに応じたファジィエンジンを選択 ---
+        strategy_mode = self._resolve_strategy_mode(unit)
+        behavior_engine = self._strategy_engines.get(strategy_mode, {}).get(
+            "behavior", self._fuzzy_engine
+        )
+
         # --- ファジィ推論 ---
-        _, debug = self._fuzzy_engine.infer_with_debug(fuzzy_inputs)
+        _, debug = behavior_engine.infer_with_debug(fuzzy_inputs)
         fuzzy_scores: dict = debug.get("activations", {})
 
         # 行動を決定: action の活性化度が最も高いラベルを選択
@@ -376,7 +456,7 @@ class BattleSimulator:
                 ),
                 position_snapshot=unit.position,
                 fuzzy_scores=fuzzy_scores,
-                strategy_mode="AGGRESSIVE",
+                strategy_mode=strategy_mode,
             )
         )
 
@@ -742,6 +822,12 @@ class BattleSimulator:
 
         pos_actor = actor.position.to_numpy()
 
+        # 戦略モードに応じたターゲット選択エンジンを選択
+        strategy_mode = self._resolve_strategy_mode(actor)
+        target_engine = self._strategy_engines.get(strategy_mode, {}).get(
+            "target", self._target_selection_fuzzy_engine
+        )
+
         # 各候補にファジィ推論を実行し優先度スコアを計算
         try:
             best_target: MobileSuit | None = None
@@ -769,9 +855,7 @@ class BattleSimulator:
                     "is_attacking_ally": is_attacking_ally,
                 }
 
-                result, debug = self._target_selection_fuzzy_engine.infer_with_debug(
-                    fuzzy_inputs
-                )
+                result, debug = target_engine.infer_with_debug(fuzzy_inputs)
                 score = result.get("target_priority", 0.0)
                 all_scores[str(candidate.id)] = score
 
@@ -887,6 +971,12 @@ class BattleSimulator:
         max_en = float(max(1, actor.max_en))
         current_en_ratio = current_en / max_en
 
+        # 戦略モードに応じた武器選択エンジンを選択
+        strategy_mode = self._resolve_strategy_mode(actor)
+        weapon_engine = self._strategy_engines.get(strategy_mode, {}).get(
+            "weapon", self._weapon_selection_fuzzy_engine
+        )
+
         try:
             best_weapon: Weapon | None = None
             best_score: float = -1.0
@@ -916,9 +1006,7 @@ class BattleSimulator:
                     "weapon_is_beam": weapon_is_beam,
                 }
 
-                result, debug = self._weapon_selection_fuzzy_engine.infer_with_debug(
-                    fuzzy_inputs
-                )
+                result, debug = weapon_engine.infer_with_debug(fuzzy_inputs)
                 score = result.get("weapon_score", 0.0)
                 all_scores[str(weapon.id)] = score
 

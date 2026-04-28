@@ -526,3 +526,64 @@ class TestFuzzyRuleSetLoad:
         }
         with pytest.raises(ValueError):
             FuzzyRuleSet.from_dict(data)
+
+    def test_from_json_defensive(self) -> None:
+        """defensive.json からロードできる."""
+        json_path = _FUZZY_RULES_DIR / "defensive.json"
+        rs = FuzzyRuleSet.from_json(json_path)
+        assert rs.strategy == "DEFENSIVE"
+        assert rs.layer == "behavior_selection"
+        assert len(rs.rules) >= 10
+        assert "hp_ratio" in rs.membership_functions
+        assert "enemy_count_near" in rs.membership_functions
+        assert "distance_to_nearest_enemy" in rs.membership_functions
+
+    def test_from_json_defensive_target_selection(self) -> None:
+        """defensive_target_selection.json からロードできる."""
+        json_path = _FUZZY_RULES_DIR / "defensive_target_selection.json"
+        rs = FuzzyRuleSet.from_json(json_path)
+        assert rs.strategy == "DEFENSIVE"
+        assert rs.layer == "target_selection"
+        assert len(rs.rules) >= 10
+        assert "is_attacking_ally" in rs.membership_functions
+        assert "target_attack_power" in rs.membership_functions
+
+    def test_from_json_defensive_weapon_selection(self) -> None:
+        """defensive_weapon_selection.json からロードできる."""
+        json_path = _FUZZY_RULES_DIR / "defensive_weapon_selection.json"
+        rs = FuzzyRuleSet.from_json(json_path)
+        assert rs.strategy == "DEFENSIVE"
+        assert rs.layer == "weapon_selection"
+        assert len(rs.rules) >= 10
+        assert "current_en_ratio" in rs.membership_functions
+        assert "ammo_ratio" in rs.membership_functions
+
+    def test_from_json_sniper(self) -> None:
+        """sniper.json からロードできる."""
+        json_path = _FUZZY_RULES_DIR / "sniper.json"
+        rs = FuzzyRuleSet.from_json(json_path)
+        assert rs.strategy == "SNIPER"
+        assert rs.layer == "behavior_selection"
+        assert len(rs.rules) >= 10
+        assert "hp_ratio" in rs.membership_functions
+        assert "distance_to_nearest_enemy" in rs.membership_functions
+
+    def test_from_json_sniper_target_selection(self) -> None:
+        """sniper_target_selection.json からロードできる."""
+        json_path = _FUZZY_RULES_DIR / "sniper_target_selection.json"
+        rs = FuzzyRuleSet.from_json(json_path)
+        assert rs.strategy == "SNIPER"
+        assert rs.layer == "target_selection"
+        assert len(rs.rules) >= 10
+        assert "target_hp_ratio" in rs.membership_functions
+        assert "target_distance" in rs.membership_functions
+
+    def test_from_json_sniper_weapon_selection(self) -> None:
+        """sniper_weapon_selection.json からロードできる."""
+        json_path = _FUZZY_RULES_DIR / "sniper_weapon_selection.json"
+        rs = FuzzyRuleSet.from_json(json_path)
+        assert rs.strategy == "SNIPER"
+        assert rs.layer == "weapon_selection"
+        assert len(rs.rules) >= 10
+        assert "distance_to_target" in rs.membership_functions
+        assert "weapon_is_beam" in rs.membership_functions

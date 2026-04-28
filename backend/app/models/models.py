@@ -142,6 +142,12 @@ class MobileSuit(SQLModel, table=True):
 
     active_weapon_index: int = Field(default=0)
 
+    # Strategy Mode
+    strategy_mode: str | None = Field(
+        default=None,
+        description="戦略モード (AGGRESSIVE/DEFENSIVE/SNIPER/ASSAULT/RETREAT)。未設定の場合は AGGRESSIVE にフォールバック",
+    )
+
     # NPC Personality System
     personality: str | None = Field(
         default=None, description="NPC性格 (AGGRESSIVE/CAUTIOUS/SNIPER)"
