@@ -50,20 +50,6 @@ def _make_test_rules_dir(tmp_path: Path) -> Path:
     # aggressive.json (behavior)
     _write_json(rules_dir / "aggressive.json", _MINIMAL_FUZZY_JSON)
     # aggressive_target_selection.json (target)
-    target_json = dict(_MINIMAL_FUZZY_JSON)
-    target_json = {
-        **_MINIMAL_FUZZY_JSON,
-        "membership_functions": {
-            **_MINIMAL_FUZZY_JSON["membership_functions"],
-            "action": {
-                "ATTACK": {"type": "trapezoid", "params": [0.0, 0.0, 0.15, 0.30]},
-                "target_priority": {
-                    "type": "trapezoid",
-                    "params": [0.0, 0.0, 0.5, 1.0],
-                },
-            },
-        },
-    }
     _write_json(rules_dir / "aggressive_target_selection.json", _MINIMAL_FUZZY_JSON)
     # aggressive_weapon_selection.json (weapon)
     _write_json(rules_dir / "aggressive_weapon_selection.json", _MINIMAL_FUZZY_JSON)
