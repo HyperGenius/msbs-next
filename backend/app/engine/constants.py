@@ -1,5 +1,10 @@
 """Constants for battle simulation."""
 
+from pathlib import Path
+
+# ファジィルール JSON ディレクトリ (Phase 5-2)
+FUZZY_RULES_DIR: Path = Path(__file__).parent.parent.parent / "data" / "fuzzy_rules"
+
 # 地形適正による補正係数
 TERRAIN_ADAPTABILITY_MODIFIERS = {
     "S": 1.2,

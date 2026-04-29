@@ -12,11 +12,25 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+
+def _file_hash(path: Path) -> str:
+    """ファイルの SHA-256 ハッシュを返す.
+
+    Args:
+        path: ハッシュを計算するファイルのパス
+
+    Returns:
+        SHA-256 ハッシュの16進数文字列
+    """
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
 
 # ---------------------------------------------------------------------------
 # メンバーシップ関数（抽象基底 + 具体実装）
