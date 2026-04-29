@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 
