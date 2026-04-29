@@ -1,15 +1,29 @@
 #!/usr/bin/env python3
 # backend/scripts/run_simulation.py
-"""ローカル実行スクリプト: ミッションシミュレーション.
+r"""ローカル実行スクリプト: ミッションシミュレーション（サブコマンド構成）.
 
 本番DBにReadOnlyで接続し、指定ミッションのデータを取得して
 BattleSimulatorを実行し、結果ログをJSONファイルとして出力する。
 DBへの書き込みは一切行わない。
 
 Usage:
-    python scripts/run_simulation.py --mission-id 1
-    python scripts/run_simulation.py --mission-id 2 --output results/mission2.json
-    python scripts/run_simulation.py --mission-id 1 --steps 500 --output result.json
+    # 単一シミュレーション実行（従来通り）
+    python scripts/run_simulation.py run --mission-id 1
+    python scripts/run_simulation.py run --mission-id 2 --output results/mission2.json
+    python scripts/run_simulation.py run --mission-id 1 --steps 500 --output result.json
+
+    # 複数回シミュレーションを実行してサマリーを集計
+    python scripts/run_simulation.py bench --mission-id 1 --rounds 20
+
+    # 2つの戦略を比較対照するA/Bテスト
+    python scripts/run_simulation.py compare \\
+        --mission-id 1 --strategy-a AGGRESSIVE --strategy-b DEFENSIVE --rounds 20
+
+    # シミュレーション結果JSONからレポートを生成
+    python scripts/run_simulation.py report --input data/sim_results/result_*.json
+
+後方互換:
+    python scripts/run_simulation.py --mission-id 1  （サブコマンドなし → run と同等）
 """
 
 import argparse
@@ -255,17 +269,133 @@ def run(
 
 
 def parse_args() -> argparse.Namespace:
-    """CLI 引数をパースする."""
+    """CLI 引数をパースする（サブコマンド構成 + 後方互換）."""
+    # ---- 後方互換チェック: --mission-id が先頭にある場合は run サブコマンドとして扱う ----
+    if len(sys.argv) > 1 and sys.argv[1].startswith("--"):
+        # サブコマンドなし → sys.argv に "run" を挿入して後方互換を維持
+        sys.argv.insert(1, "run")
+
     parser = argparse.ArgumentParser(
-        description="ミッションシミュレーションをローカル実行し、結果をJSONに出力する。",
+        description="ミッションシミュレーションをローカル実行するCLIツール。",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+サブコマンド:
+  run     単一シミュレーションを実行して結果JSONを出力する
+  bench   複数回シミュレーションを実行してサマリーを集計する
+  compare 2つの戦略モードを対戦させて比較する
+  report  既存のシミュレーション結果JSONからレポートを生成する
+
+使用例:
+  python scripts/run_simulation.py run --mission-id 1
+  python scripts/run_simulation.py bench --mission-id 1 --rounds 20
+  python scripts/run_simulation.py compare --mission-id 1 --strategy-a AGGRESSIVE --strategy-b DEFENSIVE --rounds 20
+  python scripts/run_simulation.py report --input data/sim_results/result_*.json
+        """,
+    )
+
+    subparsers = parser.add_subparsers(dest="subcommand")
+
+    # ---- run サブコマンド（既存機能） ----
+    run_parser = subparsers.add_parser(
+        "run",
+        help="単一シミュレーションを実行して結果JSONを出力する",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用例:
-  python scripts/run_simulation.py --mission-id 1
-  python scripts/run_simulation.py --mission-id 2 --output results/mission2.json
-  python scripts/run_simulation.py --mission-id 1 --steps 500 --output result.json
+  python scripts/run_simulation.py run --mission-id 1
+  python scripts/run_simulation.py run --mission-id 2 --output results/mission2.json
+  python scripts/run_simulation.py run --mission-id 1 --steps 500 --strategy AGGRESSIVE
         """,
     )
+    _add_run_args(run_parser)
+
+    # ---- bench サブコマンド ----
+    bench_parser = subparsers.add_parser(
+        "bench",
+        help="複数回シミュレーションを実行してサマリーを集計する",
+    )
+    bench_parser.add_argument("--mission-id", type=int, required=True, metavar="ID")
+    bench_parser.add_argument(
+        "--rounds", type=int, default=10, metavar="N", help="実行回数（デフォルト: 10）"
+    )
+    bench_parser.add_argument(
+        "--strategy",
+        type=str,
+        default="AGGRESSIVE",
+        choices=["AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"],
+        metavar="MODE",
+        help="全チームに適用する初期戦略モード（デフォルト: AGGRESSIVE）",
+    )
+    bench_parser.add_argument(
+        "--output", type=str, default=None, metavar="FILE", help="出力先ファイルパス"
+    )
+    bench_parser.add_argument(
+        "--format",
+        type=str,
+        default="text",
+        choices=["text", "json"],
+        help="出力フォーマット",
+    )
+    bench_parser.add_argument(
+        "--steps", type=int, default=5000, metavar="N", help="最大ステップ数"
+    )
+    bench_parser.add_argument("--hot-reload", action="store_true", default=False)
+
+    # ---- compare サブコマンド ----
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="2つの戦略モードを対戦させて比較する",
+    )
+    compare_parser.add_argument("--mission-id", type=int, required=True, metavar="ID")
+    compare_parser.add_argument(
+        "--rounds", type=int, default=10, metavar="N", help="実行回数（デフォルト: 10）"
+    )
+    compare_parser.add_argument(
+        "--strategy-a",
+        type=str,
+        default="AGGRESSIVE",
+        choices=["AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"],
+        metavar="MODE",
+        help="プレイヤーチームの戦略モード",
+    )
+    compare_parser.add_argument(
+        "--strategy-b",
+        type=str,
+        default="DEFENSIVE",
+        choices=["AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"],
+        metavar="MODE",
+        help="敵チームの戦略モード",
+    )
+    compare_parser.add_argument("--output", type=str, default=None, metavar="FILE")
+    compare_parser.add_argument(
+        "--format", type=str, default="text", choices=["text", "json"]
+    )
+    compare_parser.add_argument("--steps", type=int, default=5000, metavar="N")
+    compare_parser.add_argument("--hot-reload", action="store_true", default=False)
+
+    # ---- report サブコマンド ----
+    report_parser = subparsers.add_parser(
+        "report",
+        help="既存のシミュレーション結果JSONからレポートを生成する",
+    )
+    report_parser.add_argument(
+        "--input",
+        type=str,
+        nargs="+",
+        required=True,
+        metavar="FILE",
+        help="入力JSONファイルパス（ワイルドカード対応）",
+    )
+    report_parser.add_argument("--output", type=str, default=None, metavar="FILE")
+    report_parser.add_argument(
+        "--format", type=str, default="text", choices=["text", "json"]
+    )
+
+    return parser.parse_args()
+
+
+def _add_run_args(parser: argparse.ArgumentParser) -> None:
+    """Run サブコマンドの共通引数を追加する."""
     parser.add_argument(
         "--mission-id",
         type=int,
@@ -301,15 +431,31 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="ファジィルール JSON の変更をシミュレーション実行ごとに自動反映する（ローカル開発用）",
     )
-    return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run(
-        mission_id=args.mission_id,
-        max_steps=args.steps,
-        output_path=args.output,
-        strategy=args.strategy,
-        enable_hot_reload=args.hot_reload,
-    )
+
+    if args.subcommand == "run" or args.subcommand is None:
+        run(
+            mission_id=args.mission_id,
+            max_steps=args.steps,
+            output_path=args.output,
+            strategy=args.strategy,
+            enable_hot_reload=args.hot_reload,
+        )
+    elif args.subcommand == "bench":
+        from scripts.sim_bench import run_bench_command
+
+        run_bench_command(args)
+    elif args.subcommand == "compare":
+        from scripts.sim_compare import run_compare_command
+
+        run_compare_command(args)
+    elif args.subcommand == "report":
+        from scripts.sim_report import run_report_command
+
+        run_report_command(args)
+    else:
+        print(f"不明なサブコマンド: {args.subcommand}", file=sys.stderr)
+        sys.exit(1)
