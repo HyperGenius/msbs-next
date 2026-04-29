@@ -2,7 +2,6 @@
 
 import json
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -104,7 +103,9 @@ def test_list_requires_auth(client_admin):
 
 def test_list_wrong_key(client_admin):
     """不正なAPIキーで 401 が返ること."""
-    response = client_admin.get("/api/admin/mobile-suits", headers={"X-API-Key": "wrong_key"})
+    response = client_admin.get(
+        "/api/admin/mobile-suits", headers={"X-API-Key": "wrong_key"}
+    )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -132,7 +133,9 @@ def test_list_master_mobile_suits(client_admin):
 
 def test_create_master_mobile_suit(client_admin):
     """POST /api/admin/mobile-suits で新規機体を追加できること."""
-    response = client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS
+    )
     assert response.status_code == status.HTTP_201_CREATED
     data = response.json()
     assert data["id"] == "test_gm"
@@ -150,23 +153,29 @@ def test_create_duplicate_id_returns_409(client_admin):
     # 最初の追加
     client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
     # 重複追加
-    response = client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS
+    )
     assert response.status_code == status.HTTP_409_CONFLICT
 
 
 def test_create_invalid_id_returns_422(client_admin):
     """スネークケース以外の id は 422 が返ること."""
     invalid = {**SAMPLE_MS, "id": "Invalid-ID"}
-    response = client_admin.post("/api/admin/mobile-suits", json=invalid, headers=HEADERS)
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=invalid, headers=HEADERS
+    )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 def test_create_empty_weapons_returns_422(client_admin):
-    """weapons が空の場合は 422 が返ること."""
+    """Weapons が空の場合は 422 が返ること."""
     no_weapons = json.loads(json.dumps(SAMPLE_MS))
     no_weapons["id"] = "no_weapons_ms"
     no_weapons["specs"]["weapons"] = []
-    response = client_admin.post("/api/admin/mobile-suits", json=no_weapons, headers=HEADERS)
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=no_weapons, headers=HEADERS
+    )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
@@ -236,13 +245,15 @@ def test_delete_master_mobile_suit(client_admin):
 
 def test_delete_nonexistent_returns_404(client_admin):
     """存在しない id を削除しようとすると 404 が返ること."""
-    response = client_admin.delete("/api/admin/mobile-suits/nonexistent_id", headers=HEADERS)
+    response = client_admin.delete(
+        "/api/admin/mobile-suits/nonexistent_id", headers=HEADERS
+    )
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 def test_delete_referenced_returns_409(client_admin, session):
     """ショップ在庫で参照されている機体を削除しようとすると 409 が返ること."""
-    from app.models.models import MobileSuit, Weapon, Vector3
+    from app.models.models import MobileSuit, Vector3, Weapon
 
     # 先にマスターに追加
     client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)

@@ -29,8 +29,7 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
     """生JSON辞書を MasterMobileSuitEntry モデルに変換する."""
     specs_raw = raw["specs"]
     weapons = [
-        Weapon(**w) if isinstance(w, dict) else w
-        for w in specs_raw.get("weapons", [])
+        Weapon(**w) if isinstance(w, dict) else w for w in specs_raw.get("weapons", [])
     ]
     specs = MasterMobileSuitSpec(
         max_hp=specs_raw["max_hp"],
@@ -64,7 +63,9 @@ def list_master_mobile_suits() -> list[MasterMobileSuitEntry]:
     return [_raw_to_entry(r) for r in raw_list]
 
 
-@router.post("", response_model=MasterMobileSuitEntry, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=MasterMobileSuitEntry, status_code=status.HTTP_201_CREATED
+)
 def create_master_mobile_suit(data: MasterMobileSuitCreate) -> MasterMobileSuitEntry:
     """新規マスター機体を追加する.
 
@@ -77,12 +78,16 @@ def create_master_mobile_suit(data: MasterMobileSuitCreate) -> MasterMobileSuitE
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
     return _raw_to_entry(result)
 
 
 @router.put("/{ms_id}", response_model=MasterMobileSuitEntry)
-def update_master_mobile_suit(ms_id: str, data: MasterMobileSuitUpdate) -> MasterMobileSuitEntry:
+def update_master_mobile_suit(
+    ms_id: str, data: MasterMobileSuitUpdate
+) -> MasterMobileSuitEntry:
     """既存マスター機体を更新する.
 
     - weapons を更新する場合は最低1件必須
@@ -90,7 +95,9 @@ def update_master_mobile_suit(ms_id: str, data: MasterMobileSuitUpdate) -> Maste
     try:
         result = MobileSuitService.update_master_mobile_suit(ms_id, data)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
 
     if result is None:
         raise HTTPException(

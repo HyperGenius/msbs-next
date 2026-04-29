@@ -3,7 +3,12 @@ import re
 
 from sqlmodel import Session, select
 
-from app.models.models import MobileSuit, MobileSuitUpdate, MasterMobileSuitCreate, MasterMobileSuitUpdate
+from app.models.models import (
+    MasterMobileSuitCreate,
+    MasterMobileSuitUpdate,
+    MobileSuit,
+    MobileSuitUpdate,
+)
 
 
 class MobileSuitService:
@@ -49,6 +54,7 @@ class MobileSuitService:
     def get_master_mobile_suits() -> list[dict]:
         """マスター機体データを全件返す（生JSON辞書形式）."""
         from app.core.gamedata import get_master_mobile_suits
+
         return get_master_mobile_suits()
 
     @staticmethod
@@ -68,7 +74,9 @@ class MobileSuitService:
 
         # idバリデーション: スネークケース英数字のみ
         if not re.fullmatch(r"[a-z0-9_]+", data.id):
-            raise ValueError(f"Invalid id format: '{data.id}'. Only lowercase alphanumeric and underscore are allowed.")
+            raise ValueError(
+                f"Invalid id format: '{data.id}'. Only lowercase alphanumeric and underscore are allowed."
+            )
 
         # weapons 最低1件必須
         if not data.specs.weapons:
@@ -89,7 +97,9 @@ class MobileSuitService:
         return new_entry
 
     @staticmethod
-    def update_master_mobile_suit(ms_id: str, data: MasterMobileSuitUpdate) -> dict | None:
+    def update_master_mobile_suit(
+        ms_id: str, data: MasterMobileSuitUpdate
+    ) -> dict | None:
         """既存マスター機体を更新してJSONファイルを永続化する.
 
         Args:
@@ -105,7 +115,9 @@ class MobileSuitService:
         from app.core.gamedata import get_master_mobile_suits, save_master_mobile_suits
 
         current = get_master_mobile_suits()
-        target_index = next((i for i, item in enumerate(current) if item["id"] == ms_id), None)
+        target_index = next(
+            (i for i, item in enumerate(current) if item["id"] == ms_id), None
+        )
         if target_index is None:
             return None
 
@@ -148,7 +160,9 @@ class MobileSuitService:
         from app.core.gamedata import get_master_mobile_suits, save_master_mobile_suits
 
         current = get_master_mobile_suits()
-        target_index = next((i for i, item in enumerate(current) if item["id"] == ms_id), None)
+        target_index = next(
+            (i for i, item in enumerate(current) if item["id"] == ms_id), None
+        )
         if target_index is None:
             return False
 
