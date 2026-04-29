@@ -1,9 +1,9 @@
 # バトルエンジン高度化 機能仕様書
 
-**バージョン:** 0.8.0  
+**バージョン:** 0.9.0  
 **作成日:** 2026-04-27  
-**更新日:** 2026-04-28  
-**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 実装済み
+**更新日:** 2026-04-29  
+**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 / Phase 5-2 実装済み
 
 ---
 
@@ -697,3 +697,58 @@ details = {
 | `ASSAULT_RETREAT_ALIVE_THRESHOLD` | `0.50` | T07 |
 | `ASSAULT_AGGRESSIVE_HP_THRESHOLD` | `0.55` | T08 |
 | `RETREAT_WIPE_ALIVE_THRESHOLD` | `0.20` | T09 |
+
+---
+
+## 12. Phase 5-2: ファジィルールのホットリロード
+
+### 12.1 概要
+
+`backend/data/fuzzy_rules/` 以下の JSON ファイルを変更するだけで **`BattleSimulator` の再起動なしにルールセットを再ロード**できる仕組み。バランス調整作業（JSON チューニング → シミュレーション実行のサイクル）を短縮するための **ローカル開発専用** 機能。
+
+### 12.2 ファイルハッシュベースの変更検出
+
+`FuzzyEngine` に `_file_hash(path)` ユーティリティ関数を追加。SHA-256 ハッシュでファイル内容の変更を検出する。
+
+```python
+# backend/app/engine/fuzzy_engine.py
+def _file_hash(path: Path) -> str:
+    """ファイルの SHA-256 ハッシュを返す."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+```
+
+### 12.3 `FuzzyRuleCache` クラス
+
+`backend/app/engine/fuzzy_rule_cache.py` に実装。
+
+| メソッド | 説明 |
+|---------|------|
+| `__init__(rules_dir)` | 全ルールを初期ロードし、ハッシュを記録 |
+| `get_engines()` | ハッシュ変更を検出して差分のみ再ロードし、エンジン辞書を返す |
+| `force_reload_all()` | 全エンジンを強制再ロード |
+
+### 12.4 `BattleSimulator` の変更
+
+`enable_hot_reload: bool = False` パラメータを追加。`_strategy_engines` をプロパティ化。
+
+| `enable_hot_reload` | 動作 |
+|---------------------|------|
+| `False`（デフォルト） | 起動時のスナップショットを返す（本番・テスト用） |
+| `True` | `FuzzyRuleCache.get_engines()` を呼び差分ロードを行う（ローカル開発用） |
+
+### 12.5 `run_simulation.py --hot-reload` オプション
+
+```bash
+# ルールを編集しながら繰り返しシミュレーションを実行
+python scripts/run_simulation.py --mission-id 1 --hot-reload
+```
+
+変更が検出されると標準出力にログが表示される:
+
+```
+[HotReload] aggressive.json が変更されました → AGGRESSIVE:behavior を再ロードしました
+```
+
+### 12.6 `schema.json` の除外
+
+`FuzzyRuleCache` は `{prefix}{suffix}.json` の命名規則に一致するファイルのみをロードする。`schema.json` はどの戦略モード・レイヤーのパターンにも一致しないため、自動的に除外される。

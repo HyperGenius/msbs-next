@@ -3,7 +3,6 @@ import logging
 import math
 import random
 import uuid
-from pathlib import Path
 
 import numpy as np
 
@@ -17,6 +16,7 @@ from app.engine.calculator import (
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
     BOUNDARY_MARGIN,
+    FUZZY_RULES_DIR,
     HIGH_THREAT_THRESHOLD,
     MAP_BOUNDS,
     RETREAT_ATTRACTION_COEFF,
@@ -26,13 +26,13 @@ from app.engine.constants import (
     VALID_STRATEGY_MODES,
 )
 from app.engine.fuzzy_engine import FuzzyEngine
+from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
 
 logger = logging.getLogger(__name__)
 
 _MAX_STEPS = 5000
-_FUZZY_RULES_DIR = Path(__file__).parent.parent.parent / "data" / "fuzzy_rules"
 # 近隣ユニット検索半径 (m)
 _FUZZY_NEIGHBOR_RADIUS = 500.0
 # ターゲット選択ファジィ推論: 距離の最大値 (m)
@@ -43,25 +43,6 @@ _WEAPON_SELECTION_MAX_DIST = 3000.0
 MOVE_LOG_MIN_DIST: float = 100.0
 # チームレベルイベントのダミー actor_id (Phase 4-2)
 _TEAM_EVENT_ACTOR_ID: uuid.UUID = uuid.UUID(int=0)
-
-# 戦略モードとJSONファイルのレイヤーマッピング
-_STRATEGY_FILE_PREFIXES: dict[str, str] = {
-    "AGGRESSIVE": "aggressive",
-    "DEFENSIVE": "defensive",
-    "SNIPER": "sniper",
-    "ASSAULT": "assault",
-    "RETREAT": "retreat",
-}
-_LAYER_SUFFIXES: dict[str, str] = {
-    "behavior": "",
-    "target": "_target_selection",
-    "weapon": "_weapon_selection",
-}
-_LAYER_DEFAULTS: dict[str, dict[str, float]] = {
-    "behavior": {"action": 0.0},
-    "target": {"target_priority": 0.0},
-    "weapon": {"weapon_score": 0.0},
-}
 
 
 class BattleSimulator:
@@ -77,6 +58,7 @@ class BattleSimulator:
         player_pilot_stats: PilotStats | None = None,
         retreat_points: list[RetreatPoint] | None = None,
         strategy_update_interval: int = STRATEGY_UPDATE_INTERVAL,
+        enable_hot_reload: bool = False,
     ):
         """初期化.
 
@@ -89,6 +71,9 @@ class BattleSimulator:
             player_pilot_stats: プレイヤーのパイロットステータス (DEX/INT/REF/TOU/LUK)
             retreat_points: 撤退ポイントのリスト (Phase 3-3)
             strategy_update_interval: 何ステップごとに戦略評価を行うか (Phase 4-2)
+            enable_hot_reload: True の場合、シミュレーション実行ごとにファジィルール JSON
+                の変更を自動検出して再ロードする（ローカル開発用）。False の場合は
+                起動時に一度だけロードしてスナップショットとして保持する（デフォルト）。
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -141,22 +126,25 @@ class BattleSimulator:
 
         # 中階層ファジィ推論エンジン（AGGRESSIVEルールセット）
         self._fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
-            _FUZZY_RULES_DIR / "aggressive.json", default_output={"action": 0.0}
+            FUZZY_RULES_DIR / "aggressive.json", default_output={"action": 0.0}
         )
         # 低階層ファジィ推論エンジン: ターゲット選択（AGGRESSIVEルールセット）
         self._target_selection_fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
-            _FUZZY_RULES_DIR / "aggressive_target_selection.json",
+            FUZZY_RULES_DIR / "aggressive_target_selection.json",
             default_output={"target_priority": 0.0},
         )
         # 低階層ファジィ推論エンジン: 武器選択（AGGRESSIVEルールセット）
         self._weapon_selection_fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(
-            _FUZZY_RULES_DIR / "aggressive_weapon_selection.json",
+            FUZZY_RULES_DIR / "aggressive_weapon_selection.json",
             default_output={"weapon_score": 0.0},
         )
 
-        # 戦略モード別ファジィ推論エンジン辞書 {"MODE": {"behavior": ..., "target": ..., "weapon": ...}}
-        self._strategy_engines: dict[str, dict[str, FuzzyEngine]] = (
-            self._load_strategy_engines()
+        # ホットリロード設定 (Phase 5-2)
+        self._enable_hot_reload: bool = enable_hot_reload
+        self._rule_cache: FuzzyRuleCache = FuzzyRuleCache(FUZZY_RULES_DIR)
+        # ホットリロード無効時はスナップショットとしてキャッシュから一度だけ取得
+        self._cached_engines: dict[str, dict[str, FuzzyEngine]] = (
+            self._rule_cache.get_engines()
         )
 
         # チームレベル戦略コントローラ (Phase 4-2)
@@ -170,30 +158,19 @@ class BattleSimulator:
             for team_id in team_ids
         }
 
-    def _load_strategy_engines(self) -> dict[str, dict[str, FuzzyEngine]]:
-        """戦略モード別ファジィ推論エンジン辞書を構築する.
+    @property
+    def _strategy_engines(self) -> dict[str, dict[str, FuzzyEngine]]:
+        """戦略モード別ファジィ推論エンジン辞書を返す.
 
-        `data/fuzzy_rules/` ディレクトリを走査し、命名規則 `{prefix}{suffix}.json`
-        に従うファイルを自動検出してロードする。ファイルが存在しない戦略モードは
-        AGGRESSIVE にフォールバックするため、AGGRESSIVE は常にロード済みが保証される。
+        ホットリロードが有効な場合はキャッシュから変更検出付きで取得し、
+        無効な場合は起動時に一度だけロードしたスナップショットを返す。
 
         Returns:
             {"MODE": {"behavior": FuzzyEngine, "target": FuzzyEngine, "weapon": FuzzyEngine}}
         """
-        engines: dict[str, dict[str, FuzzyEngine]] = {}
-
-        for mode, prefix in _STRATEGY_FILE_PREFIXES.items():
-            mode_engines: dict[str, FuzzyEngine] = {}
-            for layer, suffix in _LAYER_SUFFIXES.items():
-                json_path = _FUZZY_RULES_DIR / f"{prefix}{suffix}.json"
-                if json_path.exists():
-                    mode_engines[layer] = FuzzyEngine.from_json(
-                        json_path, default_output=_LAYER_DEFAULTS[layer]
-                    )
-            if mode_engines:
-                engines[mode] = mode_engines
-
-        return engines
+        if self._enable_hot_reload:
+            return self._rule_cache.get_engines()
+        return self._cached_engines
 
     def _resolve_strategy_mode(self, unit: MobileSuit) -> str:
         """ユニットの戦略モードを解決する.

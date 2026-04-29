@@ -110,6 +110,7 @@ def run(
     max_steps: int = 5000,
     output_path: str | None = None,
     strategy: str | None = None,
+    enable_hot_reload: bool = False,
 ) -> None:
     """シミュレーションを実行して結果を JSON に出力する.
 
@@ -118,6 +119,7 @@ def run(
         max_steps: 最大ステップ数（デフォルト 5000）
         output_path: 出力先 JSON ファイルパス。None の場合は自動生成。
         strategy: プレイヤー機体の戦略モード (AGGRESSIVE/DEFENSIVE/SNIPER 等)。None の場合は未設定。
+        enable_hot_reload: True の場合、ファジィルール JSON の変更を自動検出して再ロードする（ローカル開発用）。
     """
     print("=" * 60)
     print(f"ミッション {mission_id} のシミュレーションを開始")
@@ -179,6 +181,7 @@ def run(
         enemies=enemies,
         environment=mission.environment,
         special_effects=mission.special_effects or [],
+        enable_hot_reload=enable_hot_reload,
     )
 
     step_count = 0
@@ -292,6 +295,12 @@ def parse_args() -> argparse.Namespace:
         metavar="MODE",
         help="プレイヤー機体の戦略モード (AGGRESSIVE/DEFENSIVE/SNIPER/ASSAULT/RETREAT)。省略時はAGGRESSIVE。",
     )
+    parser.add_argument(
+        "--hot-reload",
+        action="store_true",
+        default=False,
+        help="ファジィルール JSON の変更をシミュレーション実行ごとに自動反映する（ローカル開発用）",
+    )
     return parser.parse_args()
 
 
@@ -302,4 +311,5 @@ if __name__ == "__main__":
         max_steps=args.steps,
         output_path=args.output,
         strategy=args.strategy,
+        enable_hot_reload=args.hot_reload,
     )
