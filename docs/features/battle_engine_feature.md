@@ -439,8 +439,8 @@ python scripts/run_simulation.py \
 
 ### Phase 4：戦略・戦術階層
 
-- [ ] チームレベルの戦略モード切り替えロジック（Phase 4-2 対応予定）
-- [ ] 戦況に応じた動的 `StrategyMode` 変更（劣勢時に `RETREAT` へ移行等）（Phase 4-3 対応予定）
+- [x] チームレベルの戦略モード切り替えロジック（Phase 4-2 実装済み）
+- [x] 戦況に応じた動的 `StrategyMode` 変更（劣勢時に `RETREAT` へ移行等）（Phase 4-3 実装済み）
 - [x] `assault.json` / `retreat.json` ルールセット追加（Phase 4-1）
 
 ### Phase 5：スケールアウト・最適化
@@ -593,3 +593,107 @@ Phase 2-3 で確立した「JSONファイルを追加するだけで新戦略を
 `_STRATEGY_FILE_PREFIXES` に `"ASSAULT": "assault"` / `"RETREAT": "retreat"` が登録済みであり、
 `_load_strategy_engines()` が `assault.json` / `assault_target_selection.json` / `assault_weapon_selection.json`
 （および `retreat*` 系）を自動検出してロードする。追加のコード変更は不要。
+
+---
+
+## 10. Phase 4-2: TeamStrategyController インフラ
+
+### 10.1 概要
+
+Phase 4-2 では、チームレベルの戦略モードを管理する **`TeamStrategyController`** と **`TeamMetrics`** データクラスを実装した。`BattleSimulator._strategy_phase()` が定期的に各チームのメトリクスを収集し、コントローラが戦略変更を判断する基盤を整備した。
+
+### 10.2 主要コンポーネント
+
+- **`TeamMetrics`** (`backend/app/engine/strategy_controller.py`): チームの現在の戦況データ（生存率・HP率・現在戦略等）
+- **`TeamStrategyController`** (`backend/app/engine/strategy_controller.py`): チームの戦略モードを管理するコントローラ。`should_evaluate()` / `evaluate()` / `apply()` の3メソッドを持つ
+- **`BattleSimulator._collect_team_metrics()`**: 指定チームの TeamMetrics を算出するヘルパー
+- **`BattleSimulator._strategy_phase()`**: 全チームの戦略評価・更新フェーズ
+
+---
+
+## 11. Phase 4-3: 動的 StrategyMode 遷移ルール
+
+### 11.1 概要
+
+Phase 4-3 では、`TeamStrategyController.evaluate()` に **遷移ルール評価ロジック** を実装した。チームの戦況データ（HP率・生存率）に基づき、事前定義されたルールセット `STRATEGY_TRANSITION_RULES` を上から評価して StrategyMode を自動切換えする。
+
+### 11.2 `StrategyTransitionRule` データ構造
+
+```python
+@dataclass
+class StrategyTransitionRule:
+    """戦略遷移ルール定義."""
+    rule_id: str
+    from_strategy: str | None   # None は any にマッチ
+    to_strategy: str
+    condition: Callable[[TeamMetrics], bool]
+    description: str
+```
+
+### 11.3 戦略遷移ルール一覧 (T01〜T10)
+
+ルール評価は上から順に実施し、最初にマッチしたルールを採用する（最優先ルール優先）。
+
+| ルールID | 現在モード | 条件 | 遷移先モード | 説明 |
+|---------|----------|------|------------|------|
+| `T01` | `AGGRESSIVE` | `avg_hp_ratio < 0.30` AND `alive_ratio < 0.50` | `RETREAT` | 大損害を受けたら撤退 |
+| `T02` | `AGGRESSIVE` | `avg_hp_ratio < 0.50` AND `alive_ratio < 0.60` | `DEFENSIVE` | 劣勢になったら防衛重視に切替 |
+| `T03` | `DEFENSIVE` | `avg_hp_ratio < 0.25` AND `alive_ratio < 0.40` | `RETREAT` | 防衛中も限界なら撤退 |
+| `T04` | `DEFENSIVE` | `avg_hp_ratio >= 0.65` AND `alive_ratio >= 0.70` | `AGGRESSIVE` | 体勢を立て直したら攻勢へ |
+| `T05` | `SNIPER` | `avg_hp_ratio < 0.30` AND `alive_ratio < 0.50` | `RETREAT` | スナイパーも大損害なら撤退 |
+| `T06` | `SNIPER` | `avg_hp_ratio < 0.50` | `DEFENSIVE` | スナイパーが劣勢なら防衛へ |
+| `T07` | `ASSAULT` | `avg_hp_ratio < 0.35` AND `alive_ratio < 0.50` | `RETREAT` | 突撃部隊も壊滅寸前なら撤退 |
+| `T08` | `ASSAULT` | `avg_hp_ratio < 0.55` | `AGGRESSIVE` | 突撃継続が難しければ通常攻撃に切替 |
+| `T09` | `RETREAT` | `alive_ratio < 0.20` | `RETREAT` | 撤退中は変更しない（維持） |
+| `T10` | `RETREAT` | `retreat_points_empty == True` | `DEFENSIVE` | 撤退ポイントなし → 防衛に切替（殲滅戦） |
+
+> **Note:** T09 の `RETREAT → RETREAT` は「一度 RETREAT に入ったら撤退ポイントへ到達するまで維持」の意図。ループ内で `to_strategy == current_strategy` の場合はスキップするため次のルールへ進む。
+
+### 11.4 撤退ポイント未設定時の T10 フォールバック
+
+`_strategy_phase()` 内で `evaluate()` が "RETREAT" を返した場合に `len(self.retreat_points) == 0` を確認し、空なら "DEFENSIVE" に置き換えて `rule_id = "T10"` とする。
+
+```python
+if new_strategy == "RETREAT" and len(self.retreat_points) == 0:
+    new_strategy = "DEFENSIVE"
+    matched_rule_id = "T10"
+```
+
+### 11.5 `STRATEGY_CHANGED` ログの詳細フィールド
+
+```python
+details = {
+    "previous_strategy": "AGGRESSIVE",
+    "new_strategy": "DEFENSIVE",
+    "rule_id": "T02",           # マッチしたルールID
+    "trigger_metrics": {
+        "avg_hp_ratio": 0.45,
+        "alive_ratio": 0.55,
+        "min_hp_ratio": 0.10,
+        "alive_count": 3,
+        "total_count": 5,
+    }
+}
+```
+
+### 11.6 閾値定数（`backend/app/engine/constants.py`）
+
+遷移ルールの閾値はすべて `constants.py` に定数として分離されており、コード変更なしにチューニング可能。
+
+| 定数名 | デフォルト値 | 対応ルール |
+|--------|------------|---------|
+| `AGGRESSIVE_RETREAT_HP_THRESHOLD` | `0.30` | T01 |
+| `AGGRESSIVE_RETREAT_ALIVE_THRESHOLD` | `0.50` | T01 |
+| `AGGRESSIVE_DEFENSIVE_HP_THRESHOLD` | `0.50` | T02 |
+| `AGGRESSIVE_DEFENSIVE_ALIVE_THRESHOLD` | `0.60` | T02 |
+| `DEFENSIVE_RETREAT_HP_THRESHOLD` | `0.25` | T03 |
+| `DEFENSIVE_RETREAT_ALIVE_THRESHOLD` | `0.40` | T03 |
+| `DEFENSIVE_AGGRESSIVE_HP_THRESHOLD` | `0.65` | T04 |
+| `DEFENSIVE_AGGRESSIVE_ALIVE_THRESHOLD` | `0.70` | T04 |
+| `SNIPER_RETREAT_HP_THRESHOLD` | `0.30` | T05 |
+| `SNIPER_RETREAT_ALIVE_THRESHOLD` | `0.50` | T05 |
+| `SNIPER_DEFENSIVE_HP_THRESHOLD` | `0.50` | T06 |
+| `ASSAULT_RETREAT_HP_THRESHOLD` | `0.35` | T07 |
+| `ASSAULT_RETREAT_ALIVE_THRESHOLD` | `0.50` | T07 |
+| `ASSAULT_AGGRESSIVE_HP_THRESHOLD` | `0.55` | T08 |
+| `RETREAT_WIPE_ALIVE_THRESHOLD` | `0.20` | T09 |
