@@ -430,14 +430,16 @@ class BattleSimulator:
             min_hp_ratio=min_hp_ratio,
             current_strategy=current_strategy,
             elapsed_time=float(self.elapsed_time),
+            retreat_points_empty=len(self.retreat_points) == 0,
         )
 
     def _strategy_phase(self) -> None:
-        """戦略評価フェーズ: チームレベルの戦略モードを評価・更新する (Phase 4-2).
+        """戦略評価フェーズ: チームレベルの戦略モードを評価・更新する (Phase 4-2 / 4-3).
 
         STRATEGY_UPDATE_INTERVAL ステップごとに各チームの TeamStrategyController を
         呼び出してメトリクスを評価し、戦略変更が発生した場合はユニットの strategy_mode
         を一括更新して STRATEGY_CHANGED ログを記録する。
+        撤退ポイント未設定時に RETREAT → DEFENSIVE フォールバックを適用する (T10)。
         """
         # 全チームのメトリクスを収集
         team_ids = list(self._strategy_controllers.keys())
@@ -452,6 +454,12 @@ class BattleSimulator:
             metrics = team_metrics_map[team_id]
             previous_strategy = controller.current_strategy
             new_strategy = controller.evaluate(metrics)
+            matched_rule_id = controller._last_matched_rule_id
+
+            # T10 フォールバック: RETREAT への遷移かつ撤退ポイント未設定 → DEFENSIVE に切替
+            if new_strategy == "RETREAT" and len(self.retreat_points) == 0:
+                new_strategy = "DEFENSIVE"
+                matched_rule_id = "T10"
 
             if new_strategy is None or new_strategy == previous_strategy:
                 continue
@@ -488,6 +496,8 @@ class BattleSimulator:
                     strategy_mode=new_strategy,
                     details={
                         "previous_strategy": previous_strategy,
+                        "new_strategy": new_strategy,
+                        "rule_id": matched_rule_id,
                         "trigger_metrics": trigger_metrics,
                     },
                 )
