@@ -77,3 +77,6 @@ MAP_BOUNDS: tuple[float, float] = (0.0, 5000.0)  # XZ方向のマップ範囲 (m
 
 # 撤退ポイント引力係数 (Phase 3-3)
 RETREAT_ATTRACTION_COEFF: float = 5.0  # 撤退ポイントへの強引力係数
+
+# 戦略評価インターバル (Phase 4-2)
+STRATEGY_UPDATE_INTERVAL: int = 10  # 何ステップごとに戦略評価を行うか
