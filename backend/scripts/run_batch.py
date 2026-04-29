@@ -32,6 +32,17 @@ from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
 
+# Cloud Run Jobs 並列実行対応スタブ（将来の並列化に備えた環境変数読み取り）
+_CLOUD_RUN_TASK_INDEX = int(os.environ.get("CLOUD_RUN_TASK_INDEX", 0))
+_CLOUD_RUN_TASK_COUNT = int(os.environ.get("CLOUD_RUN_TASK_COUNT", 1))
+
+
+def _check_env() -> None:
+    """必須環境変数の存在を確認する."""
+    if not os.environ.get("NEON_DATABASE_URL"):
+        print("ERROR: 環境変数 NEON_DATABASE_URL が設定されていません。")
+        sys.exit(1)
+
 
 def run_matching_phase(session: Session) -> list[BattleRoom]:
     """マッチングフェーズ: エントリーをルームに割り当てる.
@@ -418,6 +429,8 @@ def main() -> None:
     """メイン処理."""
     print("\n" + "=" * 60)
     print("定期実行バッチを開始")
+    if _CLOUD_RUN_TASK_COUNT > 1:
+        print(f"タスクインデックス: {_CLOUD_RUN_TASK_INDEX} / {_CLOUD_RUN_TASK_COUNT}")
     print("=" * 60 + "\n")
 
     with Session(engine) as session:
@@ -439,6 +452,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    _check_env()
     try:
         main()
     except Exception as e:

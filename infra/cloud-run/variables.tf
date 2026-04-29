@@ -86,3 +86,24 @@ variable "allowed_origins" {
   type        = string
   default     = ""
 }
+
+# ==========================================
+# Cloud Run Jobs（バッチ）設定
+# ==========================================
+variable "batch_image_tag" {
+  description = "バッチ Docker イメージタグ"
+  type        = string
+  default     = "latest"
+}
+
+variable "batch_cpu_limit" {
+  description = "バッチジョブの CPU 上限"
+  type        = string
+  default     = "2"
+}
+
+variable "batch_memory_limit" {
+  description = "バッチジョブのメモリ上限"
+  type        = string
+  default     = "2Gi"
+}
