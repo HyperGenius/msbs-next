@@ -314,11 +314,11 @@ class TestSimReport:
         from sim_report import ReportGenerator
 
         logs = [
-            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "aaa", "timestamp": 1.0, "message": "攻撃"},
-            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "aaa", "timestamp": 2.0, "message": "攻撃"},
-            {"action_type": "MOVE", "actor_id": "aaa", "timestamp": 3.0, "message": "移動"},
-            {"action_type": "USE_SKILL", "actor_id": "aaa", "timestamp": 4.0, "message": "スキル使用"},
-            {"action_type": "DAMAGE", "actor_id": "bbb", "timestamp": 5.0, "message": "ダメージ"},
+            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 1.0, "message": "攻撃"},
+            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 2.0, "message": "攻撃"},
+            {"action_type": "MOVE", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 3.0, "message": "移動"},
+            {"action_type": "USE_SKILL", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 4.0, "message": "スキル使用"},
+            {"action_type": "DAMAGE", "actor_id": "00000000-0000-0000-0000-000000000002", "timestamp": 5.0, "message": "ダメージ"},
         ]
         data = _make_sim_result_json(win_loss="WIN", action_logs=logs)
 
@@ -406,11 +406,11 @@ class TestSimReport:
         from sim_report import ReportGenerator
 
         logs1 = [
-            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "aaa", "timestamp": 1.0, "message": "攻撃"},
+            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 1.0, "message": "攻撃"},
         ]
         logs2 = [
-            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "bbb", "timestamp": 1.0, "message": "攻撃"},
-            {"action_type": "MOVE", "actor_id": "bbb", "timestamp": 2.0, "message": "移動"},
+            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "00000000-0000-0000-0000-000000000002", "timestamp": 1.0, "message": "攻撃"},
+            {"action_type": "MOVE", "actor_id": "00000000-0000-0000-0000-000000000002", "timestamp": 2.0, "message": "移動"},
         ]
 
         with tempfile.TemporaryDirectory() as tmpdir:
