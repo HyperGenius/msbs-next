@@ -1,13 +1,10 @@
 """Tests for TeamStrategyController and TeamMetrics (Phase 4-2)."""
 
-import uuid
-
 import pytest
 
 from app.engine.simulation import BattleSimulator
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
 from app.models.models import MobileSuit, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # Helper factories
@@ -202,9 +199,7 @@ def test_strategy_phase_logs_strategy_changed() -> None:
 
     sim._strategy_phase()
 
-    strategy_logs = [
-        log for log in sim.logs if log.action_type == "STRATEGY_CHANGED"
-    ]
+    strategy_logs = [log for log in sim.logs if log.action_type == "STRATEGY_CHANGED"]
     assert len(strategy_logs) >= 1
 
     log = strategy_logs[0]
@@ -228,7 +223,5 @@ def test_strategy_phase_no_change_no_log() -> None:
     sim = BattleSimulator(player, [enemy], strategy_update_interval=1)
     sim._strategy_phase()
 
-    strategy_logs = [
-        log for log in sim.logs if log.action_type == "STRATEGY_CHANGED"
-    ]
+    strategy_logs = [log for log in sim.logs if log.action_type == "STRATEGY_CHANGED"]
     assert len(strategy_logs) == 0

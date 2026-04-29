@@ -160,9 +160,7 @@ class BattleSimulator:
         )
 
         # チームレベル戦略コントローラ (Phase 4-2)
-        team_ids = {
-            unit.team_id for unit in self.units if unit.team_id is not None
-        }
+        team_ids = {unit.team_id for unit in self.units if unit.team_id is not None}
         self._strategy_controllers: dict[str, TeamStrategyController] = {
             team_id: TeamStrategyController(
                 team_id=team_id,

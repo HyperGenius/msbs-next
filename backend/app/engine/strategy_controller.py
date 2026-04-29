@@ -1,5 +1,6 @@
 # backend/app/engine/strategy_controller.py
 """チームレベルの戦略モード管理コンポーネント (Phase 4-2)."""
+
 from dataclasses import dataclass
 
 
