@@ -1,0 +1,69 @@
+# infra/environments/prod/variables.tf
+variable "project_id" {
+  type = string
+}
+
+variable "region" {
+  type    = string
+  default = "asia-northeast1"
+}
+
+variable "environment" {
+  type    = string
+  default = "prod"
+}
+
+variable "service_name" {
+  type    = string
+  default = "msbs-next-api"
+}
+
+variable "image_tag" {
+  type    = string
+  default = "latest"
+}
+
+# リソース設定
+variable "container_concurrency" {
+  type    = number
+  default = 80
+}
+
+variable "min_instances" {
+  type    = number
+  default = 0
+}
+
+variable "max_instances" {
+  type    = number
+  default = 10
+}
+
+variable "cpu_limit" {
+  type    = string
+  default = "1"
+}
+
+variable "memory_limit" {
+  type    = string
+  default = "512Mi"
+}
+
+# アプリケーション設定
+variable "database_url" {
+  type      = string
+  sensitive = true
+}
+
+variable "clerk_secret_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "clerk_jwks_url" {
+  type = string
+}
+
+variable "allowed_origins" {
+  type    = list(string)
+}
