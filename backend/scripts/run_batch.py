@@ -23,8 +23,8 @@ if not _NEON_DATABASE_URL:
     sys.exit(1)
 
 # Cloud Run Jobs 並列実行対応スタブ（将来の並列化に備えた環境変数読み取り）
-CLOUD_RUN_TASK_INDEX = int(os.environ.get("CLOUD_RUN_TASK_INDEX", 0))
-CLOUD_RUN_TASK_COUNT = int(os.environ.get("CLOUD_RUN_TASK_COUNT", 1))
+_CLOUD_RUN_TASK_INDEX = int(os.environ.get("CLOUD_RUN_TASK_INDEX", 0))
+_CLOUD_RUN_TASK_COUNT = int(os.environ.get("CLOUD_RUN_TASK_COUNT", 1))
 
 from sqlmodel import Session, select
 
@@ -428,8 +428,8 @@ def main() -> None:
     """メイン処理."""
     print("\n" + "=" * 60)
     print("定期実行バッチを開始")
-    if CLOUD_RUN_TASK_COUNT > 1:
-        print(f"タスクインデックス: {CLOUD_RUN_TASK_INDEX} / {CLOUD_RUN_TASK_COUNT}")
+    if _CLOUD_RUN_TASK_COUNT > 1:
+        print(f"タスクインデックス: {_CLOUD_RUN_TASK_INDEX} / {_CLOUD_RUN_TASK_COUNT}")
     print("=" * 60 + "\n")
 
     with Session(engine) as session:

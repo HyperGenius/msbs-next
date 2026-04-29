@@ -294,7 +294,7 @@ GitHub Actions での自動デプロイ例:
 PROJECT_ID=<YOUR_PROJECT_ID>
 REPO=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next
 
-# Apple Silicon (M1/M2/M3) Mac の場合
+# --platform linux/amd64 は Cloud Run の動作環境（AMD64）に合わせるために推奨
 docker build --platform linux/amd64 \
   -f backend/Dockerfile.batch \
   -t ${REPO}/msbs-next-batch:latest \
