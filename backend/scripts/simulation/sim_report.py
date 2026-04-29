@@ -3,7 +3,7 @@
 """report サブコマンドの実処理: シミュレーション結果JSONからレポートを生成する.
 
 Usage (経由: run_simulation.py):
-    python scripts/run_simulation.py report --input data/sim_results/result_*.json
+    python scripts/simulation/run_simulation.py report --input data/sim_results/result_*.json
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 # パスを通す
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 @dataclass

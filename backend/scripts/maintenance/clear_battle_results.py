@@ -6,9 +6,9 @@
 `battle_results` テーブルのデータを削除するために使用します。
 
 Usage:
-    python scripts/clear_battle_results.py
-    python scripts/clear_battle_results.py --dry-run
-    python scripts/clear_battle_results.py --user-id user_xxxx
+    python scripts/maintenance/clear_battle_results.py
+    python scripts/maintenance/clear_battle_results.py --dry-run
+    python scripts/maintenance/clear_battle_results.py --user-id user_xxxx
 """
 
 import argparse
@@ -16,7 +16,7 @@ import os
 import sys
 
 # パスを通す
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from sqlmodel import Session, delete, func, select
 
@@ -31,10 +31,10 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用例:
-  python scripts/clear_battle_results.py              # 全件削除（確認プロンプトあり）
-  python scripts/clear_battle_results.py --dry-run    # 削除件数を確認するだけ（実際には削除しない）
-  python scripts/clear_battle_results.py --user-id user_xxxx   # 特定ユーザーの結果のみ削除
-  python scripts/clear_battle_results.py --yes        # 確認プロンプトをスキップ
+  python scripts/maintenance/clear_battle_results.py              # 全件削除（確認プロンプトあり）
+  python scripts/maintenance/clear_battle_results.py --dry-run    # 削除件数を確認するだけ（実際には削除しない）
+  python scripts/maintenance/clear_battle_results.py --user-id user_xxxx   # 特定ユーザーの結果のみ削除
+  python scripts/maintenance/clear_battle_results.py --yes        # 確認プロンプトをスキップ
         """,
     )
     parser.add_argument(

@@ -3,7 +3,7 @@
 r"""compare サブコマンドの実処理: 2つの戦略モードを対戦させて比較する.
 
 Usage (経由: run_simulation.py):
-    python scripts/run_simulation.py compare \
+    python scripts/simulation/run_simulation.py compare \
         --mission-id 1 --strategy-a AGGRESSIVE --strategy-b DEFENSIVE --rounds 20
 """
 
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # パスを通す
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from app.engine.constants import BALANCE_WARN_WIN_RATE
 from app.engine.simulation import BattleSimulator
@@ -231,7 +231,7 @@ class CompareRunner:
 
             player_base = MobileSuit.model_validate(player_results[0].model_dump())
 
-            from scripts.run_simulation import _build_enemies_from_config
+            from scripts.simulation.run_simulation import _build_enemies_from_config
 
             enemy_configs = mission.enemy_config.get("enemies", [])
             enemies_base = _build_enemies_from_config(enemy_configs)
