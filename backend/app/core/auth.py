@@ -6,7 +6,7 @@ import os
 import httpx
 import jwt
 from dotenv import load_dotenv
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 load_dotenv()
@@ -160,3 +160,28 @@ async def get_current_user_optional(
         return payload.get("sub")
     except HTTPException:
         return None
+
+
+def verify_admin_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> None:
+    """管理者APIキーを検証する依存関数.
+
+    リクエストヘッダーの ``X-API-Key`` を環境変数 ``ADMIN_API_KEY`` と照合する。
+    一致しない場合は 401 を返す。
+
+    Args:
+        x_api_key: リクエストヘッダーから取得した API キー
+
+    Raises:
+        HTTPException: 認証に失敗した場合
+    """
+    expected = os.environ.get("ADMIN_API_KEY", "")
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="ADMIN_API_KEY is not configured",
+        )
+    if x_api_key != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing admin API key",
+        )

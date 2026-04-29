@@ -471,3 +471,54 @@ export interface TeamEntryResponse {
     entry_ids: string[];
     room_id: string;
 }
+
+// =============================================================
+// マスター機体データ管理（管理者専用）
+// =============================================================
+
+/**
+ * マスター機体スペック（管理者用）
+ */
+export interface MasterMobileSuitSpec {
+    max_hp: number;
+    armor: number;
+    mobility: number;
+    sensor_range: number;
+    beam_resistance: number;
+    physical_resistance: number;
+    melee_aptitude: number;
+    shooting_aptitude: number;
+    accuracy_bonus: number;
+    evasion_bonus: number;
+    acceleration_bonus: number;
+    turning_bonus: number;
+    weapons: Weapon[];
+}
+
+/**
+ * マスター機体エントリー（管理者用）
+ */
+export interface MasterMobileSuit {
+    id: string;
+    name: string;
+    price: number;
+    faction: string;
+    description: string;
+    specs: MasterMobileSuitSpec;
+}
+
+/**
+ * マスター機体新規追加リクエスト
+ */
+export type MasterMobileSuitCreate = MasterMobileSuit;
+
+/**
+ * マスター機体更新リクエスト
+ */
+export interface MasterMobileSuitUpdate {
+    name?: string;
+    price?: number;
+    faction?: string;
+    description?: string;
+    specs?: MasterMobileSuitSpec;
+}

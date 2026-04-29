@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -8,8 +9,22 @@ const isPublicRoute = createRouteMatcher([
   '/onboarding(.*)',
 ])
 
+const isAdminRoute = createRouteMatcher(['/admin(.*)'])
+
 export default clerkMiddleware(async (auth, req) => {
   if (!isPublicRoute(req)) await auth.protect()
+
+  // 管理者専用ルートのチェック
+  if (isAdminRoute(req)) {
+    const { sessionClaims } = await auth()
+    const role = (sessionClaims?.publicMetadata as { role?: string } | undefined)?.role
+    if (role !== 'admin') {
+      // 管理者でない場合はトップページへリダイレクト
+      const url = req.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+  }
 })
 
 export const config = {
