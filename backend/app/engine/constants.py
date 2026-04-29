@@ -86,6 +86,11 @@ RETREAT_ATTRACTION_COEFF: float = 5.0  # 撤退ポイントへの強引力係数
 # 戦略評価インターバル (Phase 4-2)
 STRATEGY_UPDATE_INTERVAL: int = 10  # 何ステップごとに戦略評価を行うか
 
+# バランス調整CLIツール 警告しきい値 (Phase 5-3) — チューニング可能
+BALANCE_WARN_DRAW_RATE: float = 0.20  # 引き分け率がこれを超えると警告
+BALANCE_WARN_WIN_RATE: float = 0.80  # 勝率がこれを超えると警告（一方的優位）
+BALANCE_WARN_AVG_DURATION: float = 200.0  # 平均戦闘時間（秒）がこれを超えると警告
+
 # 戦略遷移しきい値定数 (Phase 4-3) — ゲームバランス調整用
 # AGGRESSIVE → RETREAT (T01)
 AGGRESSIVE_RETREAT_HP_THRESHOLD: float = 0.30
