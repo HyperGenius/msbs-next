@@ -3,7 +3,7 @@
 """bench サブコマンドの実処理: 複数回シミュレーションを実行してサマリーを集計する.
 
 Usage (経由: run_simulation.py):
-    python scripts/run_simulation.py bench --mission-id 1 --rounds 10
+    python scripts/simulation/run_simulation.py bench --mission-id 1 --rounds 10
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 # パスを通す
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from app.engine.constants import (
     BALANCE_WARN_AVG_DURATION,

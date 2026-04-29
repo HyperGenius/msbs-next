@@ -5,7 +5,7 @@ import os
 import sys
 
 # パスを通す
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon

@@ -35,7 +35,7 @@ from datetime import datetime
 from pathlib import Path
 
 # パスを通す
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from sqlmodel import Session, select
 

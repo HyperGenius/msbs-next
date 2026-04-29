@@ -6,7 +6,7 @@ import os
 import sys
 
 # Add the backend directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # Set a dummy database URL to avoid import errors
 os.environ.setdefault("NEON_DATABASE_URL", "postgresql://dummy:dummy@dummy/dummy")
