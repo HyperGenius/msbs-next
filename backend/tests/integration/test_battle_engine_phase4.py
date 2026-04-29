@@ -8,12 +8,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from app.engine.simulation import BattleSimulator
-from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
+from app.engine.strategy_controller import TeamMetrics
 from app.models.models import MobileSuit, RetreatPoint, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # Helper factories
@@ -148,7 +145,12 @@ def test_all_strategy_modes_trigger_correct_ruleset() -> None:
         ),
     ]
 
-    for initial_strategy, metrics_kwargs, expected_new_strategy, expected_rule_id in test_cases:
+    for (
+        initial_strategy,
+        metrics_kwargs,
+        expected_new_strategy,
+        expected_rule_id,
+    ) in test_cases:
         sim = BattleSimulator(
             player, [enemy], retreat_points=[retreat_point], strategy_update_interval=1
         )
@@ -194,13 +196,25 @@ def test_three_team_battle_with_dynamic_strategy() -> None:
     """3チーム乱戦でそれぞれ独立した戦略評価が動作すること."""
     # 3チーム構成: TEAM_P, TEAM_A, TEAM_B
     player = _make_unit(
-        "Player", "TEAM_P", hp=100, position=Vector3(x=0, y=0, z=0), strategy_mode="AGGRESSIVE"
+        "Player",
+        "TEAM_P",
+        hp=100,
+        position=Vector3(x=0, y=0, z=0),
+        strategy_mode="AGGRESSIVE",
     )
     enemy_a = _make_unit(
-        "EnemyA", "TEAM_A", hp=100, position=Vector3(x=2000, y=0, z=0), strategy_mode="AGGRESSIVE"
+        "EnemyA",
+        "TEAM_A",
+        hp=100,
+        position=Vector3(x=2000, y=0, z=0),
+        strategy_mode="AGGRESSIVE",
     )
     enemy_b = _make_unit(
-        "EnemyB", "TEAM_B", hp=100, position=Vector3(x=4000, y=0, z=0), strategy_mode="DEFENSIVE"
+        "EnemyB",
+        "TEAM_B",
+        hp=100,
+        position=Vector3(x=4000, y=0, z=0),
+        strategy_mode="DEFENSIVE",
     )
 
     retreat_point = RetreatPoint(position=Vector3(x=100, y=0, z=100), radius=200.0)

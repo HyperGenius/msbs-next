@@ -4,7 +4,6 @@ import pytest
 
 from app.engine.simulation import BattleSimulator
 from app.engine.strategy_controller import (
-    STRATEGY_TRANSITION_RULES,
     TeamMetrics,
     TeamStrategyController,
 )
@@ -260,7 +259,7 @@ def _make_metrics(
     )
 
 
-def test_T01_aggressive_heavy_damage_retreats() -> None:
+def test_t01_aggressive_heavy_damage_retreats() -> None:
     """T01: AGGRESSIVE + avg_hp < 0.30 + alive_ratio < 0.50 → RETREAT."""
     ctrl = TeamStrategyController(team_id="TEAM_A", initial_strategy="AGGRESSIVE")
     metrics = _make_metrics(
@@ -273,7 +272,7 @@ def test_T01_aggressive_heavy_damage_retreats() -> None:
     assert ctrl._last_matched_rule_id == "T01"
 
 
-def test_T02_aggressive_disadvantage_defends() -> None:
+def test_t02_aggressive_disadvantage_defends() -> None:
     """T02: AGGRESSIVE + avg_hp < 0.50 + alive_ratio < 0.60 → DEFENSIVE."""
     ctrl = TeamStrategyController(team_id="TEAM_A", initial_strategy="AGGRESSIVE")
     metrics = _make_metrics(
@@ -286,7 +285,7 @@ def test_T02_aggressive_disadvantage_defends() -> None:
     assert ctrl._last_matched_rule_id == "T02"
 
 
-def test_T04_defensive_recovery_attacks() -> None:
+def test_t04_defensive_recovery_attacks() -> None:
     """T04: DEFENSIVE + avg_hp >= 0.65 + alive_ratio >= 0.70 → AGGRESSIVE."""
     ctrl = TeamStrategyController(team_id="TEAM_A", initial_strategy="DEFENSIVE")
     metrics = _make_metrics(
@@ -299,7 +298,7 @@ def test_T04_defensive_recovery_attacks() -> None:
     assert ctrl._last_matched_rule_id == "T04"
 
 
-def test_T07_assault_near_wipe_retreats() -> None:
+def test_t07_assault_near_wipe_retreats() -> None:
     """T07: ASSAULT + avg_hp < 0.35 + alive_ratio < 0.50 → RETREAT."""
     ctrl = TeamStrategyController(team_id="TEAM_A", initial_strategy="ASSAULT")
     metrics = _make_metrics(
@@ -329,7 +328,11 @@ def test_no_transition_when_conditions_not_met() -> None:
 def test_retreat_blocked_when_no_retreat_points() -> None:
     """撤退ポイントなし + evaluate()='RETREAT' → _strategy_phase() で 'DEFENSIVE' にフォールバック."""
     player = _make_unit(
-        "Player", "TEAM_P", hp=100, position=Vector3(x=0, y=0, z=0), strategy_mode="AGGRESSIVE"
+        "Player",
+        "TEAM_P",
+        hp=100,
+        position=Vector3(x=0, y=0, z=0),
+        strategy_mode="AGGRESSIVE",
     )
     player.current_hp = 20  # 重傷
     enemy = _make_unit("Enemy", "TEAM_E", hp=100, position=Vector3(x=3000, y=0, z=0))
@@ -385,13 +388,19 @@ def test_rule_priority_first_match_wins() -> None:
 def test_strategy_changed_log_contains_rule_id() -> None:
     """STRATEGY_CHANGED ログの details.rule_id にマッチしたルールIDが含まれること."""
     player = _make_unit(
-        "Player", "TEAM_P", hp=100, position=Vector3(x=0, y=0, z=0), strategy_mode="AGGRESSIVE"
+        "Player",
+        "TEAM_P",
+        hp=100,
+        position=Vector3(x=0, y=0, z=0),
+        strategy_mode="AGGRESSIVE",
     )
     enemy = _make_unit("Enemy", "TEAM_E", hp=100, position=Vector3(x=3000, y=0, z=0))
 
     # 撤退ポイントを設定して T01 → RETREAT が最終適用されるようにする
     retreat_point = RetreatPoint(position=Vector3(x=100, y=0, z=100), radius=200.0)
-    sim = BattleSimulator(player, [enemy], retreat_points=[retreat_point], strategy_update_interval=1)
+    sim = BattleSimulator(
+        player, [enemy], retreat_points=[retreat_point], strategy_update_interval=1
+    )
 
     controller = sim._strategy_controllers["TEAM_P"]
     controller.current_strategy = "AGGRESSIVE"
@@ -425,10 +434,18 @@ def test_full_simulation_strategy_changes() -> None:
     from unittest.mock import patch
 
     player = _make_unit(
-        "Player", "TEAM_P", hp=100, position=Vector3(x=0, y=0, z=0), strategy_mode="AGGRESSIVE"
+        "Player",
+        "TEAM_P",
+        hp=100,
+        position=Vector3(x=0, y=0, z=0),
+        strategy_mode="AGGRESSIVE",
     )
     enemy = _make_unit(
-        "Enemy", "TEAM_E", hp=100, position=Vector3(x=3000, y=0, z=0), strategy_mode="AGGRESSIVE"
+        "Enemy",
+        "TEAM_E",
+        hp=100,
+        position=Vector3(x=3000, y=0, z=0),
+        strategy_mode="AGGRESSIVE",
     )
 
     sim = BattleSimulator(player, [enemy], strategy_update_interval=1)
@@ -447,7 +464,7 @@ def test_full_simulation_strategy_changes() -> None:
 
     logged_transitions: list[str] = []
 
-    original_phase = sim._strategy_phase.__func__  # type: ignore[attr-defined]
+    _ = sim._strategy_phase.__func__
 
     # メトリクスを固定してステップを重ねる（戦略が変わった後は条件が更新される）
     with patch.object(sim, "_collect_team_metrics", return_value=mock_metrics):
@@ -465,4 +482,3 @@ def test_full_simulation_strategy_changes() -> None:
     for log in strategy_logs:
         assert log.details is not None
         assert "rule_id" in log.details
-

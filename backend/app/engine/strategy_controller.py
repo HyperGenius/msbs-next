@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable
 
 from app.engine.constants import (
     AGGRESSIVE_DEFENSIVE_ALIVE_THRESHOLD,
@@ -41,7 +41,9 @@ class TeamMetrics:
     min_hp_ratio: float  # ACTIVE ユニットの最低 HP 割合 (0.0〜1.0)
     current_strategy: str  # チームの現在の StrategyMode
     elapsed_time: float  # バトル経過時間 (s)
-    retreat_points_empty: bool = field(default=False)  # 撤退ポイント未設定フラグ (Phase 4-3)
+    retreat_points_empty: bool = field(
+        default=False
+    )  # 撤退ポイント未設定フラグ (Phase 4-3)
 
 
 @dataclass
@@ -174,7 +176,9 @@ class TeamStrategyController:
         self.current_strategy = initial_strategy
         self.update_interval = update_interval
         self._step_counter: int = 0
-        self._last_matched_rule_id: str | None = None  # 直近でマッチしたルールID (Phase 4-3)
+        self._last_matched_rule_id: str | None = (
+            None  # 直近でマッチしたルールID (Phase 4-3)
+        )
 
     def should_evaluate(self) -> bool:
         """このステップで戦略評価を行うべきか判定する.
@@ -203,7 +207,10 @@ class TeamStrategyController:
         self._last_matched_rule_id = None
         for rule in STRATEGY_TRANSITION_RULES:
             # from_strategy が None (any) または現在の戦略と一致する場合のみ評価
-            if rule.from_strategy is not None and rule.from_strategy != self.current_strategy:
+            if (
+                rule.from_strategy is not None
+                and rule.from_strategy != self.current_strategy
+            ):
                 continue
             if rule.condition(team_metrics):
                 if rule.to_strategy != self.current_strategy:
