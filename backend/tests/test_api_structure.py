@@ -102,7 +102,7 @@ def test_seed_script():
     """Test that seed script exists and is valid."""
     print("Testing seed script...")
     seed_path = os.path.join(
-        os.path.dirname(__file__), "..", "scripts", "seed_missions.py"
+        os.path.dirname(__file__), "..", "scripts", "seed", "seed_missions.py"
     )
 
     assert os.path.exists(seed_path), "Seed script not found"

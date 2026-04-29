@@ -12,6 +12,9 @@ from typing import Any
 import pytest
 
 # パスを通す（scripts/ と app/ の両方が使えるようにする）
+sys.path.insert(
+    0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "simulation")
+)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
