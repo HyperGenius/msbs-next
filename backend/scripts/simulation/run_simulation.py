@@ -445,15 +445,15 @@ if __name__ == "__main__":
             enable_hot_reload=args.hot_reload,
         )
     elif args.subcommand == "bench":
-        from scripts.sim_bench import run_bench_command
+        from scripts.simulation.sim_bench import run_bench_command
 
         run_bench_command(args)
     elif args.subcommand == "compare":
-        from scripts.sim_compare import run_compare_command
+        from scripts.simulation.sim_compare import run_compare_command
 
         run_compare_command(args)
     elif args.subcommand == "report":
-        from scripts.sim_report import run_report_command
+        from scripts.simulation.sim_report import run_report_command
 
         run_report_command(args)
     else:

@@ -231,7 +231,7 @@ class CompareRunner:
 
             player_base = MobileSuit.model_validate(player_results[0].model_dump())
 
-            from scripts.run_simulation import _build_enemies_from_config
+            from scripts.simulation.run_simulation import _build_enemies_from_config
 
             enemy_configs = mission.enemy_config.get("enemies", [])
             enemies_base = _build_enemies_from_config(enemy_configs)

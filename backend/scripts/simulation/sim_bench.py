@@ -269,7 +269,7 @@ class BenchRunner:
             player_base = MobileSuit.model_validate(player_raw.model_dump())
 
             # ミッション設定から敵ユニットを構築
-            from scripts.run_simulation import _build_enemies_from_config
+            from scripts.simulation.run_simulation import _build_enemies_from_config
 
             enemy_configs = mission.enemy_config.get("enemies", [])
             enemies_base = _build_enemies_from_config(enemy_configs)
