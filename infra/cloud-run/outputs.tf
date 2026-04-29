@@ -17,3 +17,8 @@ output "service_account_email" {
   description = "Service account email for Cloud Run"
   value       = google_service_account.cloud_run.email
 }
+
+output "batch_job_name" {
+  description = "Cloud Run Jobs のジョブ名（バッチ実行用）"
+  value       = google_cloud_run_v2_job.msbs_batch.name
+}

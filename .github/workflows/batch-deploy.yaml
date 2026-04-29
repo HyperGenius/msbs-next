@@ -1,0 +1,97 @@
+# .github/workflows/batch-deploy.yaml
+name: Batch Image Build and Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker イメージタグ（デフォルト: github.sha）"
+        type: string
+        required: false
+        default: ""
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/batch-deploy.yaml'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write  # Workload Identity Federation に必要
+
+    outputs:
+      image_tag: ${{ steps.tag.outputs.value }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ github.sha }}"
+          fi
+          echo "value=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: 'github-actions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Build and Push Batch Docker Image
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            -f backend/Dockerfile.batch \
+            -t asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-batch:${{ steps.tag.outputs.value }} \
+            -t asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-batch:latest \
+            backend/
+          docker push asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-batch:${{ steps.tag.outputs.value }}
+          docker push asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-batch:latest
+
+  update-job:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: 'github-actions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Deploy Cloud Run Job via Terraform
+        run: |
+          cd infra/cloud-run
+          terraform init -backend-config="bucket=${{ secrets.GCP_TF_STATE_BUCKET }}"
+          terraform apply -auto-approve \
+            -var="batch_image_tag=${{ needs.build-and-push.outputs.image_tag }}" \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="database_url=${{ secrets.NEON_DATABASE_URL }}" \
+            -var="clerk_secret_key=${{ secrets.CLERK_SECRET_KEY }}" \
+            -var="clerk_jwks_url=${{ secrets.CLERK_JWKS_URL }}" \
+            -var="allowed_origins=${{ secrets.ALLOWED_ORIGINS }}"

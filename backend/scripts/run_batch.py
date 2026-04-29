@@ -16,6 +16,16 @@ from datetime import UTC, datetime, timedelta
 # パスを通す
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
+# Cloud Run Jobs 環境変数チェック
+_NEON_DATABASE_URL = os.environ.get("NEON_DATABASE_URL")
+if not _NEON_DATABASE_URL:
+    print("ERROR: 環境変数 NEON_DATABASE_URL が設定されていません。")
+    sys.exit(1)
+
+# Cloud Run Jobs 並列実行対応スタブ（将来の並列化に備えた環境変数読み取り）
+CLOUD_RUN_TASK_INDEX = int(os.environ.get("CLOUD_RUN_TASK_INDEX", 0))
+CLOUD_RUN_TASK_COUNT = int(os.environ.get("CLOUD_RUN_TASK_COUNT", 1))
+
 from sqlmodel import Session, select
 
 from app.db import engine
@@ -418,6 +428,8 @@ def main() -> None:
     """メイン処理."""
     print("\n" + "=" * 60)
     print("定期実行バッチを開始")
+    if CLOUD_RUN_TASK_COUNT > 1:
+        print(f"タスクインデックス: {CLOUD_RUN_TASK_INDEX} / {CLOUD_RUN_TASK_COUNT}")
     print("=" * 60 + "\n")
 
     with Session(engine) as session:

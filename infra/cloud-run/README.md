@@ -283,3 +283,79 @@ GitHub Actions での自動デプロイ例:
 - [Artifact Registry Documentation](https://cloud.google.com/artifact-registry/docs)
 - [Secret Manager Documentation](https://cloud.google.com/secret-manager/docs)
 - [Terraform Google Provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
+
+## バッチジョブ（Cloud Run Jobs）の運用手順
+
+`msbs-next-batch` Cloud Run Job はバトルシミュレーションの定期実行に使用します。
+
+### バッチ専用イメージのビルド・プッシュ
+
+```bash
+PROJECT_ID=<YOUR_PROJECT_ID>
+REPO=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next
+
+# Apple Silicon (M1/M2/M3) Mac の場合
+docker build --platform linux/amd64 \
+  -f backend/Dockerfile.batch \
+  -t ${REPO}/msbs-next-batch:latest \
+  backend/
+
+# イメージをプッシュ
+docker push ${REPO}/msbs-next-batch:latest
+```
+
+### Cloud Run Job の手動実行
+
+```bash
+# ジョブを同期実行（完了まで待機）
+gcloud run jobs execute msbs-next-batch \
+  --region=asia-northeast1 \
+  --wait \
+  --project=<YOUR_PROJECT_ID>
+```
+
+### 実行ログの確認
+
+```bash
+# Cloud Logging でバッチジョブのログを確認
+gcloud logging read "resource.type=cloud_run_job" \
+  --limit=50 \
+  --format=json \
+  --project=<YOUR_PROJECT_ID>
+```
+
+### Terraform でバッチジョブをデプロイ
+
+```bash
+cd infra/cloud-run
+
+terraform apply \
+  -var="batch_image_tag=<IMAGE_TAG>" \
+  -var="project_id=<YOUR_PROJECT_ID>" \
+  -var="database_url=<NEON_DATABASE_URL>" \
+  -var="clerk_secret_key=<CLERK_SECRET_KEY>" \
+  -var="clerk_jwks_url=<CLERK_JWKS_URL>"
+```
+
+### ジョブ名の確認
+
+```bash
+terraform output batch_job_name
+```
+
+### 将来の並列実行（タスク並列）
+
+Cloud Run Jobs の `taskCount` / `parallelism` を使用して複数バトルを並列実行できます:
+
+```bash
+gcloud run jobs execute msbs-next-batch \
+  --region=asia-northeast1 \
+  --tasks=4 \
+  --parallelism=4 \
+  --wait \
+  --project=<YOUR_PROJECT_ID>
+```
+
+各タスクは `CLOUD_RUN_TASK_INDEX` 環境変数（0始まり）を受け取ります。
+`run_batch.py` はこの変数を読み取る準備ができています。
+

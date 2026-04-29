@@ -9,37 +9,32 @@ on:
     - cron: '0 12 * * *'
 
 jobs:
-  run-batch:
+  run-batch-job:
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: read
-    
+      id-token: write  # Workload Identity Federation に必要
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: 'github-actions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Execute Cloud Run Job
         run: |
-          cd backend
-          pip install -r requirements.txt
-      
-      - name: Run batch script
-        env:
-          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-          CLERK_JWKS_URL: ${{ secrets.CLERK_JWKS_URL }}
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-        run: |
-          cd backend
-          python scripts/run_batch.py
-      
+          gcloud run jobs execute msbs-next-batch \
+            --region=asia-northeast1 \
+            --wait \
+            --project=${{ secrets.GCP_PROJECT_ID }}
+
       - name: Notify on failure
         if: failure()
         run: |
-          echo "Batch job failed. Please check the logs."
-          # ここに通知処理を追加可能（Slack, Discord, Email等）
+          echo "Cloud Run Batch Job failed. Check logs with:"
+          echo "  gcloud logging read \"resource.type=cloud_run_job\" --limit=50 --project=${{ secrets.GCP_PROJECT_ID }}"
