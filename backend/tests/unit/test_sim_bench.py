@@ -1,14 +1,13 @@
 """Tests for sim_bench, sim_compare, and sim_report modules (Phase 5-3)."""
+
 from __future__ import annotations
 
 import json
-import sys
 import os
+import sys
 import tempfile
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -17,7 +16,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from app.models.models import MobileSuit, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # Helper: テスト用ユニットファクトリ
@@ -85,8 +83,10 @@ def _make_mission(mission_id: int = 1) -> SimpleNamespace:
 
 
 class TestSimBench:
+    """sim_bench のベンチ機能のテスト."""
+
     def test_bench_summary_structure(self) -> None:
-        """bench 実行結果に win_counts / avg_duration / action_distribution キーが含まれること."""
+        """Bench 実行結果に win_counts / avg_duration / action_distribution キーが含まれること."""
         from sim_bench import BenchRunner
 
         player = _make_player()
@@ -105,7 +105,9 @@ class TestSimBench:
         # 必須キーの存在確認
         assert hasattr(summary, "win_counts"), "win_counts が存在すること"
         assert hasattr(summary, "durations"), "durations が存在すること"
-        assert hasattr(summary, "action_distribution"), "action_distribution が存在すること"
+        assert hasattr(summary, "action_distribution"), (
+            "action_distribution が存在すること"
+        )
 
         # win_counts の形式確認
         assert isinstance(summary.win_counts, dict)
@@ -130,6 +132,7 @@ class TestSimBench:
     def test_bench_draw_rate_warning(self) -> None:
         """引き分け率 > 20% のとき警告フラグが True になること."""
         from sim_bench import BenchRunner, SimulationSummary
+
         from app.engine.constants import BALANCE_WARN_DRAW_RATE
 
         # 大部分が引き分けとなるサマリーを手動で構築して警告計算を検証
@@ -158,7 +161,6 @@ class TestSimBench:
     def test_bench_win_rate_warning(self) -> None:
         """勝率 > 80% のとき不均衡警告フラグが True になること."""
         from sim_bench import BenchRunner, SimulationSummary
-        from app.engine.constants import BALANCE_WARN_WIN_RATE
 
         runner = BenchRunner(max_steps=100)
         summary = SimulationSummary(
@@ -206,8 +208,10 @@ class TestSimBench:
 
 
 class TestSimCompare:
+    """sim_compare の比較機能のテスト."""
+
     def test_compare_outputs_both_strategies(self) -> None:
-        """compare 結果に strategy_a / strategy_b の統計が含まれること."""
+        """Compare 結果に strategy_a / strategy_b の統計が含まれること."""
         from sim_compare import CompareRunner
 
         player = _make_player()
@@ -245,9 +249,7 @@ class TestSimCompare:
 
         # 勝利 + 引き分けの合計が rounds と一致すること
         total = (
-            summary.stats_a.win_count
-            + summary.stats_b.win_count
-            + summary.draw_count
+            summary.stats_a.win_count + summary.stats_b.win_count + summary.draw_count
         )
         assert total == 3, f"勝利 + 引き分けの合計={total} が rounds=3 と一致すること"
 
@@ -309,16 +311,45 @@ def _make_sim_result_json(
 
 
 class TestSimReport:
+    """sim_report のレポート機能のテスト."""
+
     def test_report_parses_action_logs(self) -> None:
         """既存のログ JSON から行動分布が正しく集計されること."""
         from sim_report import ReportGenerator
 
         logs = [
-            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 1.0, "message": "攻撃"},
-            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 2.0, "message": "攻撃"},
-            {"action_type": "MOVE", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 3.0, "message": "移動"},
-            {"action_type": "USE_SKILL", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 4.0, "message": "スキル使用"},
-            {"action_type": "DAMAGE", "actor_id": "00000000-0000-0000-0000-000000000002", "timestamp": 5.0, "message": "ダメージ"},
+            {
+                "action_type": "ATTACK",
+                "weapon_name": "Beam Rifle",
+                "actor_id": "00000000-0000-0000-0000-000000000001",
+                "timestamp": 1.0,
+                "message": "攻撃",
+            },
+            {
+                "action_type": "ATTACK",
+                "weapon_name": "Beam Rifle",
+                "actor_id": "00000000-0000-0000-0000-000000000001",
+                "timestamp": 2.0,
+                "message": "攻撃",
+            },
+            {
+                "action_type": "MOVE",
+                "actor_id": "00000000-0000-0000-0000-000000000001",
+                "timestamp": 3.0,
+                "message": "移動",
+            },
+            {
+                "action_type": "USE_SKILL",
+                "actor_id": "00000000-0000-0000-0000-000000000001",
+                "timestamp": 4.0,
+                "message": "スキル使用",
+            },
+            {
+                "action_type": "DAMAGE",
+                "actor_id": "00000000-0000-0000-0000-000000000002",
+                "timestamp": 5.0,
+                "message": "ダメージ",
+            },
         ]
         data = _make_sim_result_json(win_loss="WIN", action_logs=logs)
 
@@ -384,7 +415,9 @@ class TestSimReport:
                 },
             },
         ]
-        data = _make_sim_result_json(win_loss="LOSE", strategy_changed_logs=strategy_logs)
+        data = _make_sim_result_json(
+            win_loss="LOSE", strategy_changed_logs=strategy_logs
+        )
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False, encoding="utf-8"
@@ -406,11 +439,28 @@ class TestSimReport:
         from sim_report import ReportGenerator
 
         logs1 = [
-            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "00000000-0000-0000-0000-000000000001", "timestamp": 1.0, "message": "攻撃"},
+            {
+                "action_type": "ATTACK",
+                "weapon_name": "Beam Rifle",
+                "actor_id": "00000000-0000-0000-0000-000000000001",
+                "timestamp": 1.0,
+                "message": "攻撃",
+            },
         ]
         logs2 = [
-            {"action_type": "ATTACK", "weapon_name": "Beam Rifle", "actor_id": "00000000-0000-0000-0000-000000000002", "timestamp": 1.0, "message": "攻撃"},
-            {"action_type": "MOVE", "actor_id": "00000000-0000-0000-0000-000000000002", "timestamp": 2.0, "message": "移動"},
+            {
+                "action_type": "ATTACK",
+                "weapon_name": "Beam Rifle",
+                "actor_id": "00000000-0000-0000-0000-000000000002",
+                "timestamp": 1.0,
+                "message": "攻撃",
+            },
+            {
+                "action_type": "MOVE",
+                "actor_id": "00000000-0000-0000-0000-000000000002",
+                "timestamp": 2.0,
+                "message": "移動",
+            },
         ]
 
         with tempfile.TemporaryDirectory() as tmpdir:

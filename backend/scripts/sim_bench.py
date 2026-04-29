@@ -8,7 +8,6 @@ Usage (経由: run_simulation.py):
 
 from __future__ import annotations
 
-import copy
 import json
 import os
 import sys
@@ -26,7 +25,15 @@ from app.engine.constants import (
 from app.engine.simulation import BattleSimulator
 
 # 集計対象のアクションタイプ（チームイベントを除く）
-_UNIT_ACTION_TYPES = {"ATTACK", "MOVE", "USE_SKILL", "RETREAT", "MISS", "DAMAGE", "DESTROYED"}
+_UNIT_ACTION_TYPES = {
+    "ATTACK",
+    "MOVE",
+    "USE_SKILL",
+    "RETREAT",
+    "MISS",
+    "DAMAGE",
+    "DESTROYED",
+}
 
 
 @dataclass
@@ -50,7 +57,9 @@ class SimulationSummary:
     mission_id: int
     strategy: str
     rounds: int
-    win_counts: dict[str, int] = field(default_factory=dict)  # {team_id: count, "DRAW": count}
+    win_counts: dict[str, int] = field(
+        default_factory=dict
+    )  # {team_id: count, "DRAW": count}
     durations: list[float] = field(default_factory=list)
     action_distribution: dict[str, int] = field(default_factory=dict)
     strategy_transition_counts: dict[str, int] = field(default_factory=dict)
@@ -60,46 +69,79 @@ class SimulationSummary:
 
     @property
     def total_rounds(self) -> int:
+        """実際に集計されたラウンド数（win_countsの合計）を返す."""
         return self.rounds
 
     @property
     def draw_count(self) -> int:
+        """引き分けの回数を返す."""
         return self.win_counts.get("DRAW", 0)
 
     @property
     def draw_rate(self) -> float:
+        """引き分け率を返す."""
         if self.rounds == 0:
             return 0.0
         return self.draw_count / self.rounds
 
     @property
     def avg_duration(self) -> float:
+        """平均戦闘時間を返す."""
         if not self.durations:
             return 0.0
         return sum(self.durations) / len(self.durations)
 
     @property
     def min_duration(self) -> float:
+        """最短戦闘時間を返す."""
         return min(self.durations) if self.durations else 0.0
 
     @property
     def max_duration(self) -> float:
+        """最長戦闘時間を返す."""
         return max(self.durations) if self.durations else 0.0
 
     @property
     def action_total(self) -> int:
+        """行動の合計数を返す."""
         return sum(self.action_distribution.values())
 
     def action_ratio(self, action_type: str) -> float:
+        """指定した行動タイプの割合を返す."""
         total = self.action_total
         if total == 0:
             return 0.0
         return self.action_distribution.get(action_type, 0) / total
 
     def win_rate(self, team_id: str) -> float:
+        """指定したチームの勝率を返す."""
         if self.rounds == 0:
             return 0.0
         return self.win_counts.get(team_id, 0) / self.rounds
+
+    def _format_action_section(self) -> list[str]:
+        """行動分布セクションのテキスト行を返す."""
+        lines: list[str] = []
+        if not self.action_distribution:
+            return lines
+        lines.append("行動分布（全ユニット平均）:")
+        for action_type in sorted(self.action_distribution):
+            pct = self.action_ratio(action_type) * 100
+            lines.append(f"  {action_type:<12}: {pct:.1f}%")
+        lines.append("")
+        return lines
+
+    def _format_kills_section(self) -> list[str]:
+        """撃墜数セクションのテキスト行を返す."""
+        lines: list[str] = []
+        if not self.kills_per_round:
+            return lines
+        lines.append("撃墜数（平均）:")
+        for team_id, kills_list in self.kills_per_round.items():
+            avg = sum(kills_list) / len(kills_list) if kills_list else 0.0
+            lines.append(f"  {team_id}: {avg:.1f} 撃墜 / バトル")
+        lines.append("")
+        return lines
 
     def to_text(self) -> str:
         """テキスト形式でサマリーを返す."""
@@ -129,12 +171,7 @@ class SimulationSummary:
         lines.append("")
 
         # 行動分布
-        if self.action_distribution:
-            lines.append("行動分布（全ユニット平均）:")
-            for action_type, count in sorted(self.action_distribution.items()):
-                pct = self.action_ratio(action_type) * 100
-                lines.append(f"  {action_type:<12}: {pct:.1f}%")
-            lines.append("")
+        lines.extend(self._format_action_section())
 
         # 戦略遷移
         if self.strategy_transition_counts:
@@ -145,16 +182,13 @@ class SimulationSummary:
             lines.append("")
 
         # 撃墜数
-        if self.kills_per_round:
-            lines.append("撃墜数（平均）:")
-            for team_id, kills_list in self.kills_per_round.items():
-                avg = sum(kills_list) / len(kills_list) if kills_list else 0.0
-                lines.append(f"  {team_id}: {avg:.1f} 撃墜 / バトル")
-            lines.append("")
+        lines.extend(self._format_kills_section())
 
         # 引き分け検出
         if self.draw_by_max_steps > 0:
-            lines.append(f"引き分け検出: {self.draw_by_max_steps} 件（最大ステップ到達）")
+            lines.append(
+                f"引き分け検出: {self.draw_by_max_steps} 件（最大ステップ到達）"
+            )
             lines.append("")
 
         # 警告
@@ -177,7 +211,9 @@ class SimulationSummary:
                 "values": self.durations,
             },
             "action_distribution": self.action_distribution,
-            "action_ratios": {k: self.action_ratio(k) for k in self.action_distribution},
+            "action_ratios": {
+                k: self.action_ratio(k) for k in self.action_distribution
+            },
             "strategy_transition_counts": self.strategy_transition_counts,
             "kills_per_round": self.kills_per_round,
             "draw_by_max_steps": self.draw_by_max_steps,
@@ -189,6 +225,11 @@ class BenchRunner:
     """N 回シミュレーションを実行してサマリーを生成する."""
 
     def __init__(self, max_steps: int = 5000) -> None:
+        """初期化.
+
+        Args:
+            max_steps: シミュレーションの最大ステップ数
+        """
         self.max_steps = max_steps
 
     def run(
@@ -212,7 +253,7 @@ class BenchRunner:
         from sqlmodel import Session, select
 
         from app.db import engine
-        from app.models.models import Mission, MobileSuit, Vector3
+        from app.models.models import Mission, MobileSuit
 
         # DB からミッションデータを取得（1回だけ）
         with Session(engine) as session:
@@ -295,6 +336,58 @@ class BenchRunner:
         self._compute_warnings(summary)
         return summary
 
+    def _determine_win_team_bench(self, sim: Any, player: Any) -> str:
+        """シミュレーション結果から勝利チームIDを返す."""
+        player_alive = player.current_hp > 0
+        enemy_alive = any(
+            u.team_id != player.team_id and u.current_hp > 0 for u in sim.units
+        )
+        if player_alive and not enemy_alive:
+            return player.team_id
+        if enemy_alive and not player_alive:
+            alive_team_ids = {u.team_id for u in sim.units if u.current_hp > 0}
+            return next(
+                (tid for tid in alive_team_ids if tid != player.team_id), "DRAW"
+            )
+        return "DRAW"
+
+    def _collect_action_and_transitions(
+        self, sim_logs: list[Any]
+    ) -> tuple[dict[str, int], list[tuple[str, str]]]:
+        """ログから行動カウントと戦略遷移リストを収集する."""
+        action_counts: dict[str, int] = {}
+        strategy_transitions: list[tuple[str, str]] = []
+        for log in sim_logs:
+            at = log.action_type
+            if at in _UNIT_ACTION_TYPES:
+                action_counts[at] = action_counts.get(at, 0) + 1
+            if log.action_type == "STRATEGY_CHANGED" and log.details:
+                prev = log.details.get("previous_strategy", "")
+                nxt = log.details.get("new_strategy", "")
+                if prev and nxt:
+                    strategy_transitions.append((prev, nxt))
+        return action_counts, strategy_transitions
+
+    def _collect_survivor_stats_bench(
+        self, sim_units: list[Any]
+    ) -> tuple[dict[str, float], dict[str, int]]:
+        """生存ユニットの HP 比率とユニット数をチームごとに集計する."""
+        survivor_hp_ratio: dict[str, float] = {}
+        survivor_count: dict[str, int] = {}
+        for u in sim_units:
+            if u.current_hp > 0 and u.max_hp > 0 and u.team_id:
+                team_id = u.team_id
+                if team_id not in survivor_hp_ratio:
+                    survivor_hp_ratio[team_id] = 0.0
+                    survivor_count[team_id] = 0
+                survivor_hp_ratio[team_id] += u.current_hp / u.max_hp
+                survivor_count[team_id] += 1
+        for tid in survivor_hp_ratio:
+            cnt = survivor_count[tid]
+            if cnt > 0:
+                survivor_hp_ratio[tid] /= cnt
+        return survivor_hp_ratio, survivor_count
+
     def _run_single(
         self,
         player_base: Any,
@@ -303,7 +396,18 @@ class BenchRunner:
         strategy: str,
         enable_hot_reload: bool,
     ) -> RoundResult:
-        """1ラウンドのシミュレーションを実行する."""
+        """1ラウンドのシミュレーションを実行する.
+
+        Args:
+            player_base: プレイヤーユニット（コピーして使用）
+            enemies_base: 敵ユニットリスト（コピーして使用）
+            mission: ミッションオブジェクト
+            strategy: 全チームに適用する初期戦略モード
+            enable_hot_reload: Phase 5-2 のホットリロードを有効化
+
+        Returns:
+            RoundResult インスタンス
+        """
         from app.models.models import MobileSuit, Vector3
 
         # ユニットのフレッシュコピーを作成
@@ -337,42 +441,10 @@ class BenchRunner:
             step_count += 1
 
         is_max_steps = step_count >= self.max_steps
-
-        # 勝敗判定
-        alive_team_ids = {u.team_id for u in sim.units if u.current_hp > 0}
-        if player.team_id in alive_team_ids and not any(
-            u.team_id != player.team_id and u.current_hp > 0 for u in sim.units
-        ):
-            win_team = player.team_id
-        elif not alive_team_ids or (
-            player.team_id not in alive_team_ids
-            and any(u.team_id != player.team_id and u.current_hp > 0 for u in sim.units)
-        ):
-            win_team = next(
-                (tid for tid in alive_team_ids if tid != player.team_id), "DRAW"
-            )
-        elif player.team_id in alive_team_ids and any(
-            u.team_id != player.team_id and u.current_hp > 0 for u in sim.units
-        ):
-            win_team = "DRAW"
-        else:
-            win_team = "DRAW"
-
-        # 行動カウント
-        action_counts: dict[str, int] = {}
-        for log in sim.logs:
-            at = log.action_type
-            if at in _UNIT_ACTION_TYPES:
-                action_counts[at] = action_counts.get(at, 0) + 1
-
-        # 戦略遷移
-        strategy_transitions: list[tuple[str, str]] = []
-        for log in sim.logs:
-            if log.action_type == "STRATEGY_CHANGED" and log.details:
-                prev = log.details.get("previous_strategy", "")
-                nxt = log.details.get("new_strategy", "")
-                if prev and nxt:
-                    strategy_transitions.append((prev, nxt))
+        win_team = self._determine_win_team_bench(sim, player)
+        action_counts, strategy_transitions = self._collect_action_and_transitions(
+            sim.logs
+        )
 
         # 撃墜数（DESTROYED ログの actor_id をユニットの team_id で分類）
         unit_team_map = {str(u.id): u.team_id for u in sim.units}
@@ -382,22 +454,9 @@ class BenchRunner:
                 tid = unit_team_map.get(str(log.actor_id), "UNKNOWN")
                 kills[tid] = kills.get(tid, 0) + 1
 
-        # 生存ユニットの HP 比率
-        survivor_hp_ratio: dict[str, float] = {}
-        survivor_count: dict[str, int] = {}
-        for u in sim.units:
-            if u.current_hp > 0 and u.max_hp > 0 and u.team_id:
-                team_id = u.team_id
-                if team_id not in survivor_hp_ratio:
-                    survivor_hp_ratio[team_id] = 0.0
-                    survivor_count[team_id] = 0
-                survivor_hp_ratio[team_id] += u.current_hp / u.max_hp
-                survivor_count[team_id] += 1
-
-        for tid in survivor_hp_ratio:
-            cnt = survivor_count[tid]
-            if cnt > 0:
-                survivor_hp_ratio[tid] /= cnt
+        survivor_hp_ratio, survivor_count = self._collect_survivor_stats_bench(
+            sim.units
+        )
 
         return RoundResult(
             win_team=win_team,
@@ -467,7 +526,7 @@ class BenchRunner:
 
 
 def run_bench_command(args: Any) -> None:
-    """bench サブコマンドのエントリーポイント."""
+    """Bench サブコマンドのエントリーポイント."""
     runner = BenchRunner(max_steps=getattr(args, "steps", 5000))
     print(
         f"bench 実行中: mission_id={args.mission_id}, "

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # backend/scripts/sim_compare.py
-"""compare サブコマンドの実処理: 2つの戦略モードを対戦させて比較する.
+r"""compare サブコマンドの実処理: 2つの戦略モードを対戦させて比較する.
 
 Usage (経由: run_simulation.py):
-    python scripts/run_simulation.py compare \\
+    python scripts/run_simulation.py compare \
         --mission-id 1 --strategy-a AGGRESSIVE --strategy-b DEFENSIVE --rounds 20
 """
 
@@ -35,27 +35,32 @@ class StrategyStats:
 
     @property
     def win_rate(self) -> float:
+        """勝率を返す."""
         if self.rounds == 0:
             return 0.0
         return self.win_count / self.rounds
 
     @property
     def avg_survivor_hp_ratio(self) -> float:
+        """平均生存HP比率を返す."""
         if not self.survivor_hp_ratios:
             return 0.0
         return sum(self.survivor_hp_ratios) / len(self.survivor_hp_ratios)
 
     @property
     def avg_survivor_count(self) -> float:
+        """平均生存ユニット数を返す."""
         if not self.survivor_counts:
             return 0.0
         return sum(self.survivor_counts) / len(self.survivor_counts)
 
     @property
     def action_total(self) -> int:
+        """行動ログの総数を返す."""
         return sum(self.action_counts.values())
 
     def action_ratio(self, action_type: str) -> float:
+        """指定した行動タイプの割合を返す."""
         total = self.action_total
         if total == 0:
             return 0.0
@@ -114,9 +119,7 @@ class ComparisonSummary:
         for action_type in all_actions:
             ra = self.stats_a.action_ratio(action_type)
             rb = self.stats_b.action_ratio(action_type)
-            lines.append(
-                f"{'平均行動: ' + action_type:<18}{ra:>11.1%}  {rb:>11.1%}"
-            )
+            lines.append(f"{'平均行動: ' + action_type:<18}{ra:>11.1%}  {rb:>11.1%}")
         lines.append("")
 
         # 判定
@@ -124,14 +127,16 @@ class ComparisonSummary:
         if abs(diff) < 0.05:
             verdict = "両者ほぼ互角"
         elif diff > 0:
-            verdict = (
-                f"{self.strategy_a} が優勢（勝率差 +{diff:.1%}）"
-                + ("⚠️  バランス要調整" if self.stats_a.win_rate > BALANCE_WARN_WIN_RATE else "")
+            verdict = f"{self.strategy_a} が優勢（勝率差 +{diff:.1%}）" + (
+                "⚠️  バランス要調整"
+                if self.stats_a.win_rate > BALANCE_WARN_WIN_RATE
+                else ""
             )
         else:
-            verdict = (
-                f"{self.strategy_b} が優勢（勝率差 +{-diff:.1%}）"
-                + ("⚠️  バランス要調整" if self.stats_b.win_rate > BALANCE_WARN_WIN_RATE else "")
+            verdict = f"{self.strategy_b} が優勢（勝率差 +{-diff:.1%}）" + (
+                "⚠️  バランス要調整"
+                if self.stats_b.win_rate > BALANCE_WARN_WIN_RATE
+                else ""
             )
         lines.append(f"判定: {verdict}")
 
@@ -169,13 +174,22 @@ class ComparisonSummary:
 
 
 # 集計対象のアクションタイプ（チームイベントを除く）
-_UNIT_ACTION_TYPES = {"ATTACK", "MOVE", "USE_SKILL", "RETREAT", "MISS", "DAMAGE", "DESTROYED"}
+_UNIT_ACTION_TYPES = {
+    "ATTACK",
+    "MOVE",
+    "USE_SKILL",
+    "RETREAT",
+    "MISS",
+    "DAMAGE",
+    "DESTROYED",
+}
 
 
 class CompareRunner:
     """2つの戦略モードを対戦させて比較サマリーを生成する."""
 
     def __init__(self, max_steps: int = 5000) -> None:
+        """初期化."""
         self.max_steps = max_steps
 
     def run(
@@ -204,7 +218,7 @@ class CompareRunner:
         from sqlmodel import Session, select
 
         from app.db import engine
-        from app.models.models import Mission, MobileSuit, Vector3
+        from app.models.models import Mission, MobileSuit
 
         with Session(engine) as session:
             mission = session.get(Mission, mission_id)
@@ -268,6 +282,57 @@ class CompareRunner:
         self._compute_warnings(summary)
         return summary
 
+    def _determine_winner_compare(
+        self,
+        player: Any,
+        enemies: list[Any],
+        summary: ComparisonSummary,
+    ) -> None:
+        """勝敗を判定してサマリーの win_count / draw_count を更新する."""
+        player_alive = player.current_hp > 0
+        enemy_alive = any(e.current_hp > 0 for e in enemies)
+        if player_alive and not enemy_alive:
+            summary.stats_a.win_count += 1
+        elif enemy_alive and not player_alive:
+            summary.stats_b.win_count += 1
+        else:
+            summary.draw_count += 1
+
+    def _collect_action_counts_by_team(
+        self,
+        sim: Any,
+        summary: ComparisonSummary,
+    ) -> None:
+        """チームごとの行動分布をサマリーに積算する."""
+        unit_team_map = {str(u.id): u.team_id for u in sim.units}
+        for log in sim.logs:
+            at = log.action_type
+            if at not in _UNIT_ACTION_TYPES:
+                continue
+            team_of_actor = unit_team_map.get(str(log.actor_id), "")
+            if team_of_actor == "PLAYER_TEAM":
+                summary.stats_a.action_counts[at] = (
+                    summary.stats_a.action_counts.get(at, 0) + 1
+                )
+            elif team_of_actor == "ENEMY_TEAM":
+                summary.stats_b.action_counts[at] = (
+                    summary.stats_b.action_counts.get(at, 0) + 1
+                )
+
+    @staticmethod
+    def _collect_team_survivor_stats(
+        units: list[Any], team_id: str
+    ) -> tuple[float, int]:
+        """指定チームの生存ユニットの平均 HP 比率とユニット数を返す."""
+        team_units = [u for u in units if u.team_id == team_id and u.current_hp > 0]
+        count = len(team_units)
+        if count == 0:
+            return 0.0, 0
+        avg_hp = (
+            sum(u.current_hp / u.max_hp for u in team_units if u.max_hp > 0) / count
+        )
+        return avg_hp, count
+
     def _run_single(
         self,
         player_base: Any,
@@ -310,51 +375,11 @@ class CompareRunner:
             sim.step()
             step_count += 1
 
-        # 勝敗判定
-        player_alive = player.current_hp > 0
-        enemy_alive = any(e.current_hp > 0 for e in enemies)
+        self._determine_winner_compare(player, enemies, summary)
+        self._collect_action_counts_by_team(sim, summary)
 
-        if player_alive and not enemy_alive:
-            winner = "PLAYER_TEAM"
-            summary.stats_a.win_count += 1
-        elif enemy_alive and not player_alive:
-            winner = "ENEMY_TEAM"
-            summary.stats_b.win_count += 1
-        else:
-            winner = "DRAW"
-            summary.draw_count += 1
-
-        # 行動分布を集計（チームごと）
-        unit_team_map = {str(u.id): u.team_id for u in sim.units}
-        for log in sim.logs:
-            at = log.action_type
-            if at not in _UNIT_ACTION_TYPES:
-                continue
-            team_of_actor = unit_team_map.get(str(log.actor_id), "")
-            if team_of_actor == "PLAYER_TEAM":
-                summary.stats_a.action_counts[at] = (
-                    summary.stats_a.action_counts.get(at, 0) + 1
-                )
-            elif team_of_actor == "ENEMY_TEAM":
-                summary.stats_b.action_counts[at] = (
-                    summary.stats_b.action_counts.get(at, 0) + 1
-                )
-
-        # 生存ユニットの HP 比率
-        def _collect_survivor_stats(
-            units: list[Any], team_id: str
-        ) -> tuple[float, int]:
-            team_units = [
-                u for u in units if u.team_id == team_id and u.current_hp > 0
-            ]
-            count = len(team_units)
-            if count == 0:
-                return 0.0, 0
-            avg_hp = sum(u.current_hp / u.max_hp for u in team_units if u.max_hp > 0) / count
-            return avg_hp, count
-
-        hp_a, cnt_a = _collect_survivor_stats(sim.units, "PLAYER_TEAM")
-        hp_b, cnt_b = _collect_survivor_stats(sim.units, "ENEMY_TEAM")
+        hp_a, cnt_a = self._collect_team_survivor_stats(sim.units, "PLAYER_TEAM")
+        hp_b, cnt_b = self._collect_team_survivor_stats(sim.units, "ENEMY_TEAM")
         summary.stats_a.survivor_hp_ratios.append(hp_a)
         summary.stats_a.survivor_counts.append(cnt_a)
         summary.stats_b.survivor_hp_ratios.append(hp_b)
@@ -378,7 +403,7 @@ class CompareRunner:
 
 
 def run_compare_command(args: Any) -> None:
-    """compare サブコマンドのエントリーポイント."""
+    """Compare サブコマンドのエントリーポイント."""
     runner = CompareRunner(max_steps=getattr(args, "steps", 5000))
     print(
         f"compare 実行中: mission_id={args.mission_id}, "

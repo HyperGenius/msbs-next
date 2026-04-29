@@ -12,7 +12,6 @@ import glob as glob_module
 import json
 import os
 import sys
-from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -45,9 +44,11 @@ class Report:
 
     @property
     def action_total(self) -> int:
+        """行動ログの総数を返す."""
         return sum(self.action_distribution.values())
 
     def action_ratio(self, action_type: str) -> float:
+        """指定した行動タイプの割合を返す."""
         total = self.action_total
         if total == 0:
             return 0.0
@@ -55,9 +56,11 @@ class Report:
 
     @property
     def weapon_total(self) -> int:
+        """武器使用ログの総数を返す."""
         return sum(self.weapon_usage.values())
 
     def weapon_ratio(self, weapon_name: str) -> float:
+        """指定した武器の使用割合を返す."""
         total = self.weapon_total
         if total == 0:
             return 0.0
@@ -130,7 +133,9 @@ class Report:
             "total_rounds": self.total_rounds,
             "win_counts": self.win_counts,
             "action_distribution": self.action_distribution,
-            "action_ratios": {k: self.action_ratio(k) for k in self.action_distribution},
+            "action_ratios": {
+                k: self.action_ratio(k) for k in self.action_distribution
+            },
             "strategy_transitions": self.strategy_transitions,
             "weapon_usage": self.weapon_usage,
             "weapon_ratios": {k: self.weapon_ratio(k) for k in self.weapon_usage},
@@ -192,8 +197,13 @@ class ReportGenerator:
 
             # 行動分布
             if action_type in {
-                "ATTACK", "MOVE", "USE_SKILL", "RETREAT",
-                "MISS", "DAMAGE", "DESTROYED",
+                "ATTACK",
+                "MOVE",
+                "USE_SKILL",
+                "RETREAT",
+                "MISS",
+                "DAMAGE",
+                "DESTROYED",
             }:
                 report.action_distribution[action_type] = (
                     report.action_distribution.get(action_type, 0) + 1
@@ -227,7 +237,7 @@ class ReportGenerator:
 
 
 def run_report_command(args: Any) -> None:
-    """report サブコマンドのエントリーポイント."""
+    """Report サブコマンドのエントリーポイント."""
     input_patterns = args.input
     generator = ReportGenerator()
 

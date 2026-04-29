@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # backend/scripts/run_simulation.py
-"""ローカル実行スクリプト: ミッションシミュレーション（サブコマンド構成）.
+r"""ローカル実行スクリプト: ミッションシミュレーション（サブコマンド構成）.
 
 本番DBにReadOnlyで接続し、指定ミッションのデータを取得して
 BattleSimulatorを実行し、結果ログをJSONファイルとして出力する。
@@ -315,7 +315,9 @@ def parse_args() -> argparse.Namespace:
         help="複数回シミュレーションを実行してサマリーを集計する",
     )
     bench_parser.add_argument("--mission-id", type=int, required=True, metavar="ID")
-    bench_parser.add_argument("--rounds", type=int, default=10, metavar="N", help="実行回数（デフォルト: 10）")
+    bench_parser.add_argument(
+        "--rounds", type=int, default=10, metavar="N", help="実行回数（デフォルト: 10）"
+    )
     bench_parser.add_argument(
         "--strategy",
         type=str,
@@ -324,9 +326,19 @@ def parse_args() -> argparse.Namespace:
         metavar="MODE",
         help="全チームに適用する初期戦略モード（デフォルト: AGGRESSIVE）",
     )
-    bench_parser.add_argument("--output", type=str, default=None, metavar="FILE", help="出力先ファイルパス")
-    bench_parser.add_argument("--format", type=str, default="text", choices=["text", "json"], help="出力フォーマット")
-    bench_parser.add_argument("--steps", type=int, default=5000, metavar="N", help="最大ステップ数")
+    bench_parser.add_argument(
+        "--output", type=str, default=None, metavar="FILE", help="出力先ファイルパス"
+    )
+    bench_parser.add_argument(
+        "--format",
+        type=str,
+        default="text",
+        choices=["text", "json"],
+        help="出力フォーマット",
+    )
+    bench_parser.add_argument(
+        "--steps", type=int, default=5000, metavar="N", help="最大ステップ数"
+    )
     bench_parser.add_argument("--hot-reload", action="store_true", default=False)
 
     # ---- compare サブコマンド ----
@@ -335,7 +347,9 @@ def parse_args() -> argparse.Namespace:
         help="2つの戦略モードを対戦させて比較する",
     )
     compare_parser.add_argument("--mission-id", type=int, required=True, metavar="ID")
-    compare_parser.add_argument("--rounds", type=int, default=10, metavar="N", help="実行回数（デフォルト: 10）")
+    compare_parser.add_argument(
+        "--rounds", type=int, default=10, metavar="N", help="実行回数（デフォルト: 10）"
+    )
     compare_parser.add_argument(
         "--strategy-a",
         type=str,
@@ -353,7 +367,9 @@ def parse_args() -> argparse.Namespace:
         help="敵チームの戦略モード",
     )
     compare_parser.add_argument("--output", type=str, default=None, metavar="FILE")
-    compare_parser.add_argument("--format", type=str, default="text", choices=["text", "json"])
+    compare_parser.add_argument(
+        "--format", type=str, default="text", choices=["text", "json"]
+    )
     compare_parser.add_argument("--steps", type=int, default=5000, metavar="N")
     compare_parser.add_argument("--hot-reload", action="store_true", default=False)
 
@@ -371,13 +387,15 @@ def parse_args() -> argparse.Namespace:
         help="入力JSONファイルパス（ワイルドカード対応）",
     )
     report_parser.add_argument("--output", type=str, default=None, metavar="FILE")
-    report_parser.add_argument("--format", type=str, default="text", choices=["text", "json"])
+    report_parser.add_argument(
+        "--format", type=str, default="text", choices=["text", "json"]
+    )
 
     return parser.parse_args()
 
 
 def _add_run_args(parser: argparse.ArgumentParser) -> None:
-    """run サブコマンドの共通引数を追加する."""
+    """Run サブコマンドの共通引数を追加する."""
     parser.add_argument(
         "--mission-id",
         type=int,
