@@ -1,7 +1,7 @@
 # infra/cloud-run/modules/cloud-run/batch_job.tf
 # Cloud Run Jobs リソース（バッチ実行用）
 resource "google_cloud_run_v2_job" "msbs_batch" {
-  name     = "msbs-next-batch"
+  name     = "msbs-next-batch-${var.environment}"
   location = var.region
 
   labels = {

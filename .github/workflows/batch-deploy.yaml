@@ -20,7 +20,7 @@ env:
   REGION: asia-northeast1
   REPOSITORY: msbs-next
   IMAGE_NAME: msbs-next-batch
-  CLOUD_RUN_SERVICE: msbs-next-batch
+  CLOUD_RUN_SERVICE: msbs-next-batch-prod
 
 jobs:
   build-and-push:
