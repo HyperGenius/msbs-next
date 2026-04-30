@@ -16,6 +16,12 @@ on:
       - 'backend/**'
       - '.github/workflows/batch-deploy.yaml'
 
+env:
+  REGION: asia-northeast1
+  REPOSITORY: msbs-next
+  IMAGE_NAME: msbs-next-batch
+  CLOUD_RUN_SERVICE: msbs-next-batch
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -31,15 +37,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve image tag
-        id: tag
-        run: |
-          TAG="${{ inputs.image_tag }}"
-          if [ -z "$TAG" ]; then
-            TAG="${{ github.sha }}"
-          fi
-          echo "value=${TAG}" >> "$GITHUB_OUTPUT"
-
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -50,18 +47,28 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
-      - name: Build and Push Batch Docker Image
+      - name: Build Batch Docker Image
         run: |
           docker build \
-            --platform linux/amd64 \
             -f backend/Dockerfile.batch \
-            -t asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-batch:${{ steps.tag.outputs.value }} \
-            -t asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-batch:latest \
-            backend/
-          docker push asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-batch:${{ steps.tag.outputs.value }}
-          docker push asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-batch:latest
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -t ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:latest \
+            ./backend
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
+            --image=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --project=${{ secrets.GCP_PROJECT_ID }} \
+            --quiet
 
   update-job:
     needs: build-and-push
@@ -80,18 +87,3 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: 'github-actions-deployer@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Deploy Cloud Run Job via Terraform
-        run: |
-          cd infra/cloud-run
-          terraform init -backend-config="bucket=${{ secrets.GCP_TF_STATE_BUCKET }}"
-          terraform apply -auto-approve \
-            -var="batch_image_tag=${{ needs.build-and-push.outputs.image_tag }}" \
-            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var="database_url=${{ secrets.NEON_DATABASE_URL }}" \
-            -var="clerk_secret_key=${{ secrets.CLERK_SECRET_KEY }}" \
-            -var="clerk_jwks_url=${{ secrets.CLERK_JWKS_URL }}" \
-            -var="allowed_origins=${{ secrets.ALLOWED_ORIGINS }}"
