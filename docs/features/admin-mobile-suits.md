@@ -125,6 +125,35 @@ Content-Type: application/json
 | `NEXT_PUBLIC_API_URL` | バックエンド API の URL（デフォルト: `http://127.0.0.1:8000`） |
 | `NEXT_PUBLIC_ADMIN_API_KEY` | 管理者 API キー（フロントエンドからバックエンドへの X-API-Key） |
 
+#### `NEXT_PUBLIC_ADMIN_API_KEY` の設定方法
+
+フロントエンドが `X-API-Key` ヘッダーに付与する値は、バックエンドの `ADMIN_API_KEY` 環境変数と一致させる必要がある。
+
+**ローカル開発**
+
+`frontend/.env.local` に記載する（`.gitignore` 対象なのでコミットしない）：
+
+```env
+NEXT_PUBLIC_ADMIN_API_KEY=your_secret_key_here
+```
+
+バックエンド側にも同じ値を設定する：
+
+```env
+# backend/.env
+ADMIN_API_KEY=your_secret_key_here
+```
+
+`your_secret_key_here` は任意の安全なランダム文字列を使用する（例: `openssl rand -hex 32` で生成）。
+
+**本番環境（Vercel）**
+
+Vercel ダッシュボードの **Settings → Environment Variables** から `NEXT_PUBLIC_ADMIN_API_KEY` を追加する。
+値はバックエンド（Cloud Run）のシークレットマネージャーに設定した `ADMIN_API_KEY` と同一にする。
+
+> [!WARNING]
+> `NEXT_PUBLIC_` プレフィックスの変数はブラウザバンドルに含まれる。本番では IP 制限・Clerk ロールチェック等のアクセス制御と併用し、管理者画面 URL を公開しないこと。
+
 ### コンポーネント構成
 
 ```

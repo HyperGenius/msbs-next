@@ -17,7 +17,7 @@ export default clerkMiddleware(async (auth, req) => {
   // 管理者専用ルートのチェック
   if (isAdminRoute(req)) {
     const { sessionClaims } = await auth()
-    const role = (sessionClaims?.publicMetadata as { role?: string } | undefined)?.role
+    const role = (sessionClaims?.metadata as { role?: string } | undefined)?.role
     if (role !== 'admin') {
       // 管理者でない場合はトップページへリダイレクト
       const url = req.nextUrl.clone()
