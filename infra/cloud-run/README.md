@@ -1,361 +1,226 @@
-# Cloud Run Terraform 設定
+# MSBS-Next Backend Infrastructure (Cloud Run)
 
-このディレクトリには、MSBS-Next バックエンド API を Google Cloud Run にデプロイするための Terraform 設定が含まれています。
+このディレクトリには、MSBS-Next の FastAPI バックエンドを Google Cloud Run にデプロイするための Terraform コードが含まれています。
+再利用性を高めるため、共通リソース（モジュール）と環境ごとの設定（エンバイロメント）に分離した構成を採用しています。
 
-## デプロイメントの流れ
+## 📁 ディレクトリ構成
 
-Cloud Run サービスは Docker イメージを必要とするため、以下の順序でデプロイを行います：
-
-1. **基盤リソースの作成**: Artifact Registry、Secret Manager、Service Account などを作成
-2. **Docker イメージのビルドとプッシュ**: バックエンドアプリケーションをコンテナ化して Artifact Registry にプッシュ
-3. **Cloud Run サービスの作成**: プッシュされたイメージを使用して Cloud Run サービスをデプロイ
-
-## 構成リソース
-
-- **Artifact Registry**: Docker イメージの保存
-- **Secret Manager**: 機密情報（Database URL, Clerk Keys）の安全な管理
-- **Cloud Run Service**: バックエンド API のホスティング
-- **Service Account**: Cloud Run が他の GCP リソースにアクセスするための権限管理
-- **IAM**: サービスアカウントへの権限付与
-
-## 前提条件
-
-1. Google Cloud Platform アカウント
-2. `gcloud` CLI のインストールと認証
-3. Terraform >= 1.0
-4. 以下の GCP API を有効化:
-   ```bash
-   gcloud services enable \
-     run.googleapis.com \
-     artifactregistry.googleapis.com \
-     secretmanager.googleapis.com \
-     cloudbuild.googleapis.com
-   ```
-
-## セットアップ手順
-
-### 1. 認証設定
-
-```bash
-# GCP にログイン
-gcloud auth application-default login
-
-# タグの設定等を必要に応じて行う
-
-# プロジェクトを設定
-gcloud config set project YOUR_PROJECT_ID
+```text
+infra/cloud-run/
+├── modules/                   # 共通化されたTerraformモジュール
+│   ├── base/                  # 基盤リソース（Artifact Registry等）
+│   └── cloud-run/             # アプリケーション層（Cloud Run, IAM, Secret Manager）
+└── environments/              # 環境ごとのデプロイ設定
+    ├── prod/                  # 本番環境 (Production)
+    └── (dev/)                 # ※必要に応じて追加可能
 ```
 
-### 2. 変数ファイルの準備
+## 🛠️ 事前準備
+
+デプロイを実行する前に、以下の準備が必要です。
+
+1. **ツールのインストール**
+   - [Terraform](https://developer.hashicorp.com/terraform/downloads) (>= 1.0)
+   - [Google Cloud CLI (gcloud)](https://cloud.google.com/sdk/docs/install)
+
+2. **GCP 認証**
+   ```bash
+   gcloud auth application-default login
+   ```
+
+3. **Terraform State 保存用の GCS バケット作成**
+   Terraform の State ファイルを保存するための GCS バケットを、**初回のみ** 手動で作成します。
+   ```bash
+   # 1. CLI認証を更新（ブラウザが開く）
+   gcloud auth login
+
+   # 2. デフォルトプロジェクトをに切り替え
+   gcloud config set project <YOUR_PROJECT_ID>
+
+   # 3. ADC（ライブラリ用認証）のクォータプロジェクトも切り替え
+   gcloud auth application-default set-quota-project <YOUR_PROJECT_ID>
+
+   # 4. バケットを作成
+   gcloud storage buckets create gs://<YOUR_GCS_BUCKET_NAME> \
+     --project=<YOUR_PROJECT_ID> \
+     --location=<REGION> \
+     --uniform-bucket-level-access
+
+   # 5. バケットへのState ファイルの誤上書き・削除からのリカバリに備え、バージョニングを有効化
+   gcloud storage buckets update gs://<YOUR_GCS_BUCKET_NAME> --versioning
+   ```
+   > このバケットは Terraform の管理外で一度だけ作成します。バケット名はグローバルで一意である必要があります（例: `MSBS-Next-tfstate-prod`）。
+
+4. **必要な認証情報・値の取得**
+   - GCP プロジェクト ID
+   - Terraform State 保存用の GCS バケット名（上記で作成したもの）
+   - Neon Database の接続 URL (`postgresql://...`)
+   - Clerk Secret Key (`sk_live_...` または `sk_test_...`)
+   - Clerk JWKS URL
+
+## 🚀 デプロイ手順（本番環境: prod の場合）
+
+### 1. ディレクトリの移動
+対象環境のディレクトリに移動します。
+
+```bash
+cd environments/prod
+```
+
+### 2. 変数ファイルの設定
+サンプルの変数をコピーして、実際の値に書き換えます。
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-`terraform.tfvars` を編集して、以下の値を設定:
+`terraform.tfvars` をエディタで開き、必要な値を設定してください。（※このファイルは `.gitignore` に含まれるため、Gitにはコミットされません）
 
-- `project_id`: GCP プロジェクト ID
-- `database_url`: Neon データベース接続文字列
-- `clerk_secret_key`: Clerk Secret Key
-- `clerk_jwks_url`: Clerk JWKS URL
-- `allowed_origins`: Vercel ドメイン（カンマ区切り）
-
-### 3. GCS リモートバックエンドのセットアップ（初回のみ）
-
-Terraform の state を GitHub Actions と共有するため、GCS バケットをリモートバックエンドとして使用します。
-
-#### 3-1. GCS バケットの作成
+### 3. 初期化 (init)
+Terraform を初期化します。Stateファイルを保存する GCS バケット名を指定してください。
 
 ```bash
-PROJECT_ID=<YOUR_PROJECT_ID>
-BUCKET_NAME="${PROJECT_ID}-tfstate"
-
-gsutil mb -p ${PROJECT_ID} -l asia-northeast1 gs://${BUCKET_NAME}
-
-# バージョニングを有効化（誤削除対策）
-gsutil versioning set on gs://${BUCKET_NAME}
+terraform init -backend-config="bucket=<YOUR_GCS_BUCKET_NAME>"
 ```
 
-#### 3-2. ローカル state を GCS へ移行（既にローカル state がある場合）
-
-```bash
-terraform init -backend-config="bucket=${BUCKET_NAME}" -migrate-state
-```
-
-確認プロンプトに `yes` と入力します。移行後、ローカルの `terraform.tfstate` / `terraform.tfstate.backup` は削除して問題ありません。
-
-#### 3-3. GitHub Actions にシークレットを追加
-
-`GCP_TF_STATE_BUCKET` に上記で作成したバケット名を登録してください。
-
-新規環境では通常の初期化コマンドを使用します:
-
-```bash
-terraform init -backend-config="bucket=${BUCKET_NAME}"
-```
-
-### 4. プランの確認
+### 4. 計画の確認 (plan)
+どのようなリソースが作成・変更されるかを確認します。
 
 ```bash
 terraform plan
 ```
 
-### 5. 基盤リソースの作成（Artifact Registry、Secret Manager など）
-
-Cloud Run サービスを作成する前に、まず Artifact Registry とシークレット関連のリソースを作成します：
-
-```bash
-terraform apply -target=google_artifact_registry_repository.msbs_next \
-  -target=google_secret_manager_secret.database_url \
-  -target=google_secret_manager_secret_version.database_url \
-  -target=google_secret_manager_secret.clerk_secret_key \
-  -target=google_secret_manager_secret_version.clerk_secret_key \
-  -target=google_service_account.cloud_run \
-  -target=google_secret_manager_secret_iam_member.database_url_access \
-  -target=google_secret_manager_secret_iam_member.clerk_secret_key_access
-```
-
-### 6. Docker イメージのビルドとプッシュ
-
-基盤リソースが作成されたら、Docker イメージをビルドして Artifact Registry にプッシュします：
+### 5. デプロイの実行 (apply)
+変更を適用し、リソースを作成します。
 
 ```bash
-# Artifact Registry にログイン
-gcloud auth configure-docker asia-northeast1-docker.pkg.dev
-
-PROJECT_ID=msbs-next
-
-# Docker イメージをビルド
-cd ../../backend
-
-# Apple Silicon (M1/M2/M3) Mac の場合
-docker build --platform linux/amd64 -t asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest .
-
-# Intel Mac / Linux の場合
-# docker build -t asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest .
-
-# イメージをプッシュ
-docker push asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest
-```
-
-**重要**: Apple Silicon Mac では `--platform linux/amd64` オプションが必須です。Cloud Run は AMD64 アーキテクチャで動作するため、ARM64 イメージは使用できません。
-
-または、Cloud Build を使用（推奨: アーキテクチャを気にせず自動でビルド）:
-
-```bash
-cd ../../backend
-PROJECT_NUMBER=$(gcloud projects describe ${PROJECT_ID} --format="value(projectNumber)")
-
-# サービスアカウントに Cloud Build の権限を付与
-gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-    --role="roles/storage.objectViewer" \
-    --role="roles/artifactregistry.writer"
-
-# Cloud Build を使用してビルドとプッシュ
-gcloud builds submit --tag asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest
-```
-
-**Cloud Runを公開アクセス可能にする**
-Cloud Run サービスを公開アクセス可能にするには、以下のコマンドを実行して全員に Cloud Run Invoker ロールを付与します：
-
-```bash
-gcloud run services add-iam-policy-binding msbs-next-api \
-  --member="allUsers" \
-  --role="roles/run.invoker" \
-  --region=asia-northeast1
-```
-
-### 7. Cloud Run サービスの作成
-
-Docker イメージがプッシュされた後、残りのリソース（Cloud Run サービス）を作成します：
-
-```bash
-cd ../../infra/cloud-run
 terraform apply
 ```
+完了すると、Cloud RunのURLやArtifact RegistryのリポジトリURLが出力（Outputs）として表示されます。
 
-### 8. サービスURLの確認
+> **Note:** `terraform apply` 時点でイメージが Artifact Registry に存在しない場合、Cloud Run サービスの作成に失敗します（`Image not found` エラー）。後述の「初回イメージのプッシュ」を実施してから再度 `terraform apply` を実行してください。
 
-```bash
-terraform output service_url
-```
+---
 
-このURLをフロントエンド（Vercel）の環境変数 `NEXT_PUBLIC_API_URL` に設定します。
+## 🐳 初回イメージのプッシュ
 
-## 環境変数の更新
+Terraform で Artifact Registry を作成した後、初回は手動でイメージをビルド・プッシュする必要があります。
 
-既にデプロイ済みのサービスの環境変数を更新する場合:
-
-1. `terraform.tfvars` を編集
-2. `terraform apply` を実行
-
-Secret Manager を使用しているため、機密情報は安全に管理されます。
-
-## リソースの削除
+### 1. Docker 認証の設定
 
 ```bash
-terraform destroy
+gcloud auth configure-docker asia-northeast1-docker.pkg.dev
 ```
 
-**注意**: この操作により、すべてのリソース（Secret Manager のシークレットを含む）が削除されます。
-
-## トラブルシューティング
-
-### Cloud Run サービス作成時に「イメージが見つからない」エラー
-
-Docker イメージを Artifact Registry にプッシュする前に Cloud Run サービスを作成しようとすると、このエラーが発生します。上記の手順 5 → 6 → 7 の順序で実行してください。
-
-イメージが正しくプッシュされているか確認:
-
-```bash
-gcloud artifacts docker images list \
-  asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/msbs-next
-```
-
-### Artifact Registry のイメージを削除したい
-
-誤ったアーキテクチャでビルドした場合など、プッシュ済みのイメージを削除する場合：
-
-```bash
-# イメージ一覧を確認
-gcloud artifacts docker images list \
-  asia-northeast1-docker.pkg.dev/msbs-next/msbs-next
-
-# 特定のタグを削除
-gcloud artifacts docker images delete \
-  asia-northeast1-docker.pkg.dev/msbs-next/msbs-next/msbs-next-api:latest \
-  --quiet
-
-# または、確認しながら削除（--quiet なし）
-gcloud artifacts docker images delete \
-  asia-northeast1-docker.pkg.dev/msbs-next/msbs-next/msbs-next-api:latest
-```
-
-**Apple Silicon Mac で誤ってビルドした場合**: `--platform linux/amd64` オプションなしでビルドした場合は、上記コマンドで削除してから正しくビルドし直してください。
-
-### サービスがヘルスチェックに失敗する
-
-Cloud Run のログを確認:
-
-```bash
-gcloud run services logs read msbs-next-api --region=asia-northeast1
-```
-
-### Secret Manager へのアクセスエラー
-
-サービスアカウントに適切な権限があるか確認:
-
-```bash
-gcloud projects get-iam-policy YOUR_PROJECT_ID \
-  --flatten="bindings[].members" \
-  --filter="bindings.members:serviceAccount:$(terraform output -raw service_account_email)"
-```
-
-## CI/CD 統合
-
-GitHub Actions での自動デプロイ例:
-
-```yaml
-- name: Authenticate to Google Cloud
-  uses: google-github-actions/auth@v1
-  with:
-    credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-- name: Build and Push Docker Image
-  run: |
-    gcloud auth configure-docker asia-northeast1-docker.pkg.dev
-    docker build -t asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-api:${{ github.sha }} backend/
-    docker push asia-northeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/msbs-next/msbs-next-api:${{ github.sha }}
-
-- name: Deploy to Cloud Run
-  run: |
-    cd infra/cloud-run
-    terraform init
-    terraform apply -auto-approve -var="image_tag=${{ github.sha }}"
-```
-
-**注意**: 初回デプロイ時は、手順 5 で基盤リソースを先に作成してから CI/CD を実行してください。
-
-## 参考リンク
-
-- [Cloud Run Documentation](https://cloud.google.com/run/docs)
-- [Artifact Registry Documentation](https://cloud.google.com/artifact-registry/docs)
-- [Secret Manager Documentation](https://cloud.google.com/secret-manager/docs)
-- [Terraform Google Provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
-
-## バッチジョブ（Cloud Run Jobs）の運用手順
-
-`msbs-next-batch` Cloud Run Job はバトルシミュレーションの定期実行に使用します。
-
-### バッチ専用イメージのビルド・プッシュ
+### 2. イメージのビルド＆プッシュ
 
 ```bash
 PROJECT_ID=<YOUR_PROJECT_ID>
-REPO=asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next
+cd <repo_root>/backend
 
-# --platform linux/amd64 は Cloud Run の動作環境（AMD64）に合わせるために推奨
-docker build --platform linux/amd64 \
-  -f backend/Dockerfile.batch \
-  -t ${REPO}/msbs-next-batch:latest \
-  backend/
+docker build -t asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest .
+# または
+docker build --platform linux/amd64 -t asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest .
 
-# イメージをプッシュ
-docker push ${REPO}/msbs-next-batch:latest
+docker push asia-northeast1-docker.pkg.dev/${PROJECT_ID}/msbs-next/msbs-next-api:latest
 ```
 
-### Cloud Run Job の手動実行
+### 3. terraform apply の再実行
 
 ```bash
-# ジョブを同期実行（完了まで待機）
-gcloud run jobs execute msbs-next-batch \
-  --region=asia-northeast1 \
-  --wait \
-  --project=<YOUR_PROJECT_ID>
+cd <repo_root>/infra/cloud-run/environments/prod
+terraform apply
 ```
 
-### 実行ログの確認
+---
+
+## 🔄 継続的デプロイ（GitHub Actions）
+
+初回セットアップ完了後は、GitHub Actions によって自動デプロイが行われます。
+`main` ブランチへの push をトリガーに以下のフローが実行されます：
+
+```
+main へ push
+  → docker build & push（Artifact Registry へ）
+  → Cloud Run サービスの更新
+```
+
+手動でのイメージプッシュや `terraform apply` は通常不要です。
+
+---
+
+## 💡 新しい環境（例: dev）を追加する方法
+
+モジュール化されているため、新しい環境の追加は非常に簡単です。
+
+1. `environments/prod` ディレクトリをコピーして `environments/dev` を作成します。
+2. `environments/dev/versions.tf` を開き、バックエンドの prefix を変更します。
+   ```hcl
+   backend "gcs" {
+     prefix = "terraform/cloud-run/dev" # prod から dev に変更
+   }
+   ```
+3. `environments/dev/terraform.tfvars` の `environment` 変数や各種シークレットを開発環境用の値に変更します。
+4. あとは同様に `terraform init`, `plan`, `apply` を実行するだけです。
+
+## 🔐 シークレットの管理について
+本構成では、Secret Managerのリソース（枠組み）と IAM 権限の作成、および初期値の登録を Terraform で行っています。
+GitHub Actions などの CI/CD パイプラインを構築する場合は、Terraform にはダミーの値を渡し、実際の最新シークレット値の更新は CI/CD 側、または手動で GCP コンソールから行う運用に切り替えることも検討してください。
+
+---
+
+## IAM Service Account Credentials APIの有効化
+GitHub Actions から GCP にアクセスするための Workload Identity Federation を利用する必要があります。
+
+> [TIPS] WIF を使って Google Cloud にアクセスする場合、GitHub の ID トークンを Google のアクセス（OAuth2）トークンに交換する必要があります。この交換作業を担うのが IAM Service Account Credentials API (iamcredentials.googleapis.com) です。これが無効だと、認証が完了せず、その後の docker push で「権限がない（Unauthenticated）」と怒られてしまいます。
+
+ローカル環境のターミナル（対象プロジェクトの権限があるアカウント）で以下を実行します。
 
 ```bash
-# Cloud Logging でバッチジョブのログを確認
-gcloud logging read "resource.type=cloud_run_job" \
-  --limit=50 \
-  --format=json \
-  --project=<YOUR_PROJECT_ID>
+gcloud services enable iamcredentials.googleapis.com --project=<YOUR_PROJECT_ID>
 ```
 
-### Terraform でバッチジョブをデプロイ
+---
+
+
+## ⚙️ GitHub Actions セットアップ
+
+※IAMの設定はTerraform で行いますが、GitHub Actions 側の Secrets 登録は手動で行う必要があります。
+
+`.github/workflows/deploy.yml` は `main` ブランチの `backend/` 配下への push をトリガーに、イメージのビルド・プッシュ・Cloud Run へのデプロイを自動実行します。
+
+### 必要な GitHub Secrets
+
+| Secret 名 | 説明 |
+|---|---|
+| `GCP_PROJECT_ID` | GCP プロジェクト ID |
+| `WIF_PROVIDER` | Workload Identity Federation プロバイダのリソース名 |
+| `WIF_SERVICE_ACCOUNT` | デプロイ用サービスアカウントのメールアドレス |
+
+GitHub リポジトリの **Settings → Secrets and variables → Actions** から登録してください。
+
+### Workload Identity Federation の設定（初回のみ）
+
+キーレス認証のための WIF リソースは `infra/gcp-iam/` の Terraform で管理しています。
+詳細な手順は [infra/gcp-iam/README.md](../gcp-iam/README.md) を参照してください。
 
 ```bash
-cd infra/cloud-run
-
-terraform apply \
-  -var="batch_image_tag=<IMAGE_TAG>" \
-  -var="project_id=<YOUR_PROJECT_ID>" \
-  -var="database_url=<NEON_DATABASE_URL>" \
-  -var="clerk_secret_key=<CLERK_SECRET_KEY>" \
-  -var="clerk_jwks_url=<CLERK_JWKS_URL>"
+cd infra/gcp-iam
+cp terraform.tfvars.example terraform.tfvars
+terraform init -backend-config="bucket=<YOUR_PROJECT_ID>-tfstate-prod"
+terraform apply
 ```
 
-### ジョブ名の確認
+### GitHub Secrets への登録値の確認
+
+apply 完了後、以下のコマンドで各 Secret の値を取得できます。
 
 ```bash
-terraform output batch_job_name
+cd infra/gcp-iam
+
+# WIF_PROVIDER
+terraform output workload_identity_provider_id
+
+# WIF_SERVICE_ACCOUNT
+terraform output service_account_email
 ```
-
-### 将来の並列実行（タスク並列）
-
-Cloud Run Jobs の `taskCount` / `parallelism` を使用して複数バトルを並列実行できます:
-
-```bash
-gcloud run jobs execute msbs-next-batch \
-  --region=asia-northeast1 \
-  --tasks=4 \
-  --parallelism=4 \
-  --wait \
-  --project=<YOUR_PROJECT_ID>
-```
-
-各タスクは `CLOUD_RUN_TASK_INDEX` 環境変数（0始まり）を受け取ります。
-`run_batch.py` はこの変数を読み取る準備ができています。
-

@@ -1,13 +1,31 @@
-# infra/cloud-run/main.tf
+# infra/modules/cloud-run/main.tf
+# サービスアカウント
+resource "google_service_account" "cloud_run" {
+  account_id   = "${var.service_name}-${var.environment}-sa"
+  display_name = "Service Account for ${var.service_name} (${var.environment})"
+}
+
+# Secret Manager へのアクセス権限
+resource "google_secret_manager_secret_iam_member" "database_url_access" {
+  secret_id = google_secret_manager_secret.database_url.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "clerk_secret_key_access" {
+  secret_id = google_secret_manager_secret.clerk_secret_key.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
 # Cloud Run サービス
-resource "google_cloud_run_v2_service" "msbs_next_api" {
-  name     = var.service_name
+resource "google_cloud_run_v2_service" "main" {
+  name     = "${var.service_name}-${var.environment}"
   location = var.region
   ingress  = "INGRESS_TRAFFIC_ALL"
 
   labels = {
-    environment = "production"
-    project     = "msbs-next"
+    environment = var.environment
   }
 
   template {
@@ -19,7 +37,7 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
     }
 
     containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.msbs_next.repository_id}/${var.service_name}:${var.image_tag}"
+      image = var.image_url
 
       resources {
         limits = {
@@ -32,7 +50,6 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
         container_port = 8080
       }
 
-      # 環境変数（Secret Managerから取得）
       env {
         name = "NEON_DATABASE_URL"
         value_source {
@@ -53,7 +70,6 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
         }
       }
 
-      # 通常の環境変数
       env {
         name  = "CLERK_JWKS_URL"
         value = var.clerk_jwks_url
@@ -64,36 +80,26 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
         value = var.allowed_origins
       }
 
-      # ヘルスチェック
       startup_probe {
         http_get {
           path = "/health"
           port = 8080
         }
-        initial_delay_seconds = 0
-        timeout_seconds       = 1
-        period_seconds        = 3
-        failure_threshold     = 3
-      }
-
-      liveness_probe {
-        http_get {
-          path = "/health"
-          port = 8080
-        }
-        initial_delay_seconds = 10
-        timeout_seconds       = 1
+        initial_delay_seconds = 5
+        timeout_seconds       = 5
         period_seconds        = 10
-        failure_threshold     = 3
+        failure_threshold     = 5
       }
     }
-
     max_instance_request_concurrency = var.container_concurrency
   }
 
-  traffic {
-    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
-    percent = 100
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image, # GitHub Actions側でタグを更新するため
+      client,                          # gcloud等からの変更を無視
+      client_version
+    ]
   }
 
   depends_on = [
@@ -104,12 +110,11 @@ resource "google_cloud_run_v2_service" "msbs_next_api" {
   ]
 }
 
-# Cloud Run サービスへの一般公開アクセスを許可
+# 一般公開アクセス
 resource "google_cloud_run_v2_service_iam_member" "public_access" {
-  name     = google_cloud_run_v2_service.msbs_next_api.name
-  project  = google_cloud_run_v2_service.msbs_next_api.project
-  location = google_cloud_run_v2_service.msbs_next_api.location
-
+  name     = google_cloud_run_v2_service.main.name
+  project  = google_cloud_run_v2_service.main.project
+  location = google_cloud_run_v2_service.main.location
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
