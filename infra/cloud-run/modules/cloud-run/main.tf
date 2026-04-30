@@ -85,10 +85,10 @@ resource "google_cloud_run_v2_service" "main" {
           path = "/health"
           port = 8080
         }
-        initial_delay_seconds = 0
-        timeout_seconds       = 1
-        period_seconds        = 3
-        failure_threshold     = 3
+        initial_delay_seconds = 5
+        timeout_seconds       = 5
+        period_seconds        = 10
+        failure_threshold     = 5
       }
     }
     max_instance_request_concurrency = var.container_concurrency
