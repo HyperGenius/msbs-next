@@ -9,7 +9,7 @@ module "base" {
   project_id    = var.project_id
   region        = var.region
   environment   = var.environment
-  repository_id = "shift-assist"
+  repository_id = "msbs-next"
 }
 
 # 2. アプリケーションリソース（Cloud Run, Secret Manager, IAM等）
@@ -37,4 +37,12 @@ module "cloud_run" {
   clerk_secret_key = var.clerk_secret_key
   clerk_jwks_url   = var.clerk_jwks_url
   allowed_origins  = join(",", var.allowed_origins)
+
+  # Artifact Registry
+  repository_url = module.base.repository_url
+
+  # batch_job 設定
+  batch_image_tag    = var.batch_image_tag
+  batch_cpu_limit    = var.batch_cpu_limit
+  batch_memory_limit = var.batch_memory_limit
 }

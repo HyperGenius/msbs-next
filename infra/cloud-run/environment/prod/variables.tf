@@ -1,4 +1,7 @@
 # infra/environments/prod/variables.tf
+# ==========================================
+# GCP 基本設定
+# ==========================================
 variable "project_id" {
   type = string
 }
@@ -13,6 +16,9 @@ variable "environment" {
   default = "prod"
 }
 
+# ==========================================
+# Cloud Run サービス設定
+# ==========================================
 variable "service_name" {
   type    = string
   default = "msbs-next-api"
@@ -23,7 +29,9 @@ variable "image_tag" {
   default = "latest"
 }
 
+# ==========================================
 # リソース設定
+# ==========================================
 variable "container_concurrency" {
   type    = number
   default = 80
@@ -49,7 +57,9 @@ variable "memory_limit" {
   default = "512Mi"
 }
 
-# アプリケーション設定
+# ==========================================
+# アプリケーション設定・シークレット
+# ==========================================
 variable "database_url" {
   type      = string
   sensitive = true
@@ -66,4 +76,25 @@ variable "clerk_jwks_url" {
 
 variable "allowed_origins" {
   type    = list(string)
+}
+
+# ==========================================
+# Cloud Run Jobs（バッチ）設定
+# ==========================================
+variable "batch_image_tag" {
+  description = "バッチ Docker イメージタグ"
+  type        = string
+  default     = "latest"
+}
+
+variable "batch_cpu_limit" {
+  description = "バッチジョブの CPU 上限"
+  type        = string
+  default     = "2"
+}
+
+variable "batch_memory_limit" {
+  description = "バッチジョブのメモリ上限"
+  type        = string
+  default     = "2Gi"
 }

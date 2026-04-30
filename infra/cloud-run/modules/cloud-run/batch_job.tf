@@ -1,12 +1,11 @@
-# infra/cloud-run/batch_job.tf
+# infra/cloud-run/modules/cloud-run/batch_job.tf
 # Cloud Run Jobs リソース（バッチ実行用）
 resource "google_cloud_run_v2_job" "msbs_batch" {
   name     = "msbs-next-batch"
   location = var.region
 
   labels = {
-    environment = "production"
-    project     = "msbs-next"
+    environment = var.environment
   }
 
   template {
@@ -20,7 +19,7 @@ resource "google_cloud_run_v2_job" "msbs_batch" {
       timeout = "3600s"
 
       containers {
-        image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.msbs_next.repository_id}/msbs-next-batch:${var.batch_image_tag}"
+        image = "${var.repository_url}/msbs-next-batch:${var.batch_image_tag}"
 
         resources {
           limits = {
