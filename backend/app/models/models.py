@@ -295,6 +295,59 @@ class MobileSuitResponse(SQLModel):
         )
 
 
+# --- Master Mobile Suit Admin Models ---
+
+
+class MasterMobileSuitSpec(SQLModel):
+    """マスター機体スペック定義（管理者用）."""
+
+    max_hp: int
+    armor: int
+    mobility: float
+    sensor_range: float = 500.0
+    beam_resistance: float = 0.0
+    physical_resistance: float = 0.0
+    melee_aptitude: float = 1.0
+    shooting_aptitude: float = 1.0
+    accuracy_bonus: float = 0.0
+    evasion_bonus: float = 0.0
+    acceleration_bonus: float = 1.0
+    turning_bonus: float = 1.0
+    weapons: list[Weapon]
+
+
+class MasterMobileSuitEntry(SQLModel):
+    """マスター機体エントリー定義（管理者用レスポンス）."""
+
+    id: str
+    name: str
+    price: int
+    faction: str = ""
+    description: str
+    specs: MasterMobileSuitSpec
+
+
+class MasterMobileSuitCreate(SQLModel):
+    """マスター機体新規追加リクエスト."""
+
+    id: str
+    name: str
+    price: int
+    faction: str = ""
+    description: str
+    specs: MasterMobileSuitSpec
+
+
+class MasterMobileSuitUpdate(SQLModel):
+    """マスター機体更新リクエスト."""
+
+    name: str | None = None
+    price: int | None = None
+    faction: str | None = None
+    description: str | None = None
+    specs: MasterMobileSuitSpec | None = None
+
+
 class RetreatPoint(SQLModel):
     """撤退ポイント定義 (Phase 3-3)."""
 

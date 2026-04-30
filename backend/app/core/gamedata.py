@@ -198,6 +198,34 @@ def _get_weapon_shop_listings() -> list[dict]:
     return _weapon_shop_listings_cache
 
 
+def get_master_mobile_suits() -> list[dict]:
+    """マスター機体データを生データ（辞書リスト）で返す.
+
+    キャッシュ未ロード時は自動ロードする。
+    Weaponオブジェクトではなく辞書のまま返すため、JSON出力に向く。
+
+    Returns:
+        list[dict]: マスター機体データの生辞書リスト
+    """
+    json_path = _DATA_DIR / "mobile_suits.json"
+    with open(json_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_master_mobile_suits(data: list[dict]) -> None:
+    """マスター機体データをJSONファイルへ保存し、インメモリキャッシュをリロードする.
+
+    Args:
+        data: 保存するマスター機体データの辞書リスト
+    """
+    global _shop_listings_cache
+    json_path = _DATA_DIR / "mobile_suits.json"
+    with open(json_path, mode="w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    # キャッシュをリロード
+    _shop_listings_cache = _load_mobile_suits_json()
+
+
 def reload_master_data() -> dict[str, int]:
     """マスターデータのキャッシュをリロードする.
 
