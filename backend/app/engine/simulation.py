@@ -19,6 +19,8 @@ from app.engine.constants import (
     FUZZY_RULES_DIR,
     HIGH_THREAT_THRESHOLD,
     MAP_BOUNDS,
+    OBSTACLE_MARGIN,
+    OBSTACLE_REPULSION_COEFF,
     RETREAT_ATTRACTION_COEFF,
     SPECIAL_ENVIRONMENT_EFFECTS,
     STRATEGY_UPDATE_INTERVAL,
@@ -28,7 +30,7 @@ from app.engine.constants import (
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
-from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
+from app.models.models import BattleLog, MobileSuit, Obstacle, RetreatPoint, Vector3, Weapon
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +47,48 @@ MOVE_LOG_MIN_DIST: float = 100.0
 _TEAM_EVENT_ACTOR_ID: uuid.UUID = uuid.UUID(int=0)
 
 
+def _has_los(
+    pos_a: np.ndarray,
+    pos_b: np.ndarray,
+    obstacles: "list[Obstacle]",
+) -> bool:
+    """pos_a から pos_b への視線が障害物に遮られていないか判定する（3D Ray-Sphere 交差判定）.
+
+    障害物を 3D 球体としてモデル化し、Y 軸（高度）も考慮する。
+    a = |unit_dir|² = 1 なので簡略化した判別式を使用する。
+
+    Args:
+        pos_a: 射撃者の位置 (3D numpy 配列)
+        pos_b: ターゲットの位置 (3D numpy 配列)
+        obstacles: 障害物リスト
+
+    Returns:
+        True: LOS あり（視線が通っている）
+        False: LOS なし（障害物で遮断されている）
+    """
+    if not obstacles:
+        return True
+
+    direction = pos_b - pos_a
+    dist = float(np.linalg.norm(direction))
+    if dist < 1e-6:
+        return True
+    unit_dir = direction / dist
+
+    for obs in obstacles:
+        obs_center = np.array([obs.position.x, obs.position.y, obs.position.z])
+        oc = pos_a - obs_center
+        b = 2.0 * float(np.dot(oc, unit_dir))
+        c = float(np.dot(oc, oc)) - obs.radius ** 2
+        discriminant = b ** 2 - 4.0 * c
+        if discriminant < 0:
+            continue
+        t = (-b - math.sqrt(discriminant)) / 2.0
+        if 0.0 < t < dist:
+            return False
+    return True
+
+
 class BattleSimulator:
     """戦闘シミュレータ."""
 
@@ -59,6 +103,7 @@ class BattleSimulator:
         retreat_points: list[RetreatPoint] | None = None,
         strategy_update_interval: int = STRATEGY_UPDATE_INTERVAL,
         enable_hot_reload: bool = False,
+        obstacles: list[Obstacle] | None = None,
     ):
         """初期化.
 
@@ -74,6 +119,7 @@ class BattleSimulator:
             enable_hot_reload: True の場合、シミュレーション実行ごとにファジィルール JSON
                 の変更を自動検出して再ロードする（ローカル開発用）。False の場合は
                 起動時に一度だけロードしてスナップショットとして保持する（デフォルト）。
+            obstacles: フィールド上の障害物リスト (Phase A — LOS システム)
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -90,6 +136,7 @@ class BattleSimulator:
         self.special_effects: list[str] = special_effects or []
         self.player_pilot_stats: PilotStats = player_pilot_stats or PilotStats()
         self.retreat_points: list[RetreatPoint] = retreat_points or []
+        self.obstacles: list[Obstacle] = obstacles or []
 
         # team_id が未設定のユニットにはソロ参加用のIDを自動付与
         for unit in self.units:
@@ -113,6 +160,7 @@ class BattleSimulator:
                 "velocity_vec": np.zeros(3),  # 現在の速度ベクトル (3D, m/s)
                 "heading_deg": 0.0,  # 現在の向き (XZ平面, 度)
                 "status": "ACTIVE",  # ユニット状態: ACTIVE / RETREATED / DESTROYED (Phase 3-3)
+                "last_known_enemy_position": {},  # {enemy_id: [x, y, z]} LOS 喪失時の最終座標 (Phase A)
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:
@@ -206,6 +254,32 @@ class BattleSimulator:
             return "AGGRESSIVE"
 
         return mode
+
+    def _get_units_in_weapon_range(
+        self,
+        unit: MobileSuit,
+        all_units: list[MobileSuit],
+        weapon_max_range: float,
+    ) -> list[MobileSuit]:
+        """射撃武器の最大射程内にいるユニットを返す（LOS チェックのパフォーマンス最適化用）.
+
+        Args:
+            unit: 基準となるユニット
+            all_units: チェック対象の全ユニットリスト
+            weapon_max_range: 武器の最大射程 (m)
+
+        Returns:
+            射程内にいるユニットのリスト
+        """
+        pos_unit = unit.position.to_numpy()
+        result = []
+        for target in all_units:
+            if target.id == unit.id:
+                continue
+            dist = float(np.linalg.norm(target.position.to_numpy() - pos_unit))
+            if dist <= weapon_max_range:
+                result.append(target)
+        return result
 
     def _generate_chatter(self, unit: MobileSuit, chatter_type: str) -> str | None:
         """NPCのセリフを生成する.
@@ -825,15 +899,31 @@ class BattleSimulator:
 
             # 索敵範囲内の敵をチェック
             for target in potential_targets:
-                if target.id in self.team_detected_units[unit.team_id]:
-                    # 既に発見済み
-                    continue
-
+                unit_id = str(unit.id)
                 pos_target = target.position.to_numpy()
                 distance = float(np.linalg.norm(pos_target - pos_unit))
 
+                if target.id in self.team_detected_units[unit.team_id]:
+                    # 既に発見済み — LOS が失われていないか再チェック（障害物がある場合）
+                    if self.obstacles and not _has_los(
+                        pos_unit, pos_target, self.obstacles
+                    ):
+                        # LOS 喪失: 発見済みリストから除外し最終座標を記憶
+                        self.team_detected_units[unit.team_id].discard(target.id)
+                        self.unit_resources[unit_id]["last_known_enemy_position"][
+                            str(target.id)
+                        ] = pos_target.tolist()
+                    continue
+
                 # 索敵判定（ミノフスキー粒子による索敵範囲低下を適用）
                 if distance <= effective_sensor_range:
+                    # LOS チェック（障害物がある場合のみ）
+                    if self.obstacles and not _has_los(
+                        pos_unit, pos_target, self.obstacles
+                    ):
+                        # 障害物により遮断されているため発見不可
+                        continue
+
                     # 発見！
                     self.team_detected_units[unit.team_id].add(target.id)
 
@@ -1391,6 +1481,28 @@ class BattleSimulator:
         unit_id = str(actor.id)
         resources = self.unit_resources[unit_id]
 
+        # LOS チェック（格闘武器はスキップ、障害物がある場合のみ）
+        is_melee = getattr(weapon, "is_melee", False)
+        if not is_melee and self.obstacles:
+            pos_target = target.position.to_numpy()
+            if not _has_los(pos_actor, pos_target, self.obstacles):
+                actor_name = self._format_actor_name(actor)
+                weapon_display = f"[{weapon.name}]" if weapon.name else "[武装]"
+                self.logs.append(
+                    BattleLog(
+                        timestamp=self.elapsed_time,
+                        actor_id=actor.id,
+                        action_type="ATTACK_BLOCKED_LOS",
+                        target_id=target.id,
+                        message=(
+                            f"{actor_name}の{weapon_display}は障害物に遮られ、"
+                            f"{target.name}への射線が確保できない"
+                        ),
+                        position_snapshot=snapshot,
+                    )
+                )
+                return
+
         # リソース状態を取得または初期化
         weapon_state = self._get_or_init_weapon_state(weapon, resources)
 
@@ -1865,6 +1977,14 @@ class BattleSimulator:
             ]
             total_force += self._retreat_points_attraction(pos_unit, applicable_rps)
 
+        # 7. 障害物への斥力 (Phase A — LOS システム)
+        for obs in self.obstacles:
+            obs_pos = np.array([obs.position.x, obs.position.y, obs.position.z])
+            obs_dist = float(np.linalg.norm(pos_unit - obs_pos))
+            if obs_dist <= obs.radius + OBSTACLE_MARGIN:
+                away_vec = (pos_unit - obs_pos) / max(obs_dist, 1.0)
+                total_force += OBSTACLE_REPULSION_COEFF * away_vec
+
         # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
         total_force[1] = 0.0  # Y 成分を XZ 平面に固定
         magnitude = float(np.linalg.norm(total_force))
@@ -1996,8 +2116,48 @@ class BattleSimulator:
         if not potential_targets:
             return
 
-        # 最も近い敵の方向へ移動（まだ発見していなくても）
         pos_actor = actor.position.to_numpy()
+        unit_id = str(actor.id)
+
+        # LOS 喪失済みの最終既知座標がある場合はそこへ向かう（Phase A）
+        last_known = self.unit_resources[unit_id].get("last_known_enemy_position", {})
+        if last_known:
+            # 最も近い最終既知座標を選ぶ
+            best_pos: np.ndarray | None = None
+            best_dist = float("inf")
+            for pos_list in last_known.values():
+                p = np.array(pos_list)
+                d = float(np.linalg.norm(p - pos_actor))
+                if d < best_dist:
+                    best_dist = d
+                    best_pos = p
+            if best_pos is not None:
+                diff_vector = best_pos - pos_actor
+                distance = float(np.linalg.norm(diff_vector))
+                if distance > 0:
+                    desired_direction = self._calculate_potential_field(
+                        actor, target=None, retreat_points=self.retreat_points
+                    )
+                    self._apply_inertia(actor, desired_direction, dt)
+                    if distance >= MOVE_LOG_MIN_DIST:
+                        self.logs.append(
+                            BattleLog(
+                                timestamp=self.elapsed_time,
+                                actor_id=actor.id,
+                                action_type="MOVE",
+                                message=(
+                                    f"{self._format_actor_name(actor)}が最終目撃地点へ向かっている"
+                                    f" (残距離: {int(distance)}m)"
+                                ),
+                                position_snapshot=actor.position,
+                                velocity_snapshot=Vector3.from_numpy(
+                                    self.unit_resources[unit_id]["velocity_vec"]
+                                ),
+                            )
+                        )
+                    return
+
+        # 最も近い敵の方向へ移動（まだ発見していなくても）
         closest_enemy = min(
             potential_targets,
             key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
