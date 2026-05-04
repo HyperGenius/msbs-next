@@ -358,6 +358,21 @@ class RetreatPoint(SQLModel):
     )
 
 
+class Obstacle(SQLModel):
+    """障害物定義 (Phase A — LOS システム)."""
+
+    obstacle_id: str
+    position: Vector3  # 球体中心座標（3D: x, y, z）
+    radius: float  # 半径（m）。LOS 判定では 3D 球体として使用
+    height: float = 0.0  # 高さ（m）。BattleViewer の視覚的高さ表現用
+
+
+class BattleField(SQLModel):
+    """バトルフィールド定義 (Phase A — 障害物システム)."""
+
+    obstacles: list[Obstacle] = []  # フィールド上の障害物リスト
+
+
 class BattleTeam(SQLModel):
     """バトルチーム定義 (Phase 4-2)."""
 

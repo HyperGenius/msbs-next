@@ -1,8 +1,8 @@
 # ダイナミック近接戦闘システム 機能仕様書
 
-**バージョン:** 0.1.0 (Draft)
+**バージョン:** 0.2.0 (Phase A 実装済み)
 **作成日:** 2026-05-04
-**ステータス:** 設計中
+**ステータス:** Phase A 実装済み
 
 ---
 
@@ -579,14 +579,16 @@ RANGED_MID_ACCURACY_PENALTY: float = 0.7  # d <= CLOSE_RANGE
 
 ### Phase A：LOS + 障害物（基盤）
 
-- [ ] `Obstacle` データクラスの追加
-- [ ] `BattleField.obstacles` フィールドの追加
-- [ ] `_has_los()` の実装（Ray-Sphere 交差判定）
-- [ ] `_search_phase()` に LOS チェックを追加
-- [ ] `_process_attack()` に LOS チェックを追加（射撃遮断）
-- [ ] `last_known_enemy_position` の管理ロジック
-- [ ] ポテンシャルフィールドに障害物斥力を追加
-- [ ] `ATTACK_BLOCKED_LOS` ログ追加
+- [x] `Obstacle` データクラスの追加（`backend/app/models/models.py`）
+- [x] `BattleField.obstacles` フィールドの追加（`backend/app/models/models.py`）
+- [x] `_has_los()` の実装（Ray-Sphere 交差判定、`backend/app/engine/simulation.py`）
+- [x] `_get_units_in_weapon_range()` の実装（パフォーマンス最適化用ヘルパー）
+- [x] `_detection_phase()` に LOS チェックを追加（LOS 遮断時は発見不可）
+- [x] `_process_attack()` に LOS チェックを追加（射撃遮断、`ATTACK_BLOCKED_LOS` ログ）
+- [x] `last_known_enemy_position` の管理ロジック（LOS 喪失時に座標を記憶）
+- [x] ポテンシャルフィールドに障害物斥力を追加（`OBSTACLE_REPULSION_COEFF=4.0`）
+- [x] `OBSTACLE_MARGIN` / `OBSTACLE_REPULSION_COEFF` を `constants.py` に追加
+- [x] ユニットテスト追加（`backend/tests/unit/test_los_obstacle.py`、28 テスト）
 
 ### Phase B：ブーストダッシュ
 
