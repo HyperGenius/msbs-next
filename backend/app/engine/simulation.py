@@ -78,8 +78,8 @@ def _has_los(
     for obs in obstacles:
         obs_center = np.array([obs.position.x, obs.position.y, obs.position.z])
         oc = pos_a - obs_center
-        b = 2.0 * float(np.dot(oc, unit_dir))
-        c = float(np.dot(oc, oc)) - obs.radius ** 2
+        b = 2.0 * np.dot(oc, unit_dir)
+        c = np.dot(oc, oc) - obs.radius ** 2
         discriminant = b ** 2 - 4.0 * c
         if discriminant < 0:
             continue
