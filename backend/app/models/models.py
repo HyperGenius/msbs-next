@@ -133,6 +133,20 @@ class MobileSuit(SQLModel, table=True):
         default=1000, description="最大推進剤容量 (将来的な移動コスト用)"
     )
 
+    # Boost Dash Parameters (Phase B)
+    boost_speed_multiplier: float = Field(
+        default=2.0, description="ブースト時速度倍率 (max_speed × multiplier)"
+    )
+    boost_en_cost: float = Field(
+        default=5.0, description="ブースト中 EN 消費量 (/s)"
+    )
+    boost_max_duration: float = Field(
+        default=3.0, description="1 回のブーストの最大継続時間 (s)"
+    )
+    boost_cooldown: float = Field(
+        default=5.0, description="ブースト終了後の再使用不可時間 (s)"
+    )
+
     # Complex Types (Stored as JSON in Postgres)
     # SQLModel + SQLAlchemy JSON Column mapping
     position: Vector3 = Field(default_factory=Vector3, sa_column=Column(JSON))
@@ -195,6 +209,10 @@ class MobileSuitUpdate(SQLModel):
     evasion_bonus: float | None = None
     acceleration_bonus: float | None = None
     turning_bonus: float | None = None
+    boost_speed_multiplier: float | None = None
+    boost_en_cost: float | None = None
+    boost_max_duration: float | None = None
+    boost_cooldown: float | None = None
 
 
 # --- Response Models (APIレスポンス用) ---
@@ -236,6 +254,12 @@ class MobileSuitResponse(SQLModel):
     pilot_name: str | None = None
     bounty_exp: int = 0
     bounty_credits: int = 0
+
+    # Boost Dash Parameters (Phase B)
+    boost_speed_multiplier: float = 2.0
+    boost_en_cost: float = 5.0
+    boost_max_duration: float = 3.0
+    boost_cooldown: float = 5.0
 
     # Rank fields (computed from raw values)
     hp_rank: str = "C"
@@ -292,6 +316,10 @@ class MobileSuitResponse(SQLModel):
             hp_rank=get_rank("hp", ms.max_hp),
             armor_rank=get_rank("armor", ms.armor),
             mobility_rank=get_rank("mobility", ms.mobility),
+            boost_speed_multiplier=ms.boost_speed_multiplier,
+            boost_en_cost=ms.boost_en_cost,
+            boost_max_duration=ms.boost_max_duration,
+            boost_cooldown=ms.boost_cooldown,
         )
 
 
