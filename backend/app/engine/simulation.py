@@ -30,7 +30,14 @@ from app.engine.constants import (
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
-from app.models.models import BattleLog, MobileSuit, Obstacle, RetreatPoint, Vector3, Weapon
+from app.models.models import (
+    BattleLog,
+    MobileSuit,
+    Obstacle,
+    RetreatPoint,
+    Vector3,
+    Weapon,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +86,8 @@ def _has_los(
         obs_center = np.array([obs.position.x, obs.position.y, obs.position.z])
         oc = pos_a - obs_center
         b = 2.0 * np.dot(oc, unit_dir)
-        c = np.dot(oc, oc) - obs.radius ** 2
-        discriminant = b ** 2 - 4.0 * c
+        c = np.dot(oc, oc) - obs.radius**2
+        discriminant = b**2 - 4.0 * c
         if discriminant < 0:
             continue
         t = (-b - math.sqrt(discriminant)) / 2.0

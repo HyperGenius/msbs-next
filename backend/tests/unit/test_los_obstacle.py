@@ -12,11 +12,15 @@ Validates:
 """
 
 import numpy as np
-import pytest
 
 from app.engine.simulation import BattleSimulator, _has_los
-from app.models.models import BattleField, MobileSuit, Obstacle, RetreatPoint, Vector3, Weapon
-
+from app.models.models import (
+    BattleField,
+    MobileSuit,
+    Obstacle,
+    Vector3,
+    Weapon,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -184,7 +188,9 @@ def test_has_los_y_axis_obstacle_3d() -> None:
 def test_detection_blocked_by_obstacle() -> None:
     """センサー範囲内でも障害物で遮断されている場合、発見されないこと."""
     # プレイヤー: (0,0,0), 敵: (1000,0,0), 障害物: (500,0,0) radius=100
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0
+    )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
     obs = _make_obstacle("obs1", 500.0, 0.0, 0.0, 100.0)
     sim = BattleSimulator(player, [enemy], obstacles=[obs])
@@ -199,7 +205,9 @@ def test_detection_blocked_by_obstacle() -> None:
 
 def test_detection_passes_without_obstacle_on_ray() -> None:
     """障害物が射線外にある場合、通常通り発見されること."""
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0
+    )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
     obs = _make_obstacle("obs1", 500.0, 0.0, 300.0, 100.0)  # 射線横
     sim = BattleSimulator(player, [enemy], obstacles=[obs])
@@ -214,7 +222,9 @@ def test_detection_passes_without_obstacle_on_ray() -> None:
 
 def test_detection_los_lost_stores_last_known_position() -> None:
     """発見済みの敵が障害物の陰に入った場合、最終座標が記録されること."""
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0
+    )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
 
     # 最初は障害物なしで発見させる
@@ -236,7 +246,9 @@ def test_detection_los_lost_stores_last_known_position() -> None:
 
 def test_detection_no_obstacles_backward_compatible() -> None:
     """obstacles=[] の場合、従来通りに発見されること（後方互換性）."""
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0
+    )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=500, y=0, z=0))
     sim = BattleSimulator(player, [enemy])  # obstacles なし
 
@@ -254,7 +266,9 @@ def test_detection_no_obstacles_backward_compatible() -> None:
 
 def test_attack_blocked_by_obstacle_logs_attack_blocked_los() -> None:
     """射線上の障害物により攻撃がスキップされ ATTACK_BLOCKED_LOS がログに記録されること."""
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapon_range=1500.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapon_range=1500.0
+    )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
     obs = _make_obstacle("obs1", 500.0, 0.0, 0.0, 100.0)
     sim = BattleSimulator(player, [enemy], obstacles=[obs])
@@ -273,7 +287,9 @@ def test_attack_blocked_by_obstacle_logs_attack_blocked_los() -> None:
 
 def test_attack_not_blocked_when_no_obstacle_on_ray() -> None:
     """射線外の障害物があっても攻撃は通常通り実行されること."""
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapon_range=1500.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapon_range=1500.0
+    )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
     obs = _make_obstacle("obs1", 500.0, 0.0, 300.0, 100.0)  # 射線外
     sim = BattleSimulator(player, [enemy], obstacles=[obs])
@@ -287,14 +303,21 @@ def test_attack_not_blocked_when_no_obstacle_on_ray() -> None:
     assert len(blocked_logs) == 0, "射線外の障害物では攻撃がブロックされてはいけない"
 
     # ATTACK or DAMAGE or MISS が記録されること
-    attack_logs = [log for log in sim.logs if log.action_type in {"ATTACK", "DAMAGE", "MISS"}]
+    attack_logs = [
+        log for log in sim.logs if log.action_type in {"ATTACK", "DAMAGE", "MISS"}
+    ]
     assert len(attack_logs) > 0, "攻撃が実行されるべき"
 
 
 def test_melee_attack_skips_los_check() -> None:
     """格闘武器は LOS チェックをスキップすること."""
     player = _make_unit(
-        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapon_range=50.0, is_melee=True
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        weapon_range=50.0,
+        is_melee=True,
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=30, y=0, z=0))
     obs = _make_obstacle("obs1", 15.0, 0.0, 0.0, 10.0)  # 射線上
@@ -313,7 +336,9 @@ def test_melee_attack_skips_los_check() -> None:
 
 def test_attack_no_obstacles_backward_compatible() -> None:
     """obstacles=[] の場合、攻撃は従来通り実行されること（後方互換性）."""
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapon_range=1500.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapon_range=1500.0
+    )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=200, y=0, z=0))
     sim = BattleSimulator(player, [enemy])  # obstacles なし
 
@@ -373,11 +398,13 @@ def test_potential_field_no_repulsion_outside_margin() -> None:
         [_make_unit("Enemy2", "ENEMY", "ET", Vector3(x=4000, y=0, z=0))],
     )
     sim_with_obs.team_detected_units[player.team_id].add(enemy.id)
-    sim_without_obs.team_detected_units[
-        sim_without_obs.player.team_id
-    ].add(sim_without_obs.enemies[0].id)
+    sim_without_obs.team_detected_units[sim_without_obs.player.team_id].add(
+        sim_without_obs.enemies[0].id
+    )
     sim_with_obs.unit_resources[str(player.id)]["current_action"] = "MOVE"
-    sim_without_obs.unit_resources[str(sim_without_obs.player.id)]["current_action"] = "MOVE"
+    sim_without_obs.unit_resources[str(sim_without_obs.player.id)]["current_action"] = (
+        "MOVE"
+    )
 
     dir_with = sim_with_obs._calculate_potential_field(player)
     dir_without = sim_without_obs._calculate_potential_field(sim_without_obs.player)
@@ -470,7 +497,7 @@ def test_simulator_accepts_obstacles_parameter() -> None:
 
 
 def test_simulator_default_no_obstacles() -> None:
-    """obstacles を渡さない場合、空リストになること（後方互換性）."""
+    """Obstacles を渡さない場合、空リストになること（後方互換性）."""
     player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=500, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
@@ -479,9 +506,16 @@ def test_simulator_default_no_obstacles() -> None:
 
 def test_full_simulation_with_obstacles_completes() -> None:
     """障害物ありでシミュレーションが正常に完了すること（後方互換性）."""
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0
+    )
     enemy = _make_unit(
-        "Enemy", "ENEMY", "ET", Vector3(x=4000, y=0, z=0), sensor_range=2000.0, weapon_range=1500.0
+        "Enemy",
+        "ENEMY",
+        "ET",
+        Vector3(x=4000, y=0, z=0),
+        sensor_range=2000.0,
+        weapon_range=1500.0,
     )
     # 射線外の障害物（両ユニット間の正射線からずれた位置）
     obs = _make_obstacle("obs1", 2000.0, 0.0, 300.0, 100.0)
@@ -502,8 +536,12 @@ def test_full_simulation_without_obstacles_unchanged() -> None:
     import random
 
     random.seed(42)
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0)
-    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=500, y=0, z=0), sensor_range=2000.0)
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), sensor_range=2000.0
+    )
+    enemy = _make_unit(
+        "Enemy", "ENEMY", "ET", Vector3(x=500, y=0, z=0), sensor_range=2000.0
+    )
 
     sim = BattleSimulator(player, [enemy])
     for _ in range(200):
