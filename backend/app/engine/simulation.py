@@ -2259,11 +2259,8 @@ class BattleSimulator:
                                 "current_ammo"
                             )
                             is None
-                            or (
-                                resources["weapon_states"].get(str(w.id), {}).get(
-                                    "current_ammo", 0
-                                )
-                                or 0
+                            or resources["weapon_states"].get(str(w.id), {}).get(
+                                "current_ammo", 0
                             )
                             > 0
                         )
@@ -2279,10 +2276,7 @@ class BattleSimulator:
                     # 停止距離: d_stop = v² / (2 × deceleration)
                     if deceleration > 0 and current_speed > 0:
                         d_stop = (current_speed ** 2) / (2.0 * deceleration)
-                        if current_speed > 0:
-                            stop_direction = current_velocity / current_speed
-                        else:
-                            stop_direction = np.zeros(3)
+                        stop_direction = current_velocity / current_speed
 
                         stop_pos = pos_actor + stop_direction * d_stop
                         d_to_target_from_stop = float(
