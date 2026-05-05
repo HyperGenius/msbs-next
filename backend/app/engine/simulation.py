@@ -834,47 +834,75 @@ class BattleSimulator:
                     target=target,
                 )
         elif current_action == "BOOST_DASH":
-            # ブーストダッシュ行動 (Phase B)
-            resources = self.unit_resources[unit_id]
-            is_boosting = resources.get("is_boosting", False)
-            cooldown_remaining = resources.get("boost_cooldown_remaining", 0.0)
-
-            if not is_boosting and cooldown_remaining <= 0.0:
-                # ブースト開始
-                resources["is_boosting"] = True
-                resources["boost_elapsed"] = 0.0
-                self.logs.append(
-                    BattleLog(
-                        timestamp=float(self.elapsed_time),
-                        actor_id=actor.id,
-                        action_type="BOOST_START",
-                        message=(
-                            f"{self._format_actor_name(actor)} がブーストダッシュを開始した！"
-                        ),
-                        position_snapshot=actor.position,
-                    )
-                )
-
-            # ブーストキャンセル判定
-            cancelled = self._check_boost_cancel(actor, target, dt)
-
-            if cancelled:
-                # キャンセル後は遠距離攻撃試行
-                if weapon and distance <= weapon.range:
-                    self._process_attack(actor, target, distance, pos_actor, weapon)
-                else:
-                    self._process_movement(
-                        actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
-                    )
-            else:
-                # ブースト継続: ターゲット方向へ高速移動
-                self._process_movement(
-                    actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
-                )
+            self._handle_boost_dash_action(
+                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
+            )
         else:
             # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ（攻撃対象引力なし）
             self._process_movement(
                 actor, pos_actor, pos_target, diff_vector, distance, dt
+            )
+
+    def _handle_boost_dash_action(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: object,
+        pos_actor: object,
+        pos_target: object,
+        diff_vector: object,
+        distance: float,
+        dt: float,
+    ) -> None:
+        """ブーストダッシュ行動処理 (Phase B)."""
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
+        is_boosting = resources.get("is_boosting", False)
+        cooldown_remaining = resources.get("boost_cooldown_remaining", 0.0)
+
+        if not is_boosting and cooldown_remaining <= 0.0:
+            # ブースト開始
+            resources["is_boosting"] = True
+            resources["boost_elapsed"] = 0.0
+            self.logs.append(
+                BattleLog(
+                    timestamp=float(self.elapsed_time),
+                    actor_id=actor.id,
+                    action_type="BOOST_START",
+                    message=(
+                        f"{self._format_actor_name(actor)} がブーストダッシュを開始した！"
+                    ),
+                    position_snapshot=actor.position,
+                )
+            )
+
+        # ブーストキャンセル判定
+        cancelled = self._check_boost_cancel(actor, target, dt)
+
+        if cancelled:
+            # キャンセル後は遠距離攻撃試行
+            if weapon and isinstance(weapon, Weapon) and distance <= weapon.range:
+                self._process_attack(actor, target, distance, pos_actor, weapon)
+            else:
+                self._process_movement(
+                    actor,
+                    pos_actor,
+                    pos_target,
+                    diff_vector,
+                    distance,
+                    dt,
+                    target=target,
+                )
+        else:
+            # ブースト継続: ターゲット方向へ高速移動
+            self._process_movement(
+                actor,
+                pos_actor,
+                pos_target,
+                diff_vector,
+                distance,
+                dt,
+                target=target,
             )
 
     def _log_target_selection(
@@ -2144,7 +2172,9 @@ class BattleSimulator:
         terrain_modifier = self._get_terrain_modifier(actor)
 
         # ブースト中は effective_max_speed を boost_speed_multiplier 倍にする (Phase B)
-        boost_multiplier = getattr(actor, "boost_speed_multiplier", DEFAULT_BOOST_SPEED_MULTIPLIER)
+        boost_multiplier = getattr(
+            actor, "boost_speed_multiplier", DEFAULT_BOOST_SPEED_MULTIPLIER
+        )
         if resources.get("is_boosting", False):
             effective_max_speed = actor.max_speed * boost_multiplier * terrain_modifier
         else:
@@ -2218,7 +2248,9 @@ class BattleSimulator:
         if not resources.get("is_boosting", False):
             return False
 
-        boost_max_duration = getattr(actor, "boost_max_duration", DEFAULT_BOOST_MAX_DURATION)
+        boost_max_duration = getattr(
+            actor, "boost_max_duration", DEFAULT_BOOST_MAX_DURATION
+        )
         boost_cooldown = getattr(actor, "boost_cooldown", DEFAULT_BOOST_COOLDOWN)
         boost_elapsed = resources.get("boost_elapsed", 0.0)
         current_en = resources.get("current_en", 0.0)
@@ -2250,18 +2282,18 @@ class BattleSimulator:
                         w
                         for w in actor.weapons
                         if not w.is_melee
-                        and resources["weapon_states"].get(str(w.id), {}).get(
-                            "current_cool_down", 0
-                        )
+                        and resources["weapon_states"]
+                        .get(str(w.id), {})
+                        .get("current_cool_down", 0)
                         == 0
                         and (
-                            resources["weapon_states"].get(str(w.id), {}).get(
-                                "current_ammo"
-                            )
+                            resources["weapon_states"]
+                            .get(str(w.id), {})
+                            .get("current_ammo")
                             is None
-                            or resources["weapon_states"].get(str(w.id), {}).get(
-                                "current_ammo", 0
-                            )
+                            or resources["weapon_states"]
+                            .get(str(w.id), {})
+                            .get("current_ammo", 0)
                             > 0
                         )
                     ),
@@ -2275,7 +2307,7 @@ class BattleSimulator:
 
                     # 停止距離: d_stop = v² / (2 × deceleration)
                     if deceleration > 0 and current_speed > 0:
-                        d_stop = (current_speed ** 2) / (2.0 * deceleration)
+                        d_stop = (current_speed**2) / (2.0 * deceleration)
                         stop_direction = current_velocity / current_speed
 
                         stop_pos = pos_actor + stop_direction * d_stop

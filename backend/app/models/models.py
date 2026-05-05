@@ -137,9 +137,7 @@ class MobileSuit(SQLModel, table=True):
     boost_speed_multiplier: float = Field(
         default=2.0, description="ブースト時速度倍率 (max_speed × multiplier)"
     )
-    boost_en_cost: float = Field(
-        default=5.0, description="ブースト中 EN 消費量 (/s)"
-    )
+    boost_en_cost: float = Field(default=5.0, description="ブースト中 EN 消費量 (/s)")
     boost_max_duration: float = Field(
         default=3.0, description="1 回のブーストの最大継続時間 (s)"
     )

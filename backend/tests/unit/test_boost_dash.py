@@ -4,18 +4,15 @@
 """
 
 import numpy as np
-import pytest
 
 from app.engine.constants import (
     DEFAULT_BOOST_COOLDOWN,
     DEFAULT_BOOST_EN_COST,
     DEFAULT_BOOST_MAX_DURATION,
     DEFAULT_BOOST_SPEED_MULTIPLIER,
-    MELEE_BOOST_ARRIVAL_RANGE,
 )
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # ヘルパー
@@ -403,7 +400,7 @@ def test_boost_cancel_logs_boost_end() -> None:
     sim.unit_resources[uid]["is_boosting"] = True
     sim.unit_resources[uid]["boost_elapsed"] = 3.0
 
-    initial_log_count = len(sim.logs)
+    _ = len(sim.logs)
     sim._check_boost_cancel(player, enemy, 0.1)
 
     boost_end_logs = [log for log in sim.logs if log.action_type == "BOOST_END"]
