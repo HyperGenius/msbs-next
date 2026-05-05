@@ -580,6 +580,95 @@ class BattleSimulator:
                 )
             )
 
+    def _compute_phase_c_fuzzy_inputs(
+        self,
+        unit: MobileSuit,
+        unit_id: str,
+        pos_unit: np.ndarray,
+        nearest_enemy: MobileSuit,
+    ) -> dict[str, float]:
+        """Phase C ファジィ入力変数を計算して返す.
+
+        Args:
+            unit: 行動中のユニット
+            unit_id: ユニットの文字列 ID
+            pos_unit: 行動中ユニットの位置ベクトル
+            nearest_enemy: 最近の索敵済み敵ユニット
+
+        Returns:
+            ranged_ammo_ratio / los_blocked / boost_available を含む dict
+        """
+        result: dict[str, float] = {}
+
+        # ranged_ammo_ratio: 全遠距離武器の残弾割合の平均
+        ranged_weapons = [
+            w for w in unit.weapons
+            if getattr(w, "weapon_type", "RANGED") != "MELEE"
+            and not getattr(w, "is_melee", False)
+        ]
+        if ranged_weapons:
+            ammo_ratios = []
+            for rw in ranged_weapons:
+                ws = self.unit_resources[unit_id]["weapon_states"].get(rw.id, {})
+                if rw.max_ammo is not None and rw.max_ammo > 0:
+                    current_ammo = ws.get("current_ammo", rw.max_ammo) or 0
+                    ammo_ratios.append(float(current_ammo) / float(rw.max_ammo))
+                else:
+                    ammo_ratios.append(1.0)
+            result["ranged_ammo_ratio"] = sum(ammo_ratios) / len(ammo_ratios)
+        else:
+            result["ranged_ammo_ratio"] = 1.0
+
+        # los_blocked: ターゲットへの LOS 状態（Phase A の結果を使用）
+        if self.obstacles:
+            pos_nearest = nearest_enemy.position.to_numpy()
+            los_ok = _has_los(pos_unit, pos_nearest, self.obstacles)
+            result["los_blocked"] = 0.0 if los_ok else 1.0
+        else:
+            result["los_blocked"] = 0.0
+
+        # boost_available: クールダウン中でなく EN が十分か
+        boost_cooldown_remaining = self.unit_resources[unit_id].get(
+            "boost_cooldown_remaining", 0.0
+        )
+        current_en = self.unit_resources[unit_id].get("current_en", 0.0)
+        boost_en_cost = getattr(unit, "boost_en_cost", DEFAULT_BOOST_EN_COST)
+        result["boost_available"] = (
+            1.0
+            if boost_cooldown_remaining == 0.0 and current_en > boost_en_cost
+            else 0.0
+        )
+
+        return result
+
+    def _resolve_final_action(
+        self, action: str, unit_id: str, strategy_mode: str
+    ) -> str:
+        """ファジィ推論結果に制約ガードを適用して最終アクションを決定する.
+
+        Args:
+            action: ファジィ推論が提案したアクション名
+            unit_id: ユニットの文字列 ID
+            strategy_mode: 現在の戦略モード
+
+        Returns:
+            制約ガード適用後の最終アクション名
+        """
+        if action == "RETREAT" and not self.retreat_points:
+            return "MOVE"
+
+        if action == "BOOST_DASH":
+            cooldown_remaining = self.unit_resources[unit_id].get(
+                "boost_cooldown_remaining", 0.0
+            )
+            if cooldown_remaining > 0.0:
+                return "MOVE"
+
+        if action == "ENGAGE_MELEE" and strategy_mode == "RETREAT":
+            return "MOVE"
+
+        return action
+
     def _ai_decision_phase(self, unit: MobileSuit) -> None:
         """中階層ファジィ推論フェーズ: 各ユニットの行動を決定する.
 
@@ -621,10 +710,8 @@ class BattleSimulator:
             return
 
         # --- ファジィ入力変数の計算 ---
-        # hp_ratio: 現在HP / 最大HP
         hp_ratio = unit.current_hp / max(1, unit.max_hp)
 
-        # 最近敵との距離を計算
         distances_to_detected = [
             float(np.linalg.norm(e.position.to_numpy() - pos_unit))
             for e in detected_enemies
@@ -633,12 +720,10 @@ class BattleSimulator:
             min(distances_to_detected) if distances_to_detected else 9999.0
         )
 
-        # enemy_count_near: 索敵済みの敵ユニット数（半径 _FUZZY_NEIGHBOR_RADIUS 以内）
         enemy_count_near = float(
             sum(1 for d in distances_to_detected if d <= _FUZZY_NEIGHBOR_RADIUS)
         )
 
-        # ally_count_near: 同一チームの生存ユニット数（半径 _FUZZY_NEIGHBOR_RADIUS 以内、自分を除く）
         ally_count_near = float(
             sum(
                 1
@@ -658,52 +743,15 @@ class BattleSimulator:
             "distance_to_nearest_enemy": distance_to_nearest_enemy,
         }
 
-        # --- 新規入力変数 (Phase C) ---
-        # ranged_ammo_ratio: 遠距離武器の残弾割合（全遠距離武器の平均）
-        ranged_weapons = [
-            w for w in unit.weapons
-            if getattr(w, "weapon_type", "RANGED") != "MELEE"
-            and not getattr(w, "is_melee", False)
-        ]
-        if ranged_weapons:
-            ammo_ratios = []
-            for rw in ranged_weapons:
-                ws = self.unit_resources[unit_id]["weapon_states"].get(rw.id, {})
-                if rw.max_ammo is not None and rw.max_ammo > 0:
-                    current_ammo = ws.get("current_ammo", rw.max_ammo) or 0
-                    ammo_ratios.append(float(current_ammo) / float(rw.max_ammo))
-                else:
-                    ammo_ratios.append(1.0)
-            ranged_ammo_ratio = sum(ammo_ratios) / len(ammo_ratios)
-        else:
-            ranged_ammo_ratio = 1.0
-        fuzzy_inputs["ranged_ammo_ratio"] = ranged_ammo_ratio
-
-        # los_blocked: ターゲットへの LOS 状態（Phase A の結果を使用）
+        # --- Phase C 入力変数をヘルパーで追加 ---
         nearest_enemy = min(
             detected_enemies,
             key=lambda e: float(np.linalg.norm(e.position.to_numpy() - pos_unit)),
         )
-        if self.obstacles:
-            pos_nearest = nearest_enemy.position.to_numpy()
-            los_ok = _has_los(pos_unit, pos_nearest, self.obstacles)
-            los_blocked = 0.0 if los_ok else 1.0
-        else:
-            los_blocked = 0.0
-        fuzzy_inputs["los_blocked"] = los_blocked
-
-        # boost_available: ブースト可否（クールダウン中か否か、EN残量チェック）
-        boost_cooldown_remaining = self.unit_resources[unit_id].get(
-            "boost_cooldown_remaining", 0.0
+        phase_c_inputs = self._compute_phase_c_fuzzy_inputs(
+            unit, unit_id, pos_unit, nearest_enemy
         )
-        current_en = self.unit_resources[unit_id].get("current_en", 0.0)
-        boost_en_cost = getattr(unit, "boost_en_cost", DEFAULT_BOOST_EN_COST)
-        boost_available = (
-            1.0
-            if boost_cooldown_remaining == 0.0 and current_en > boost_en_cost
-            else 0.0
-        )
-        fuzzy_inputs["boost_available"] = boost_available
+        fuzzy_inputs.update(phase_c_inputs)
 
         # --- 戦略モードに応じたファジィエンジンを選択 ---
         strategy_mode = self._resolve_strategy_mode(unit)
@@ -722,27 +770,16 @@ class BattleSimulator:
         else:
             action = "MOVE"
 
-        # RETREAT が出力されたが撤退ポイントが未設定の場合は MOVE にフォールバック
-        if action == "RETREAT" and not self.retreat_points:
-            action = "MOVE"
-
-        # BOOST_DASH がクールダウン中の場合は MOVE にフォールバック (Phase B)
-        if action == "BOOST_DASH":
-            cooldown_remaining = self.unit_resources[unit_id].get(
-                "boost_cooldown_remaining", 0.0
-            )
-            if cooldown_remaining > 0.0:
-                action = "MOVE"
-
-        # ENGAGE_MELEE は RETREAT モード中は選択されない (Phase C)
-        if action == "ENGAGE_MELEE":
-            if strategy_mode == "RETREAT":
-                action = "MOVE"
+        # 制約ガード（RETREAT/BOOST_DASH/ENGAGE_MELEE のフォールバック）
+        action = self._resolve_final_action(action, unit_id, strategy_mode)
 
         # 決定した行動を保存
         self.unit_resources[unit_id]["current_action"] = action
 
         # ファジィ推論結果をログに記録
+        ranged_ammo_ratio = phase_c_inputs["ranged_ammo_ratio"]
+        los_blocked = phase_c_inputs["los_blocked"]
+        boost_available = phase_c_inputs["boost_available"]
         self.logs.append(
             BattleLog(
                 timestamp=self.elapsed_time,

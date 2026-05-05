@@ -11,7 +11,6 @@
 - ファジィ入力変数の追加 (ranged_ammo_ratio / los_blocked / boost_available)
 """
 
-import random
 from unittest.mock import patch
 
 import numpy as np
@@ -19,9 +18,9 @@ import pytest
 
 from app.engine.constants import (
     CLOSE_RANGE,
-    COMBO_BASE_CHANCE,
     COMBO_DAMAGE_MULTIPLIER,
     COMBO_MAX_CHAIN,
+    FUZZY_RULES_DIR,
     MELEE_CLOSE_ACCURACY_BONUS,
     MELEE_MID_ACCURACY_BONUS,
     MELEE_RANGE,
@@ -29,6 +28,7 @@ from app.engine.constants import (
     RANGED_CLOSE_ACCURACY_PENALTY,
     RANGED_MID_ACCURACY_PENALTY,
 )
+from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 
@@ -462,14 +462,13 @@ class TestMeleeCombo:
         snapshot = player.position
 
         initial_hp = enemy.current_hp
-        combo_logs_before = len(sim.logs)
 
         with patch("random.random", return_value=1.0):
             sim._process_melee_combo(player, enemy, melee_w, 100, snapshot)
 
         # コンボなし: HP変化なし、MELEE_COMBOログなし
         assert enemy.current_hp == initial_hp
-        combo_logs = [l for l in sim.logs if l.action_type == "MELEE_COMBO"]
+        combo_logs = [log for log in sim.logs if log.action_type == "MELEE_COMBO"]
         assert len(combo_logs) == 0
 
     def test_single_combo_fires(self) -> None:
@@ -489,7 +488,7 @@ class TestMeleeCombo:
         expected_combo_damage = int(100 * COMBO_DAMAGE_MULTIPLIER)
         assert enemy.current_hp == initial_hp - expected_combo_damage
 
-        combo_logs = [l for l in sim.logs if l.action_type == "MELEE_COMBO"]
+        combo_logs = [log for log in sim.logs if log.action_type == "MELEE_COMBO"]
         assert len(combo_logs) == 1
         assert combo_logs[0].combo_count == 1
         assert "1Combo" in combo_logs[0].combo_message
@@ -512,7 +511,7 @@ class TestMeleeCombo:
         expected_total_damage = int(100 * COMBO_DAMAGE_MULTIPLIER) * expected_combo_count
         assert enemy.current_hp == initial_hp - expected_total_damage
 
-        combo_logs = [l for l in sim.logs if l.action_type == "MELEE_COMBO"]
+        combo_logs = [log for log in sim.logs if log.action_type == "MELEE_COMBO"]
         assert len(combo_logs) == 1
         assert combo_logs[0].combo_count == COMBO_MAX_CHAIN
         assert f"{COMBO_MAX_CHAIN}Combo" in combo_logs[0].combo_message
@@ -529,7 +528,7 @@ class TestMeleeCombo:
         with patch("random.random", side_effect=[0.1, 0.05, 1.0]):
             sim._process_melee_combo(player, enemy, melee_w, 100, snapshot)
 
-        combo_logs = [l for l in sim.logs if l.action_type == "MELEE_COMBO"]
+        combo_logs = [log for log in sim.logs if log.action_type == "MELEE_COMBO"]
         assert len(combo_logs) == 1
         log = combo_logs[0]
         assert log.combo_count == 2
@@ -551,7 +550,7 @@ class TestMeleeCombo:
             sim._process_melee_combo(player, enemy, melee_w, 100, snapshot)
 
         # 撃破ログが記録される
-        destroyed_logs = [l for l in sim.logs if l.action_type == "DESTROYED"]
+        destroyed_logs = [log for log in sim.logs if log.action_type == "DESTROYED"]
         assert len(destroyed_logs) >= 1
 
     def test_combo_stops_when_target_dead(self) -> None:
@@ -631,9 +630,6 @@ class TestFuzzyInputVariables:
 
     def test_ranged_ammo_ratio_empty_triggers_engage_melee(self) -> None:
         """ranged_ammo_ratio == 0 (EMPTY) のとき ENGAGE_MELEE が高スコアになる."""
-        from app.engine.fuzzy_engine import FuzzyEngine
-        from app.engine.constants import FUZZY_RULES_DIR
-
         engine = FuzzyEngine.from_json(FUZZY_RULES_DIR / "assault.json")
         _, debug = engine.infer_with_debug({
             "hp_ratio": 1.0,
@@ -658,9 +654,6 @@ class TestFuzzyInputVariables:
 
     def test_hp_high_and_distance_melee_triggers_engage_melee(self) -> None:
         """hp_ratio IS HIGH AND distance IS MELEE 時に ENGAGE_MELEE が選択される."""
-        from app.engine.fuzzy_engine import FuzzyEngine
-        from app.engine.constants import FUZZY_RULES_DIR
-
         engine = FuzzyEngine.from_json(FUZZY_RULES_DIR / "aggressive.json")
         _, debug = engine.infer_with_debug({
             "hp_ratio": 1.0,
@@ -685,9 +678,6 @@ class TestFuzzyInputVariables:
 
     def test_los_blocked_and_boost_available_triggers_boost_dash(self) -> None:
         """los_blocked IS BLOCKED AND boost_available IS AVAILABLE 時に BOOST_DASH が選択される."""
-        from app.engine.fuzzy_engine import FuzzyEngine
-        from app.engine.constants import FUZZY_RULES_DIR
-
         engine = FuzzyEngine.from_json(FUZZY_RULES_DIR / "assault.json")
         _, debug = engine.infer_with_debug({
             "hp_ratio": 0.8,
