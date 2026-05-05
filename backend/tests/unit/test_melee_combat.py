@@ -576,7 +576,7 @@ class TestMeleeCombo:
 # ---------------------------------------------------------------------------
 
 
-class TestProcessEngateMelee:
+class TestProcessEngageMelee:
     """_process_engage_melee() の格闘後再配置テスト."""
 
     def test_post_melee_repositioning(self) -> None:

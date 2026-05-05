@@ -736,8 +736,7 @@ class BattleSimulator:
 
         # ENGAGE_MELEE は RETREAT モード中は選択されない (Phase C)
         if action == "ENGAGE_MELEE":
-            strategy_mode_check = self._resolve_strategy_mode(unit)
-            if strategy_mode_check == "RETREAT":
+            if strategy_mode == "RETREAT":
                 action = "MOVE"
 
         # 決定した行動を保存
