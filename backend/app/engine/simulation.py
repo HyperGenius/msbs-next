@@ -602,7 +602,8 @@ class BattleSimulator:
 
         # ranged_ammo_ratio: 全遠距離武器の残弾割合の平均
         ranged_weapons = [
-            w for w in unit.weapons
+            w
+            for w in unit.weapons
             if getattr(w, "weapon_type", "RANGED") != "MELEE"
             and not getattr(w, "is_melee", False)
         ]
@@ -1060,7 +1061,13 @@ class BattleSimulator:
                 self._process_attack(actor, target, distance, pos_actor, weapon)
             else:
                 self._process_movement(
-                    actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+                    actor,
+                    pos_actor,
+                    pos_target,
+                    diff_vector,
+                    distance,
+                    dt,
+                    target=target,
                 )
 
     def _process_engage_melee(
@@ -1680,9 +1687,9 @@ class BattleSimulator:
         Returns:
             tuple[bool, str]: (攻撃可能か, 失敗理由)
         """
-        is_melee_weapon = getattr(weapon, "weapon_type", "RANGED") == "MELEE" or getattr(
-            weapon, "is_melee", False
-        )
+        is_melee_weapon = getattr(
+            weapon, "weapon_type", "RANGED"
+        ) == "MELEE" or getattr(weapon, "is_melee", False)
 
         # MELEE武器は弾数・EN消費ゼロ（弾切れ/EN不足チェックをスキップ）
         if not is_melee_weapon:
@@ -1772,9 +1779,9 @@ class BattleSimulator:
 
         MELEE 武器は弾薬・EN 消費がゼロのためスキップする (Phase C)。
         """
-        is_melee_weapon = getattr(weapon, "weapon_type", "RANGED") == "MELEE" or getattr(
-            weapon, "is_melee", False
-        )
+        is_melee_weapon = getattr(
+            weapon, "weapon_type", "RANGED"
+        ) == "MELEE" or getattr(weapon, "is_melee", False)
 
         if not is_melee_weapon:
             # 弾数を消費
@@ -2043,10 +2050,9 @@ class BattleSimulator:
             return
 
         # 格闘コンボシステム (Phase C — MELEE 武器のみ適用)
-        is_melee_weapon = (
-            getattr(weapon, "weapon_type", "RANGED") == "MELEE"
-            or getattr(weapon, "is_melee", False)
-        )
+        is_melee_weapon = getattr(
+            weapon, "weapon_type", "RANGED"
+        ) == "MELEE" or getattr(weapon, "is_melee", False)
         if is_melee_weapon:
             self._process_melee_combo(
                 actor, target, weapon, base_damage, snapshot, attack_chatter
@@ -2166,9 +2172,8 @@ class BattleSimulator:
             damage_multiplier = 1.0 + (damage_skill_level * 3.0) / 100.0  # +3% / Lv
             base_damage = int(base_damage * damage_multiplier)
 
-        is_melee = (
-            getattr(weapon, "weapon_type", "RANGED") == "MELEE"
-            or getattr(weapon, "is_melee", False)
+        is_melee = getattr(weapon, "weapon_type", "RANGED") == "MELEE" or getattr(
+            weapon, "is_melee", False
         )
         aptitude = (
             getattr(actor, "melee_aptitude", 1.0)

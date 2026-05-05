@@ -183,8 +183,9 @@ class TestCalculateHitChanceWithDistanceModifier:
 
     def test_melee_weapon_at_melee_range_has_higher_hit_than_ranged(self) -> None:
         """格闘武器は近接距離で遠距離武器より高い命中率を持つ."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_melee_weapon()])
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_melee_weapon()]
+        )
         enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=30, y=0, z=0))
         sim = BattleSimulator(player, [enemy])
 
@@ -199,8 +200,9 @@ class TestCalculateHitChanceWithDistanceModifier:
 
     def test_ranged_weapon_at_melee_range_has_0_4_modifier(self) -> None:
         """遠距離武器は d <= 50m で 0.4 倍補正を受ける."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_ranged_weapon()])
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_ranged_weapon()]
+        )
         enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=30, y=0, z=0))
         sim = BattleSimulator(player, [enemy])
         sim_no_dist = BattleSimulator(player, [enemy])
@@ -219,8 +221,9 @@ class TestCalculateHitChanceWithDistanceModifier:
 
     def test_melee_weapon_hit_chance_clamped_to_100(self) -> None:
         """命中率は 100% を超えない."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_melee_weapon()])
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_melee_weapon()]
+        )
         enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=10, y=0, z=0))
         sim = BattleSimulator(player, [enemy])
 
@@ -250,10 +253,12 @@ class TestMeleeResistanceBypass:
 
     def test_melee_weapon_ignores_physical_resistance(self) -> None:
         """MELEE 武器は physical_resistance を無視する."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_melee_weapon()])
-        enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=10, y=0, z=0),
-                            physical_resistance=0.5)  # 50% 耐性
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_melee_weapon()]
+        )
+        enemy = _make_unit(
+            "E", "ENEMY", "ET", Vector3(x=10, y=0, z=0), physical_resistance=0.5
+        )  # 50% 耐性
         sim = BattleSimulator(player, [enemy])
 
         melee_w = _make_melee_weapon(power=100)
@@ -268,10 +273,12 @@ class TestMeleeResistanceBypass:
 
     def test_melee_weapon_ignores_beam_resistance(self) -> None:
         """MELEE 武器は beam_resistance を無視する."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_melee_weapon()])
-        enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=10, y=0, z=0),
-                            beam_resistance=0.3)  # 30% ビーム耐性
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_melee_weapon()]
+        )
+        enemy = _make_unit(
+            "E", "ENEMY", "ET", Vector3(x=10, y=0, z=0), beam_resistance=0.3
+        )  # 30% ビーム耐性
         sim = BattleSimulator(player, [enemy])
 
         melee_w = _make_melee_weapon(power=100)
@@ -286,10 +293,12 @@ class TestMeleeResistanceBypass:
 
     def test_ranged_weapon_applies_resistance(self) -> None:
         """遠距離武器は physical_resistance を適用する."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_ranged_weapon()])
-        enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=100, y=0, z=0),
-                            physical_resistance=0.5)
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_ranged_weapon()]
+        )
+        enemy = _make_unit(
+            "E", "ENEMY", "ET", Vector3(x=100, y=0, z=0), physical_resistance=0.5
+        )
         sim = BattleSimulator(player, [enemy])
 
         ranged_w = Weapon(
@@ -313,8 +322,9 @@ class TestMeleeResistanceBypass:
     def test_is_melee_flag_also_bypasses_resistance(self) -> None:
         """is_melee=True フラグでも耐性を無視する（後方互換）."""
         player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
-        enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=10, y=0, z=0),
-                            physical_resistance=0.5)
+        enemy = _make_unit(
+            "E", "ENEMY", "ET", Vector3(x=10, y=0, z=0), physical_resistance=0.5
+        )
         sim = BattleSimulator(player, [enemy])
 
         legacy_melee_w = Weapon(
@@ -353,13 +363,14 @@ class TestMeleeZeroResourceConsumption:
         weapon_state = {"current_ammo": 0, "current_cool_down": 0}
         resources = sim.unit_resources[str(player.id)]
 
-        can_attack, reason = sim._check_attack_resources(melee_w, weapon_state, resources)
+        can_attack, reason = sim._check_attack_resources(
+            melee_w, weapon_state, resources
+        )
         assert can_attack, f"MELEE 武器で弾切れになってはいけない: {reason}"
 
     def test_melee_weapon_passes_en_check(self) -> None:
         """MELEE 武器は EN 不足扱いにならない."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             max_en=100)
+        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), max_en=100)
         enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=10, y=0, z=0))
         sim = BattleSimulator(player, [enemy])
 
@@ -378,7 +389,9 @@ class TestMeleeZeroResourceConsumption:
         resources = sim.unit_resources[str(player.id)]
         resources["current_en"] = 0  # EN ゼロ
 
-        can_attack, reason = sim._check_attack_resources(melee_w, weapon_state, resources)
+        can_attack, reason = sim._check_attack_resources(
+            melee_w, weapon_state, resources
+        )
         assert can_attack, f"MELEE 武器で EN 不足になってはいけない: {reason}"
 
     def test_melee_weapon_does_not_consume_ammo(self) -> None:
@@ -430,8 +443,9 @@ class TestMeleeZeroResourceConsumption:
 
     def test_ranged_weapon_consumes_ammo(self) -> None:
         """遠距離武器は弾薬を消費する（正常系確認）."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_ranged_weapon()])
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_ranged_weapon()]
+        )
         enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=100, y=0, z=0))
         sim = BattleSimulator(player, [enemy])
 
@@ -508,7 +522,9 @@ class TestMeleeCombo:
             sim._process_melee_combo(player, enemy, melee_w, 100, snapshot)
 
         expected_combo_count = COMBO_MAX_CHAIN
-        expected_total_damage = int(100 * COMBO_DAMAGE_MULTIPLIER) * expected_combo_count
+        expected_total_damage = (
+            int(100 * COMBO_DAMAGE_MULTIPLIER) * expected_combo_count
+        )
         assert enemy.current_hp == initial_hp - expected_total_damage
 
         combo_logs = [log for log in sim.logs if log.action_type == "MELEE_COMBO"]
@@ -580,8 +596,9 @@ class TestProcessEngageMelee:
 
     def test_post_melee_repositioning(self) -> None:
         """格闘命中後、攻撃者がターゲットから POST_MELEE_DISTANCE の位置に再配置される."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_melee_weapon()])
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_melee_weapon()]
+        )
         enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=30, y=0, z=0), hp=10000)
         sim = BattleSimulator(player, [enemy])
 
@@ -601,8 +618,9 @@ class TestProcessEngageMelee:
 
     def test_post_melee_velocity_reset(self) -> None:
         """格闘命中後、速度ベクトルがゼロにリセットされる."""
-        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-                             weapons=[_make_melee_weapon()])
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=0, y=0, z=0), weapons=[_make_melee_weapon()]
+        )
         enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=30, y=0, z=0), hp=10000)
         sim = BattleSimulator(player, [enemy])
 
@@ -631,16 +649,20 @@ class TestFuzzyInputVariables:
     def test_ranged_ammo_ratio_empty_triggers_engage_melee(self) -> None:
         """ranged_ammo_ratio == 0 (EMPTY) のとき ENGAGE_MELEE が高スコアになる."""
         engine = FuzzyEngine.from_json(FUZZY_RULES_DIR / "assault.json")
-        _, debug = engine.infer_with_debug({
-            "hp_ratio": 1.0,
-            "enemy_count_near": 1.0,
-            "ally_count_near": 0.0,
-            "distance_to_nearest_enemy": 200.0,
-            "ranged_ammo_ratio": 0.0,  # EMPTY
-            "los_blocked": 0.0,
-            "boost_available": 0.0,
-        })
-        action_activations: dict[str, float] = debug.get("activations", {}).get("action", {})
+        _, debug = engine.infer_with_debug(
+            {
+                "hp_ratio": 1.0,
+                "enemy_count_near": 1.0,
+                "ally_count_near": 0.0,
+                "distance_to_nearest_enemy": 200.0,
+                "ranged_ammo_ratio": 0.0,  # EMPTY
+                "los_blocked": 0.0,
+                "boost_available": 0.0,
+            }
+        )
+        action_activations: dict[str, float] = debug.get("activations", {}).get(
+            "action", {}
+        )
         # ENGAGE_MELEE が高スコア（>= 0.5）であることを確認
         engage_melee_score = action_activations.get("ENGAGE_MELEE", 0.0)
         assert engage_melee_score >= 0.5, (
@@ -655,16 +677,20 @@ class TestFuzzyInputVariables:
     def test_hp_high_and_distance_melee_triggers_engage_melee(self) -> None:
         """hp_ratio IS HIGH AND distance IS MELEE 時に ENGAGE_MELEE が選択される."""
         engine = FuzzyEngine.from_json(FUZZY_RULES_DIR / "aggressive.json")
-        _, debug = engine.infer_with_debug({
-            "hp_ratio": 1.0,
-            "enemy_count_near": 1.0,
-            "ally_count_near": 0.0,
-            "distance_to_nearest_enemy": 20.0,  # MELEE 範囲
-            "ranged_ammo_ratio": 1.0,
-            "los_blocked": 0.0,
-            "boost_available": 0.0,
-        })
-        action_activations: dict[str, float] = debug.get("activations", {}).get("action", {})
+        _, debug = engine.infer_with_debug(
+            {
+                "hp_ratio": 1.0,
+                "enemy_count_near": 1.0,
+                "ally_count_near": 0.0,
+                "distance_to_nearest_enemy": 20.0,  # MELEE 範囲
+                "ranged_ammo_ratio": 1.0,
+                "los_blocked": 0.0,
+                "boost_available": 0.0,
+            }
+        )
+        action_activations: dict[str, float] = debug.get("activations", {}).get(
+            "action", {}
+        )
         # ENGAGE_MELEE が正のスコアを持つことを確認
         engage_melee_score = action_activations.get("ENGAGE_MELEE", 0.0)
         assert engage_melee_score > 0.0, (
@@ -679,16 +705,20 @@ class TestFuzzyInputVariables:
     def test_los_blocked_and_boost_available_triggers_boost_dash(self) -> None:
         """los_blocked IS BLOCKED AND boost_available IS AVAILABLE 時に BOOST_DASH が選択される."""
         engine = FuzzyEngine.from_json(FUZZY_RULES_DIR / "assault.json")
-        _, debug = engine.infer_with_debug({
-            "hp_ratio": 0.8,
-            "enemy_count_near": 1.0,
-            "ally_count_near": 0.0,
-            "distance_to_nearest_enemy": 500.0,
-            "ranged_ammo_ratio": 1.0,
-            "los_blocked": 1.0,    # BLOCKED
-            "boost_available": 1.0,  # AVAILABLE
-        })
-        action_activations: dict[str, float] = debug.get("activations", {}).get("action", {})
+        _, debug = engine.infer_with_debug(
+            {
+                "hp_ratio": 0.8,
+                "enemy_count_near": 1.0,
+                "ally_count_near": 0.0,
+                "distance_to_nearest_enemy": 500.0,
+                "ranged_ammo_ratio": 1.0,
+                "los_blocked": 1.0,  # BLOCKED
+                "boost_available": 1.0,  # AVAILABLE
+            }
+        )
+        action_activations: dict[str, float] = debug.get("activations", {}).get(
+            "action", {}
+        )
         # BOOST_DASH が正のスコアを持つことを確認
         boost_dash_score = action_activations.get("BOOST_DASH", 0.0)
         assert boost_dash_score > 0.0, (

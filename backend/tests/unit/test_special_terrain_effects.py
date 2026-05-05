@@ -228,6 +228,7 @@ def test_obstacle_reduces_hit_chance() -> None:
     # Phase C: 距離補正（距離100m: CLOSE_RANGE 範囲の遠距離武器補正 0.7）が
     # 適用されるため、障害物ペナルティ(10%) も 0.7 倍される → 差は 7.0
     from app.engine.constants import RANGED_MID_ACCURACY_PENALTY
+
     obstacle_penalty_raw = 10.0
     assert hit_normal - hit_obstacle == pytest.approx(
         obstacle_penalty_raw * RANGED_MID_ACCURACY_PENALTY, rel=1e-5

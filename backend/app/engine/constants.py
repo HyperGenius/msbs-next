@@ -119,10 +119,18 @@ COMBO_DAMAGE_MULTIPLIER: float = 1.5  # コンボ命中1回あたりのダメー
 COMBO_MAX_CHAIN: int = 3  # 最大コンボ連続回数
 
 # 命中率距離補正定数 (Phase C)
-MELEE_CLOSE_ACCURACY_BONUS: float = 1.5  # 近接/格闘武器: d <= MELEE_RANGE 時の命中ボーナス
-MELEE_MID_ACCURACY_BONUS: float = 1.2  # 近接/格闘武器: d <= CLOSE_RANGE 時の命中ボーナス
-RANGED_CLOSE_ACCURACY_PENALTY: float = 0.4  # 遠距離武器: d <= MELEE_RANGE 時の命中ペナルティ
-RANGED_MID_ACCURACY_PENALTY: float = 0.7  # 遠距離武器: d <= CLOSE_RANGE 時の命中ペナルティ
+MELEE_CLOSE_ACCURACY_BONUS: float = (
+    1.5  # 近接/格闘武器: d <= MELEE_RANGE 時の命中ボーナス
+)
+MELEE_MID_ACCURACY_BONUS: float = (
+    1.2  # 近接/格闘武器: d <= CLOSE_RANGE 時の命中ボーナス
+)
+RANGED_CLOSE_ACCURACY_PENALTY: float = (
+    0.4  # 遠距離武器: d <= MELEE_RANGE 時の命中ペナルティ
+)
+RANGED_MID_ACCURACY_PENALTY: float = (
+    0.7  # 遠距離武器: d <= CLOSE_RANGE 時の命中ペナルティ
+)
 
 # 戦略遷移しきい値定数 (Phase 4-3) — ゲームバランス調整用
 # AGGRESSIVE → RETREAT (T01)

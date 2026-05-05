@@ -433,7 +433,9 @@ class BattleLog(SQLModel):
     team_id: str | None = None  # チームレベルイベント用チームID (Phase 4-2)
     details: dict | None = None  # 追加詳細情報（STRATEGY_CHANGED 等）(Phase 4-2)
     combo_count: int | None = None  # コンボ連続回数 (Phase C — 格闘コンボシステム)
-    combo_message: str | None = None  # コンボ演出メッセージ (Phase C — 例: "2Combo 300ダメージ!!")
+    combo_message: str | None = (
+        None  # コンボ演出メッセージ (Phase C — 例: "2Combo 300ダメージ!!")
+    )
 
 
 class Mission(SQLModel, table=True):
