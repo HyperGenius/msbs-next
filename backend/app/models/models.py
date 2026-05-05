@@ -36,6 +36,10 @@ class Weapon(SQLModel):
     range: float = Field(description="射程距離")
     accuracy: float = Field(description="基本命中率(%)")
     type: str = Field(default="PHYSICAL", description="武器属性 (BEAM/PHYSICAL)")
+    weapon_type: str = Field(
+        default="RANGED",
+        description="武器種別 (MELEE/CLOSE_RANGE/RANGED) — Phase C 近接戦闘システム用",
+    )
     optimal_range: float = Field(default=300.0, description="最適射程距離")
     decay_rate: float = Field(default=0.05, description="距離による命中率減衰係数")
     is_melee: bool = Field(default=False, description="近接武器かどうか")
@@ -413,7 +417,7 @@ class BattleLog(SQLModel):
 
     timestamp: float  # バトル内経過時間 (s)
     actor_id: uuid.UUID
-    action_type: str  # "MOVE", "ATTACK", "DAMAGE", "DESTROYED", "MISS"
+    action_type: str  # "MOVE", "ATTACK", "DAMAGE", "DESTROYED", "MISS", "MELEE_COMBO"
     target_id: uuid.UUID | None = None
 
     damage: int | None = None
@@ -428,6 +432,10 @@ class BattleLog(SQLModel):
     strategy_mode: str | None = None  # 行動決定時の戦略モード
     team_id: str | None = None  # チームレベルイベント用チームID (Phase 4-2)
     details: dict | None = None  # 追加詳細情報（STRATEGY_CHANGED 等）(Phase 4-2)
+    combo_count: int | None = None  # コンボ連続回数 (Phase C — 格闘コンボシステム)
+    combo_message: str | None = (
+        None  # コンボ演出メッセージ (Phase C — 例: "2Combo 300ダメージ!!")
+    )
 
 
 class Mission(SQLModel, table=True):

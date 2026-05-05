@@ -1,8 +1,8 @@
 # ダイナミック近接戦闘システム 機能仕様書
 
-**バージョン:** 0.3.0 (Phase A + Phase B 実装済み)
+**バージョン:** 0.4.0 (Phase A + Phase B + Phase C 実装済み)
 **作成日:** 2026-05-04
-**ステータス:** Phase A・Phase B 実装済み
+**ステータス:** Phase A・Phase B・Phase C 実装済み
 
 ---
 
@@ -155,6 +155,8 @@ ELSE:
 ---
 
 ## 4. 近接戦闘トリガー
+
+> **実装状況:** ✅ Phase C 実装済み
 
 ### 4.1 トリガー条件
 
@@ -634,13 +636,16 @@ RANGED_MID_ACCURACY_PENALTY: float = 0.7  # d <= CLOSE_RANGE
 
 ### Phase C：近接戦闘トリガー + メリット
 
-- [ ] 中階層ファジィ変数に `ranged_ammo_ratio` / `los_blocked` / `boost_available` 追加
-- [ ] `ENGAGE_MELEE` / `BOOST_DASH` アクションの追加
-- [ ] 命中率の距離補正を `_process_attack()` に実装
-- [ ] 格闘武器の耐性無視ロジック追加
-- [ ] 格闘武器の弾薬・EN 消費ゼロ化
-- [ ] コンボシステムの実装（`MELEE_COMBO` ログ）
-- [ ] `assault.json` ファジィルールの更新
+- [x] 中階層ファジィ変数に `ranged_ammo_ratio` / `los_blocked` / `boost_available` 追加
+- [x] `ENGAGE_MELEE` / `BOOST_DASH` アクションの追加
+- [x] 命中率の距離補正を `_process_attack()` に実装
+- [x] 格闘武器の耐性無視ロジック追加
+- [x] 格闘武器の弾薬・EN 消費ゼロ化
+- [x] コンボシステムの実装（`MELEE_COMBO` ログ）
+- [x] `assault.json` / `aggressive.json` ファジィルールの更新
+- [x] `BattleLog` に `combo_count` / `combo_message` フィールドを追加
+- [x] `Weapon` に `weapon_type` フィールドを追加
+- [x] フロントエンドの `ComboEffect` コンポーネントを追加（コンボ演出）
 
 ### Phase D：AI 行動統合・チューニング
 

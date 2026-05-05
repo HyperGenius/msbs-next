@@ -7,6 +7,7 @@ import { getBattleSnapshot } from "./hooks/useBattleSnapshot";
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
+import { ComboEffect } from "./ui/ComboEffect";
 import { getEnvironmentColor, SIMULATION_STEP_S } from "./utils";
 
 interface BattleViewerProps {
@@ -66,6 +67,9 @@ export default function BattleViewer({
                 currentTimestamp={currentTimestamp}
                 logs={logs}
             />
+
+            {/* 格闘コンボエフェクト (Phase C) */}
+            <ComboEffect logs={logs} currentTimestamp={currentTimestamp} />
         </div>
     );
 }

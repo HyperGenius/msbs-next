@@ -24,6 +24,17 @@ export function useBattleEvents(
                 });
             }
             
+            // 格闘コンボ検出 (Phase C) — MELEE_COMBO ログはアクター側にエフェクト表示
+            if (log.action_type === "MELEE_COMBO" && log.actor_id && !battleEventMap.has(log.actor_id)) {
+                const comboCount = log.combo_count ?? 1;
+                const color = comboCount >= 3 ? '#ff2200' : comboCount === 2 ? '#ff7700' : '#ffdd00';
+                battleEventMap.set(log.actor_id, {
+                    type: 'critical',
+                    text: `${comboCount}HIT COMBO!!`,
+                    color,
+                });
+            }
+            
             // 防御/軽減検出（ダメージを受けた側）
             if (log.action_type === "ATTACK" && log.target_id && !battleEventMap.has(log.target_id)) {
                 if (log.message.includes("対ビーム装甲により") || log.message.includes("対実弾装甲により")) {
