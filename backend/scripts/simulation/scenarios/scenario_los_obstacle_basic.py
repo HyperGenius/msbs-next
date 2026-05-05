@@ -149,15 +149,14 @@ def run_scenario(max_steps: int = 5000) -> dict:
         sim.step()
         step_count += 1
 
+    player_team = data["player"].team_id
     alive_teams = {u.team_id for u in sim.units if u.current_hp > 0}
-    if data["player"].team_id in alive_teams and len(alive_teams) == 1:
+    if player_team in alive_teams and len(alive_teams) == 1:
         win_loss = "WIN"
-    elif not alive_teams or len(alive_teams) > 1 and data["player"].team_id not in alive_teams:
+    elif player_team not in alive_teams:
         win_loss = "LOSE"
-    elif len(alive_teams) > 1:
-        win_loss = "DRAW"
     else:
-        win_loss = "WIN"
+        win_loss = "DRAW"
 
     action_types = {log.action_type for log in sim.logs}
     attack_blocked_count = sum(
