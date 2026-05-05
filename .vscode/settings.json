@@ -11,4 +11,11 @@
     },
     "editor.definitionLinkOpensInPeek": true, // 定義をポップアップで表示
     "editor.cursorSmoothCaretAnimation": "on", // カーソルの動きを滑らかにして視認性UP
+    "cSpell.customDictionaries": {
+        "project-words": {
+            "name": "project-words",
+            "path": "${workspaceFolder}/.vscode/project-words.txt",
+            "addWords": true
+        }
+    }
 }
