@@ -95,6 +95,18 @@ BALANCE_WARN_AVG_DURATION: float = 200.0  # 平均戦闘時間（秒）がこれ
 OBSTACLE_MARGIN: float = 50.0  # 障害物斥力が働く追加マージン (m)
 OBSTACLE_REPULSION_COEFF: float = 4.0  # 障害物への斥力係数
 
+# ブーストダッシュシステム定数 (Phase B)
+MELEE_RANGE: float = 50.0  # 近接攻撃有効距離 (m)
+MELEE_BOOST_ARRIVAL_RANGE: float = (
+    100.0  # ブーストキャンセル目安距離 = MELEE_RANGE × 2 (m)
+)
+DEFAULT_BOOST_SPEED_MULTIPLIER: float = (
+    2.0  # ブースト時速度倍率（max_speed × multiplier）
+)
+DEFAULT_BOOST_EN_COST: float = 5.0  # ブースト中 EN 消費量 (/s)
+DEFAULT_BOOST_MAX_DURATION: float = 3.0  # 1 回のブーストの最大継続時間 (s)
+DEFAULT_BOOST_COOLDOWN: float = 5.0  # ブースト終了後の再使用不可時間 (s)
+
 # 戦略遷移しきい値定数 (Phase 4-3) — ゲームバランス調整用
 # AGGRESSIVE → RETREAT (T01)
 AGGRESSIVE_RETREAT_HP_THRESHOLD: float = 0.30

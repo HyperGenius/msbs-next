@@ -8,8 +8,9 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-# conftest.py で環境変数が設定済みであることを前提とする
-os.environ.setdefault("ADMIN_API_KEY", "test_admin_key_12345")
+# テスト用APIキーを強制的に設定（.env からの load_dotenv より後に評価される conftest より
+# 先に上書きするため setdefault ではなく直接代入を使用）
+os.environ["ADMIN_API_KEY"] = "test_admin_key_12345"
 
 from app.core import gamedata as gd
 from main import app

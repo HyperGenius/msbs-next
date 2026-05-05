@@ -16,9 +16,14 @@ from app.engine.calculator import (
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
     BOUNDARY_MARGIN,
+    DEFAULT_BOOST_COOLDOWN,
+    DEFAULT_BOOST_EN_COST,
+    DEFAULT_BOOST_MAX_DURATION,
+    DEFAULT_BOOST_SPEED_MULTIPLIER,
     FUZZY_RULES_DIR,
     HIGH_THREAT_THRESHOLD,
     MAP_BOUNDS,
+    MELEE_BOOST_ARRIVAL_RANGE,
     OBSTACLE_MARGIN,
     OBSTACLE_REPULSION_COEFF,
     RETREAT_ATTRACTION_COEFF,
@@ -168,6 +173,9 @@ class BattleSimulator:
                 "heading_deg": 0.0,  # 現在の向き (XZ平面, 度)
                 "status": "ACTIVE",  # ユニット状態: ACTIVE / RETREATED / DESTROYED (Phase 3-3)
                 "last_known_enemy_position": {},  # {enemy_id: [x, y, z]} LOS 喪失時の最終座標 (Phase A)
+                "is_boosting": False,  # ブースト中フラグ (Phase B)
+                "boost_elapsed": 0.0,  # 現ブーストの継続時間 (s) (Phase B)
+                "boost_cooldown_remaining": 0.0,  # 残クールダウン時間 (s) (Phase B)
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:
@@ -436,7 +444,7 @@ class BattleSimulator:
             self._retreat_check_phase()
 
         # 6. リソース更新フェーズ（EN回復・クールダウン減少）
-        self._refresh_phase()
+        self._refresh_phase(dt)
 
         # 7. 時間を進める
         self.elapsed_time += dt
@@ -660,6 +668,14 @@ class BattleSimulator:
         if action == "RETREAT" and not self.retreat_points:
             action = "MOVE"
 
+        # BOOST_DASH がクールダウン中の場合は MOVE にフォールバック (Phase B)
+        if action == "BOOST_DASH":
+            cooldown_remaining = self.unit_resources[unit_id].get(
+                "boost_cooldown_remaining", 0.0
+            )
+            if cooldown_remaining > 0.0:
+                action = "MOVE"
+
         # 決定した行動を保存
         self.unit_resources[unit_id]["current_action"] = action
 
@@ -736,7 +752,7 @@ class BattleSimulator:
         if len(active_teams) <= 1:
             self.is_finished = True
 
-    def _refresh_phase(self) -> None:
+    def _refresh_phase(self, dt: float = 0.1) -> None:
         """リフレッシュフェーズ: ENの回復とクールダウンの減少."""
         for unit in self.units:
             if unit.current_hp <= 0:
@@ -745,12 +761,28 @@ class BattleSimulator:
             unit_id = str(unit.id)
             resources = self.unit_resources[unit_id]
 
-            # ENを回復（最大値を超えない）
-            current_en = resources["current_en"]
-            max_en = unit.max_en
-            en_recovery = unit.en_recovery
-            new_en = min(current_en + en_recovery, max_en)
-            resources["current_en"] = new_en
+            is_boosting: bool = resources.get("is_boosting", False)
+
+            if is_boosting:
+                # ブースト中: EN 消費（boost_en_cost × dt）
+                boost_en_cost = getattr(unit, "boost_en_cost", DEFAULT_BOOST_EN_COST)
+                resources["current_en"] = max(
+                    0.0, resources["current_en"] - boost_en_cost * dt
+                )
+                # ブースト継続時間を加算
+                resources["boost_elapsed"] = resources.get("boost_elapsed", 0.0) + dt
+            else:
+                # 非ブースト中: EN を回復（最大値を超えない）
+                current_en = resources["current_en"]
+                max_en = unit.max_en
+                en_recovery = unit.en_recovery
+                new_en = min(current_en + en_recovery, max_en)
+                resources["current_en"] = new_en
+
+                # ブーストクールダウンを減算
+                cooldown = resources.get("boost_cooldown_remaining", 0.0)
+                if cooldown > 0.0:
+                    resources["boost_cooldown_remaining"] = max(0.0, cooldown - dt)
 
             # 武器のクールダウンを減少
             for _, weapon_state in resources["weapon_states"].items():
@@ -801,10 +833,76 @@ class BattleSimulator:
                     dt,
                     target=target,
                 )
+        elif current_action == "BOOST_DASH":
+            self._handle_boost_dash_action(
+                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
+            )
         else:
             # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ（攻撃対象引力なし）
             self._process_movement(
                 actor, pos_actor, pos_target, diff_vector, distance, dt
+            )
+
+    def _handle_boost_dash_action(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: object,
+        pos_actor: object,
+        pos_target: object,
+        diff_vector: object,
+        distance: float,
+        dt: float,
+    ) -> None:
+        """ブーストダッシュ行動処理 (Phase B)."""
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
+        is_boosting = resources.get("is_boosting", False)
+        cooldown_remaining = resources.get("boost_cooldown_remaining", 0.0)
+
+        if not is_boosting and cooldown_remaining <= 0.0:
+            # ブースト開始
+            resources["is_boosting"] = True
+            resources["boost_elapsed"] = 0.0
+            self.logs.append(
+                BattleLog(
+                    timestamp=float(self.elapsed_time),
+                    actor_id=actor.id,
+                    action_type="BOOST_START",
+                    message=(
+                        f"{self._format_actor_name(actor)} がブーストダッシュを開始した！"
+                    ),
+                    position_snapshot=actor.position,
+                )
+            )
+
+        # ブーストキャンセル判定
+        cancelled = self._check_boost_cancel(actor, target, dt)
+
+        if cancelled:
+            # キャンセル後は遠距離攻撃試行
+            if weapon and isinstance(weapon, Weapon) and distance <= weapon.range:
+                self._process_attack(actor, target, distance, pos_actor, weapon)
+            else:
+                self._process_movement(
+                    actor,
+                    pos_actor,
+                    pos_target,
+                    diff_vector,
+                    distance,
+                    dt,
+                    target=target,
+                )
+        else:
+            # ブースト継続: ターゲット方向へ高速移動
+            self._process_movement(
+                actor,
+                pos_actor,
+                pos_target,
+                diff_vector,
+                distance,
+                dt,
+                target=target,
             )
 
     def _log_target_selection(
@@ -2072,7 +2170,15 @@ class BattleSimulator:
         # 2. 加速・減速制限
         current_speed = float(np.linalg.norm(current_velocity))
         terrain_modifier = self._get_terrain_modifier(actor)
-        effective_max_speed = actor.max_speed * terrain_modifier
+
+        # ブースト中は effective_max_speed を boost_speed_multiplier 倍にする (Phase B)
+        boost_multiplier = getattr(
+            actor, "boost_speed_multiplier", DEFAULT_BOOST_SPEED_MULTIPLIER
+        )
+        if resources.get("is_boosting", False):
+            effective_max_speed = actor.max_speed * boost_multiplier * terrain_modifier
+        else:
+            effective_max_speed = actor.max_speed * terrain_modifier
 
         if current_speed < effective_max_speed:
             new_speed = min(
@@ -2112,6 +2218,131 @@ class BattleSimulator:
             modifier *= gravity["mobility_multiplier"]
 
         return modifier
+
+    def _check_boost_cancel(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit | None,
+        dt: float,
+    ) -> bool:
+        """ブーストキャンセル判定を実行し、キャンセルが必要なら状態を更新する (Phase B).
+
+        以下いずれかの条件を満たすとブーストを終了させる:
+        1. boost_elapsed >= boost_max_duration
+        2. current_en <= 0 (EN 切れ)
+        3. ターゲットが MELEE_BOOST_ARRIVAL_RANGE (100m) 以内
+        4. 慣性考慮キャンセル: 停止予想位置から遠距離武器の max_range 以内に入っている
+
+        Args:
+            actor: ブースト中のユニット
+            target: 現在のターゲット（None の場合は条件 3/4 をスキップ）
+            dt: 時間ステップ幅 (s)
+
+        Returns:
+            True: ブーストをキャンセルした（is_boosting を False に変更）
+            False: ブーストを継続
+        """
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
+
+        if not resources.get("is_boosting", False):
+            return False
+
+        boost_max_duration = getattr(
+            actor, "boost_max_duration", DEFAULT_BOOST_MAX_DURATION
+        )
+        boost_cooldown = getattr(actor, "boost_cooldown", DEFAULT_BOOST_COOLDOWN)
+        boost_elapsed = resources.get("boost_elapsed", 0.0)
+        current_en = resources.get("current_en", 0.0)
+
+        cancel_reason: str | None = None
+
+        # 条件 1: 最大継続時間超過
+        if boost_elapsed >= boost_max_duration:
+            cancel_reason = f"max_duration ({boost_max_duration}s) 到達"
+
+        # 条件 2: EN 切れ
+        elif current_en <= 0:
+            cancel_reason = "EN 枯渇"
+
+        elif target is not None:
+            pos_actor = actor.position.to_numpy()
+            pos_target = target.position.to_numpy()
+            distance_to_target = float(np.linalg.norm(pos_target - pos_actor))
+
+            # 条件 3: ターゲットが格闘到達射程内
+            if distance_to_target <= MELEE_BOOST_ARRIVAL_RANGE:
+                cancel_reason = f"格闘到達射程 ({MELEE_BOOST_ARRIVAL_RANGE}m) 以内"
+
+            else:
+                # 条件 4: 慣性考慮キャンセル判定
+                # 使用予定の遠距離武器を取得
+                ranged_weapon = next(
+                    (
+                        w
+                        for w in actor.weapons
+                        if not w.is_melee
+                        and resources["weapon_states"]
+                        .get(str(w.id), {})
+                        .get("current_cool_down", 0)
+                        == 0
+                        and (
+                            resources["weapon_states"]
+                            .get(str(w.id), {})
+                            .get("current_ammo")
+                            is None
+                            or resources["weapon_states"]
+                            .get(str(w.id), {})
+                            .get("current_ammo", 0)
+                            > 0
+                        )
+                    ),
+                    None,
+                )
+
+                if ranged_weapon is not None:
+                    current_velocity: np.ndarray = resources["velocity_vec"]
+                    current_speed = float(np.linalg.norm(current_velocity))
+                    deceleration = actor.deceleration
+
+                    # 停止距離: d_stop = v² / (2 × deceleration)
+                    if deceleration > 0 and current_speed > 0:
+                        d_stop = (current_speed**2) / (2.0 * deceleration)
+                        stop_direction = current_velocity / current_speed
+
+                        stop_pos = pos_actor + stop_direction * d_stop
+                        d_to_target_from_stop = float(
+                            np.linalg.norm(pos_target - stop_pos)
+                        )
+
+                        if d_to_target_from_stop <= ranged_weapon.range:
+                            cancel_reason = (
+                                f"慣性考慮キャンセル (停止予想位置からの射程内: "
+                                f"{d_to_target_from_stop:.0f}m <= {ranged_weapon.range}m)"
+                            )
+
+        if cancel_reason is None:
+            return False
+
+        # ブースト終了処理
+        resources["is_boosting"] = False
+        resources["boost_cooldown_remaining"] = boost_cooldown
+
+        self.logs.append(
+            BattleLog(
+                timestamp=float(self.elapsed_time),
+                actor_id=actor.id,
+                action_type="BOOST_END",
+                message=(
+                    f"{self._format_actor_name(actor)} のブーストが終了した"
+                    f" (理由: {cancel_reason})"
+                ),
+                position_snapshot=actor.position,
+                details={"reason": cancel_reason},
+            )
+        )
+
+        return True
 
     def _search_movement(self, actor: MobileSuit, dt: float = 0.1) -> None:
         """索敵移動: 未発見の敵を探すための移動."""
