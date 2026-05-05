@@ -955,9 +955,9 @@ class BattleSimulator:
         actor: MobileSuit,
         target: MobileSuit,
         weapon: object,
-        pos_actor: object,
-        pos_target: object,
-        diff_vector: object,
+        pos_actor: np.ndarray,
+        pos_target: np.ndarray,
+        diff_vector: np.ndarray,
         distance: float,
         dt: float,
     ) -> None:
