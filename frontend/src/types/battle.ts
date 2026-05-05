@@ -19,6 +19,7 @@ export interface Weapon {
     range: number;
     accuracy: number;
     type?: string;
+    weapon_type?: "MELEE" | "CLOSE_RANGE" | "RANGED";
     optimal_range?: number;
     decay_rate?: number;
     max_ammo?: number | null;
@@ -88,7 +89,7 @@ export interface MobileSuit {
 export interface BattleLog {
     timestamp: number;
     actor_id: string;
-    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT";
+    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT" | "MELEE_COMBO";
     target_id?: string;
     damage?: number;
     message: string;
@@ -104,6 +105,10 @@ export interface BattleLog {
     fuzzy_scores?: Record<string, unknown>;
     /** 行動決定時の戦略モード */
     strategy_mode?: string;
+    /** 格闘コンボ連続回数 (Phase C) */
+    combo_count?: number;
+    /** 格闘コンボ演出メッセージ e.g. "2Combo 300ダメージ!!" (Phase C) */
+    combo_message?: string;
 }
 
 /**

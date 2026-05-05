@@ -16,6 +16,11 @@ from app.engine.calculator import (
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
     BOUNDARY_MARGIN,
+    CLOSE_RANGE,
+    COMBO_BASE_CHANCE,
+    COMBO_CHAIN_DECAY,
+    COMBO_DAMAGE_MULTIPLIER,
+    COMBO_MAX_CHAIN,
     DEFAULT_BOOST_COOLDOWN,
     DEFAULT_BOOST_EN_COST,
     DEFAULT_BOOST_MAX_DURATION,
@@ -24,8 +29,14 @@ from app.engine.constants import (
     HIGH_THREAT_THRESHOLD,
     MAP_BOUNDS,
     MELEE_BOOST_ARRIVAL_RANGE,
+    MELEE_CLOSE_ACCURACY_BONUS,
+    MELEE_MID_ACCURACY_BONUS,
+    MELEE_RANGE,
     OBSTACLE_MARGIN,
     OBSTACLE_REPULSION_COEFF,
+    POST_MELEE_DISTANCE,
+    RANGED_CLOSE_ACCURACY_PENALTY,
+    RANGED_MID_ACCURACY_PENALTY,
     RETREAT_ATTRACTION_COEFF,
     SPECIAL_ENVIRONMENT_EFFECTS,
     STRATEGY_UPDATE_INTERVAL,
@@ -647,6 +658,53 @@ class BattleSimulator:
             "distance_to_nearest_enemy": distance_to_nearest_enemy,
         }
 
+        # --- 新規入力変数 (Phase C) ---
+        # ranged_ammo_ratio: 遠距離武器の残弾割合（全遠距離武器の平均）
+        ranged_weapons = [
+            w for w in unit.weapons
+            if getattr(w, "weapon_type", "RANGED") != "MELEE"
+            and not getattr(w, "is_melee", False)
+        ]
+        if ranged_weapons:
+            ammo_ratios = []
+            for rw in ranged_weapons:
+                ws = self.unit_resources[unit_id]["weapon_states"].get(rw.id, {})
+                if rw.max_ammo is not None and rw.max_ammo > 0:
+                    current_ammo = ws.get("current_ammo", rw.max_ammo) or 0
+                    ammo_ratios.append(float(current_ammo) / float(rw.max_ammo))
+                else:
+                    ammo_ratios.append(1.0)
+            ranged_ammo_ratio = sum(ammo_ratios) / len(ammo_ratios)
+        else:
+            ranged_ammo_ratio = 1.0
+        fuzzy_inputs["ranged_ammo_ratio"] = ranged_ammo_ratio
+
+        # los_blocked: ターゲットへの LOS 状態（Phase A の結果を使用）
+        nearest_enemy = min(
+            detected_enemies,
+            key=lambda e: float(np.linalg.norm(e.position.to_numpy() - pos_unit)),
+        )
+        if self.obstacles:
+            pos_nearest = nearest_enemy.position.to_numpy()
+            los_ok = _has_los(pos_unit, pos_nearest, self.obstacles)
+            los_blocked = 0.0 if los_ok else 1.0
+        else:
+            los_blocked = 0.0
+        fuzzy_inputs["los_blocked"] = los_blocked
+
+        # boost_available: ブースト可否（クールダウン中か否か、EN残量チェック）
+        boost_cooldown_remaining = self.unit_resources[unit_id].get(
+            "boost_cooldown_remaining", 0.0
+        )
+        current_en = self.unit_resources[unit_id].get("current_en", 0.0)
+        boost_en_cost = getattr(unit, "boost_en_cost", DEFAULT_BOOST_EN_COST)
+        boost_available = (
+            1.0
+            if boost_cooldown_remaining == 0.0 and current_en > boost_en_cost
+            else 0.0
+        )
+        fuzzy_inputs["boost_available"] = boost_available
+
         # --- 戦略モードに応じたファジィエンジンを選択 ---
         strategy_mode = self._resolve_strategy_mode(unit)
         behavior_engine = self._strategy_engines.get(strategy_mode, {}).get(
@@ -676,6 +734,12 @@ class BattleSimulator:
             if cooldown_remaining > 0.0:
                 action = "MOVE"
 
+        # ENGAGE_MELEE は RETREAT モード中は選択されない (Phase C)
+        if action == "ENGAGE_MELEE":
+            strategy_mode_check = self._resolve_strategy_mode(unit)
+            if strategy_mode_check == "RETREAT":
+                action = "MOVE"
+
         # 決定した行動を保存
         self.unit_resources[unit_id]["current_action"] = action
 
@@ -689,7 +753,9 @@ class BattleSimulator:
                     f"{self._format_actor_name(unit)} がファジィ推論により"
                     f" [{action}] を選択"
                     f" (HP率:{hp_ratio:.2f} 近敵:{enemy_count_near:.0f}"
-                    f" 近味:{ally_count_near:.0f} 近距:{distance_to_nearest_enemy:.0f}m)"
+                    f" 近味:{ally_count_near:.0f} 近距:{distance_to_nearest_enemy:.0f}m"
+                    f" 弾薬率:{ranged_ammo_ratio:.2f} LOS閉塞:{los_blocked:.0f}"
+                    f" ブースト可:{boost_available:.0f})"
                 ),
                 position_snapshot=unit.position,
                 fuzzy_scores=fuzzy_scores,
@@ -833,6 +899,10 @@ class BattleSimulator:
                     dt,
                     target=target,
                 )
+        elif current_action == "ENGAGE_MELEE":
+            self._handle_engage_melee_action(
+                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
+            )
         elif current_action == "BOOST_DASH":
             self._handle_boost_dash_action(
                 actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
@@ -904,6 +974,99 @@ class BattleSimulator:
                 dt,
                 target=target,
             )
+
+    def _handle_engage_melee_action(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: object,
+        pos_actor: np.ndarray,
+        pos_target: np.ndarray,
+        diff_vector: np.ndarray,
+        distance: float,
+        dt: float,
+    ) -> None:
+        """近接格闘突入行動処理 (Phase C).
+
+        ENGAGE_MELEE アクション:
+        1. ターゲットまでの距離 > MELEE_BOOST_ARRIVAL_RANGE → BOOST_DASH を実行
+        2. ターゲットまでの距離 <= MELEE_BOOST_ARRIVAL_RANGE → 格闘武器で攻撃
+
+        Args:
+            actor: 行動ユニット
+            target: ターゲットユニット
+            weapon: 選択された武器
+            pos_actor: アクターの位置
+            pos_target: ターゲットの位置
+            diff_vector: ターゲット方向ベクトル
+            distance: ターゲットまでの距離
+            dt: 時間ステップ幅 (s)
+        """
+        if distance > MELEE_BOOST_ARRIVAL_RANGE:
+            # ターゲットへ向かってブーストダッシュ
+            self._handle_boost_dash_action(
+                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
+            )
+        else:
+            # 格闘攻撃範囲内 — 格闘武器で攻撃
+            melee_weapon = next(
+                (
+                    w
+                    for w in actor.weapons
+                    if getattr(w, "weapon_type", "RANGED") == "MELEE"
+                    or getattr(w, "is_melee", False)
+                ),
+                weapon if isinstance(weapon, Weapon) else None,
+            )
+            if melee_weapon and isinstance(melee_weapon, Weapon):
+                self._process_engage_melee(actor, target, pos_actor, melee_weapon)
+            elif weapon and isinstance(weapon, Weapon):
+                self._process_attack(actor, target, distance, pos_actor, weapon)
+            else:
+                self._process_movement(
+                    actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+                )
+
+    def _process_engage_melee(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        pos_actor: np.ndarray,
+        weapon: Weapon,
+    ) -> None:
+        """格闘攻撃を処理し、命中後に再配置を行う (Phase C).
+
+        格闘命中後のポジショニング:
+            dir_away = normalize(pos_self - pos_target)
+            pos_self  = pos_target + dir_away × POST_MELEE_DISTANCE (10m)
+            velocity_vec = [0, 0, 0]  # 速度リセット
+
+        Args:
+            actor: 格闘攻撃するユニット
+            target: 攻撃対象
+            pos_actor: アクターの現在位置
+            weapon: 使用する格闘武器
+        """
+        pos_target = target.position.to_numpy()
+        distance = float(np.linalg.norm(pos_target - pos_actor))
+
+        # 格闘攻撃を実行
+        self._process_attack(actor, target, distance, pos_actor, weapon)
+
+        # 格闘命中後の再配置（ターゲットが生存している場合）
+        if target.current_hp > 0:
+            dir_away_vec = pos_actor - pos_target
+            dir_away_dist = float(np.linalg.norm(dir_away_vec))
+            if dir_away_dist > 1e-6:
+                dir_away = dir_away_vec / dir_away_dist
+            else:
+                dir_away = np.array([1.0, 0.0, 0.0])
+
+            new_pos = pos_target + dir_away * POST_MELEE_DISTANCE
+            actor.position = Vector3.from_numpy(new_pos)
+
+            unit_id = str(actor.id)
+            self.unit_resources[unit_id]["velocity_vec"] = np.zeros(3)
 
     def _log_target_selection(
         self,
@@ -1447,25 +1610,57 @@ class BattleSimulator:
             resources["weapon_states"][weapon.id] = weapon_state
         return weapon_state
 
+    @staticmethod
+    def _get_accuracy_modifier(distance: float, weapon_type: str) -> float:
+        """距離と武器種別に応じた命中率補正乗数を返す (Phase C).
+
+        Args:
+            distance: ターゲットまでの距離 (m)
+            weapon_type: 武器種別 ("MELEE" / "CLOSE_RANGE" / "RANGED" など)
+
+        Returns:
+            命中率に乗算する補正値 (0.4〜1.5)
+        """
+        if weapon_type in ("MELEE", "CLOSE_RANGE"):
+            if distance <= MELEE_RANGE:
+                return MELEE_CLOSE_ACCURACY_BONUS  # 1.5
+            if distance <= CLOSE_RANGE:
+                return MELEE_MID_ACCURACY_BONUS  # 1.2
+            return 0.8
+        else:
+            if distance <= MELEE_RANGE:
+                return RANGED_CLOSE_ACCURACY_PENALTY  # 0.4
+            if distance <= CLOSE_RANGE:
+                return RANGED_MID_ACCURACY_PENALTY  # 0.7
+            return 1.0
+
     def _check_attack_resources(
         self, weapon: Weapon, weapon_state: dict, resources: dict
     ) -> tuple[bool, str]:
         """攻撃に必要なリソースをチェックする.
 
+        MELEE 武器は弾薬・EN 消費が発生しないため、該当チェックをスキップする (Phase C)。
+
         Returns:
             tuple[bool, str]: (攻撃可能か, 失敗理由)
         """
-        # 弾数チェック（max_ammoがNoneまたは0の場合は無制限）
-        if weapon.max_ammo is not None and weapon.max_ammo > 0:
-            current_ammo = weapon_state["current_ammo"]
-            if current_ammo is None or current_ammo <= 0:
-                return False, "弾切れ"
+        is_melee_weapon = getattr(weapon, "weapon_type", "RANGED") == "MELEE" or getattr(
+            weapon, "is_melee", False
+        )
 
-        # ENチェック
-        if weapon.en_cost > 0:
-            current_en = resources["current_en"]
-            if current_en < weapon.en_cost:
-                return False, "EN不足"
+        # MELEE武器は弾数・EN消費ゼロ（弾切れ/EN不足チェックをスキップ）
+        if not is_melee_weapon:
+            # 弾数チェック（max_ammoがNoneまたは0の場合は無制限）
+            if weapon.max_ammo is not None and weapon.max_ammo > 0:
+                current_ammo = weapon_state["current_ammo"]
+                if current_ammo is None or current_ammo <= 0:
+                    return False, "弾切れ"
+
+            # ENチェック
+            if weapon.en_cost > 0:
+                current_en = resources["current_en"]
+                if current_en < weapon.en_cost:
+                    return False, "EN不足"
 
         # クールダウンチェック
         if weapon_state["current_cool_down"] > 0:
@@ -1480,6 +1675,8 @@ class BattleSimulator:
         self, actor: MobileSuit, target: MobileSuit, weapon: Weapon, distance: float
     ) -> tuple[float, float]:
         """命中率を計算する.
+
+        距離補正乗数を適用する（Phase C — 近接戦闘システム）。
 
         Returns:
             tuple[float, float]: (命中率, 最適距離からの差)
@@ -1519,22 +1716,41 @@ class BattleSimulator:
             defender_int=defender_int,
         )
 
+        # 距離補正乗数を適用 (Phase C — 近接戦闘システム)
+        weapon_type = getattr(weapon, "weapon_type", "RANGED")
+        # is_melee フラグが True の場合は MELEE 扱い
+        if getattr(weapon, "is_melee", False) and weapon_type == "RANGED":
+            weapon_type = "MELEE"
+        accuracy_modifier = self._get_accuracy_modifier(distance, weapon_type)
+        hit_chance = hit_chance * accuracy_modifier
+
+        # 命中率を [0.0, 100.0] にクランプ
+        hit_chance = max(0.0, min(100.0, hit_chance))
+
         return hit_chance, distance_from_optimal
 
     def _consume_attack_resources(
         self, weapon: Weapon, weapon_state: dict, resources: dict
     ) -> None:
-        """攻撃実行時のリソースを消費する."""
-        # 弾数を消費
-        if weapon.max_ammo is not None and weapon.max_ammo > 0:
-            if weapon_state["current_ammo"] is not None:
-                weapon_state["current_ammo"] -= 1
+        """攻撃実行時のリソースを消費する.
 
-        # ENを消費
-        if weapon.en_cost > 0:
-            resources["current_en"] -= weapon.en_cost
+        MELEE 武器は弾薬・EN 消費がゼロのためスキップする (Phase C)。
+        """
+        is_melee_weapon = getattr(weapon, "weapon_type", "RANGED") == "MELEE" or getattr(
+            weapon, "is_melee", False
+        )
 
-        # クールダウンを設定
+        if not is_melee_weapon:
+            # 弾数を消費
+            if weapon.max_ammo is not None and weapon.max_ammo > 0:
+                if weapon_state["current_ammo"] is not None:
+                    weapon_state["current_ammo"] -= 1
+
+            # ENを消費
+            if weapon.en_cost > 0:
+                resources["current_en"] -= weapon.en_cost
+
+        # クールダウンを設定（MELEE武器でも適用）
         if weapon.cool_down_turn > 0:
             weapon_state["current_cool_down"] = weapon.cool_down_turn
 
@@ -1788,6 +2004,86 @@ class BattleSimulator:
 
         if target.current_hp <= 0:
             self._process_destruction(target)
+            return
+
+        # 格闘コンボシステム (Phase C — MELEE 武器のみ適用)
+        is_melee_weapon = (
+            getattr(weapon, "weapon_type", "RANGED") == "MELEE"
+            or getattr(weapon, "is_melee", False)
+        )
+        if is_melee_weapon:
+            self._process_melee_combo(
+                actor, target, weapon, base_damage, snapshot, attack_chatter
+            )
+
+    def _process_melee_combo(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: Weapon,
+        base_damage: int,
+        snapshot: Vector3,
+        attack_chatter: str | None = None,
+    ) -> None:
+        """格闘コンボシステム: 命中時に確率的にコンボ（連続ヒット）が発生する (Phase C).
+
+        コンボ計算:
+            n 連目の発生確率 = COMBO_BASE_CHANCE × COMBO_CHAIN_DECAY^(n-1)
+            例: 1連目 30%、2連目 15%、3連目 7.5%
+
+        Args:
+            actor: 攻撃ユニット
+            target: 攻撃対象
+            weapon: 格闘武器
+            base_damage: 最初の命中で計算されたベースダメージ
+            snapshot: 攻撃時点の座標スナップショット
+            attack_chatter: 攻撃時のセリフ
+        """
+        combo_count = 0
+        combo_total_damage = 0
+        combo_chance = COMBO_BASE_CHANCE
+
+        for _ in range(COMBO_MAX_CHAIN):
+            if random.random() > combo_chance:
+                break
+            if target.current_hp <= 0:
+                break
+
+            combo_count += 1
+            combo_damage = int(base_damage * COMBO_DAMAGE_MULTIPLIER)
+            combo_total_damage += combo_damage
+            target.current_hp -= combo_damage
+
+            if target.current_hp <= 0:
+                target.current_hp = 0
+
+            # コンボ継続確率を減衰
+            combo_chance *= COMBO_CHAIN_DECAY
+
+        if combo_count > 0:
+            combo_message = f"{combo_count}Combo {combo_total_damage}ダメージ!!"
+            self.logs.append(
+                BattleLog(
+                    timestamp=self.elapsed_time,
+                    actor_id=actor.id,
+                    action_type="MELEE_COMBO",
+                    target_id=target.id,
+                    damage=combo_total_damage,
+                    target_max_hp=target.max_hp,
+                    message=(
+                        f"{self._format_actor_name(actor)} の格闘コンボ！"
+                        f" {combo_message}"
+                    ),
+                    position_snapshot=snapshot,
+                    weapon_name=weapon.name if weapon else None,
+                    chatter=attack_chatter,
+                    combo_count=combo_count,
+                    combo_message=combo_message,
+                )
+            )
+
+            if target.current_hp <= 0:
+                self._process_destruction(target)
 
     def _calculate_hit_base_damage(
         self,
@@ -1825,13 +2121,19 @@ class BattleSimulator:
         weapon: Weapon,
         base_damage: int,
     ) -> tuple[int, str]:
-        """命中ダメージへスキル・適性・耐性補正を適用する."""
+        """命中ダメージへスキル・適性・耐性補正を適用する.
+
+        MELEE 武器は耐性計算をバイパスする（属性なし物理として扱う）(Phase C)。
+        """
         if actor.side == "PLAYER":
             damage_skill_level = self.player_skills.get("damage_up", 0)
             damage_multiplier = 1.0 + (damage_skill_level * 3.0) / 100.0  # +3% / Lv
             base_damage = int(base_damage * damage_multiplier)
 
-        is_melee = getattr(weapon, "is_melee", False)
+        is_melee = (
+            getattr(weapon, "weapon_type", "RANGED") == "MELEE"
+            or getattr(weapon, "is_melee", False)
+        )
         aptitude = (
             getattr(actor, "melee_aptitude", 1.0)
             if is_melee
@@ -1839,8 +2141,13 @@ class BattleSimulator:
         )
         base_damage = int(base_damage * aptitude)
 
-        weapon_type = getattr(weapon, "type", "PHYSICAL")
         resistance_msg = ""
+
+        # MELEE武器は耐性無視（属性なし物理として扱う）
+        if is_melee:
+            return base_damage, resistance_msg
+
+        weapon_type = getattr(weapon, "type", "PHYSICAL")
         if weapon_type == "BEAM":
             resistance = getattr(target, "beam_resistance", 0.0)
             if resistance > 0:

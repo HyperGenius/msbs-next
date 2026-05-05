@@ -107,6 +107,23 @@ DEFAULT_BOOST_EN_COST: float = 5.0  # ブースト中 EN 消費量 (/s)
 DEFAULT_BOOST_MAX_DURATION: float = 3.0  # 1 回のブーストの最大継続時間 (s)
 DEFAULT_BOOST_COOLDOWN: float = 5.0  # ブースト終了後の再使用不可時間 (s)
 
+# 近接戦闘システム定数 (Phase C)
+POST_MELEE_DISTANCE: float = 10.0  # 格闘命中後の再配置距離 (m)
+CLOSE_RANGE: float = 200.0  # 近距離定義 (m)
+DASH_TRIGGER_DISTANCE: float = 800.0  # ブーストダッシュ発動距離しきい値 (m)
+
+# 格闘コンボシステム定数 (Phase C)
+COMBO_BASE_CHANCE: float = 0.30  # 初回コンボ発生確率（30%）
+COMBO_CHAIN_DECAY: float = 0.50  # 2連目以降のコンボ継続確率倍率
+COMBO_DAMAGE_MULTIPLIER: float = 1.5  # コンボ命中1回あたりのダメージ倍率
+COMBO_MAX_CHAIN: int = 3  # 最大コンボ連続回数
+
+# 命中率距離補正定数 (Phase C)
+MELEE_CLOSE_ACCURACY_BONUS: float = 1.5  # 近接/格闘武器: d <= MELEE_RANGE 時の命中ボーナス
+MELEE_MID_ACCURACY_BONUS: float = 1.2  # 近接/格闘武器: d <= CLOSE_RANGE 時の命中ボーナス
+RANGED_CLOSE_ACCURACY_PENALTY: float = 0.4  # 遠距離武器: d <= MELEE_RANGE 時の命中ペナルティ
+RANGED_MID_ACCURACY_PENALTY: float = 0.7  # 遠距離武器: d <= CLOSE_RANGE 時の命中ペナルティ
+
 # 戦略遷移しきい値定数 (Phase 4-3) — ゲームバランス調整用
 # AGGRESSIVE → RETREAT (T01)
 AGGRESSIVE_RETREAT_HP_THRESHOLD: float = 0.30

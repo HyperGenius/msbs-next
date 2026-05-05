@@ -90,6 +90,32 @@
       ],
       "operator": "AND",
       "output": { "variable": "action", "set": "ATTACK" }
+    },
+    {
+      "id": "rule_011",
+      "conditions": [
+        { "variable": "ranged_ammo_ratio", "set": "EMPTY" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ENGAGE_MELEE" }
+    },
+    {
+      "id": "rule_012",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "HIGH" },
+        { "variable": "distance_to_nearest_enemy", "set": "MELEE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ENGAGE_MELEE" }
+    },
+    {
+      "id": "rule_013",
+      "conditions": [
+        { "variable": "los_blocked", "set": "BLOCKED" },
+        { "variable": "boost_available", "set": "AVAILABLE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "BOOST_DASH" }
     }
   ],
   "membership_functions": {
@@ -109,14 +135,30 @@
       "MANY":   { "type": "trapezoid", "params": [4, 6, 99, 99] }
     },
     "distance_to_nearest_enemy": {
+      "MELEE": { "type": "trapezoid", "params": [0, 0, 30, 50] },
       "CLOSE": { "type": "trapezoid", "params": [0, 0, 150, 250] },
       "MID":   { "type": "triangle",  "params": [150, 350, 550] },
       "FAR":   { "type": "trapezoid", "params": [400, 600, 9999, 9999] }
     },
+    "ranged_ammo_ratio": {
+      "EMPTY":      { "type": "trapezoid", "params": [0.0, 0.0, 0.0, 0.05] },
+      "LOW":        { "type": "triangle",  "params": [0.0, 0.15, 0.35] },
+      "SUFFICIENT": { "type": "trapezoid", "params": [0.25, 0.50, 1.0, 1.0] }
+    },
+    "los_blocked": {
+      "CLEAR":   { "type": "trapezoid", "params": [0.0, 0.0, 0.3, 0.5] },
+      "BLOCKED": { "type": "trapezoid", "params": [0.5, 0.7, 1.0, 1.0] }
+    },
+    "boost_available": {
+      "UNAVAILABLE": { "type": "trapezoid", "params": [0.0, 0.0, 0.3, 0.5] },
+      "AVAILABLE":   { "type": "trapezoid", "params": [0.5, 0.7, 1.0, 1.0] }
+    },
     "action": {
-      "ATTACK":  { "type": "trapezoid", "params": [0.0, 0.0, 0.15, 0.30] },
-      "MOVE":    { "type": "triangle",  "params": [0.25, 0.50, 0.75] },
-      "RETREAT": { "type": "trapezoid", "params": [0.70, 0.85, 1.0, 1.0] }
+      "ATTACK":       { "type": "trapezoid", "params": [0.0, 0.0, 0.10, 0.20] },
+      "MOVE":         { "type": "triangle",  "params": [0.15, 0.30, 0.45] },
+      "ENGAGE_MELEE": { "type": "triangle",  "params": [0.40, 0.55, 0.70] },
+      "BOOST_DASH":   { "type": "triangle",  "params": [0.60, 0.75, 0.90] },
+      "RETREAT":      { "type": "trapezoid", "params": [0.80, 0.90, 1.0, 1.0] }
     }
   }
 }
