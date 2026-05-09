@@ -1,5 +1,6 @@
 # backend/app/engine/simulation.py
 import logging
+import math
 import uuid
 
 import numpy as np
@@ -10,8 +11,16 @@ from app.engine.battle_utils import BattleUtilsMixin
 from app.engine.calculator import PilotStats
 from app.engine.combat import CombatMixin, has_los
 from app.engine.constants import (
+    ALLY_REPULSION_RADIUS,
     FUZZY_RULES_DIR,
+    MAP_BOUNDS,
     MOVE_LOG_MIN_DIST,
+    OBSTACLE_GRID_PARAMS,
+    SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR,
+    SPAWN_ZONE_RADIUS_2TEAM,
+    SPAWN_ZONE_RADIUS_3TEAM,
+    SPAWN_ZONE_RADIUS_4TEAM,
+    SPAWN_ZONE_SAMPLE_MAX_TRIES,
     STRATEGY_UPDATE_INTERVAL,
     VALID_STRATEGY_MODES,
 )
@@ -21,10 +30,13 @@ from app.engine.movement import MovementMixin
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
 from app.engine.targeting import TargetingMixin
 from app.models.models import (
+    BattleField,
     BattleLog,
     MobileSuit,
     Obstacle,
     RetreatPoint,
+    SpawnZone,
+    Vector3,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,6 +78,7 @@ class BattleSimulator(
         strategy_update_interval: int = STRATEGY_UPDATE_INTERVAL,
         enable_hot_reload: bool = False,
         obstacles: list[Obstacle] | None = None,
+        battlefield: BattleField | None = None,
     ):
         """初期化.
 
@@ -82,6 +95,8 @@ class BattleSimulator(
                 の変更を自動検出して再ロードする（ローカル開発用）。False の場合は
                 起動時に一度だけロードしてスナップショットとして保持する（デフォルト）。
             obstacles: フィールド上の障害物リスト (Phase A — LOS システム)
+            battlefield: バトルフィールド定義 (Phase 6-3)。obstacle_density / spawn_zones を含む。
+                obstacles と同時に指定した場合は obstacles が優先される。
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -98,7 +113,22 @@ class BattleSimulator(
         self.special_effects: list[str] = special_effects or []
         self.player_pilot_stats: PilotStats = player_pilot_stats or PilotStats()
         self.retreat_points: list[RetreatPoint] = retreat_points or []
-        self.obstacles: list[Obstacle] = obstacles or []
+
+        # battlefield パラメータの解決 (Phase 6-3)
+        # 明示的な obstacles 引数が渡された場合は後方互換性のためそれを優先する
+        # battlefield が明示的に渡された場合のみ自動生成・適用する（後方互換性）
+        self._battlefield_explicit: bool = battlefield is not None
+        if battlefield is None:
+            battlefield = BattleField()
+        self.battlefield: BattleField = battlefield
+        if obstacles is not None:
+            # 後方互換: obstacles 引数が明示的に渡された場合は battlefield を上書き
+            self.battlefield = BattleField(
+                obstacles=obstacles,
+                spawn_zones=battlefield.spawn_zones,
+                obstacle_density=battlefield.obstacle_density,
+            )
+        self.obstacles: list[Obstacle] = self.battlefield.obstacles
 
         # チームレベルイベントのダミー actor_id (AiDecisionMixin で参照)
         self._team_event_actor_id: uuid.UUID = _TEAM_EVENT_ACTOR_ID
@@ -174,6 +204,255 @@ class BattleSimulator(
             )
             for team_id in team_ids
         }
+
+        # スポーン領域の解決と適用 (Phase 6-3)
+        # battlefield が明示的に渡された場合のみ自動生成・適用する（後方互換性）
+        if self._battlefield_explicit:
+            if not self.battlefield.spawn_zones:
+                spawn_zones = self._generate_default_spawn_zones()
+                self.battlefield = BattleField(
+                    obstacles=self.battlefield.obstacles,
+                    spawn_zones=spawn_zones,
+                    obstacle_density=self.battlefield.obstacle_density,
+                )
+            self._apply_spawn_zones()
+
+            # 障害物の自動生成 (Phase 6-3)
+            # obstacles が空かつ obstacle_density != "NONE" のとき自動生成
+            if not self.obstacles and self.battlefield.obstacle_density != "NONE":
+                generated = self._generate_obstacles()
+                self.battlefield = BattleField(
+                    obstacles=generated,
+                    spawn_zones=self.battlefield.spawn_zones,
+                    obstacle_density=self.battlefield.obstacle_density,
+                )
+                self.obstacles = self.battlefield.obstacles
+
+    # ---------------------------------------------------------------------------
+    # Phase 6-3: スポーン領域・障害物自動生成メソッド
+    # ---------------------------------------------------------------------------
+
+    def _generate_default_spawn_zones(self) -> list[SpawnZone]:
+        """チーム数とマップサイズに応じたデフォルトスポーン領域を生成する (Phase 6-3).
+
+        Returns:
+            生成されたスポーン領域リスト
+        """
+        map_min, map_max = MAP_BOUNDS
+        offset = 500.0  # マップ端からのオフセット (m)
+
+        # チームIDを収集（順序安定化のためソート）
+        team_ids = sorted(
+            {unit.team_id for unit in self.units if unit.team_id is not None}
+        )
+        n_teams = len(team_ids)
+
+        if n_teams == 0:
+            return []
+
+        # 2チーム: 対角配置
+        if n_teams == 2:
+            centers = [
+                (map_min + offset, map_min + offset),
+                (map_max - offset, map_max - offset),
+            ]
+            radius = SPAWN_ZONE_RADIUS_2TEAM
+        # 3チーム: 三角形頂点
+        elif n_teams == 3:
+            centers = [
+                (map_min + offset, map_min + offset),
+                (map_max - offset, map_min + offset),
+                ((map_min + map_max) / 2.0, map_max - offset),
+            ]
+            radius = SPAWN_ZONE_RADIUS_3TEAM
+        # 4チーム: 四隅
+        elif n_teams == 4:
+            centers = [
+                (map_min + offset, map_min + offset),
+                (map_max - offset, map_min + offset),
+                (map_min + offset, map_max - offset),
+                (map_max - offset, map_max - offset),
+            ]
+            radius = SPAWN_ZONE_RADIUS_4TEAM
+        else:
+            # 5チーム以上: 円周上に均等配置
+            cx = (map_min + map_max) / 2.0
+            cz = (map_min + map_max) / 2.0
+            r_field = (map_max - map_min) / 2.0 - offset
+            centers = [
+                (
+                    cx + r_field * math.cos(2 * math.pi * i / n_teams),
+                    cz + r_field * math.sin(2 * math.pi * i / n_teams),
+                )
+                for i in range(n_teams)
+            ]
+            radius = SPAWN_ZONE_RADIUS_4TEAM
+
+        return [
+            SpawnZone(
+                team_id=team_id,
+                center=Vector3(x=cx, y=0.0, z=cz),
+                radius=radius,
+            )
+            for team_id, (cx, cz) in zip(team_ids, centers, strict=True)
+        ]
+
+    @staticmethod
+    def _sample_position_in_zone(
+        zone: SpawnZone,
+        placed_positions: list[np.ndarray],
+        min_dist: float,
+        rng: np.random.Generator | None = None,
+    ) -> np.ndarray:
+        """スポーン領域内でユニットの配置位置をサンプリングする (Phase 6-3).
+
+        円内の一様サンプリング（r = radius * sqrt(U), θ = 2π * V）を使用する。
+        既配置ユニットとの最小距離 min_dist が保証されるまでリサンプリングする。
+        SPAWN_ZONE_SAMPLE_MAX_TRIES 回試行後も配置できない場合は min_dist を段階的に緩和する。
+
+        Args:
+            zone: スポーン領域
+            placed_positions: 既に配置されたユニット位置リスト (np.ndarray [x, y, z])
+            min_dist: 既配置ユニットとの最小距離 (m)
+            rng: 乱数生成器。None の場合は numpy のデフォルト RNG を使用する。
+
+        Returns:
+            配置位置 np.ndarray([x, y, z])
+        """
+        if rng is None:
+            rng = np.random.default_rng()
+
+        # radius=0 の場合は常に中心座標を返す（計算省略）
+        if zone.radius == 0.0:
+            return np.array([zone.center.x, zone.center.y, zone.center.z])
+
+        current_min_dist = min_dist
+        for attempt in range(SPAWN_ZONE_SAMPLE_MAX_TRIES * 3):
+            # 段階的に min_dist を緩和する (SPAWN_ZONE_SAMPLE_MAX_TRIES 試行ごとに半減)
+            if attempt > 0 and attempt % SPAWN_ZONE_SAMPLE_MAX_TRIES == 0:
+                current_min_dist *= SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR
+
+            r = zone.radius * math.sqrt(rng.random())
+            theta = 2.0 * math.pi * rng.random()
+            x = zone.center.x + r * math.cos(theta)
+            z = zone.center.z + r * math.sin(theta)
+            pos = np.array([x, zone.center.y, z])
+
+            if not placed_positions:
+                return pos
+
+            dists = [float(np.linalg.norm(pos - p)) for p in placed_positions]
+            if min(dists) >= current_min_dist:
+                return pos
+
+        # 最終フォールバック: 全試行失敗時は中心座標を返す
+        # （ゾーンが狭くユニットが多い場合に発生しうる）
+        logger.warning(
+            "スポーン領域 %s (radius=%.1f) でユニット配置に失敗 (%d 回試行)。中心座標を使用します。",
+            zone.team_id,
+            zone.radius,
+            SPAWN_ZONE_SAMPLE_MAX_TRIES * 3,
+        )
+        return np.array([zone.center.x, zone.center.y, zone.center.z])
+
+    def _apply_spawn_zones(self) -> None:
+        """スポーン領域に基づいて全ユニットの初期位置を設定する (Phase 6-3).
+
+        self.battlefield.spawn_zones から team_id をキーとした領域マップを作成し、
+        各チームのユニットを対応する領域内にランダム配置する。
+        ALLY_REPULSION_RADIUS 以上の同チーム内間隔を保証する。
+        """
+        zone_map: dict[str, SpawnZone] = {
+            sz.team_id: sz for sz in self.battlefield.spawn_zones
+        }
+        if not zone_map:
+            return
+
+        # チームごとに処理
+        team_units: dict[str, list[MobileSuit]] = {}
+        for unit in self.units:
+            if unit.team_id and unit.team_id in zone_map:
+                team_units.setdefault(unit.team_id, []).append(unit)
+
+        rng = np.random.default_rng()
+        for team_id, units in team_units.items():
+            zone = zone_map[team_id]
+            placed: list[np.ndarray] = []
+            for unit in units:
+                pos = self._sample_position_in_zone(
+                    zone, placed, ALLY_REPULSION_RADIUS, rng
+                )
+                unit.position = Vector3(
+                    x=float(pos[0]), y=float(pos[1]), z=float(pos[2])
+                )
+                placed.append(pos)
+
+    def _generate_obstacles(self) -> list[Obstacle]:
+        """障害物をグリッド分割＋ランダムオフセット方式で自動生成する (Phase 6-3).
+
+        フィールドを N×N グリッドに分割し、各セルに確率 p で障害物を配置する。
+        スポーン領域と重複する位置には配置しない。
+
+        Returns:
+            生成された障害物リスト
+        """
+        density = self.battlefield.obstacle_density.upper()
+        if density == "NONE" or density not in OBSTACLE_GRID_PARAMS:
+            return []
+
+        params = OBSTACLE_GRID_PARAMS[density]
+        n: int = params["n"]
+        prob: float = params["prob"]
+        radius_min: float = params["radius_range"][0]
+        radius_max: float = params["radius_range"][1]
+
+        map_min, map_max = MAP_BOUNDS
+        cell_size = (map_max - map_min) / n
+
+        spawn_zones = self.battlefield.spawn_zones
+        obstacles: list[Obstacle] = []
+        rng = np.random.default_rng()
+        obs_counter = 0
+
+        for i in range(n):
+            for j in range(n):
+                if rng.random() > prob:
+                    continue
+
+                # セル中心 + ランダムオフセット（セルの 40% 以内）
+                cell_cx = map_min + (i + 0.5) * cell_size
+                cell_cz = map_min + (j + 0.5) * cell_size
+                offset_limit = cell_size * 0.4
+                ox = rng.uniform(-offset_limit, offset_limit)
+                oz = rng.uniform(-offset_limit, offset_limit)
+                obs_x = cell_cx + ox
+                obs_z = cell_cz + oz
+                obs_radius = float(rng.uniform(radius_min, radius_max))
+
+                # スポーン領域との重複チェック
+                overlaps_spawn = False
+                for sz in spawn_zones:
+                    dist = math.sqrt(
+                        (obs_x - sz.center.x) ** 2 + (obs_z - sz.center.z) ** 2
+                    )
+                    if dist < sz.radius + obs_radius:
+                        overlaps_spawn = True
+                        break
+
+                if overlaps_spawn:
+                    continue
+
+                obstacles.append(
+                    Obstacle(
+                        obstacle_id=f"auto_obs_{obs_counter}",
+                        position=Vector3(x=obs_x, y=0.0, z=obs_z),
+                        radius=obs_radius,
+                        height=obs_radius * 1.5,
+                    )
+                )
+                obs_counter += 1
+
+        return obstacles
 
     @property
     def _strategy_engines(self) -> dict[str, dict[str, FuzzyEngine]]:
