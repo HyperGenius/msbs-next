@@ -42,7 +42,8 @@ module "cloud_run" {
   repository_url = module.base.repository_url
 
   # batch_job 設定
-  batch_image_tag    = var.batch_image_tag
-  batch_cpu_limit    = var.batch_cpu_limit
-  batch_memory_limit = var.batch_memory_limit
+  batch_image_tag       = var.batch_image_tag
+  batch_cpu_limit       = var.batch_cpu_limit
+  batch_memory_limit    = var.batch_memory_limit
+  max_simulation_steps  = var.max_simulation_steps
 }

@@ -102,3 +102,9 @@ variable "batch_memory_limit" {
   type        = string
   default     = "512Mi"
 }
+
+variable "max_simulation_steps" {
+  description = "Maximum number of simulation steps per battle (1 step = 0.1 s)"
+  type        = number
+  default     = 3000
+}
