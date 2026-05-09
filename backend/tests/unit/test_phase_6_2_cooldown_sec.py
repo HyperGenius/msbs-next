@@ -20,7 +20,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 
-
 # ---------------------------------------------------------------------------
 # テスト用ヘルパー
 # ---------------------------------------------------------------------------
@@ -219,7 +218,9 @@ def test_check_attack_resources_blocked_when_cooldown_positive() -> None:
 
     ok, reason = sim._check_attack_resources(weapon, weapon_state, resources)
     assert not ok, "クールダウン中は攻撃不可"
-    assert "クールダウン" in reason, f"reason にクールダウン情報が含まれること: {reason}"
+    assert "クールダウン" in reason, (
+        f"reason にクールダウン情報が含まれること: {reason}"
+    )
     assert "1.5s" in reason, f"残り秒数が表示されること: {reason}"
 
 
