@@ -22,12 +22,13 @@ NEON_DATABASE_URL=<接続文字列> python scripts/run_batch.py
 |---|---|
 | `NEON_DATABASE_URL` | NeonデータベースへのURL |
 
-### オプション環境変数（Cloud Run Jobs 並列実行用）
+### オプション環境変数
 
 | 変数名 | デフォルト | 説明 |
 |---|---|---|
-| `CLOUD_RUN_TASK_INDEX` | `0` | タスクインデックス |
-| `CLOUD_RUN_TASK_COUNT` | `1` | 並列タスク総数 |
+| `CLOUD_RUN_TASK_INDEX` | `0` | タスクインデックス（Cloud Run Jobs 並列実行用） |
+| `CLOUD_RUN_TASK_COUNT` | `1` | 並列タスク総数（Cloud Run Jobs 並列実行用） |
+| `MAX_SIMULATION_STEPS` | `3000` | バトル 1 戦あたりの最大シミュレーションステップ数（1 step = 0.1 s、デフォルト 300 s） |
 
 ### 処理フロー
 

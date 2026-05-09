@@ -53,6 +53,11 @@ resource "google_cloud_run_v2_job" "msbs_batch" {
           name  = "CLERK_JWKS_URL"
           value = var.clerk_jwks_url
         }
+
+        env {
+          name  = "MAX_SIMULATION_STEPS"
+          value = tostring(var.max_simulation_steps)
+        }
       }
     }
   }
