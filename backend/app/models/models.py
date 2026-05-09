@@ -410,10 +410,20 @@ class Obstacle(SQLModel):
     height: float = 0.0  # 高さ（m）。BattleViewer の視覚的高さ表現用
 
 
+class SpawnZone(SQLModel):
+    """スポーン領域定義 (Phase 6-3)."""
+
+    team_id: str  # 使用チームID
+    center: Vector3  # 領域中心座標
+    radius: float  # 領域半径 (m)。ユニットはこの円内にランダム配置される
+
+
 class BattleField(SQLModel):
     """バトルフィールド定義 (Phase A — 障害物システム)."""
 
     obstacles: list[Obstacle] = []  # フィールド上の障害物リスト
+    spawn_zones: list[SpawnZone] = []  # チームごとのスポーン領域 (Phase 6-3)
+    obstacle_density: str = "MEDIUM"  # 障害物密度: "NONE" / "SPARSE" / "MEDIUM" / "DENSE" (Phase 6-3)
 
 
 class BattleTeam(SQLModel):

@@ -2,8 +2,8 @@
 
 **バージョン:** 0.9.0  
 **作成日:** 2026-04-27  
-**更新日:** 2026-04-29  
-**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 / Phase 5-2 実装済み
+**更新日:** 2026-05-09  
+**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 / Phase 5-2 / Phase 6-3 実装済み
 
 ---
 
@@ -811,3 +811,125 @@ weapon_state = {
 ```
 
 旧形式（`残り2ターン`）は廃止。
+
+---
+
+## 14. Phase 6-3: フィールド初期化改善（スポーン領域分離 + 障害物デフォルト配置）
+
+### 14.1 概要
+
+`BattleField` モデルを拡張し、**スポーン領域の定義** と **障害物の自動生成** を実装する。
+
+- **スポーン領域 (`SpawnZone`)**: チームごとの初期配置エリアを定義し、チーム間の距離を保証する
+- **障害物の自動生成**: `obstacle_density` に応じた障害物をフィールドに自動配置する
+
+### 14.2 新モデル: `SpawnZone`
+
+```python
+class SpawnZone(SQLModel):
+    """スポーン領域定義 (Phase 6-3)."""
+    team_id: str      # 使用チームID
+    center: Vector3   # 領域中心座標
+    radius: float     # 領域半径 (m)。ユニットはこの円内にランダム配置される
+```
+
+### 14.3 `BattleField` の拡張
+
+```python
+class BattleField(SQLModel):
+    obstacles: list[Obstacle] = []
+    spawn_zones: list[SpawnZone] = []        # Phase 6-3: チームごとのスポーン領域
+    obstacle_density: str = "MEDIUM"         # Phase 6-3: "NONE" / "SPARSE" / "MEDIUM" / "DENSE"
+```
+
+### 14.4 `BattleSimulator` の変更
+
+#### 新パラメータ
+
+```python
+def __init__(
+    self,
+    ...
+    battlefield: BattleField | None = None,  # Phase 6-3
+):
+```
+
+**`battlefield=None`（デフォルト）:** 後方互換モード。ユニット位置・障害物は変更されない。  
+**`battlefield=BattleField(...)`:** 新機能が有効化される。
+
+#### 自動生成フロー
+
+```
+BattleField を battlefield=BattleField(...) で渡した場合:
+  1. spawn_zones が空 → _generate_default_spawn_zones() でデフォルト領域を生成
+  2. _apply_spawn_zones() で全ユニットをスポーン領域内にランダム配置
+  3. obstacles が空 かつ obstacle_density != "NONE" → _generate_obstacles() で自動生成
+```
+
+### 14.5 デフォルトスポーン領域
+
+`MAP_BOUNDS = (0.0, 5000.0)` の場合:
+
+| チーム数 | 配置方式 | スポーン中心（XZ）| スポーン半径 |
+|---|---|---|---|
+| 2チーム | 対角 | `(500, 500)` / `(4500, 4500)` | `400m` |
+| 3チーム | 三角形頂点 | `(500, 500)` / `(4500, 500)` / `(2500, 4500)` | `400m` |
+| 4チーム | 四隅 | `(500, 500)` 等 | `300m` |
+| 5チーム以上 | 円周均等配置 | 中心から放射状 | `300m` |
+
+2チームの場合、スポーン中心間距離は約 `5657m`（`≥ 1000m` の要件を満たす）。
+
+### 14.6 障害物自動生成パラメータ
+
+| `obstacle_density` | グリッド N | 配置確率 p | 障害物半径 |
+|---|---|---|---|
+| `"SPARSE"` | 6 | 0.4 | 100〜200m |
+| `"MEDIUM"` | 8 | 0.6 | 80〜150m |
+| `"DENSE"` | 10 | 0.8 | 60〜120m |
+| `"NONE"` | — | — | 障害物なし |
+
+生成方式: グリッド分割＋ランダムオフセット。スポーン領域と重複する位置には配置しない。
+
+### 14.7 新定数 (`constants.py`)
+
+```python
+DEFAULT_OBSTACLE_DENSITY: str = "MEDIUM"
+OBSTACLE_GRID_PARAMS: dict[str, dict] = {
+    "SPARSE": {"n": 6, "prob": 0.4, "radius_range": (100.0, 200.0)},
+    "MEDIUM": {"n": 8, "prob": 0.6, "radius_range": (80.0, 150.0)},
+    "DENSE":  {"n": 10, "prob": 0.8, "radius_range": (60.0, 120.0)},
+}
+SPAWN_ZONE_RADIUS_2TEAM: float = 400.0
+SPAWN_ZONE_RADIUS_3TEAM: float = 400.0
+SPAWN_ZONE_RADIUS_4TEAM: float = 300.0
+SPAWN_ZONE_SAMPLE_MAX_TRIES: int = 50
+```
+
+### 14.8 使用例
+
+```python
+# デフォルト設定（MEDIUM 密度、スポーン領域は自動生成）
+sim = BattleSimulator(player, enemies, battlefield=BattleField())
+
+# 障害物なし（後方互換テスト用）
+sim = BattleSimulator(player, enemies, battlefield=BattleField(obstacle_density="NONE"))
+
+# 手動スポーン領域 + DENSE 障害物
+bf = BattleField(
+    spawn_zones=[
+        SpawnZone(team_id="PT", center=Vector3(x=500, y=0, z=500), radius=0.0),  # radius=0 で固定配置
+        SpawnZone(team_id="ET", center=Vector3(x=4500, y=0, z=4500), radius=400.0),
+    ],
+    obstacle_density="DENSE",
+)
+sim = BattleSimulator(player, enemies, battlefield=bf)
+```
+
+### 14.9 後方互換性
+
+| 呼び出し方 | スポーン適用 | 障害物生成 |
+|---|---|---|
+| `BattleSimulator(player, enemies)` | ❌ | ❌（後方互換） |
+| `BattleSimulator(player, enemies, obstacles=[...])` | ❌ | ❌（明示的 obstacles 優先） |
+| `BattleSimulator(player, enemies, battlefield=BattleField(...))` | ✅ | ✅（density≠NONE の場合） |
+

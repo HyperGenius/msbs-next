@@ -102,6 +102,20 @@ BALANCE_WARN_AVG_DURATION: float = 200.0  # 平均戦闘時間（秒）がこれ
 OBSTACLE_MARGIN: float = 50.0  # 障害物斥力が働く追加マージン (m)
 OBSTACLE_REPULSION_COEFF: float = 4.0  # 障害物への斥力係数
 
+# 障害物自動生成定数 (Phase 6-3)
+DEFAULT_OBSTACLE_DENSITY: str = "MEDIUM"
+OBSTACLE_GRID_PARAMS: dict[str, dict] = {
+    "SPARSE": {"n": 6, "prob": 0.4, "radius_range": (100.0, 200.0)},
+    "MEDIUM": {"n": 8, "prob": 0.6, "radius_range": (80.0, 150.0)},
+    "DENSE":  {"n": 10, "prob": 0.8, "radius_range": (60.0, 120.0)},
+}
+
+# スポーン領域定数 (Phase 6-3)
+SPAWN_ZONE_RADIUS_2TEAM: float = 400.0  # 2チーム時のスポーン半径 (m)
+SPAWN_ZONE_RADIUS_3TEAM: float = 400.0  # 3チーム時のスポーン半径 (m)
+SPAWN_ZONE_RADIUS_4TEAM: float = 300.0  # 4チーム時のスポーン半径 (m)
+SPAWN_ZONE_SAMPLE_MAX_TRIES: int = 50  # 配置リサンプリングの最大試行回数
+
 # ブーストダッシュシステム定数 (Phase B)
 MELEE_RANGE: float = 50.0  # 近接攻撃有効距離 (m)
 MELEE_BOOST_ARRIVAL_RANGE: float = (
