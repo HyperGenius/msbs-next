@@ -36,6 +36,9 @@ from app.services.ranking_service import RankingService
 _CLOUD_RUN_TASK_INDEX = int(os.environ.get("CLOUD_RUN_TASK_INDEX", 0))
 _CLOUD_RUN_TASK_COUNT = int(os.environ.get("CLOUD_RUN_TASK_COUNT", 1))
 
+# シミュレーションの最大ステップ数 (1 step = 0.1 s, デフォルト 3000 step = 300 s)
+_MAX_SIMULATION_STEPS = int(os.environ.get("MAX_SIMULATION_STEPS", 3000))
+
 
 def _check_env() -> None:
     """必須環境変数の存在を確認する."""
@@ -185,8 +188,7 @@ def _run_simulation(
     """
     simulator = BattleSimulator(player_unit, enemy_units)
 
-    max_steps = 100
-    for _step_count in range(max_steps):
+    for _step_count in range(_MAX_SIMULATION_STEPS):
         if simulator.is_finished:
             break
         simulator.step()
