@@ -138,7 +138,7 @@ class BattleSimulator(
                     "current_ammo": weapon.max_ammo
                     if weapon.max_ammo is not None
                     else None,
-                    "current_cool_down": 0,
+                    "cooldown_remaining_sec": 0.0,  # 残りクールダウン時間（秒）(Phase 6-2)
                 }
 
         # 中階層ファジィ推論エンジン（AGGRESSIVEルールセット）

@@ -15,6 +15,7 @@ def create_beam_weapon() -> Weapon:
         type="BEAM",
         optimal_range=400.0,
         decay_rate=0.05,
+        cooldown_sec=0.0,
     )
 
 
@@ -29,6 +30,7 @@ def create_physical_weapon() -> Weapon:
         type="PHYSICAL",
         optimal_range=300.0,
         decay_rate=0.08,
+        cooldown_sec=0.0,
     )
 
 

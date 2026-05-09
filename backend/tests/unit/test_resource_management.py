@@ -93,7 +93,7 @@ def test_simulation_initializes_resources():
     weapon_states = sim.unit_resources[player_id]["weapon_states"]
     assert "rifle" in weapon_states
     assert weapon_states["rifle"]["current_ammo"] == 10
-    assert weapon_states["rifle"]["current_cool_down"] == 0
+    assert weapon_states["rifle"]["cooldown_remaining_sec"] == 0.0
 
 
 def test_en_depletion_blocks_attack():
@@ -108,6 +108,7 @@ def test_en_depletion_blocks_attack():
         max_ammo=None,
         en_cost=60,
         cool_down_turn=0,
+        cooldown_sec=0.0,
     )
 
     player = MobileSuit(
@@ -162,6 +163,7 @@ def test_ammo_depletion_blocks_attack():
         max_ammo=3,
         en_cost=0,
         cool_down_turn=0,
+        cooldown_sec=0.0,
     )
 
     player = MobileSuit(
@@ -216,6 +218,7 @@ def test_cooldown_blocks_attack():
         max_ammo=None,
         en_cost=0,
         cool_down_turn=2,
+        cooldown_sec=2.0,  # 2秒クールダウン (Phase 6-2)
     )
 
     player = MobileSuit(

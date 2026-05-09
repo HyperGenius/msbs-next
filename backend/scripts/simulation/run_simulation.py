@@ -82,6 +82,7 @@ def _build_enemies_from_config(enemy_configs: list[dict]) -> list[MobileSuit]:
                     max_ammo=weapon_dict.get("max_ammo"),
                     en_cost=weapon_dict.get("en_cost", 0),
                     cool_down_turn=weapon_dict.get("cool_down_turn", 0),
+                    cooldown_sec=weapon_dict.get("cooldown_sec", 1.0),
                 )
             ],
             side="ENEMY",

@@ -44,6 +44,7 @@ def _make_ranged_weapon(weapon_id: str = "beam_rifle") -> Weapon:
         decay_rate=0.05,
         max_ammo=30,
         en_cost=10,
+        cooldown_sec=0.3,  # RANGED 標準: 0.3秒 (Phase 6-2)
     )
 
 

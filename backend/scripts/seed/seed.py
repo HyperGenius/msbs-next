@@ -28,7 +28,8 @@ rifle = Weapon(
     decay_rate=0.05,
     max_ammo=None,  # ビーム兵器は弾数無制限
     en_cost=50,  # ENを50消費
-    cool_down_turn=0,  # クールタイムなし
+    cool_down_turn=0,  # クールタイムなし（後方互換）
+    cooldown_sec=2.0,  # ビーム重火力: 2秒クールダウン
 )
 mg = Weapon(
     id="w2",
@@ -41,7 +42,8 @@ mg = Weapon(
     decay_rate=0.08,
     max_ammo=100,  # 実弾兵器は100発まで
     en_cost=0,  # 実弾なのでEN消費なし
-    cool_down_turn=0,  # クールタイムなし
+    cool_down_turn=0,  # クールタイムなし（後方互換）
+    cooldown_sec=0.3,  # マシンガン: 0.3秒クールダウン
 )
 
 # 機体データ
