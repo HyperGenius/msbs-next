@@ -25,12 +25,11 @@ from app.engine.constants import (
 )
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3
 
-if TYPE_CHECKING:
-    pass
-
-
 class MovementMixin:
     """移動・慣性・ポテンシャルフィールド処理のミックスイン."""
+
+    # BattleSimulator が提供するインスタンス属性 (mypy 向け型宣言のみ; 実体は simulation.py)
+    units: list[MobileSuit]
 
     def _threat_enemy_repulsion(
         self,

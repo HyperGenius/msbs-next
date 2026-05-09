@@ -23,6 +23,10 @@ _WEAPON_SELECTION_MAX_DIST = 3000.0
 class TargetingMixin:
     """索敵・ターゲット選択・武器選択処理のミックスイン."""
 
+    # BattleSimulator が提供するインスタンス属性 (mypy 向け型宣言のみ; 実体は simulation.py)
+    units: list[MobileSuit]
+    team_detected_units: dict[str, set]
+
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
         alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]

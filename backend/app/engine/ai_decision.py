@@ -14,7 +14,7 @@ from app.engine.constants import (
 from app.models.models import BattleLog, MobileSuit, Vector3
 
 if TYPE_CHECKING:
-    pass
+    from app.engine.strategy_controller import TeamMetrics
 
 # 近隣ユニット検索半径 (m)
 _FUZZY_NEIGHBOR_RADIUS = 500.0
@@ -22,6 +22,12 @@ _FUZZY_NEIGHBOR_RADIUS = 500.0
 
 class AiDecisionMixin:
     """戦略・AI決定・後退チェックフェーズのミックスイン."""
+
+    # BattleSimulator が提供するインスタンス属性 (mypy 向け型宣言のみ; 実体は simulation.py)
+    units: list[MobileSuit]
+
+    if TYPE_CHECKING:
+        def _collect_team_metrics(self, team_id: str) -> "TeamMetrics": ...
 
     def _strategy_phase(self) -> None:
         """戦略評価フェーズ: チームレベルの戦略モードを評価・更新する (Phase 4-2 / 4-3).
@@ -240,7 +246,7 @@ class AiDecisionMixin:
 
         ally_count_near = float(
             sum(
-                1
+                True  # bool (sum counts True=1); fixes mypy [misc] int-vs-bool error
                 for u in self.units  # type: ignore[attr-defined]
                 if u.current_hp > 0
                 and u.team_id == unit.team_id
