@@ -139,6 +139,9 @@ RANGED_MID_ACCURACY_PENALTY: float = (
     0.7  # 遠距離武器: d <= CLOSE_RANGE 時の命中ペナルティ
 )
 
+# MOVE ログを出力する最小残距離 (m) — これ未満の残距離では MOVE ログを抑制する
+MOVE_LOG_MIN_DIST: float = 100.0
+
 # 戦略遷移しきい値定数 (Phase 4-3) — ゲームバランス調整用
 # AGGRESSIVE → RETREAT (T01)
 AGGRESSIVE_RETREAT_HP_THRESHOLD: float = 0.30
