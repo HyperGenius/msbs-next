@@ -83,6 +83,7 @@ ALLY_REPULSION_RADIUS: float = 150.0  # 味方斥力が働く半径 (m)
 BOUNDARY_MARGIN: float = 200.0  # マップ境界からの斥力発生距離 (m)
 HIGH_THREAT_THRESHOLD: float = 0.5  # 高脅威敵の閾値（脅威度スコア）
 MAP_BOUNDS: tuple[float, float] = (0.0, 5000.0)  # XZ方向のマップ範囲 (m)
+MOVE_LOG_MIN_DIST: float = 100.0  # MOVE ログを出力する最小残距離 (m) — これ未満では MOVE ログを抑制する
 
 # 撤退ポイント引力係数 (Phase 3-3)
 RETREAT_ATTRACTION_COEFF: float = 5.0  # 撤退ポイントへの強引力係数
@@ -138,9 +139,6 @@ RANGED_CLOSE_ACCURACY_PENALTY: float = (
 RANGED_MID_ACCURACY_PENALTY: float = (
     0.7  # 遠距離武器: d <= CLOSE_RANGE 時の命中ペナルティ
 )
-
-# MOVE ログを出力する最小残距離 (m) — これ未満の残距離では MOVE ログを抑制する
-MOVE_LOG_MIN_DIST: float = 100.0
 
 # 戦略遷移しきい値定数 (Phase 4-3) — ゲームバランス調整用
 # AGGRESSIVE → RETREAT (T01)
