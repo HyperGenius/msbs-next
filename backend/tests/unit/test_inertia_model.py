@@ -54,7 +54,7 @@ def _make_unit(
 
 
 def test_unit_resources_initialized_with_velocity_and_heading() -> None:
-    """unit_resources に velocity_vec / heading_deg が初期値で追加されること."""
+    """unit_resources に velocity_vec / movement_heading_deg / body_heading_deg が初期値で追加されること."""
     player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=200, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
@@ -63,9 +63,11 @@ def test_unit_resources_initialized_with_velocity_and_heading() -> None:
         uid = str(unit.id)
         resources = sim.unit_resources[uid]
         assert "velocity_vec" in resources
-        assert "heading_deg" in resources
+        assert "movement_heading_deg" in resources
+        assert "body_heading_deg" in resources
         np.testing.assert_array_equal(resources["velocity_vec"], np.zeros(3))
-        assert resources["heading_deg"] == 0.0
+        assert resources["movement_heading_deg"] == 0.0
+        assert resources["body_heading_deg"] == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -169,9 +171,9 @@ def test_ma_turn_rate_limited() -> None:
     sim = BattleSimulator(ma, [enemy])
 
     dt = 0.1
-    # heading_deg を 0° (正面: +x 方向) に設定
+    # movement_heading_deg を 0° (正面: +x 方向) に設定
     uid = str(ma.id)
-    sim.unit_resources[uid]["heading_deg"] = 0.0
+    sim.unit_resources[uid]["movement_heading_deg"] = 0.0
 
     # 目標方向を +z 方向（90° 旋回が必要）
     desired = np.array([0.0, 0.0, 1.0])
@@ -180,7 +182,7 @@ def test_ma_turn_rate_limited() -> None:
     resources = sim.unit_resources[uid]
     # max_turn_rate=30 deg/s, dt=0.1s → 最大 3° 旋回
     max_rotation = 30.0 * dt  # = 3.0°
-    heading_change = abs(resources["heading_deg"] - 0.0)
+    heading_change = abs(resources["movement_heading_deg"] - 0.0)
     assert heading_change <= max_rotation + 1e-6
 
 
@@ -214,16 +216,16 @@ def test_normal_ms_turn_rate_larger_than_ma() -> None:
     uid_normal = str(normal_ms.id)
     uid_ma = str(ma.id)
 
-    # 両方とも heading_deg = 0° から 90° 方向に旋回
-    sim_normal.unit_resources[uid_normal]["heading_deg"] = 0.0
-    sim_ma.unit_resources[uid_ma]["heading_deg"] = 0.0
+    # 両方とも movement_heading_deg = 0° から 90° 方向に旋回
+    sim_normal.unit_resources[uid_normal]["movement_heading_deg"] = 0.0
+    sim_ma.unit_resources[uid_ma]["movement_heading_deg"] = 0.0
 
     desired = np.array([0.0, 0.0, 1.0])  # +z 方向 (90° 旋回が必要)
     sim_normal._apply_inertia(normal_ms, desired, dt)
     sim_ma._apply_inertia(ma, desired, dt)
 
-    heading_normal = sim_normal.unit_resources[uid_normal]["heading_deg"]
-    heading_ma = sim_ma.unit_resources[uid_ma]["heading_deg"]
+    heading_normal = sim_normal.unit_resources[uid_normal]["movement_heading_deg"]
+    heading_ma = sim_ma.unit_resources[uid_ma]["movement_heading_deg"]
 
     # 通常MSは MA より大きく旋回できる
     assert heading_normal > heading_ma

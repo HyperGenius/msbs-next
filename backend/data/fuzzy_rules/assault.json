@@ -3,6 +3,35 @@
   "layer": "behavior_selection",
   "rules": [
     {
+      "id": "arc_001",
+      "conditions": [
+        { "variable": "angle_to_target", "set": "FRONTAL" },
+        { "variable": "los_blocked", "set": "CLEAR" },
+        { "variable": "ranged_ammo_ratio", "set": "SUFFICIENT" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" },
+      "comment": "正面に敵がいてLOSが確保でき弾薬が十分であれば攻撃を優先"
+    },
+    {
+      "id": "arc_002",
+      "conditions": [
+        { "variable": "angle_to_target", "set": "FLANK" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "MOVE" },
+      "comment": "側面に敵がいれば旋回して正面に収める"
+    },
+    {
+      "id": "arc_003",
+      "conditions": [
+        { "variable": "angle_to_target", "set": "REAR" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "MOVE" },
+      "comment": "背面に敵がいれば旋回を最優先"
+    },
+    {
       "id": "asl_rule_001",
       "conditions": [
         { "variable": "distance_to_nearest_enemy", "set": "CLOSE" }
@@ -168,6 +197,11 @@
     "boost_available": {
       "UNAVAILABLE": { "type": "trapezoid", "params": [0.0, 0.0, 0.3, 0.5] },
       "AVAILABLE":   { "type": "trapezoid", "params": [0.5, 0.7, 1.0, 1.0] }
+    },
+    "angle_to_target": {
+      "FRONTAL": { "type": "trapezoid", "params": [0, 0, 25, 40] },
+      "FLANK":   { "type": "triangle",  "params": [25, 60, 120] },
+      "REAR":    { "type": "trapezoid", "params": [100, 130, 180, 180] }
     },
     "action": {
       "ATTACK":       { "type": "trapezoid", "params": [0.0, 0.0, 0.10, 0.20] },
