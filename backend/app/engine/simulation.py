@@ -1927,65 +1927,13 @@ class BattleSimulator:
         unit_id = str(actor.id)
 
         # --- Phase 6-1: fire_arc_deg ゲートチェック ---
-        # MELEE 武器は全方位攻撃可能なので弧制限ゲートをスキップする
-        is_melee_weapon = (
-            getattr(weapon, "weapon_type", "RANGED") == "MELEE"
-            or getattr(weapon, "is_melee", False)
-        )
-        if not is_melee_weapon:
-            pos_target = target.position.to_numpy()
-            target_dir_deg = math.degrees(
-                math.atan2(
-                    float(pos_target[2] - pos_actor[2]),
-                    float(pos_target[0] - pos_actor[0]),
-                )
-            )
-            body_heading = self.unit_resources[unit_id].get("body_heading_deg", 0.0)
-            raw_diff = target_dir_deg - body_heading
-            angle_to_tgt = abs(((raw_diff + 180) % 360) - 180)
-            effective_fire_arc = getattr(weapon, "fire_arc_deg", DEFAULT_FIRE_ARC_DEG)
-            if angle_to_tgt > effective_fire_arc:
-                # 弧外: 攻撃をスキップして旋回を継続する
-                actor_name = self._format_actor_name(actor)
-                weapon_display = f"[{weapon.name}]" if weapon.name else "[武装]"
-                self.logs.append(
-                    BattleLog(
-                        timestamp=self.elapsed_time,
-                        actor_id=actor.id,
-                        action_type="TURNING_TO_TARGET",
-                        target_id=target.id,
-                        message=(
-                            f"{actor_name}の{weapon_display}は射撃弧外"
-                            f"（角度差:{angle_to_tgt:.1f}° > 弧:{effective_fire_arc:.1f}°）"
-                            f"のため旋回中"
-                        ),
-                        position_snapshot=snapshot,
-                    )
-                )
-                return
+        if self._is_fire_arc_blocked(actor, target, weapon, pos_actor, snapshot):
+            return
         resources = self.unit_resources[unit_id]
 
         # LOS チェック（格闘武器はスキップ、障害物がある場合のみ）
-        is_melee = getattr(weapon, "is_melee", False)
-        if not is_melee and self.obstacles:
-            pos_target = target.position.to_numpy()
-            if not _has_los(pos_actor, pos_target, self.obstacles):
-                actor_name = self._format_actor_name(actor)
-                weapon_display = f"[{weapon.name}]" if weapon.name else "[武装]"
-                self.logs.append(
-                    BattleLog(
-                        timestamp=self.elapsed_time,
-                        actor_id=actor.id,
-                        action_type="ATTACK_BLOCKED_LOS",
-                        target_id=target.id,
-                        message=(
-                            f"{actor_name}の{weapon_display}は障害物に遮られ、"
-                            f"{target.name}への射線が確保できない"
-                        ),
-                        position_snapshot=snapshot,
-                    )
-                )
-                return
+        if self._is_los_blocked(actor, target, weapon, pos_actor, snapshot):
+            return
 
         # リソース状態を取得または初期化
         weapon_state = self._get_or_init_weapon_state(weapon, resources)
@@ -2060,6 +2008,86 @@ class BattleSimulator:
                 is_bad_distance,
                 skill_activated,
             )
+
+    def _is_fire_arc_blocked(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: Weapon,
+        pos_actor: np.ndarray,
+        snapshot: Vector3,
+    ) -> bool:
+        """射撃弧制限ゲートチェック. 弧外なら True を返してログを記録する."""
+        # MELEE 武器は全方位攻撃可能なので弧制限ゲートをスキップする
+        is_melee_weapon = getattr(
+            weapon, "weapon_type", "RANGED"
+        ) == "MELEE" or getattr(weapon, "is_melee", False)
+        if is_melee_weapon:
+            return False
+        unit_id = str(actor.id)
+        pos_target = target.position.to_numpy()
+        target_dir_deg = math.degrees(
+            math.atan2(
+                float(pos_target[2] - pos_actor[2]),
+                float(pos_target[0] - pos_actor[0]),
+            )
+        )
+        body_heading = self.unit_resources[unit_id].get("body_heading_deg", 0.0)
+        raw_diff = target_dir_deg - body_heading
+        angle_to_tgt = abs(((raw_diff + 180) % 360) - 180)
+        effective_fire_arc = getattr(weapon, "fire_arc_deg", DEFAULT_FIRE_ARC_DEG)
+        if angle_to_tgt <= effective_fire_arc:
+            return False
+        # 弧外: 攻撃をスキップして旋回を継続する
+        actor_name = self._format_actor_name(actor)
+        weapon_display = f"[{weapon.name}]" if weapon.name else "[武装]"
+        self.logs.append(
+            BattleLog(
+                timestamp=self.elapsed_time,
+                actor_id=actor.id,
+                action_type="TURNING_TO_TARGET",
+                target_id=target.id,
+                message=(
+                    f"{actor_name}の{weapon_display}は射撃弧外"
+                    f"（角度差:{angle_to_tgt:.1f}° > 弧:{effective_fire_arc:.1f}°）"
+                    f"のため旋回中"
+                ),
+                position_snapshot=snapshot,
+            )
+        )
+        return True
+
+    def _is_los_blocked(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: Weapon,
+        pos_actor: np.ndarray,
+        snapshot: Vector3,
+    ) -> bool:
+        """LOS（射線）チェック. 射線なしなら True を返してログを記録する."""
+        is_melee = getattr(weapon, "is_melee", False)
+        if is_melee or not self.obstacles:
+            return False
+        pos_target = target.position.to_numpy()
+        if _has_los(pos_actor, pos_target, self.obstacles):
+            return False
+        actor_name = self._format_actor_name(actor)
+        weapon_display = f"[{weapon.name}]" if weapon.name else "[武装]"
+        self.logs.append(
+            BattleLog(
+                timestamp=self.elapsed_time,
+                actor_id=actor.id,
+                action_type="ATTACK_BLOCKED_LOS",
+                target_id=target.id,
+                message=(
+                    f"{actor_name}の{weapon_display}は障害物に遮られ、"
+                    f"{target.name}への射線が確保できない"
+                ),
+                position_snapshot=snapshot,
+            )
+        )
+        return True
 
     def _process_hit(
         self,

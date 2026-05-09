@@ -4,16 +4,11 @@
 _update_body_heading() の動作、fire_arc_deg ゲートの動作を検証する。
 """
 
-import math
-import uuid
-
 import numpy as np
-import pytest
 
 from app.engine.constants import DEFAULT_FIRE_ARC_DEG
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # ヘルパー
@@ -263,7 +258,7 @@ def test_fire_arc_gate_blocks_attack_out_of_arc() -> None:
 
     # TURNING_TO_TARGET ログが記録されること
     new_logs = sim.logs[initial_log_count:]
-    turning_logs = [l for l in new_logs if l.action_type == "TURNING_TO_TARGET"]
+    turning_logs = [log for log in new_logs if log.action_type == "TURNING_TO_TARGET"]
     assert len(turning_logs) >= 1, "弧外の場合 TURNING_TO_TARGET ログが記録されること"
 
     # 攻撃が実行されていないこと（武器弾薬が変わっていない）
@@ -303,11 +298,11 @@ def test_fire_arc_gate_allows_attack_in_arc() -> None:
 
     # TURNING_TO_TARGET ログが記録されていないこと
     new_logs = sim.logs[initial_log_count:]
-    turning_logs = [l for l in new_logs if l.action_type == "TURNING_TO_TARGET"]
+    turning_logs = [log for log in new_logs if log.action_type == "TURNING_TO_TARGET"]
     assert len(turning_logs) == 0, "弧内では TURNING_TO_TARGET ログが記録されないこと"
 
     # 攻撃が実行されたこと（ATTACK/MISS ログが記録された）
-    attack_logs = [l for l in new_logs if l.action_type in ("ATTACK", "MISS")]
+    attack_logs = [log for log in new_logs if log.action_type in ("ATTACK", "MISS")]
     assert len(attack_logs) >= 1, "弧内では攻撃ログが記録されること"
 
 
@@ -343,7 +338,7 @@ def test_melee_weapon_skips_fire_arc_gate() -> None:
 
     # TURNING_TO_TARGET ログが記録されていないこと（MELEE はスキップ）
     new_logs = sim.logs[initial_log_count:]
-    turning_logs = [l for l in new_logs if l.action_type == "TURNING_TO_TARGET"]
+    turning_logs = [log for log in new_logs if log.action_type == "TURNING_TO_TARGET"]
     assert len(turning_logs) == 0, "MELEE 武器は弧チェックをスキップすること"
 
 
@@ -370,7 +365,7 @@ def test_ai_decision_includes_angle_to_target() -> None:
     sim._ai_decision_phase(player)
 
     # AI_DECISION ログに "対目標角" が含まれること
-    ai_logs = [l for l in sim.logs if l.action_type == "AI_DECISION"]
+    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
     assert len(ai_logs) >= 1
     assert "対目標角" in ai_logs[0].message, "angle_to_target がログに含まれること"
     # 正面方向なので角度差が小さい
@@ -402,7 +397,7 @@ def test_angle_to_target_is_180_when_no_target() -> None:
     assert action == "MOVE", "敵未検出時は MOVE にフォールバックすること"
 
     # angle_to_target = 180.0 の効果: AI_DECISION ログなし（早期リターン）
-    ai_logs = [l for l in sim.logs if l.action_type == "AI_DECISION"]
+    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
     assert len(ai_logs) == 0, "早期リターンのためファジィ推論ログが記録されないこと"
 
 
@@ -428,7 +423,7 @@ def test_angle_to_target_180_via_fuzzy_log() -> None:
     sim._ai_decision_phase(player)
 
     # AI_DECISION ログが記録されること
-    ai_logs = [l for l in sim.logs if l.action_type == "AI_DECISION"]
+    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
     assert len(ai_logs) >= 1
     # angle_to_target が 180.0° に近いこと（敵は真後ろ）
     assert "対目標角:180.0°" in ai_logs[0].message, (
