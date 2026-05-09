@@ -55,7 +55,9 @@ class TargetingMixin:
                 if target.id in self.team_detected_units[unit.team_id]:  # type: ignore[attr-defined]
                     # 既に発見済み — LOS が失われていないか再チェック（障害物がある場合）
                     if self.obstacles and not has_los(  # type: ignore[attr-defined]
-                        pos_unit, pos_target, self.obstacles  # type: ignore[attr-defined]
+                        pos_unit,
+                        pos_target,
+                        self.obstacles,  # type: ignore[attr-defined]
                     ):
                         # LOS 喪失: 発見済みリストから除外し最終座標を記憶
                         self.team_detected_units[unit.team_id].discard(target.id)  # type: ignore[attr-defined]
@@ -68,7 +70,9 @@ class TargetingMixin:
                 if distance <= effective_sensor_range:
                     # LOS チェック（障害物がある場合のみ）
                     if self.obstacles and not has_los(  # type: ignore[attr-defined]
-                        pos_unit, pos_target, self.obstacles  # type: ignore[attr-defined]
+                        pos_unit,
+                        pos_target,
+                        self.obstacles,  # type: ignore[attr-defined]
                     ):
                         # 障害物により遮断されているため発見不可
                         continue
@@ -175,7 +179,9 @@ class TargetingMixin:
         """
         # ターゲット選択: team_idが異なる生存ユニットをリストアップ
         potential_targets = [
-            u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
+            u
+            for u in self.units
+            if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
         ]
 
         # 索敵済みの敵のみをターゲット候補とする
@@ -252,7 +258,9 @@ class TargetingMixin:
         """
         # ターゲット選択: team_idが異なる生存ユニットをリストアップ
         potential_targets = [
-            u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
+            u
+            for u in self.units
+            if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
         ]
 
         # 索敵済みの敵のみをターゲット候補とする
@@ -273,7 +281,8 @@ class TargetingMixin:
         # 戦略モードに応じたターゲット選択エンジンを選択
         strategy_mode = self._resolve_strategy_mode(actor)  # type: ignore[attr-defined]
         target_engine = self._strategy_engines.get(strategy_mode, {}).get(  # type: ignore[attr-defined]
-            "target", self._target_selection_fuzzy_engine  # type: ignore[attr-defined]
+            "target",
+            self._target_selection_fuzzy_engine,  # type: ignore[attr-defined]
         )
 
         # 各候補にファジィ推論を実行し優先度スコアを計算
@@ -422,7 +431,8 @@ class TargetingMixin:
         # 戦略モードに応じた武器選択エンジンを選択
         strategy_mode = self._resolve_strategy_mode(actor)  # type: ignore[attr-defined]
         weapon_engine = self._strategy_engines.get(strategy_mode, {}).get(  # type: ignore[attr-defined]
-            "weapon", self._weapon_selection_fuzzy_engine  # type: ignore[attr-defined]
+            "weapon",
+            self._weapon_selection_fuzzy_engine,  # type: ignore[attr-defined]
         )
 
         try:

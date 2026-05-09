@@ -9,7 +9,6 @@ import numpy as np
 from app.engine.combat import has_los
 from app.engine.constants import (
     DEFAULT_BOOST_EN_COST,
-    STRATEGY_UPDATE_INTERVAL,
 )
 from app.models.models import BattleLog, MobileSuit, Vector3
 
@@ -27,6 +26,7 @@ class AiDecisionMixin:
     units: list[MobileSuit]
 
     if TYPE_CHECKING:
+
         def _collect_team_metrics(self, team_id: str) -> "TeamMetrics": ...
 
     def _strategy_phase(self) -> None:
@@ -40,7 +40,8 @@ class AiDecisionMixin:
         # 全チームのメトリクスを収集
         team_ids = list(self._strategy_controllers.keys())  # type: ignore[attr-defined]
         team_metrics_map = {
-            team_id: self._collect_team_metrics(team_id) for team_id in team_ids  # type: ignore[attr-defined]
+            team_id: self._collect_team_metrics(team_id)
+            for team_id in team_ids  # type: ignore[attr-defined]
         }
 
         for team_id, controller in self._strategy_controllers.items():  # type: ignore[attr-defined]
@@ -298,7 +299,8 @@ class AiDecisionMixin:
         # --- 戦略モードに応じたファジィエンジンを選択 ---
         strategy_mode = self._resolve_strategy_mode(unit)  # type: ignore[attr-defined]
         behavior_engine = self._strategy_engines.get(strategy_mode, {}).get(  # type: ignore[attr-defined]
-            "behavior", self._fuzzy_engine  # type: ignore[attr-defined]
+            "behavior",
+            self._fuzzy_engine,  # type: ignore[attr-defined]
         )
 
         # --- ファジィ推論 ---

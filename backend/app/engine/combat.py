@@ -3,13 +3,11 @@
 
 import math
 import random
-import uuid
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from app.engine.calculator import (
-    PilotStats,
     calculate_critical_chance,
     calculate_damage_variance,
     calculate_hit_chance,

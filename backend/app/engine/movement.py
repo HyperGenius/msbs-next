@@ -3,7 +3,6 @@
 
 import math
 import random
-from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -25,6 +24,7 @@ from app.engine.constants import (
 )
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3
 
+
 class MovementMixin:
     """移動・慣性・ポテンシャルフィールド処理のミックスイン."""
 
@@ -40,7 +40,9 @@ class MovementMixin:
         """高脅威敵（自機射程外）への斥力ベクトルを返す."""
         force = np.zeros(3)
         all_enemies = [
-            u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id  # type: ignore[attr-defined]
+            u
+            for u in self.units
+            if u.current_hp > 0 and u.team_id != unit.team_id  # type: ignore[attr-defined]
         ]
         for enemy in all_enemies:
             vec_to_enemy = enemy.position.to_numpy() - pos_unit
@@ -99,7 +101,9 @@ class MovementMixin:
         """最近敵への引力ベクトルを返す（MOVE行動時）."""
         force = np.zeros(3)
         enemies = [
-            u for u in self.units if u.current_hp > 0 and u.team_id != unit.team_id  # type: ignore[attr-defined]
+            u
+            for u in self.units
+            if u.current_hp > 0 and u.team_id != unit.team_id  # type: ignore[attr-defined]
         ]
         if enemies:
             closest_enemy = min(
@@ -214,7 +218,9 @@ class MovementMixin:
 
         # ポテンシャルフィールドで目標方向を算出し、慣性モデルで位置・速度を更新
         desired_direction = self._calculate_potential_field(
-            actor, target, self.retreat_points  # type: ignore[attr-defined]
+            actor,
+            target,
+            self.retreat_points,  # type: ignore[attr-defined]
         )
         self._apply_inertia(actor, desired_direction, dt)
 
@@ -448,7 +454,9 @@ class MovementMixin:
         """索敵移動: 未発見の敵を探すための移動."""
         # 敵対勢力を特定 (team_idが異なるユニットが敵)
         potential_targets = [
-            u for u in self.units if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
+            u
+            for u in self.units
+            if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
         ]
 
         if not potential_targets:
@@ -474,7 +482,9 @@ class MovementMixin:
                 distance = float(np.linalg.norm(diff_vector))
                 if distance > 0:
                     desired_direction = self._calculate_potential_field(
-                        actor, target=None, retreat_points=self.retreat_points  # type: ignore[attr-defined]
+                        actor,
+                        target=None,
+                        retreat_points=self.retreat_points,  # type: ignore[attr-defined]
                     )
                     self._apply_inertia(actor, desired_direction, dt)
                     if distance >= MOVE_LOG_MIN_DIST:
@@ -510,7 +520,9 @@ class MovementMixin:
 
         # ポテンシャルフィールドで目標方向を算出し、慣性モデルで移動
         desired_direction = self._calculate_potential_field(
-            actor, target=None, retreat_points=self.retreat_points  # type: ignore[attr-defined]
+            actor,
+            target=None,
+            retreat_points=self.retreat_points,  # type: ignore[attr-defined]
         )
         self._apply_inertia(actor, desired_direction, dt)
 

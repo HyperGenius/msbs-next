@@ -25,8 +25,6 @@ from app.models.models import (
     MobileSuit,
     Obstacle,
     RetreatPoint,
-    Vector3,
-    Weapon,
 )
 
 logger = logging.getLogger(__name__)
