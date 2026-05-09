@@ -423,7 +423,9 @@ class BattleField(SQLModel):
 
     obstacles: list[Obstacle] = []  # フィールド上の障害物リスト
     spawn_zones: list[SpawnZone] = []  # チームごとのスポーン領域 (Phase 6-3)
-    obstacle_density: str = "MEDIUM"  # 障害物密度: "NONE" / "SPARSE" / "MEDIUM" / "DENSE" (Phase 6-3)
+    obstacle_density: str = (
+        "MEDIUM"  # 障害物密度: "NONE" / "SPARSE" / "MEDIUM" / "DENSE" (Phase 6-3)
+    )
 
 
 class BattleTeam(SQLModel):

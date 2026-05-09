@@ -242,7 +242,9 @@ class BattleSimulator(
         offset = 500.0  # マップ端からのオフセット (m)
 
         # チームIDを収集（順序安定化のためソート）
-        team_ids = sorted({unit.team_id for unit in self.units if unit.team_id is not None})
+        team_ids = sorted(
+            {unit.team_id for unit in self.units if unit.team_id is not None}
+        )
         n_teams = len(team_ids)
 
         if n_teams == 0:
@@ -292,7 +294,7 @@ class BattleSimulator(
                 center=Vector3(x=cx, y=0.0, z=cz),
                 radius=radius,
             )
-            for team_id, (cx, cz) in zip(team_ids, centers)
+            for team_id, (cx, cz) in zip(team_ids, centers, strict=True)
         ]
 
     @staticmethod
@@ -377,8 +379,12 @@ class BattleSimulator(
             zone = zone_map[team_id]
             placed: list[np.ndarray] = []
             for unit in units:
-                pos = self._sample_position_in_zone(zone, placed, ALLY_REPULSION_RADIUS, rng)
-                unit.position = Vector3(x=float(pos[0]), y=float(pos[1]), z=float(pos[2]))
+                pos = self._sample_position_in_zone(
+                    zone, placed, ALLY_REPULSION_RADIUS, rng
+                )
+                unit.position = Vector3(
+                    x=float(pos[0]), y=float(pos[1]), z=float(pos[2])
+                )
                 placed.append(pos)
 
     def _generate_obstacles(self) -> list[Obstacle]:

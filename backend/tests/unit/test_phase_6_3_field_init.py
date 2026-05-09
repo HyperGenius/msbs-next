@@ -14,17 +14,22 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from app.engine.constants import (
-    ALLY_REPULSION_RADIUS,
     MAP_BOUNDS,
     SPAWN_ZONE_RADIUS_2TEAM,
     SPAWN_ZONE_RADIUS_3TEAM,
     SPAWN_ZONE_RADIUS_4TEAM,
 )
 from app.engine.simulation import BattleSimulator
-from app.models.models import BattleField, MobileSuit, Obstacle, SpawnZone, Vector3, Weapon
+from app.models.models import (
+    BattleField,
+    MobileSuit,
+    Obstacle,
+    SpawnZone,
+    Vector3,
+    Weapon,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -129,10 +134,10 @@ def test_battlefield_obstacle_density_none() -> None:
 
 
 def test_backward_compat_no_battlefield_no_spawn_zones_applied() -> None:
-    """battlefield を渡さない場合、ユニット位置が変更されないこと（後方互換性）."""
+    """Battlefield を渡さない場合、ユニット位置が変更されないこと（後方互換性）."""
     player = _make_unit("P", "PLAYER", "PT", Vector3(x=100, y=0, z=100))
     enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=300, y=0, z=300))
-    sim = BattleSimulator(player, [enemy])
+    _ = BattleSimulator(player, [enemy])
     assert player.position.x == 100.0
     assert player.position.z == 100.0
     assert enemy.position.x == 300.0
@@ -140,7 +145,7 @@ def test_backward_compat_no_battlefield_no_spawn_zones_applied() -> None:
 
 
 def test_backward_compat_no_battlefield_no_obstacles_generated() -> None:
-    """battlefield を渡さない場合、obstacles が自動生成されないこと（後方互換性）."""
+    """Battlefield を渡さない場合、obstacles が自動生成されないこと（後方互換性）."""
     player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
     enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=500, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
@@ -148,7 +153,7 @@ def test_backward_compat_no_battlefield_no_obstacles_generated() -> None:
 
 
 def test_obstacles_param_still_works_without_battlefield() -> None:
-    """obstacles 引数単体でも従来通り動作すること（後方互換性）."""
+    """Obstacles 引数単体でも従来通り動作すること（後方互換性）."""
     player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
     enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=500, y=0, z=0))
     obs = Obstacle(obstacle_id="obs1", position=Vector3(x=250, y=0, z=0), radius=50)
@@ -163,10 +168,12 @@ def test_obstacles_param_still_works_without_battlefield() -> None:
 
 
 def test_default_spawn_zones_generated_for_2_teams() -> None:
-    """battlefield を渡した場合、2チームのデフォルトスポーン領域が生成されること."""
+    """Battlefield を渡した場合、2チームのデフォルトスポーン領域が生成されること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="NONE"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="NONE")
+    )
     assert len(sim.battlefield.spawn_zones) == 2
 
 
@@ -174,7 +181,9 @@ def test_default_spawn_zones_cover_all_team_ids() -> None:
     """生成されたスポーン領域が全チームをカバーすること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="NONE"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="NONE")
+    )
     team_ids = {sz.team_id for sz in sim.battlefield.spawn_zones}
     assert "PT" in team_ids
     assert "ET" in team_ids
@@ -184,7 +193,9 @@ def test_2team_spawn_zone_radius() -> None:
     """2チームスポーン領域のデフォルト半径が正しいこと."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="NONE"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="NONE")
+    )
     for sz in sim.battlefield.spawn_zones:
         assert sz.radius == SPAWN_ZONE_RADIUS_2TEAM
 
@@ -193,7 +204,9 @@ def test_2team_spawn_center_distance_gte_1000m() -> None:
     """2チームのスポーン中心間距離が 1000m 以上であること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="NONE"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="NONE")
+    )
     zones = sim.battlefield.spawn_zones
     assert len(zones) == 2
     c0 = np.array([zones[0].center.x, zones[0].center.z])
@@ -219,7 +232,9 @@ def test_default_spawn_zones_4_teams() -> None:
     e1 = _make_unit("E1", "ENEMY", "TB")
     e2 = _make_unit("E2", "ENEMY", "TC")
     e3 = _make_unit("E3", "ENEMY", "TD")
-    sim = BattleSimulator(p, [e1, e2, e3], battlefield=BattleField(obstacle_density="NONE"))
+    sim = BattleSimulator(
+        p, [e1, e2, e3], battlefield=BattleField(obstacle_density="NONE")
+    )
     assert len(sim.battlefield.spawn_zones) == 4
     for sz in sim.battlefield.spawn_zones:
         assert sz.radius == SPAWN_ZONE_RADIUS_4TEAM
@@ -249,7 +264,9 @@ def test_apply_spawn_zones_places_units_in_zone() -> None:
     """スポーン領域適用後、各ユニットがゾーン内に配置されること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="NONE"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="NONE")
+    )
 
     zone_map = {sz.team_id: sz for sz in sim.battlefield.spawn_zones}
     for unit in sim.units:
@@ -269,7 +286,7 @@ def test_apply_spawn_zones_with_zero_radius_places_at_center() -> None:
     bf = BattleField(spawn_zones=[sz_p, sz_e], obstacle_density="NONE")
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=bf)
+    _ = BattleSimulator(player, [enemy], battlefield=bf)
 
     assert abs(player.position.x - 100.0) < 1e-6
     assert abs(player.position.z - 200.0) < 1e-6
@@ -309,7 +326,9 @@ def test_obstacles_auto_generated_with_medium_density() -> None:
     """obstacle_density='MEDIUM' で障害物が自動生成されること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="MEDIUM"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="MEDIUM")
+    )
     assert len(sim.obstacles) > 0
 
 
@@ -335,17 +354,22 @@ def test_obstacles_not_generated_with_none_density() -> None:
     """obstacle_density='NONE' では障害物が生成されないこと."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="NONE"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="NONE")
+    )
     assert sim.obstacles == []
 
 
 def test_obstacles_not_generated_when_obstacles_explicitly_passed() -> None:
-    """obstacles を明示的に渡した場合、自動生成が行われないこと."""
+    """Obstacles を明示的に渡した場合、自動生成が行われないこと."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    obs = Obstacle(obstacle_id="manual_obs", position=Vector3(x=2500, y=0, z=2500), radius=100)
+    obs = Obstacle(
+        obstacle_id="manual_obs", position=Vector3(x=2500, y=0, z=2500), radius=100
+    )
     sim = BattleSimulator(
-        player, [enemy],
+        player,
+        [enemy],
         obstacles=[obs],
         battlefield=BattleField(obstacle_density="DENSE"),
     )
@@ -358,7 +382,9 @@ def test_auto_generated_obstacles_not_in_spawn_zones() -> None:
     """自動生成された障害物がスポーン領域と重複しないこと."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="DENSE"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="DENSE")
+    )
 
     for obs in sim.obstacles:
         for sz in sim.battlefield.spawn_zones:
@@ -375,7 +401,9 @@ def test_auto_generated_obstacles_have_valid_ids() -> None:
     """自動生成された障害物に一意の ID が付与されること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
-    sim = BattleSimulator(player, [enemy], battlefield=BattleField(obstacle_density="MEDIUM"))
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="MEDIUM")
+    )
     ids = [obs.obstacle_id for obs in sim.obstacles]
     assert len(ids) == len(set(ids)), "障害物 ID が重複している"
 
@@ -388,12 +416,16 @@ def test_sparse_density_generates_fewer_obstacles_than_dense() -> None:
     for _ in range(5):
         p = _make_unit("P", "PLAYER", "PT")
         e = _make_unit("E", "ENEMY", "ET")
-        sim_s = BattleSimulator(p, [e], battlefield=BattleField(obstacle_density="SPARSE"))
+        sim_s = BattleSimulator(
+            p, [e], battlefield=BattleField(obstacle_density="SPARSE")
+        )
         sparse_counts.append(len(sim_s.obstacles))
 
         p2 = _make_unit("P2", "PLAYER", "PT")
         e2 = _make_unit("E2", "ENEMY", "ET")
-        sim_d = BattleSimulator(p2, [e2], battlefield=BattleField(obstacle_density="DENSE"))
+        sim_d = BattleSimulator(
+            p2, [e2], battlefield=BattleField(obstacle_density="DENSE")
+        )
         dense_counts.append(len(sim_d.obstacles))
 
     assert sum(sparse_counts) <= sum(dense_counts), (
@@ -407,11 +439,12 @@ def test_sparse_density_generates_fewer_obstacles_than_dense() -> None:
 
 
 def test_full_simulation_with_battlefield_completes() -> None:
-    """battlefield パラメータありでシミュレーションが正常に完了すること."""
+    """Battlefield パラメータありでシミュレーションが正常に完了すること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
     sim = BattleSimulator(
-        player, [enemy],
+        player,
+        [enemy],
         battlefield=BattleField(obstacle_density="MEDIUM"),
     )
     for _ in range(200):
@@ -422,11 +455,12 @@ def test_full_simulation_with_battlefield_completes() -> None:
 
 
 def test_battlefield_param_sets_explicit_flag() -> None:
-    """battlefield パラメータを渡すと _battlefield_explicit が True になること."""
+    """Battlefield パラメータを渡すと _battlefield_explicit が True になること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemy = _make_unit("E", "ENEMY", "ET")
     sim_with = BattleSimulator(
-        player, [enemy],
+        player,
+        [enemy],
         battlefield=BattleField(obstacle_density="NONE"),
     )
     assert sim_with._battlefield_explicit is True
