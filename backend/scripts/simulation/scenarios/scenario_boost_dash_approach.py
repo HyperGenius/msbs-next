@@ -14,22 +14,22 @@
     - Player が格闘圏 (MELEE_RANGE=50m) まで接近する
     - ENGAGE_MELEE または BOOST_END ログが発生する
 """
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from app.engine.simulation import BattleSimulator
 from app.engine.constants import (
     DEFAULT_BOOST_COOLDOWN,
     DEFAULT_BOOST_EN_COST,
     DEFAULT_BOOST_MAX_DURATION,
     DEFAULT_BOOST_SPEED_MULTIPLIER,
 )
+from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Obstacle, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # ヘルパー
@@ -53,7 +53,9 @@ def _make_melee_weapon() -> Weapon:
     )
 
 
-def _make_ranged_weapon(weapon_id: str = "beam_rifle", max_ammo: int | None = 20) -> Weapon:
+def _make_ranged_weapon(
+    weapon_id: str = "beam_rifle", max_ammo: int | None = 20
+) -> Weapon:
     return Weapon(
         id=weapon_id,
         name="Beam Rifle",
@@ -244,7 +246,9 @@ def run_scenario(max_steps: int = 5000) -> dict:
 if __name__ == "__main__":
     result = run_scenario()
     print(f"シナリオ: {result['scenario']}")
-    print(f"ステップ数: {result['step_count']}, 経過時間: {result['elapsed_time']:.1f}s")
+    print(
+        f"ステップ数: {result['step_count']}, 経過時間: {result['elapsed_time']:.1f}s"
+    )
     print(f"結果: {result['win_loss']}")
     print(f"BOOST_START 回数: {result['boost_start_count']}")
     print(f"BOOST_END 回数: {result['boost_end_count']}")

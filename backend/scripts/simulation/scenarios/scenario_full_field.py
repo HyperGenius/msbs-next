@@ -23,16 +23,16 @@
     - BOOST_START / MELEE_COMBO / ATTACK_BLOCKED_LOS が適宜発生する
     - シミュレーションが 5000 ステップ以内にクラッシュせず完了する
 """
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Obstacle, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # ヘルパー
@@ -245,7 +245,9 @@ def run_scenario(max_steps: int = 5000) -> dict:
 if __name__ == "__main__":
     result = run_scenario()
     print(f"シナリオ: {result['scenario']}")
-    print(f"ステップ数: {result['step_count']}, 経過時間: {result['elapsed_time']:.1f}s")
+    print(
+        f"ステップ数: {result['step_count']}, 経過時間: {result['elapsed_time']:.1f}s"
+    )
     print(f"結果: {result['win_loss']}")
     print(f"BOOST_START 回数: {result['boost_start_count']}")
     print(f"MELEE_COMBO 回数: {result['melee_combo_count']}")

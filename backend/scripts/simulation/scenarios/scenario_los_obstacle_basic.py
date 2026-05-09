@@ -14,16 +14,16 @@ LOS 遮断・索敵ブロック・迂回行動を検証する。
     - Player は ATTACK_BLOCKED_LOS ログを出力するか、迂回経路を進む
     - 最終的に Player が Enemy を視認して攻撃できる
 """
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Obstacle, Vector3, Weapon
-
 
 # ---------------------------------------------------------------------------
 # ヘルパー
@@ -175,11 +175,11 @@ def run_scenario(max_steps: int = 5000) -> dict:
 
 
 if __name__ == "__main__":
-    import json
-
     result = run_scenario()
     print(f"シナリオ: {result['scenario']}")
-    print(f"ステップ数: {result['step_count']}, 経過時間: {result['elapsed_time']:.1f}s")
+    print(
+        f"ステップ数: {result['step_count']}, 経過時間: {result['elapsed_time']:.1f}s"
+    )
     print(f"結果: {result['win_loss']}")
     print(f"ATTACK_BLOCKED_LOS 回数: {result['attack_blocked_los_count']}")
     print(f"出力 action_type 種類: {sorted(result['log_action_types'])}")
