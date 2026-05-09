@@ -115,6 +115,7 @@ SPAWN_ZONE_RADIUS_2TEAM: float = 400.0  # 2チーム時のスポーン半径 (m)
 SPAWN_ZONE_RADIUS_3TEAM: float = 400.0  # 3チーム時のスポーン半径 (m)
 SPAWN_ZONE_RADIUS_4TEAM: float = 300.0  # 4チーム時のスポーン半径 (m)
 SPAWN_ZONE_SAMPLE_MAX_TRIES: int = 50  # 配置リサンプリングの最大試行回数
+SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR: float = 0.5  # 最小間隔緩和係数（試行失敗時に min_dist に乗算）
 
 # ブーストダッシュシステム定数 (Phase B)
 MELEE_RANGE: float = 50.0  # 近接攻撃有効距離 (m)

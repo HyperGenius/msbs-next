@@ -917,7 +917,7 @@ sim = BattleSimulator(player, enemies, battlefield=BattleField(obstacle_density=
 # 手動スポーン領域 + DENSE 障害物
 bf = BattleField(
     spawn_zones=[
-        SpawnZone(team_id="PT", center=Vector3(x=500, y=0, z=500), radius=0.0),  # radius=0 で固定配置
+        SpawnZone(team_id="PT", center=Vector3(x=500, y=0, z=500), radius=0.0),  # radius=0.0 の場合、中心座標に固定配置される
         SpawnZone(team_id="ET", center=Vector3(x=4500, y=0, z=4500), radius=400.0),
     ],
     obstacle_density="DENSE",

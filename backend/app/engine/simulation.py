@@ -16,6 +16,7 @@ from app.engine.constants import (
     MAP_BOUNDS,
     MOVE_LOG_MIN_DIST,
     OBSTACLE_GRID_PARAMS,
+    SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR,
     SPAWN_ZONE_RADIUS_2TEAM,
     SPAWN_ZONE_RADIUS_3TEAM,
     SPAWN_ZONE_RADIUS_4TEAM,
@@ -319,11 +320,15 @@ class BattleSimulator(
         if rng is None:
             rng = np.random.default_rng()
 
+        # radius=0 の場合は常に中心座標を返す（計算省略）
+        if zone.radius == 0.0:
+            return np.array([zone.center.x, zone.center.y, zone.center.z])
+
         current_min_dist = min_dist
         for attempt in range(SPAWN_ZONE_SAMPLE_MAX_TRIES * 3):
-            # 段階的に min_dist を緩和する (50 試行ごとに半減)
+            # 段階的に min_dist を緩和する (SPAWN_ZONE_SAMPLE_MAX_TRIES 試行ごとに半減)
             if attempt > 0 and attempt % SPAWN_ZONE_SAMPLE_MAX_TRIES == 0:
-                current_min_dist *= 0.5
+                current_min_dist *= SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR
 
             r = zone.radius * math.sqrt(rng.random())
             theta = 2.0 * math.pi * rng.random()
@@ -338,7 +343,14 @@ class BattleSimulator(
             if min(dists) >= current_min_dist:
                 return pos
 
-        # 最終フォールバック: 中心座標をそのまま返す
+        # 最終フォールバック: 全試行失敗時は中心座標を返す
+        # （ゾーンが狭くユニットが多い場合に発生しうる）
+        logger.warning(
+            "スポーン領域 %s (radius=%.1f) でユニット配置に失敗 (%d 回試行)。中心座標を使用します。",
+            zone.team_id,
+            zone.radius,
+            SPAWN_ZONE_SAMPLE_MAX_TRIES * 3,
+        )
         return np.array([zone.center.x, zone.center.y, zone.center.z])
 
     def _apply_spawn_zones(self) -> None:
