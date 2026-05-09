@@ -390,8 +390,8 @@ class MovementMixin:
                         if not w.is_melee
                         and resources["weapon_states"]
                         .get(str(w.id), {})
-                        .get("current_cool_down", 0)
-                        == 0
+                        .get("cooldown_remaining_sec", 0.0)
+                        == 0.0
                         and (
                             resources["weapon_states"]
                             .get(str(w.id), {})

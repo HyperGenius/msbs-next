@@ -50,6 +50,7 @@ def _make_melee_weapon() -> Weapon:
         decay_rate=0.0,
         max_ammo=None,
         en_cost=0,
+        cooldown_sec=1.5,  # MELEE 格闘: 1.5秒 (Phase 6-2)
     )
 
 
@@ -69,6 +70,7 @@ def _make_ranged_weapon(
         decay_rate=0.05,
         max_ammo=max_ammo,
         en_cost=10,
+        cooldown_sec=0.3,  # RANGED 標準: 0.3秒 (Phase 6-2)
     )
 
 

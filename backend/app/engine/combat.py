@@ -85,7 +85,7 @@ class CombatMixin:
                 "current_ammo": weapon.max_ammo
                 if weapon.max_ammo is not None
                 else None,
-                "current_cool_down": 0,
+                "cooldown_remaining_sec": 0.0,  # 残りクールダウン時間（秒）(Phase 6-2)
             }
             resources["weapon_states"][weapon.id] = weapon_state
         return weapon_state
@@ -143,10 +143,11 @@ class CombatMixin:
                     return False, "EN不足"
 
         # クールダウンチェック
-        if weapon_state["current_cool_down"] > 0:
+        if weapon_state.get("cooldown_remaining_sec", 0.0) > 0.0:
+            remaining = weapon_state["cooldown_remaining_sec"]
             return (
                 False,
-                f"クールダウン中 (残り{weapon_state['current_cool_down']}ターン)",
+                f"クールダウン中 (残り{remaining:.1f}s)",
             )
 
         return True, ""
@@ -231,8 +232,9 @@ class CombatMixin:
                 resources["current_en"] -= weapon.en_cost
 
         # クールダウンを設定（MELEE武器でも適用）
-        if weapon.cool_down_turn > 0:
-            weapon_state["current_cool_down"] = weapon.cool_down_turn
+        cooldown = getattr(weapon, "cooldown_sec", 0.0)
+        if cooldown > 0.0:
+            weapon_state["cooldown_remaining_sec"] = cooldown
 
     def _log_attack_wait(
         self,
@@ -250,8 +252,8 @@ class CombatMixin:
         elif "EN不足" in failure_reason:
             wait_message = f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
         elif "クールダウン" in failure_reason:
-            remaining_turns = weapon_state.get("current_cool_down", 0)
-            wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_turns}ターン）、やむなく待機"
+            remaining_sec = weapon_state.get("cooldown_remaining_sec", 0.0)
+            wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_sec:.1f}s）、やむなく待機"
         else:
             wait_message = f"{actor_name}は{failure_reason}のため攻撃できない（待機）"
         self.logs.append(  # type: ignore[attr-defined]

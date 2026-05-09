@@ -20,6 +20,7 @@ def create_test_player() -> MobileSuit:
                 power=30,
                 range=500,
                 accuracy=85,
+                cooldown_sec=0.0,
             )
         ],
         side="PLAYER",
@@ -44,6 +45,7 @@ def create_test_enemy(name: str, position: Vector3) -> MobileSuit:
                 power=15,
                 range=400,
                 accuracy=70,
+                cooldown_sec=0.0,
             )
         ],
         side="ENEMY",
@@ -1421,6 +1423,7 @@ def test_is_weapon_usable_cooldown() -> None:
         range=800,
         accuracy=75,
         cool_down_turn=3,
+        cooldown_sec=3.0,
     )
     player = create_ms_with_weapons([cannon])
     enemy = create_ms_with_weapons(
@@ -1432,7 +1435,7 @@ def test_is_weapon_usable_cooldown() -> None:
     # クールダウンを手動で設定
     sim.unit_resources[str(player.id)]["weapon_states"][cannon.id] = {
         "current_ammo": None,
-        "current_cool_down": 2,
+        "cooldown_remaining_sec": 2.0,
     }
 
     assert sim._is_weapon_usable(player, cannon) is False
@@ -1458,7 +1461,7 @@ def test_is_weapon_usable_ammo_depleted() -> None:
     # 弾薬を0に設定
     sim.unit_resources[str(player.id)]["weapon_states"][missile.id] = {
         "current_ammo": 0,
-        "current_cool_down": 0,
+        "cooldown_remaining_sec": 0.0,
     }
 
     assert sim._is_weapon_usable(player, missile) is False
@@ -1589,7 +1592,7 @@ def test_select_weapon_fuzzy_excludes_cooldown_weapons() -> None:
     # ビームライフルをクールダウン中に設定
     sim.unit_resources[str(player.id)]["weapon_states"][beam_rifle.id] = {
         "current_ammo": None,
-        "current_cool_down": 2,
+        "cooldown_remaining_sec": 2.0,
     }
     sim._detection_phase()
 

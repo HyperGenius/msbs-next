@@ -360,7 +360,7 @@ class TestMeleeZeroResourceConsumption:
         sim = BattleSimulator(player, [enemy])
 
         melee_w = _make_melee_weapon()
-        weapon_state = {"current_ammo": 0, "current_cool_down": 0}
+        weapon_state = {"current_ammo": 0, "cooldown_remaining_sec": 0.0}
         resources = sim.unit_resources[str(player.id)]
 
         can_attack, reason = sim._check_attack_resources(
@@ -385,7 +385,7 @@ class TestMeleeZeroResourceConsumption:
             is_melee=True,
             en_cost=999,  # 高 EN コストだが無視される
         )
-        weapon_state = {"current_ammo": None, "current_cool_down": 0}
+        weapon_state = {"current_ammo": None, "cooldown_remaining_sec": 0.0}
         resources = sim.unit_resources[str(player.id)]
         resources["current_en"] = 0  # EN ゼロ
 
@@ -410,7 +410,7 @@ class TestMeleeZeroResourceConsumption:
             is_melee=True,
             max_ammo=5,
         )
-        weapon_state = {"current_ammo": 5, "current_cool_down": 0}
+        weapon_state = {"current_ammo": 5, "cooldown_remaining_sec": 0.0}
         resources = sim.unit_resources[str(player.id)]
 
         sim._consume_attack_resources(melee_w, weapon_state, resources)
@@ -433,7 +433,7 @@ class TestMeleeZeroResourceConsumption:
             is_melee=True,
             en_cost=100,
         )
-        weapon_state = {"current_ammo": None, "current_cool_down": 0}
+        weapon_state = {"current_ammo": None, "cooldown_remaining_sec": 0.0}
         resources = sim.unit_resources[str(player.id)]
         initial_en = resources["current_en"]
 
@@ -450,7 +450,7 @@ class TestMeleeZeroResourceConsumption:
         sim = BattleSimulator(player, [enemy])
 
         ranged_w = _make_ranged_weapon(max_ammo=10)
-        weapon_state = {"current_ammo": 10, "current_cool_down": 0}
+        weapon_state = {"current_ammo": 10, "cooldown_remaining_sec": 0.0}
         resources = sim.unit_resources[str(player.id)]
 
         sim._consume_attack_resources(ranged_w, weapon_state, resources)

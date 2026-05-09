@@ -47,7 +47,13 @@ class Weapon(SQLModel):
         default=None, description="最大弾数 (Noneまたは0の場合は無限/EN兵器)"
     )
     en_cost: int = Field(default=0, description="射撃ごとの消費EN (実弾兵器は通常0)")
-    cool_down_turn: int = Field(default=0, description="発射後の再使用待機ターン数")
+    cool_down_turn: int = Field(
+        default=0, description="発射後の再使用待機ターン数（後方互換用）"
+    )
+    cooldown_sec: float = Field(
+        default=1.0,
+        description="発射後の再使用待機時間（秒）。0.0 は連射可能を意味する",
+    )
     fire_arc_deg: float = Field(
         default=30.0,
         description="射撃可能弧（胴体正面からの片側角度、度）。格闘武器は 360 を設定",

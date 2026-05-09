@@ -483,7 +483,8 @@ class AiDecisionMixin:
                 if cooldown > 0.0:
                     resources["boost_cooldown_remaining"] = max(0.0, cooldown - dt)
 
-            # 武器のクールダウンを減少
+            # 武器のクールダウンを減少 (Phase 6-2: 秒単位)
             for _, weapon_state in resources["weapon_states"].items():
-                if weapon_state["current_cool_down"] > 0:
-                    weapon_state["current_cool_down"] -= 1
+                remaining = weapon_state.get("cooldown_remaining_sec", 0.0)
+                if remaining > 0.0:
+                    weapon_state["cooldown_remaining_sec"] = max(0.0, remaining - dt)

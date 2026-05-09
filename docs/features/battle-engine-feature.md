@@ -752,3 +752,62 @@ python scripts/run_simulation.py --mission-id 1 --hot-reload
 ### 12.6 `schema.json` の除外
 
 `FuzzyRuleCache` は `{prefix}{suffix}.json` の命名規則に一致するファイルのみをロードする。`schema.json` はどの戦略モード・レイヤーのパターンにも一致しないため、自動的に除外される。
+
+## 13. Phase 6-2: 武器クールダウンの時間ステップ制対応
+
+### 13.1 概要
+
+旧ターン制の `cool_down_turn`（整数）を廃止し、時間ステップ制（`dt = 0.1s`）に対応した **秒単位クールダウン** に移行。
+
+| 変更前 | 変更後 |
+|--------|--------|
+| `current_cool_down: int` (ターン数) | `cooldown_remaining_sec: float` (秒) |
+| `cool_down_turn` を基準に `-= 1` | `cooldown_sec` を基準に `-= dt` |
+
+### 13.2 `Weapon.cooldown_sec` フィールド
+
+```python
+cooldown_sec: float = Field(
+    default=1.0,
+    description="発射後の再使用待機時間（秒）。0.0 は連射可能を意味する"
+)
+```
+
+**武器種別ごとの目安値:**
+
+| 武器種別 | `cooldown_sec` 目安 |
+|----------|----------------------|
+| MELEE（格闘） | `1.5` |
+| CLOSE_RANGE（近距離） | `0.5` |
+| RANGED 標準（マシンガン等） | `0.3` |
+| RANGED 重火力（ビーム砲等） | `2.0〜5.0` |
+| RANGED 狙撃（スナイパーライフル） | `5.0〜10.0` |
+
+`cool_down_turn` は後方互換フィールドとして残るが、シミュレーションでは参照しない。
+
+### 13.3 `weapon_states` の変更
+
+```python
+# 変更後
+weapon_state = {
+    "current_ammo": weapon.max_ammo,
+    "cooldown_remaining_sec": 0.0,  # 残りクールダウン時間（秒）
+}
+```
+
+### 13.4 各フェーズの変更点
+
+| フェーズ | 変更内容 |
+|----------|----------|
+| `_refresh_phase()` | `cooldown_remaining_sec -= dt`（`max(0.0, ...)` でクリップ） |
+| `_check_attack_resources()` | `cooldown_remaining_sec > 0.0` で攻撃ブロック |
+| `_consume_attack_resources()` | `cooldown_sec` を `cooldown_remaining_sec` にセット |
+| `_log_attack_wait()` | `残りXX.Xs` 形式で秒単位表示 |
+
+### 13.5 WAIT ログ形式
+
+```
+...（残り1.5s）...
+```
+
+旧形式（`残り2ターン`）は廃止。

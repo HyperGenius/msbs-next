@@ -44,6 +44,7 @@ missions = [
                         "max_ammo": 120,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
                 {
@@ -70,6 +71,7 @@ missions = [
                         "max_ammo": 120,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
                 {
@@ -96,6 +98,7 @@ missions = [
                         "max_ammo": 120,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
             ]
@@ -133,6 +136,7 @@ missions = [
                         "max_ammo": 120,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
                 {
@@ -159,6 +163,7 @@ missions = [
                         "max_ammo": 120,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
                 {
@@ -185,6 +190,7 @@ missions = [
                         "max_ammo": 120,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
                 {
@@ -211,6 +217,7 @@ missions = [
                         "max_ammo": 120,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
             ]
@@ -248,6 +255,7 @@ missions = [
                         "max_ammo": 150,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
                 {
@@ -274,6 +282,7 @@ missions = [
                         "max_ammo": 150,
                         "en_cost": 0,
                         "cool_down_turn": 0,
+                        "cooldown_sec": 0.3,
                     },
                 },
             ]
