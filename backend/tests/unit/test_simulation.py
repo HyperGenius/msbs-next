@@ -1739,7 +1739,8 @@ def test_ai_decision_phase_defensive_strategy_mode_logged() -> None:
     enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=200, y=0, z=0))
 
     sim = BattleSimulator(player, enemies=[enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     sim._ai_decision_phase(player)
 
     ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
@@ -1757,7 +1758,8 @@ def test_ai_decision_phase_sniper_strategy_mode_logged() -> None:
     enemy.sensor_range = 5000.0
 
     sim = BattleSimulator(player, enemies=[enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     sim._ai_decision_phase(player)
 
     ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]

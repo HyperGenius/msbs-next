@@ -1,13 +1,12 @@
 # backend/app/engine/targeting.py
 """索敵・ターゲット選択・武器選択処理のミックスイン."""
 
+import random
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from app.engine.combat import has_los
-import random
-
 from app.engine.constants import (
     DETECTION_FALLOFF_EXPONENT,
     DETECTION_FALLOFF_EXPONENT_MINOVSKY,

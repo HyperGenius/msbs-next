@@ -3,6 +3,8 @@
 ブーストダッシュシステムの速度制御・EN消費・キャンセル判定・ログ記録を検証する。
 """
 
+from unittest.mock import patch
+
 import numpy as np
 
 from app.engine.constants import (
@@ -443,7 +445,8 @@ def test_boost_start_logged_on_boost_dash_action() -> None:
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=2000, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     uid = str(player.id)
     sim.unit_resources[uid]["current_action"] = "BOOST_DASH"
