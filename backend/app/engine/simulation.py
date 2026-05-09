@@ -25,6 +25,7 @@ from app.engine.constants import (
     DEFAULT_BOOST_EN_COST,
     DEFAULT_BOOST_MAX_DURATION,
     DEFAULT_BOOST_SPEED_MULTIPLIER,
+    DEFAULT_FIRE_ARC_DEG,
     FUZZY_RULES_DIR,
     HIGH_THREAT_THRESHOLD,
     MAP_BOUNDS,
@@ -181,7 +182,8 @@ class BattleSimulator:
                 "weapon_states": {},
                 "current_action": "MOVE",  # 中階層ファジィ推論で決定した行動
                 "velocity_vec": np.zeros(3),  # 現在の速度ベクトル (3D, m/s)
-                "heading_deg": 0.0,  # 現在の向き (XZ平面, 度)
+                "movement_heading_deg": 0.0,  # 移動方向の向き (XZ平面, 度) (Phase 6-1: heading_deg からリネーム)
+                "body_heading_deg": 0.0,  # 胴体（砲塔）の向き (XZ平面, 度) (Phase 6-1)
                 "status": "ACTIVE",  # ユニット状態: ACTIVE / RETREATED / DESTROYED (Phase 3-3)
                 "last_known_enemy_position": {},  # {enemy_id: [x, y, z]} LOS 喪失時の最終座標 (Phase A)
                 "is_boosting": False,  # ブースト中フラグ (Phase B)
@@ -443,21 +445,26 @@ class BattleSimulator:
         for unit in alive_units:
             self._ai_decision_phase(unit)
 
-        # 4. 行動フェーズ（全ユニットを同一ステップで並列処理）
+        # 4. 胴体向き更新フェーズ (Phase 6-1)
+        alive_units = [u for u in self.units if u.current_hp > 0]
+        for unit in alive_units:
+            self._update_body_heading(unit, dt)
+
+        # 5. 行動フェーズ（全ユニットを同一ステップで並列処理）
         alive_units = [u for u in self.units if u.current_hp > 0]
         for unit in alive_units:
             if self.is_finished:
                 break
             self._action_phase(unit, dt)
 
-        # 5. 撤退離脱判定フェーズ (Phase 3-3)
+        # 6. 撤退離脱判定フェーズ (Phase 3-3)
         if self.retreat_points:
             self._retreat_check_phase()
 
-        # 6. リソース更新フェーズ（EN回復・クールダウン減少）
+        # 7. リソース更新フェーズ（EN回復・クールダウン減少）
         self._refresh_phase(dt)
 
-        # 7. 時間を進める
+        # 8. 時間を進める
         self.elapsed_time += dt
         self._step_count += 1
 
@@ -754,6 +761,22 @@ class BattleSimulator:
         )
         fuzzy_inputs.update(phase_c_inputs)
 
+        # --- Phase 6-1: angle_to_target を計算してファジィ入力に追加 ---
+        # ターゲットが存在する場合は胴体方向との角度差を計算する。
+        # ターゲット未選択時は 180.0（最大値）とし、REAR のメンバーシップ度を最大にして
+        # ファジィ推論で ATTACK が選ばれないようにする。これは意図的な設計仕様。
+        body_heading_deg = self.unit_resources[unit_id].get("body_heading_deg", 0.0)
+        pos_nearest = nearest_enemy.position.to_numpy()
+        target_dir_deg = math.degrees(
+            math.atan2(
+                float(pos_nearest[2] - pos_unit[2]),
+                float(pos_nearest[0] - pos_unit[0]),
+            )
+        )
+        raw_diff = target_dir_deg - body_heading_deg
+        angle_to_target = abs(((raw_diff + 180) % 360) - 180)  # 0〜180 に正規化
+        fuzzy_inputs["angle_to_target"] = angle_to_target
+
         # --- 戦略モードに応じたファジィエンジンを選択 ---
         strategy_mode = self._resolve_strategy_mode(unit)
         behavior_engine = self._strategy_engines.get(strategy_mode, {}).get(
@@ -792,7 +815,7 @@ class BattleSimulator:
                     f" (HP率:{hp_ratio:.2f} 近敵:{enemy_count_near:.0f}"
                     f" 近味:{ally_count_near:.0f} 近距:{distance_to_nearest_enemy:.0f}m"
                     f" 弾薬率:{ranged_ammo_ratio:.2f} LOS閉塞:{los_blocked:.0f}"
-                    f" ブースト可:{boost_available:.0f})"
+                    f" ブースト可:{boost_available:.0f} 対目標角:{angle_to_target:.1f}°)"
                 ),
                 position_snapshot=unit.position,
                 fuzzy_scores=fuzzy_scores,
@@ -854,6 +877,59 @@ class BattleSimulator:
         }
         if len(active_teams) <= 1:
             self.is_finished = True
+
+    def _update_body_heading(self, actor: MobileSuit, dt: float) -> None:
+        """胴体（砲塔）の向きを毎ステップ更新する (Phase 6-1).
+
+        アクションとターゲット有無に応じた目標方向へ body_turn_rate で旋回制限を適用し、
+        `unit_resources[unit_id]["body_heading_deg"]` を更新する。
+
+        旋回ルール:
+        - ATTACK / ENGAGE_MELEE かつターゲットあり → ターゲット方向
+        - MOVE かつターゲットあり → ターゲット方向（ストレイフ移動）
+        - それ以外（MOVE でターゲットなし / RETREAT / その他）→ movement_heading_deg
+
+        Args:
+            actor: 対象ユニット
+            dt: 時間ステップ幅 (s)
+        """
+        if actor.current_hp <= 0:
+            return
+
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]
+
+        if resources.get("status") == "RETREATED":
+            return
+
+        current_body_heading: float = resources.get("body_heading_deg", 0.0)
+        current_action = resources.get("current_action", "MOVE")
+        movement_heading: float = resources.get("movement_heading_deg", 0.0)
+
+        # ターゲットを取得（攻撃対象のみ対象; 選択失敗時は None）
+        target: MobileSuit | None = None
+        if current_action in ("ATTACK", "ENGAGE_MELEE", "MOVE"):
+            target = self._select_target_fuzzy(actor)
+
+        # 目標方向を決定
+        if target is not None and current_action in ("ATTACK", "ENGAGE_MELEE", "MOVE"):
+            pos_actor = actor.position.to_numpy()
+            pos_target = target.position.to_numpy()
+            target_heading = math.degrees(
+                math.atan2(
+                    float(pos_target[2] - pos_actor[2]),
+                    float(pos_target[0] - pos_actor[0]),
+                )
+            )
+        else:
+            target_heading = movement_heading
+
+        # 旋回制限を適用
+        body_turn_rate: float = getattr(actor, "body_turn_rate", 720.0)
+        max_rotation = body_turn_rate * dt
+        angular_diff = ((target_heading - current_body_heading + 180) % 360) - 180
+        actual_rotation = max(-max_rotation, min(max_rotation, angular_diff))
+        resources["body_heading_deg"] = current_body_heading + actual_rotation
 
     def _refresh_phase(self, dt: float = 0.1) -> None:
         """リフレッシュフェーズ: ENの回復とクールダウンの減少."""
@@ -1843,6 +1919,44 @@ class BattleSimulator:
 
         snapshot = Vector3.from_numpy(pos_actor)
         unit_id = str(actor.id)
+
+        # --- Phase 6-1: fire_arc_deg ゲートチェック ---
+        # MELEE 武器は全方位攻撃可能なので弧制限ゲートをスキップする
+        is_melee_weapon = (
+            getattr(weapon, "weapon_type", "RANGED") == "MELEE"
+            or getattr(weapon, "is_melee", False)
+        )
+        if not is_melee_weapon:
+            pos_target = target.position.to_numpy()
+            target_dir_deg = math.degrees(
+                math.atan2(
+                    float(pos_target[2] - pos_actor[2]),
+                    float(pos_target[0] - pos_actor[0]),
+                )
+            )
+            body_heading = self.unit_resources[unit_id].get("body_heading_deg", 0.0)
+            raw_diff = target_dir_deg - body_heading
+            angle_to_tgt = abs(((raw_diff + 180) % 360) - 180)
+            effective_fire_arc = getattr(weapon, "fire_arc_deg", DEFAULT_FIRE_ARC_DEG)
+            if angle_to_tgt > effective_fire_arc:
+                # 弧外: 攻撃をスキップして旋回を継続する
+                actor_name = self._format_actor_name(actor)
+                weapon_display = f"[{weapon.name}]" if weapon.name else "[武装]"
+                self.logs.append(
+                    BattleLog(
+                        timestamp=self.elapsed_time,
+                        actor_id=actor.id,
+                        action_type="TURNING_TO_TARGET",
+                        target_id=target.id,
+                        message=(
+                            f"{actor_name}の{weapon_display}は射撃弧外"
+                            f"（角度差:{angle_to_tgt:.1f}° > 弧:{effective_fire_arc:.1f}°）"
+                            f"のため旋回中"
+                        ),
+                        position_snapshot=snapshot,
+                    )
+                )
+                return
         resources = self.unit_resources[unit_id]
 
         # LOS チェック（格闘武器はスキップ、障害物がある場合のみ）
@@ -2490,7 +2604,7 @@ class BattleSimulator:
         """慣性モデルによる速度・位置更新.
 
         旋回制限・加速制限を適用したうえで速度ベクトルと位置を更新する。
-        `unit_resources` の `velocity_vec` / `heading_deg` を更新し、
+        `unit_resources` の `velocity_vec` / `movement_heading_deg` を更新し、
         `actor.position` を書き換える。
 
         Args:
@@ -2502,7 +2616,7 @@ class BattleSimulator:
         resources = self.unit_resources[unit_id]
 
         current_velocity: np.ndarray = resources["velocity_vec"]
-        current_heading: float = resources["heading_deg"]
+        current_heading: float = resources["movement_heading_deg"]
 
         # 目標方向のヘッディング角度を計算 (XZ 平面での atan2)
         desired_heading = math.degrees(
@@ -2546,7 +2660,7 @@ class BattleSimulator:
 
         # unit_resources を更新
         resources["velocity_vec"] = new_velocity
-        resources["heading_deg"] = new_heading
+        resources["movement_heading_deg"] = new_heading
 
         # 位置を更新
         actor.position = Vector3.from_numpy(new_pos)

@@ -48,6 +48,10 @@ class Weapon(SQLModel):
     )
     en_cost: int = Field(default=0, description="射撃ごとの消費EN (実弾兵器は通常0)")
     cool_down_turn: int = Field(default=0, description="発射後の再使用待機ターン数")
+    fire_arc_deg: float = Field(
+        default=30.0,
+        description="射撃可能弧（胴体正面からの片側角度、度）。格闘武器は 360 を設定",
+    )
 
 
 class WeaponResponse(Weapon):
@@ -116,6 +120,9 @@ class MobileSuit(SQLModel, table=True):
     acceleration: float = Field(default=30.0, description="加速度 (m/s²)")
     deceleration: float = Field(default=50.0, description="減速度 (m/s²)")
     max_turn_rate: float = Field(default=360.0, description="最大旋回速度 (deg/s)")
+    body_turn_rate: float = Field(
+        default=720.0, description="胴体（砲塔）の最大旋回速度 (deg/s) (Phase 6-1)"
+    )
 
     terrain_adaptability: dict[str, str] = Field(
         default_factory=lambda: {

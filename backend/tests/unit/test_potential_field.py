@@ -197,7 +197,8 @@ def test_potential_field_ally_repulsion_pushes_away() -> None:
         "weapon_states": {},
         "current_action": "MOVE",
         "velocity_vec": np.zeros(3),
-        "heading_deg": 0.0,
+        "movement_heading_deg": 0.0,
+        "body_heading_deg": 0.0,
     }
 
     sim.unit_resources[str(player.id)]["current_action"] = "MOVE"
@@ -242,7 +243,8 @@ def test_potential_field_ally_outside_radius_no_effect() -> None:
         "weapon_states": {},
         "current_action": "MOVE",
         "velocity_vec": np.zeros(3),
-        "heading_deg": 0.0,
+        "movement_heading_deg": 0.0,
+        "body_heading_deg": 0.0,
     }
     sim_with_far_ally.unit_resources[str(player.id)]["current_action"] = "MOVE"
 
