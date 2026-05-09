@@ -378,22 +378,59 @@ def test_ai_decision_includes_angle_to_target() -> None:
 
 
 def test_angle_to_target_is_180_when_no_target() -> None:
-    """ターゲット未選択時（検出なし）の angle_to_target は 180.0 で処理されること.
+    """ターゲット未選択時の angle_to_target は 180.0 で処理されること.
 
-    仕様: ターゲット未選択時は REAR のメンバーシップ度が最大になるよう 180.0 を使用する。
-    これによりファジィ推論で ATTACK が選ばれなくなる。
+    仕様: _select_target_fuzzy() が None を返した場合（索敵前 / 索敵済み敵がいない場合）、
+    angle_to_target = 180.0 として扱う。
+    これにより REAR のメンバーシップ度が最大となり、ファジィ推論で ATTACK が選ばれなくなる。
+    この挙動は意図的な設計仕様であり、コードコメントに明記されている。
     """
     player = _make_unit(
         "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), body_turn_rate=720.0
     )
     player.strategy_mode = "AGGRESSIVE"
-    # 敵なし（敵ユニットが存在しない場合は検出されない）
-    sim = BattleSimulator(player, [])
-    # 検出フェーズをスキップ → 検出済み敵 = なし
+    # 敵を配置するが検出フェーズを実行しない → detected_enemies が空になる
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=500, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+    # _detection_phase() を実行しない → detected_enemies = [] → early return で MOVE
 
     sim._ai_decision_phase(player)
 
-    # 敵が検出されていない場合は MOVE にフォールバックする
+    # 検出済み敵なし → ファジィ推論をスキップして MOVE にフォールバックすること
     uid = str(player.id)
     action = sim.unit_resources[uid]["current_action"]
     assert action == "MOVE", "敵未検出時は MOVE にフォールバックすること"
+
+    # angle_to_target = 180.0 の効果: AI_DECISION ログなし（早期リターン）
+    ai_logs = [l for l in sim.logs if l.action_type == "AI_DECISION"]
+    assert len(ai_logs) == 0, "早期リターンのためファジィ推論ログが記録されないこと"
+
+
+def test_angle_to_target_180_via_fuzzy_log() -> None:
+    """検出済み敵がいてターゲット選択結果の angle_to_target が AI_DECISION ログに記録されること.
+
+    angle_to_target = 180.0 は _select_target_fuzzy() が None を返したときに設定される。
+    通常は detected_enemies が非空であれば target が選択されるため、正常フローでは
+    angle_to_target は計算値が使われる。180.0 はガードとして機能する。
+    """
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), body_turn_rate=720.0
+    )
+    player.strategy_mode = "AGGRESSIVE"
+    # 敵を真後ろ (-x 方向) に配置, body_heading = 0° (正面 = +x)
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=-500, y=0, z=0))
+
+    sim = BattleSimulator(player, [enemy])
+    sim._detection_phase()
+    uid = str(player.id)
+    sim.unit_resources[uid]["body_heading_deg"] = 0.0  # 正面 = +x, 敵は -x (180°)
+
+    sim._ai_decision_phase(player)
+
+    # AI_DECISION ログが記録されること
+    ai_logs = [l for l in sim.logs if l.action_type == "AI_DECISION"]
+    assert len(ai_logs) >= 1
+    # angle_to_target が 180.0° に近いこと（敵は真後ろ）
+    assert "対目標角:180.0°" in ai_logs[0].message, (
+        f"真後ろの敵は angle_to_target=180.0 になること: {ai_logs[0].message}"
+    )

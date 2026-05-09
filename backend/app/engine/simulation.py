@@ -762,19 +762,25 @@ class BattleSimulator:
         fuzzy_inputs.update(phase_c_inputs)
 
         # --- Phase 6-1: angle_to_target を計算してファジィ入力に追加 ---
-        # ターゲットが存在する場合は胴体方向との角度差を計算する。
-        # ターゲット未選択時は 180.0（最大値）とし、REAR のメンバーシップ度を最大にして
-        # ファジィ推論で ATTACK が選ばれないようにする。これは意図的な設計仕様。
+        # ファジィ選択ターゲット方向と胴体向きとの角度差を計算する。
+        # ターゲット未選択時（索敵前 / 索敵済み敵がいない場合）は 180.0（最大値）として扱う。
+        # これにより REAR のメンバーシップ度が最大となり、ファジィ推論で ATTACK が選ばれなくなる。
+        # この挙動は意図的な設計仕様であり、単純な "敵なし = 旋回" 制御を実現する。
         body_heading_deg = self.unit_resources[unit_id].get("body_heading_deg", 0.0)
-        pos_nearest = nearest_enemy.position.to_numpy()
-        target_dir_deg = math.degrees(
-            math.atan2(
-                float(pos_nearest[2] - pos_unit[2]),
-                float(pos_nearest[0] - pos_unit[0]),
+        target_for_angle: MobileSuit | None = self._select_target_fuzzy(unit)
+        if target_for_angle is None:
+            # ターゲット未選択時は REAR が最大活性化するよう 180.0 に固定
+            angle_to_target = 180.0
+        else:
+            pos_target_for_angle = target_for_angle.position.to_numpy()
+            target_dir_deg = math.degrees(
+                math.atan2(
+                    float(pos_target_for_angle[2] - pos_unit[2]),
+                    float(pos_target_for_angle[0] - pos_unit[0]),
+                )
             )
-        )
-        raw_diff = target_dir_deg - body_heading_deg
-        angle_to_target = abs(((raw_diff + 180) % 360) - 180)  # 0〜180 に正規化
+            raw_diff = target_dir_deg - body_heading_deg
+            angle_to_target = abs(((raw_diff + 180) % 360) - 180)  # 0〜180 に正規化
         fuzzy_inputs["angle_to_target"] = angle_to_target
 
         # --- 戦略モードに応じたファジィエンジンを選択 ---
