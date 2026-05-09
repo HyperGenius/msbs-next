@@ -12,6 +12,7 @@ Validates:
 """
 
 import numpy as np
+from unittest.mock import patch
 
 from app.engine.simulation import BattleSimulator, _has_los
 from app.models.models import (
@@ -212,7 +213,8 @@ def test_detection_passes_without_obstacle_on_ray() -> None:
     obs = _make_obstacle("obs1", 500.0, 0.0, 300.0, 100.0)  # 射線横
     sim = BattleSimulator(player, [enemy], obstacles=[obs])
 
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     player_team_id = player.team_id
     assert enemy.id in sim.team_detected_units[player_team_id], (
@@ -227,9 +229,10 @@ def test_detection_los_lost_stores_last_known_position() -> None:
     )
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
 
-    # 最初は障害物なしで発見させる
+    # 最初は障害物なしで発見させる（パッチで確率判定を常に成功させる）
     sim = BattleSimulator(player, [enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     assert enemy.id in sim.team_detected_units[player.team_id]
 
     # 障害物を追加（射線上）して再チェック
@@ -252,7 +255,8 @@ def test_detection_no_obstacles_backward_compatible() -> None:
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=500, y=0, z=0))
     sim = BattleSimulator(player, [enemy])  # obstacles なし
 
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     assert enemy.id in sim.team_detected_units[player.team_id], (
         "obstacles なし（デフォルト）では従来通り発見されること"

@@ -1,5 +1,7 @@
 """Tests for the battle simulation engine."""
 
+from unittest.mock import patch
+
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, RetreatPoint, Vector3, Weapon
 
@@ -209,8 +211,9 @@ def test_tactics_weakest_priority() -> None:
 
     sim = BattleSimulator(player, enemies)
 
-    # Run detection phase so enemies are detected
-    sim._detection_phase()
+    # Manually detect all enemies (testing target selection, not detection behavior)
+    for e in enemies:
+        sim.team_detected_units["PLAYER_TEAM"].add(e.id)
 
     # Get target selection
     target = sim._select_target_legacy(player)
@@ -262,6 +265,10 @@ def test_tactics_flee_behavior() -> None:
     ]
 
     sim = BattleSimulator(player, enemies)
+
+    # Pre-populate detection so player knows about enemy before running step
+    # (enemy is at sensor boundary → prob=0, needs manual setup)
+    sim.team_detected_units["PLAYER_TEAM"].add(enemies[0].id)
 
     # Run one turn
     sim.step()
@@ -363,8 +370,9 @@ def test_tactics_strongest_priority() -> None:
     enemies = [weak_enemy, strong_enemy, medium_enemy]
     sim = BattleSimulator(player, enemies)
 
-    # Run detection phase so enemies are detected
-    sim._detection_phase()
+    # Run detection phase so enemies are detected (patch random to always succeed)
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # Get target selection
     target = sim._select_target_legacy(player)
@@ -394,8 +402,9 @@ def test_tactics_threat_priority() -> None:
     enemies = [close_weak, far_strong, close_strong]
     sim = BattleSimulator(player, enemies)
 
-    # Run detection phase so enemies are detected
-    sim._detection_phase()
+    # Run detection phase so enemies are detected (patch random to always succeed)
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # Get target selection
     target = sim._select_target_legacy(player)
@@ -438,7 +447,8 @@ def test_target_selection_with_multiple_tactics() -> None:
     player, enemies = create_scenario()
     player.tactics = {"priority": "CLOSEST", "range": "BALANCED"}
     sim = BattleSimulator(player, enemies)
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Close Zaku"
@@ -447,7 +457,8 @@ def test_target_selection_with_multiple_tactics() -> None:
     player, enemies = create_scenario()
     player.tactics = {"priority": "WEAKEST", "range": "BALANCED"}
     sim = BattleSimulator(player, enemies)
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Damaged GM"
@@ -456,7 +467,8 @@ def test_target_selection_with_multiple_tactics() -> None:
     player, enemies = create_scenario()
     player.tactics = {"priority": "STRONGEST", "range": "BALANCED"}
     sim = BattleSimulator(player, enemies)
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Far Gundam"
@@ -1010,7 +1022,8 @@ def test_detection_shared_within_team() -> None:
 
     sim = BattleSimulator(scout, [rear_guard, enemy])
     sim.elapsed_time = 0.1
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # Scoutが敵を発見 → TEAM_Aの索敵情報に共有される
     assert enemy.id in sim.team_detected_units["TEAM_A"]
@@ -1128,7 +1141,8 @@ def test_ai_decision_phase_fuzzy_scores_recorded() -> None:
     enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=200, y=0, z=0))
 
     sim = BattleSimulator(player, enemies=[enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     sim._ai_decision_phase(player)
 
     ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
@@ -1152,7 +1166,8 @@ def test_ai_decision_phase_retreat_fallback_to_move() -> None:
     ]
 
     sim = BattleSimulator(player, enemies=enemies)
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     sim._ai_decision_phase(player)
 
     # RETREAT フォールバックで MOVE になっている（または ATTACK の場合もあり得る）

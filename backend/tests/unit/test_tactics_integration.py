@@ -3,6 +3,8 @@
 This test demonstrates the complete tactics functionality end-to-end.
 """
 
+from unittest.mock import patch
+
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 
@@ -94,6 +96,13 @@ def test_tactics_integration() -> None:
     ]
 
     sim = BattleSimulator(player, enemies)
+
+    # Pre-populate all enemies as detected so WEAKEST priority works deterministically
+    # (Damaged Gouf at ~447m has low detection probability with default sensor_range=500m)
+    for e in enemies:
+        for team_id in sim.team_detected_units:
+            if e.team_id != team_id:
+                sim.team_detected_units[team_id].add(e.id)
 
     # Run simulation
     max_turns = 30

@@ -1,5 +1,7 @@
 """Tests for special terrain effects (Minovsky particles, gravity well, obstacles)."""
 
+from unittest.mock import patch
+
 import pytest
 
 from app.engine.constants import MAX_WEAPON_SLOTS, SPECIAL_ENVIRONMENT_EFFECTS
@@ -91,7 +93,9 @@ def test_minovsky_reduces_sensor_range() -> None:
     sim_minovsky = BattleSimulator(
         player, [enemy], environment="SPACE", special_effects=["MINOVSKY"]
     )
-    sim_minovsky._detection_phase()
+    # パッチで確率判定を常に成功させる（近距離でもミノフスキー粒子による確率低下のため）
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim_minovsky._detection_phase()
 
     # ミノフスキー粒子下では 600 * 0.5 = 300m が実効範囲
     # 299m なので検出されるはず
@@ -105,9 +109,10 @@ def test_minovsky_blocks_long_range_detection() -> None:
     # 400mの敵 - 通常は検出可能 (600m範囲内)、ミノフスキー粒子下では不可 (300m範囲外)
     enemy = create_test_enemy("Far Enemy", Vector3(x=400, y=0, z=0))
 
-    # 通常環境
+    # 通常環境（パッチで確率判定を常に成功させる）
     sim_normal = BattleSimulator(player, [enemy], environment="SPACE")
-    sim_normal._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim_normal._detection_phase()
     assert enemy.id in sim_normal.team_detected_units["PLAYER_TEAM"]
 
     # ミノフスキー粒子下 (同じ敵、新しいシミュレーター)
@@ -130,7 +135,8 @@ def test_minovsky_detection_log_includes_message() -> None:
         player, [enemy], environment="SPACE", special_effects=["MINOVSKY"]
     )
     sim.elapsed_time = 0.1
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     detection_logs = [log for log in sim.logs if log.action_type == "DETECTION"]
     assert len(detection_logs) >= 1
@@ -144,7 +150,8 @@ def test_no_minovsky_no_message() -> None:
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
     sim.elapsed_time = 0.1
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     detection_logs = [log for log in sim.logs if log.action_type == "DETECTION"]
     assert len(detection_logs) >= 1

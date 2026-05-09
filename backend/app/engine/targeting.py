@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from app.engine.combat import has_los
+import random
+
 from app.engine.constants import (
+    DETECTION_FALLOFF_EXPONENT,
+    DETECTION_FALLOFF_EXPONENT_MINOVSKY,
     SPECIAL_ENVIRONMENT_EFFECTS,
 )
 from app.models.models import BattleLog, MobileSuit, Weapon
@@ -31,11 +35,13 @@ class TargetingMixin:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
         alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]
 
-        # ミノフスキー粒子効果: 索敵範囲を半減
+        # ミノフスキー粒子効果: 索敵範囲を半減 + 距離減衰指数を強化
         sensor_multiplier = 1.0
+        falloff_exponent = DETECTION_FALLOFF_EXPONENT
         if "MINOVSKY" in self.special_effects:  # type: ignore[attr-defined]
             minovsky = SPECIAL_ENVIRONMENT_EFFECTS["MINOVSKY"]
             sensor_multiplier = minovsky["sensor_range_multiplier"]
+            falloff_exponent = DETECTION_FALLOFF_EXPONENT_MINOVSKY
 
         for unit in alive_units:
             if unit.team_id is None:
@@ -77,20 +83,30 @@ class TargetingMixin:
                         # 障害物により遮断されているため発見不可
                         continue
 
+                    # 確率的索敵判定: P = max(0, 1 - (d / d_eff)^k)
+                    ratio = distance / effective_sensor_range
+                    detect_prob = max(0.0, 1.0 - ratio ** falloff_exponent)
+                    if random.random() >= detect_prob:
+                        # 発見失敗（確率判定で見逃し）
+                        continue
+
                     # 発見！
                     self.team_detected_units[unit.team_id].add(target.id)  # type: ignore[attr-defined]
 
                     # 発見ログを追加
                     dist_label = self._get_distance_label(distance)  # type: ignore[attr-defined]
                     actor_name = self._format_actor_name(unit)  # type: ignore[attr-defined]
+                    prob_pct = int(detect_prob * 100)
                     if "MINOVSKY" in self.special_effects:  # type: ignore[attr-defined]
                         detect_message = (
                             f"{actor_name}が濃密なミノフスキー粒子の中、"
                             f"{dist_label}に{target.name}の反応を捉えた！"
+                            f"（索敵確率 {prob_pct}%）"
                         )
                     else:
                         detect_message = (
                             f"{actor_name}が{dist_label}に{target.name}を発見！"
+                            f"（索敵確率 {prob_pct}%）"
                         )
                     self.logs.append(  # type: ignore[attr-defined]
                         BattleLog(
