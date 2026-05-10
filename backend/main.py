@@ -29,7 +29,6 @@ from app.routers import (
     shop,
     teams,
 )
-
 app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 
 # --- CORS設定 ---
@@ -65,6 +64,7 @@ app.include_router(rankings.router)
 app.include_router(friends.router)
 app.include_router(teams.router)
 app.include_router(admin.router)
+app.include_router(admin.weapon_router)
 
 # --- Response Schemas ---
 # models.py にあるクラスを使用する形でも良いですが、
