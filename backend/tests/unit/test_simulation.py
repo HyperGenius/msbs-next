@@ -503,7 +503,8 @@ def test_different_team_id_attack() -> None:
     enemy.team_id = "TEAM_B"
 
     sim = BattleSimulator(player, [enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     target = sim._select_target_legacy(player)
     assert target is not None
@@ -1123,7 +1124,8 @@ def test_ai_decision_phase_logs_ai_decision() -> None:
     enemy = create_fuzzy_test_enemy("Enemy", Vector3(x=200, y=0, z=0))
 
     sim = BattleSimulator(player, enemies=[enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     sim._ai_decision_phase(player)
 
     ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
@@ -1235,7 +1237,8 @@ def test_action_phase_respects_attack_action() -> None:
     enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
 
     sim = BattleSimulator(player, enemies=[enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # ATTACK に設定して行動フェーズを実行
     sim.unit_resources[str(player.id)]["current_action"] = "ATTACK"
@@ -1268,7 +1271,8 @@ def test_select_target_fuzzy_returns_target_when_single_enemy_detected() -> None
     player = create_test_player()
     enemy = create_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     target = sim._select_target_fuzzy(player)
     assert target is not None
@@ -1291,7 +1295,8 @@ def test_select_target_fuzzy_logs_fuzzy_scores_in_target_selection() -> None:
     player = create_test_player()
     enemy = create_test_enemy("Target Enemy", Vector3(x=100, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     sim._select_target_fuzzy(player)
 
@@ -1639,7 +1644,8 @@ def test_action_phase_uses_fuzzy_weapon_selection() -> None:
     )
     enemy.sensor_range = 1000
     sim = BattleSimulator(player, [enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     # プレイヤーを ATTACK モードに設定
     sim.unit_resources[str(player.id)]["current_action"] = "ATTACK"
 
@@ -1901,7 +1907,8 @@ def test_team_detection_isolation() -> None:
     unit_c = _make_team_unit("TeamC", "TEAM_C", Vector3(x=50, y=0, z=0))
 
     sim = BattleSimulator(unit_a, [unit_b, unit_c])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # チームAは近いTeamCを発見しているはず、遠いTeamBは未発見
     team_a_detected = sim.team_detected_units.get("TEAM_A", set())
@@ -2054,7 +2061,8 @@ def test_assault_behavior_close_enemy_attacks() -> None:
     enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
 
     sim = BattleSimulator(player, enemies=[enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     sim._ai_decision_phase(player)
 
     action = sim.unit_resources[str(player.id)]["current_action"]
