@@ -15,6 +15,7 @@ export default function GaragePage() {
     isError,
     pilot,
     weaponListings,
+    playerWeapons,
     selectedMs,
     showCustomizationModal,
     isSaving,
@@ -103,6 +104,7 @@ export default function GaragePage() {
             weaponListings={weaponListings}
             pilot={pilot}
             ownedMobileSuits={mobileSuits || []}
+            playerWeapons={playerWeapons}
             previewWeaponId={previewWeaponId}
             onSetPreviewWeaponId={setPreviewWeaponId}
             onEquipWeapon={handleEquipWeapon}
