@@ -2,7 +2,7 @@
 import useSWR from "swr";
 import { useAuth } from "@clerk/nextjs";
 import { useCallback } from "react";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, BulkUpgradeRequest, BulkUpgradeResponse, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile, Friend, Team, TeamEntryRequest, TeamEntryResponse } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, BulkUpgradeRequest, BulkUpgradeResponse, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile, Friend, Team, TeamEntryRequest, TeamEntryResponse, PlayerWeapon } from "@/types/battle";
 import { EnrichedMobileSuit, enrichMobileSuit } from "@/utils/rankUtils";
 
 /** PlayerProfile の mobile_suit フィールドが EnrichedMobileSuit に変換された型 */
@@ -487,6 +487,50 @@ export async function equipWeapon(mobileSuitId: string, request: EquipWeaponRequ
   }
 
   return res.json();
+}
+
+/**
+ * 所有武器インスタンス一覧を取得する SWR hook
+ */
+export function usePlayerWeapons(unequippedOnly = false) {
+  const { isLoaded, isSignedIn } = useAuth();
+  const authFetcher = useAuthFetcher();
+
+  const url = `${API_BASE_URL}/api/player-weapons${unequippedOnly ? "?unequipped=true" : ""}`;
+
+  const { data, error, isLoading, mutate } = useSWR<PlayerWeapon[]>(
+    isLoaded && isSignedIn ? url : null,
+    authFetcher
+  );
+
+  return {
+    playerWeapons: data,
+    isLoading: !isLoaded || isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+/**
+ * 武器インスタンスを売却・破棄する関数
+ */
+export async function deletePlayerWeapon(playerWeaponId: string): Promise<void> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/player-weapons/${playerWeaponId}`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to delete player weapon: ${res.status} ${res.statusText}`);
+  }
 }
 
 /**

@@ -4,7 +4,7 @@ from typing import Any
 
 import numpy as np
 from pydantic import field_validator
-from sqlalchemy import JSON
+from sqlalchemy import JSON, UniqueConstraint
 from sqlmodel import Column, Field, SQLModel
 
 # --- Component Models (JSONとしてDBに保存される部品) ---
@@ -729,3 +729,50 @@ class TeamMember(SQLModel, table=True):
     joined_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="参加日時"
     )
+
+
+class PlayerWeapon(SQLModel, table=True):
+    """プレイヤー武器インスタンステーブル."""
+
+    __tablename__ = "player_weapons"
+    __table_args__ = (
+        UniqueConstraint("equipped_ms_id", "equipped_slot", name="uq_equipped_slot"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: str = Field(index=True, description="所有者 (Pilot.user_id)")
+    master_weapon_id: str = Field(index=True, description="weapons.json の id（論理FK）")
+    base_snapshot: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description="購入時の Weapon スペックスナップショット",
+    )
+    custom_stats: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description="強化・改造による差分（初期値: {}）",
+    )
+    equipped_ms_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="mobile_suits.id",
+        description="装備中の機体ID（未装備は null）",
+    )
+    equipped_slot: int | None = Field(
+        default=None,
+        description="装備スロット（0=メイン, 1=サブ, 未装備は null）",
+    )
+    acquired_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="取得日時"
+    )
+
+
+class PlayerWeaponResponse(SQLModel):
+    """プレイヤー武器インスタンスAPIレスポンスモデル."""
+
+    id: uuid.UUID
+    master_weapon_id: str
+    base_snapshot: dict
+    custom_stats: dict
+    equipped_ms_id: uuid.UUID | None
+    equipped_slot: int | None
+    acquired_at: datetime

@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from typing import Any, cast
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -16,6 +17,7 @@ from app.core.gamedata import (
 )
 from app.db import get_session
 from app.models.models import MobileSuit, Pilot, Weapon
+from app.services.weapon_service import WeaponService
 
 router = APIRouter(prefix="/api/shop", tags=["shop"])
 
@@ -53,6 +55,7 @@ class WeaponPurchaseResponse(BaseModel):
 
     message: str
     weapon_id: str
+    player_weapon_id: UUID
     remaining_credits: int
 
 
@@ -227,44 +230,16 @@ async def purchase_weapon(
     Raises:
         HTTPException: 武器が存在しない、所持金不足などのエラー
     """
-    # 1. 武器データを取得
+    player_weapon = WeaponService.purchase_weapon(session, user_id, weapon_id)
+
+    # パイロット情報を取得してクレジットを返す
+    pilot = session.exec(select(Pilot).where(Pilot.user_id == user_id)).first()
+
     listing = get_weapon_listing_by_id(weapon_id)
-    if not listing:
-        raise HTTPException(status_code=404, detail="武器が見つかりません")
-
-    # 2. パイロット情報を取得
-    statement = select(Pilot).where(Pilot.user_id == user_id)
-    pilot = session.exec(statement).first()
-
-    if not pilot:
-        raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
-
-    # 3. 所持金チェック
-    if pilot.credits < listing["price"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"所持金が不足しています。必要: {listing['price']} Credits, 所持: {pilot.credits} Credits",
-        )
-
-    # 4. 所持金を減算
-    pilot.credits -= listing["price"]
-
-    # 5. インベントリに武器を追加
-    if pilot.inventory is None:
-        pilot.inventory = {}
-
-    current_count = pilot.inventory.get(weapon_id, 0)
-    # 新しいdictオブジェクトを作成して代入（SQLModelのJSON変更検知のため）
-    pilot.inventory = {**pilot.inventory, weapon_id: current_count + 1}
-
-    pilot.updated_at = datetime.now(UTC)
-
-    session.add(pilot)
-    session.commit()
-    session.refresh(pilot)
 
     return WeaponPurchaseResponse(
         message=f"{listing['name']}を購入しました！",
         weapon_id=weapon_id,
-        remaining_credits=pilot.credits,
+        player_weapon_id=player_weapon.id,
+        remaining_credits=pilot.credits if pilot else 0,
     )
