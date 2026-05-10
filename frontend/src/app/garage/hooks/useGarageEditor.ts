@@ -109,13 +109,13 @@ export function useGarageEditor() {
   };
 
   // 武器を装備
-  const handleEquipWeapon = async (weaponId: string) => {
+  const handleEquipWeapon = async (playerWeaponId: string) => {
     if (!selectedMs) return;
 
     setIsSaving(true);
     try {
       const updatedMs = await equipWeapon(selectedMs.id, {
-        weapon_id: weaponId,
+        player_weapon_id: playerWeaponId,
         slot_index: selectedWeaponSlot,
       });
       setSuccessMessage("武器を装備しました");
