@@ -21,3 +21,6 @@ node_modules/
 # Allow example env files
 !.env.example
 !.env.local.example
+
+# Deployment artifacts
+battle_logs/
