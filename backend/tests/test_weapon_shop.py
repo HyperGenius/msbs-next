@@ -71,6 +71,7 @@ def test_purchase_weapon_success(client, session):
 
         # DBに PlayerWeapon が INSERT されていることを確認
         from sqlmodel import select
+
         pw_stmt = select(PlayerWeapon).where(PlayerWeapon.user_id == test_user_id)
         player_weapons = session.exec(pw_stmt).all()
         assert len(player_weapons) == 1
@@ -166,6 +167,7 @@ def test_equip_weapon_success(client, session):
 
     # PlayerWeapon を作成
     from app.core.gamedata import get_weapon_listing_by_id
+
     weapon_data = get_weapon_listing_by_id("zaku_mg")
     player_weapon = PlayerWeapon(
         user_id=test_user_id,
@@ -229,6 +231,7 @@ def test_equip_weapon_not_owned(client, session):
     # 他ユーザーの PlayerWeapon を作成
     other_user_id = "other_user_equip_456"
     from app.core.gamedata import get_weapon_listing_by_id
+
     weapon_data = get_weapon_listing_by_id("zaku_mg")
     other_player_weapon = PlayerWeapon(
         user_id=other_user_id,
@@ -285,6 +288,7 @@ def test_equip_weapon_invalid_slot_index(client, session):
 
     # PlayerWeapon を作成
     from app.core.gamedata import get_weapon_listing_by_id
+
     weapon_data = get_weapon_listing_by_id("zaku_mg")
     player_weapon = PlayerWeapon(
         user_id=test_user_id,
@@ -541,6 +545,7 @@ def test_get_player_weapons(client, session):
     session.add(pilot)
 
     from app.core.gamedata import get_weapon_listing_by_id
+
     weapon_data = get_weapon_listing_by_id("zaku_mg")
 
     pw1 = PlayerWeapon(
@@ -641,6 +646,7 @@ def test_delete_player_weapon_success(client, session):
     test_user_id = "test_user_pw_delete"
 
     from app.core.gamedata import get_weapon_listing_by_id
+
     weapon_data = get_weapon_listing_by_id("zaku_mg")
 
     player_weapon = PlayerWeapon(
@@ -660,7 +666,6 @@ def test_delete_player_weapon_success(client, session):
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
         # DB から削除されていることを確認
-        from sqlmodel import select
         pw = session.get(PlayerWeapon, player_weapon.id)
         assert pw is None
     finally:
@@ -672,6 +677,7 @@ def test_delete_player_weapon_equipped_fails(client, session):
     test_user_id = "test_user_pw_delete_equipped"
 
     from app.core.gamedata import get_weapon_listing_by_id
+
     weapon_data = get_weapon_listing_by_id("zaku_mg")
 
     mobile_suit = MobileSuit(
@@ -716,6 +722,7 @@ def test_delete_player_weapon_other_user_fails(client, session):
     other_user_id = "other_user_pw"
 
     from app.core.gamedata import get_weapon_listing_by_id
+
     weapon_data = get_weapon_listing_by_id("zaku_mg")
 
     player_weapon = PlayerWeapon(
@@ -739,11 +746,10 @@ def test_delete_player_weapon_other_user_fails(client, session):
 
 def test_unequip_weapon_via_service(client, session):
     """WeaponService.unequip_weapon で装備を外せることをテスト."""
-    from sqlmodel import Session as _Session
-
     test_user_id = "test_user_unequip"
 
     from app.core.gamedata import get_weapon_listing_by_id
+
     weapon_data = get_weapon_listing_by_id("zaku_mg")
 
     mobile_suit = MobileSuit(
@@ -773,6 +779,7 @@ def test_unequip_weapon_via_service(client, session):
     session.refresh(player_weapon)
 
     from app.services.weapon_service import WeaponService
+
     result = WeaponService.unequip_weapon(session, test_user_id, player_weapon.id)
 
     assert result.equipped_ms_id is None

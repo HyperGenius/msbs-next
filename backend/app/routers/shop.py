@@ -236,9 +236,10 @@ async def purchase_weapon(
     pilot = session.exec(select(Pilot).where(Pilot.user_id == user_id)).first()
 
     listing = get_weapon_listing_by_id(weapon_id)
+    weapon_name = listing["name"] if listing else weapon_id
 
     return WeaponPurchaseResponse(
-        message=f"{listing['name']}を購入しました！",
+        message=f"{weapon_name}を購入しました！",
         weapon_id=weapon_id,
         player_weapon_id=player_weapon.id,
         remaining_credits=pilot.credits,  # type: ignore[union-attr]

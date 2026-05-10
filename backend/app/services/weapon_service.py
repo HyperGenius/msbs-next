@@ -36,7 +36,9 @@ class WeaponService:
         statement = select(Pilot).where(Pilot.user_id == user_id)
         pilot = session.exec(statement).first()
         if not pilot:
-            raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
+            raise HTTPException(
+                status_code=404, detail="パイロット情報が見つかりません"
+            )
 
         if pilot.credits < listing["price"]:
             raise HTTPException(
@@ -105,14 +107,23 @@ class WeaponService:
 
         player_weapon = session.get(PlayerWeapon, player_weapon_id)
         if not player_weapon:
-            raise HTTPException(status_code=404, detail="武器インスタンスが見つかりません")
+            raise HTTPException(
+                status_code=404, detail="武器インスタンスが見つかりません"
+            )
 
         if player_weapon.user_id != user_id:
-            raise HTTPException(status_code=403, detail="この武器インスタンスへのアクセス権がありません")
+            raise HTTPException(
+                status_code=403, detail="この武器インスタンスへのアクセス権がありません"
+            )
 
         # 既に別の機体に装備中の場合は 400
-        if player_weapon.equipped_ms_id is not None and player_weapon.equipped_ms_id != ms_id:
-            raise HTTPException(status_code=400, detail="この武器は別の機体に装備中です")
+        if (
+            player_weapon.equipped_ms_id is not None
+            and player_weapon.equipped_ms_id != ms_id
+        ):
+            raise HTTPException(
+                status_code=400, detail="この武器は別の機体に装備中です"
+            )
 
         # 同スロットに既に別の PlayerWeapon が入っている場合は外す
         existing_stmt = (
@@ -132,7 +143,9 @@ class WeaponService:
             raise HTTPException(status_code=404, detail="機体が見つかりません")
 
         if mobile_suit.user_id != user_id:
-            raise HTTPException(status_code=403, detail="この機体を編集する権限がありません")
+            raise HTTPException(
+                status_code=403, detail="この機体を編集する権限がありません"
+            )
 
         # PlayerWeapon を更新
         player_weapon.equipped_ms_id = ms_id
@@ -173,10 +186,14 @@ class WeaponService:
         """
         player_weapon = session.get(PlayerWeapon, player_weapon_id)
         if not player_weapon:
-            raise HTTPException(status_code=404, detail="武器インスタンスが見つかりません")
+            raise HTTPException(
+                status_code=404, detail="武器インスタンスが見つかりません"
+            )
 
         if player_weapon.user_id != user_id:
-            raise HTTPException(status_code=403, detail="この武器インスタンスへのアクセス権がありません")
+            raise HTTPException(
+                status_code=403, detail="この武器インスタンスへのアクセス権がありません"
+            )
 
         player_weapon.equipped_ms_id = None
         player_weapon.equipped_slot = None

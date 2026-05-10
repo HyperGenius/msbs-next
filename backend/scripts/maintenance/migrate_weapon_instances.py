@@ -42,6 +42,21 @@ def _get_weapon_snapshot_from_obj(weapon: object) -> dict:
     return {}
 
 
+def _build_equipped_slots(
+    session: Session, user_id: str
+) -> dict[str, list[tuple[uuid.UUID, int]]]:
+    """ユーザーの機体に装備された武器スロットのマッピングを構築する."""
+    ms_stmt = select(MobileSuit).where(MobileSuit.user_id == user_id)
+    all_ms = session.exec(ms_stmt).all()
+    equipped_slots: dict[str, list[tuple[uuid.UUID, int]]] = {}
+    for ms in all_ms:
+        for slot_idx, w in enumerate(ms.weapons or []):
+            w_id = _get_weapon_id_from_obj(w)
+            if w_id:
+                equipped_slots.setdefault(w_id, []).append((ms.id, slot_idx))
+    return equipped_slots
+
+
 def migrate(session: Session) -> None:
     """既存データを player_weapons テーブルへ移行する."""
     print("=== PlayerWeapon データ移行スクリプト ===")
@@ -50,8 +65,12 @@ def migrate(session: Session) -> None:
     existing_stmt = select(PlayerWeapon)
     existing_pws = session.exec(existing_stmt).all()
     if existing_pws:
-        print(f"既に {len(existing_pws)} 件の PlayerWeapon が存在します。スキップします。")
-        print("  ※ 完全な再実行が必要な場合は先に player_weapons テーブルを空にしてください。")
+        print(
+            f"既に {len(existing_pws)} 件の PlayerWeapon が存在します。スキップします。"
+        )
+        print(
+            "  ※ 完全な再実行が必要な場合は先に player_weapons テーブルを空にしてください。"
+        )
         return
 
     # 全パイロットを取得
@@ -70,17 +89,8 @@ def migrate(session: Session) -> None:
         print(f"\nパイロット: {pilot.name} ({user_id})")
         print(f"  インベントリ: {inventory}")
 
-        # このユーザーの全機体を取得
-        ms_stmt = select(MobileSuit).where(MobileSuit.user_id == user_id)
-        all_ms = session.exec(ms_stmt).all()
-
         # 機体スロットのマッピングを構築: {weapon_id: [(ms_id, slot_index), ...]}
-        equipped_slots: dict[str, list[tuple[uuid.UUID, int]]] = {}
-        for ms in all_ms:
-            for slot_idx, w in enumerate(ms.weapons or []):
-                w_id = _get_weapon_id_from_obj(w)
-                if w_id:
-                    equipped_slots.setdefault(w_id, []).append((ms.id, slot_idx))
+        equipped_slots = _build_equipped_slots(session, user_id)
 
         print(f"  装備済みスロット: {equipped_slots}")
 
@@ -93,7 +103,9 @@ def migrate(session: Session) -> None:
                 base_snapshot = weapon_obj.model_dump()
             else:
                 # weapons.json に存在しない場合はスキップせずそのまま保持
-                print(f"  警告: weapons.json に {weapon_id} が見つかりません。空スナップショットで保持します。")
+                print(
+                    f"  警告: weapons.json に {weapon_id} が見つかりません。空スナップショットで保持します。"
+                )
                 base_snapshot = {"id": weapon_id}
 
             # 装備済みスロットのリストを取得（先着順に割り当て）
@@ -117,7 +129,9 @@ def migrate(session: Session) -> None:
                 )
                 session.add(pw)
                 total_inserted += 1
-                print(f"  INSERT PlayerWeapon: weapon_id={weapon_id}, equipped_ms_id={equipped_ms_id}, slot={equipped_slot}")
+                print(
+                    f"  INSERT PlayerWeapon: weapon_id={weapon_id}, equipped_ms_id={equipped_ms_id}, slot={equipped_slot}"
+                )
 
     session.commit()
     print(f"\n✅ 移行完了: {total_inserted} 件の PlayerWeapon を INSERT しました。")

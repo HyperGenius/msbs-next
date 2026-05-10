@@ -8,7 +8,6 @@ from sqlmodel import Session
 from app.core.auth import get_current_user
 from app.db import get_session
 from app.models.models import (
-    MobileSuit,
     MobileSuitResponse,
     MobileSuitUpdate,
 )
