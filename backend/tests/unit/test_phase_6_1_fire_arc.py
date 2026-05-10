@@ -4,6 +4,8 @@
 _update_body_heading() の動作、fire_arc_deg ゲートの動作を検証する。
 """
 
+from unittest.mock import patch
+
 import numpy as np
 
 from app.engine.constants import DEFAULT_FIRE_ARC_DEG
@@ -148,8 +150,9 @@ def test_update_body_heading_turns_toward_target() -> None:
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=500))
     sim = BattleSimulator(player, [enemy])
 
-    # 検出フェーズ実行
-    sim._detection_phase()
+    # 検出フェーズ実行（確率判定を常に成功させる）
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     uid = str(player.id)
     # body_heading を 0° に設定
@@ -357,7 +360,8 @@ def test_ai_decision_includes_angle_to_target() -> None:
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=500, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     uid = str(player.id)
     sim.unit_resources[uid]["body_heading_deg"] = 0.0  # 正面 (+x)
@@ -416,7 +420,8 @@ def test_angle_to_target_180_via_fuzzy_log() -> None:
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=-500, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy])
-    sim._detection_phase()
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
     uid = str(player.id)
     sim.unit_resources[uid]["body_heading_deg"] = 0.0  # 正面 = +x, 敵は -x (180°)
 

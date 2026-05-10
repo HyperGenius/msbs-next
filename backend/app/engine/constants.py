@@ -159,6 +159,10 @@ RANGED_MID_ACCURACY_PENALTY: float = (
     0.7  # 遠距離武器: d <= CLOSE_RANGE 時の命中ペナルティ
 )
 
+# 確率的索敵定数 (Phase 6-4)
+DETECTION_FALLOFF_EXPONENT: float = 2.0  # 通常環境の距離減衰指数
+DETECTION_FALLOFF_EXPONENT_MINOVSKY: float = 3.0  # ミノフスキー粒子時の減衰指数
+
 # 戦略遷移しきい値定数 (Phase 4-3) — ゲームバランス調整用
 # AGGRESSIVE → RETREAT (T01)
 AGGRESSIVE_RETREAT_HP_THRESHOLD: float = 0.30

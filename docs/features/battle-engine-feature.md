@@ -3,7 +3,7 @@
 **バージョン:** 0.9.0  
 **作成日:** 2026-04-27  
 **更新日:** 2026-05-09  
-**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 / Phase 5-2 / Phase 6-3 実装済み
+**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 / Phase 5-2 / Phase 6-3 / Phase 6-4 実装済み
 
 ---
 
@@ -932,4 +932,85 @@ sim = BattleSimulator(player, enemies, battlefield=bf)
 | `BattleSimulator(player, enemies)` | ❌ | ❌（後方互換） |
 | `BattleSimulator(player, enemies, obstacles=[...])` | ❌ | ❌（明示的 obstacles 優先） |
 | `BattleSimulator(player, enemies, battlefield=BattleField(...))` | ✅ | ✅（density≠NONE の場合） |
+
+---
+
+## 15. Phase 6-4: 確率的索敵（距離依存発見確率の導入）
+
+### 15.1 概要
+
+`_detection_phase()` における新規発見判定を**確率ベース**に変更し、遠方の敵は発見しにくく近距離では確実に発見できるグラデーションを実現する。
+
+**目的:**
+- バトル開始直後の「全 MS 同士が即座に索敵完了」を防ぎ、接近戦に至るまでの過程を生む
+- ミノフスキー粒子環境での索敵困難性をより忠実に再現
+- 索敵スキルや高 `sensor_range` 機体に差別化の価値を持たせる
+
+### 15.2 発見確率の計算式
+
+$$P(\text{detect}) = \max\!\left(0,\ 1 - \left(\frac{d}{d_{\text{eff}}}\right)^k\right)$$
+
+| パラメータ | 説明 |
+|---|---|
+| $d$ | 索敵ユニットからターゲットまでの距離 (m) |
+| $d_{\text{eff}}$ | 有効索敵範囲（`sensor_range × sensor_multiplier`） |
+| $k$ | 距離減衰指数。`DETECTION_FALLOFF_EXPONENT`（通常）または `DETECTION_FALLOFF_EXPONENT_MINOVSKY`（ミノフスキー粒子時） |
+
+**`k = 2.0`（デフォルト）での挙動例（`sensor_range = 500m`）:**
+
+| 距離 | 発見確率 |
+|---|---|
+| 0m | 100% |
+| 100m | 96% |
+| 250m | 75% |
+| 350m | 51% |
+| 450m | 19% |
+| 500m | 0% |
+
+### 15.3 発見の永続性
+
+発見確率は**新規発見時のみ**適用する。一度発見した敵は `team_detected_units` に追加され、以降は LOS チェックのみで維持・喪失を判定する（Phase A の既存ロジックを維持）。
+
+```
+既に発見済み → LOS チェックのみ（確率判定なし）
+未発見       → 確率判定 → 成功で発見リストに追加
+```
+
+### 15.4 ミノフスキー粒子時の強化
+
+ミノフスキー粒子時は索敵範囲の半減（`× 0.5`）に加え、距離減衰指数 $k$ を `DETECTION_FALLOFF_EXPONENT_MINOVSKY` に切り替えることで、近距離でも発見確率がさらに低下する。
+
+```python
+if "MINOVSKY" in self.special_effects:
+    effective_sensor_range = sensor_range * 0.5  # MINOVSKY_SENSOR_RANGE_MULTIPLIER
+    falloff_exponent = DETECTION_FALLOFF_EXPONENT_MINOVSKY  # 3.0
+else:
+    effective_sensor_range = sensor_range
+    falloff_exponent = DETECTION_FALLOFF_EXPONENT  # 2.0
+```
+
+### 15.5 新定数 (`constants.py`)
+
+```python
+# 確率的索敵定数 (Phase 6-4)
+DETECTION_FALLOFF_EXPONENT: float = 2.0       # 通常環境の距離減衰指数
+DETECTION_FALLOFF_EXPONENT_MINOVSKY: float = 3.0  # ミノフスキー粒子時の減衰指数
+```
+
+### 15.6 発見ログの変更
+
+発見ログに索敵確率パーセントを追加。
+
+```
+# 通常環境
+"{actor_name}が{dist_label}に{target.name}を発見！（索敵確率 56%）"
+
+# ミノフスキー粒子時
+"{actor_name}が濃密なミノフスキー粒子の中、{dist_label}に{target.name}の反応を捉えた！（索敵確率 21%）"
+```
+
+### 15.7 後方互換性
+
+- `random.random()` を使用するため、テストは `unittest.mock.patch("app.engine.targeting.random.random", return_value=0.0)` でモックして決定論的な動作を保証すること
+- 既存の確率なし検出ロジックに依存するテストはすべて対応済み（Phase 6-4 実装時に更新）
 

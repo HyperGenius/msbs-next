@@ -1,12 +1,15 @@
 # backend/app/engine/targeting.py
 """索敵・ターゲット選択・武器選択処理のミックスイン."""
 
+import random
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 from app.engine.combat import has_los
 from app.engine.constants import (
+    DETECTION_FALLOFF_EXPONENT,
+    DETECTION_FALLOFF_EXPONENT_MINOVSKY,
     SPECIAL_ENVIRONMENT_EFFECTS,
 )
 from app.models.models import BattleLog, MobileSuit, Weapon
@@ -31,77 +34,102 @@ class TargetingMixin:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
         alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]
 
-        # ミノフスキー粒子効果: 索敵範囲を半減
+        # ミノフスキー粒子効果: 索敵範囲を半減 + 距離減衰指数を強化
         sensor_multiplier = 1.0
+        falloff_exponent = DETECTION_FALLOFF_EXPONENT
         if "MINOVSKY" in self.special_effects:  # type: ignore[attr-defined]
             minovsky = SPECIAL_ENVIRONMENT_EFFECTS["MINOVSKY"]
             sensor_multiplier = minovsky["sensor_range_multiplier"]
+            falloff_exponent = DETECTION_FALLOFF_EXPONENT_MINOVSKY
 
         for unit in alive_units:
             if unit.team_id is None:
                 continue
             # 敵対勢力を特定 (team_idが異なるユニットが敵)
             potential_targets = [t for t in alive_units if t.team_id != unit.team_id]
-
             pos_unit = unit.position.to_numpy()
             effective_sensor_range = unit.sensor_range * sensor_multiplier
 
-            # 索敵範囲内の敵をチェック
             for target in potential_targets:
-                unit_id = str(unit.id)
-                pos_target = target.position.to_numpy()
-                distance = float(np.linalg.norm(pos_target - pos_unit))
+                self._process_single_detection(
+                    unit, target, pos_unit, effective_sensor_range, falloff_exponent
+                )
 
-                if target.id in self.team_detected_units[unit.team_id]:  # type: ignore[attr-defined]
-                    # 既に発見済み — LOS が失われていないか再チェック（障害物がある場合）
-                    if self.obstacles and not has_los(  # type: ignore[attr-defined]
-                        pos_unit,
-                        pos_target,
-                        self.obstacles,  # type: ignore[attr-defined]
-                    ):
-                        # LOS 喪失: 発見済みリストから除外し最終座標を記憶
-                        self.team_detected_units[unit.team_id].discard(target.id)  # type: ignore[attr-defined]
-                        self.unit_resources[unit_id]["last_known_enemy_position"][  # type: ignore[attr-defined]
-                            str(target.id)
-                        ] = pos_target.tolist()
-                    continue
+    def _process_single_detection(
+        self,
+        unit: MobileSuit,
+        target: MobileSuit,
+        pos_unit: np.ndarray,
+        effective_sensor_range: float,
+        falloff_exponent: float,
+    ) -> None:
+        """単一ターゲットへの索敵判定を処理する."""
+        assert unit.team_id is not None  # 呼び出し元で None チェック済み
+        unit_id = str(unit.id)
+        pos_target = target.position.to_numpy()
+        distance = float(np.linalg.norm(pos_target - pos_unit))
 
-                # 索敵判定（ミノフスキー粒子による索敵範囲低下を適用）
-                if distance <= effective_sensor_range:
-                    # LOS チェック（障害物がある場合のみ）
-                    if self.obstacles and not has_los(  # type: ignore[attr-defined]
-                        pos_unit,
-                        pos_target,
-                        self.obstacles,  # type: ignore[attr-defined]
-                    ):
-                        # 障害物により遮断されているため発見不可
-                        continue
+        if target.id in self.team_detected_units[unit.team_id]:  # type: ignore[attr-defined]
+            # 既に発見済み — LOS が失われていないか再チェック（障害物がある場合）
+            if self.obstacles and not has_los(  # type: ignore[attr-defined]
+                pos_unit,
+                pos_target,
+                self.obstacles,  # type: ignore[attr-defined]
+            ):
+                # LOS 喪失: 発見済みリストから除外し最終座標を記憶
+                self.team_detected_units[unit.team_id].discard(target.id)  # type: ignore[attr-defined]
+                self.unit_resources[unit_id]["last_known_enemy_position"][  # type: ignore[attr-defined]
+                    str(target.id)
+                ] = pos_target.tolist()
+            return
 
-                    # 発見！
-                    self.team_detected_units[unit.team_id].add(target.id)  # type: ignore[attr-defined]
+        # 索敵範囲外なら終了
+        if distance > effective_sensor_range:
+            return
 
-                    # 発見ログを追加
-                    dist_label = self._get_distance_label(distance)  # type: ignore[attr-defined]
-                    actor_name = self._format_actor_name(unit)  # type: ignore[attr-defined]
-                    if "MINOVSKY" in self.special_effects:  # type: ignore[attr-defined]
-                        detect_message = (
-                            f"{actor_name}が濃密なミノフスキー粒子の中、"
-                            f"{dist_label}に{target.name}の反応を捉えた！"
-                        )
-                    else:
-                        detect_message = (
-                            f"{actor_name}が{dist_label}に{target.name}を発見！"
-                        )
-                    self.logs.append(  # type: ignore[attr-defined]
-                        BattleLog(
-                            timestamp=self.elapsed_time,  # type: ignore[attr-defined]
-                            actor_id=unit.id,
-                            action_type="DETECTION",
-                            target_id=target.id,
-                            message=detect_message,
-                            position_snapshot=unit.position,
-                        )
-                    )
+        # LOS チェック（障害物がある場合のみ）
+        if self.obstacles and not has_los(  # type: ignore[attr-defined]
+            pos_unit,
+            pos_target,
+            self.obstacles,  # type: ignore[attr-defined]
+        ):
+            return
+
+        # 確率的索敵判定: P = max(0, 1 - (d / d_eff)^k)
+        ratio = distance / effective_sensor_range
+        detect_prob = max(0.0, 1.0 - ratio**falloff_exponent)
+        if random.random() >= detect_prob:
+            # 発見失敗（確率判定で見逃し）
+            return
+
+        # 発見！
+        self.team_detected_units[unit.team_id].add(target.id)  # type: ignore[attr-defined]
+
+        # 発見ログを追加
+        dist_label = self._get_distance_label(distance)  # type: ignore[attr-defined]
+        actor_name = self._format_actor_name(unit)  # type: ignore[attr-defined]
+        prob_pct = int(detect_prob * 100)
+        if "MINOVSKY" in self.special_effects:  # type: ignore[attr-defined]
+            detect_message = (
+                f"{actor_name}が濃密なミノフスキー粒子の中、"
+                f"{dist_label}に{target.name}の反応を捉えた！"
+                f"（索敵確率 {prob_pct}%）"
+            )
+        else:
+            detect_message = (
+                f"{actor_name}が{dist_label}に{target.name}を発見！"
+                f"（索敵確率 {prob_pct}%）"
+            )
+        self.logs.append(  # type: ignore[attr-defined]
+            BattleLog(
+                timestamp=self.elapsed_time,  # type: ignore[attr-defined]
+                actor_id=unit.id,
+                action_type="DETECTION",
+                target_id=target.id,
+                message=detect_message,
+                position_snapshot=unit.position,
+            )
+        )
 
     def _calculate_strategic_value(self, target: MobileSuit) -> float:
         """敵の戦略価値を計算する.

@@ -1,5 +1,7 @@
 """Tests for terrain adaptability and detection system."""
 
+from unittest.mock import patch
+
 from app.engine.constants import (
     DEFAULT_TERRAIN_ADAPTABILITY,
     TERRAIN_ADAPTABILITY_MODIFIERS,
@@ -190,8 +192,9 @@ def test_detection_phase_basic() -> None:
     # Before detection phase, no enemies detected
     assert len(sim.team_detected_units["PLAYER_TEAM"]) == 0
 
-    # Run detection phase
-    sim._detection_phase()
+    # Run detection phase (patch random to always succeed probability check)
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # Close enemy should be detected
     assert enemy_close.id in sim.team_detected_units["PLAYER_TEAM"]
@@ -209,8 +212,9 @@ def test_detection_logs_generated() -> None:
     sim = BattleSimulator(player, [enemy], environment="SPACE")
     sim.elapsed_time = 0.1
 
-    # Run detection phase
-    sim._detection_phase()
+    # Run detection phase (patch random to always succeed probability check)
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # Check that detection logs were created (both units detect each other)
     detection_logs = [log for log in sim.logs if log.action_type == "DETECTION"]
@@ -235,8 +239,9 @@ def test_detection_shared_among_team() -> None:
 
     sim = BattleSimulator(player, [ally, enemy], environment="SPACE")
 
-    # Run detection phase
-    sim._detection_phase()
+    # Run detection phase (patch random to always succeed probability check)
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # Enemy should be in PLAYER_TEAM's detected units
     # (both player and ally are on PLAYER_TEAM)
@@ -283,8 +288,9 @@ def test_enemy_detection_of_player() -> None:
     # Before detection phase, enemy hasn't detected player
     assert len(sim.team_detected_units["ENEMY_TEAM"]) == 0
 
-    # Run detection phase
-    sim._detection_phase()
+    # Run detection phase (patch random to always succeed probability check)
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # Enemy should have detected player
     assert player.id in sim.team_detected_units["ENEMY_TEAM"]
@@ -300,8 +306,9 @@ def test_detection_log_shows_distance() -> None:
     sim = BattleSimulator(player, [enemy], environment="SPACE")
     sim.elapsed_time = 0.1
 
-    # Run detection phase
-    sim._detection_phase()
+    # Run detection phase (patch random to always succeed probability check)
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
 
     # Check detection log includes distance
     detection_logs = [log for log in sim.logs if log.action_type == "DETECTION"]
