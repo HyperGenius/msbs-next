@@ -391,6 +391,38 @@ class MasterMobileSuitUpdate(SQLModel):
     specs: MasterMobileSuitSpec | None = None
 
 
+# --- Master Weapon Admin Models ---
+
+
+class MasterWeaponEntry(SQLModel):
+    """マスター武器エントリー定義（管理者用レスポンス）."""
+
+    id: str
+    name: str
+    price: int
+    description: str
+    weapon: Weapon
+
+
+class MasterWeaponCreate(SQLModel):
+    """マスター武器新規追加リクエスト."""
+
+    id: str
+    name: str
+    price: int
+    description: str
+    weapon: Weapon
+
+
+class MasterWeaponUpdate(SQLModel):
+    """マスター武器更新リクエスト."""
+
+    name: str | None = None
+    price: int | None = None
+    description: str | None = None
+    weapon: Weapon | None = None
+
+
 class RetreatPoint(SQLModel):
     """撤退ポイント定義 (Phase 3-3)."""
 

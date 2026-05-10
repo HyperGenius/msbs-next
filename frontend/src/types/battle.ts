@@ -541,3 +541,33 @@ export interface MasterMobileSuitUpdate {
     description?: string;
     specs?: MasterMobileSuitSpec;
 }
+
+// =============================================================
+// マスター武器データ管理（管理者専用）
+// =============================================================
+
+/**
+ * マスター武器エントリー（管理者用）
+ */
+export interface MasterWeapon {
+    id: string;
+    name: string;
+    price: number;
+    description: string;
+    weapon: Weapon;
+}
+
+/**
+ * マスター武器新規追加リクエスト
+ */
+export type MasterWeaponCreate = MasterWeapon;
+
+/**
+ * マスター武器更新リクエスト
+ */
+export interface MasterWeaponUpdate {
+    name?: string;
+    price?: number;
+    description?: string;
+    weapon?: Weapon;
+}
