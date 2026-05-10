@@ -2,7 +2,7 @@
 import useSWR from "swr";
 import { useAuth } from "@clerk/nextjs";
 import { useCallback } from "react";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, BulkUpgradeRequest, BulkUpgradeResponse, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile, Friend, Team, TeamEntryRequest, TeamEntryResponse } from "@/types/battle";
+import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, BulkUpgradeRequest, BulkUpgradeResponse, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile, Friend, Team, TeamEntryRequest, TeamEntryResponse, PlayerWeapon } from "@/types/battle";
 import { EnrichedMobileSuit, enrichMobileSuit } from "@/utils/rankUtils";
 
 /** PlayerProfile の mobile_suit フィールドが EnrichedMobileSuit に変換された型 */
@@ -487,6 +487,28 @@ export async function equipWeapon(mobileSuitId: string, request: EquipWeaponRequ
   }
 
   return res.json();
+}
+
+/**
+ * 武器インスタンスを売却・破棄する関数
+ */
+export async function deletePlayerWeapon(playerWeaponId: string): Promise<void> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/player-weapons/${playerWeaponId}`, {
+    method: "DELETE",
+    headers,
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Failed to delete player weapon: ${res.status} ${res.statusText}`);
+  }
 }
 
 /**

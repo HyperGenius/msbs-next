@@ -390,6 +390,7 @@ export interface WeaponListing {
 export interface WeaponPurchaseResponse {
     message: string;
     weapon_id: string;
+    player_weapon_id: string;
     remaining_credits: number;
 }
 
@@ -397,8 +398,21 @@ export interface WeaponPurchaseResponse {
  * 武器装備リクエスト
  */
 export interface EquipWeaponRequest {
-    weapon_id: string;
+    player_weapon_id: string;
     slot_index?: number;
+}
+
+/**
+ * プレイヤー武器インスタンス
+ */
+export interface PlayerWeapon {
+    id: string;
+    master_weapon_id: string;
+    base_snapshot: Record<string, unknown>;
+    custom_stats: Record<string, unknown>;
+    equipped_ms_id: string | null;
+    equipped_slot: number | null;
+    acquired_at: string;
 }
 
 /**

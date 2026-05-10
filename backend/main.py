@@ -25,6 +25,7 @@ from app.routers import (
     friends,
     mobile_suits,
     pilots,
+    player_weapons,
     rankings,
     shop,
     teams,
@@ -65,6 +66,7 @@ app.include_router(rankings.router)
 app.include_router(friends.router)
 app.include_router(teams.router)
 app.include_router(admin.router)
+app.include_router(player_weapons.router)
 
 # --- Response Schemas ---
 # models.py にあるクラスを使用する形でも良いですが、
