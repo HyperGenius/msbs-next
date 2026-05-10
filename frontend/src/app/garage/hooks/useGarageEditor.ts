@@ -9,6 +9,7 @@ import {
   useWeaponListings,
   equipWeapon,
 } from "@/services/api";
+import { usePlayerWeapons } from "@/hooks/usePlayerWeapons";
 import { MobileSuit } from "@/types/battle";
 import { EnrichedMobileSuit, enrichMobileSuit } from "@/utils/rankUtils";
 
@@ -19,6 +20,7 @@ export function useGarageEditor() {
   const { mobileSuits, isLoading, isError, mutate } = useMobileSuits();
   const { pilot, mutate: mutatePilot } = usePilot();
   const { weaponListings } = useWeaponListings();
+  const { playerWeapons, mutate: mutatePlayerWeapons } = usePlayerWeapons();
 
   const [selectedMs, setSelectedMs] = useState<EnrichedMobileSuit | null>(null);
   const [showCustomizationModal, setShowCustomizationModal] = useState(false);
@@ -122,6 +124,7 @@ export function useGarageEditor() {
       setShowWeaponModal(false);
       setPreviewWeaponId(null);
       mutate();
+      mutatePlayerWeapons();
       setSelectedMs(enrichMobileSuit(updatedMs));
     } catch (error) {
       console.error("Equip error:", error);
@@ -140,6 +143,7 @@ export function useGarageEditor() {
     isError,
     pilot,
     weaponListings,
+    playerWeapons,
     selectedMs,
     showCustomizationModal,
     isSaving,

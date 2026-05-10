@@ -1,7 +1,7 @@
 /* frontend/src/app/garage/components/WeaponChangeModal.tsx */
 "use client";
 
-import { MobileSuit, Weapon, WeaponListing, Pilot } from "@/types/battle";
+import { MobileSuit, Weapon, WeaponListing, Pilot, PlayerWeapon } from "@/types/battle";
 import { SciFiButton, SciFiCard, SciFiHeading, SciFiPanel } from "@/components/ui";
 import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
 import { WEAPON_LABELS } from "@/utils/displayUtils";
@@ -12,6 +12,7 @@ interface WeaponChangeModalProps {
   weaponListings: WeaponListing[] | undefined;
   pilot: Pilot | undefined;
   ownedMobileSuits: MobileSuit[];
+  playerWeapons: PlayerWeapon[] | undefined;
   previewWeaponId: string | null;
   onSetPreviewWeaponId: (id: string | null) => void;
   onEquipWeapon: (weaponId: string) => void;
@@ -56,14 +57,18 @@ export default function WeaponChangeModal({
   weaponListings,
   pilot,
   ownedMobileSuits,
+  playerWeapons,
   previewWeaponId,
   onSetPreviewWeaponId,
   onEquipWeapon,
   onClose,
 }: WeaponChangeModalProps) {
   const currentWeapon = selectedMs.weapons?.[selectedWeaponSlot];
-  const previewListing = previewWeaponId
-    ? weaponListings?.find((w) => w.id === previewWeaponId)
+  const previewPlayerWeapon = previewWeaponId
+    ? playerWeapons?.find((pw) => pw.id === previewWeaponId)
+    : null;
+  const previewListing = previewPlayerWeapon
+    ? weaponListings?.find((wl) => wl.id === previewPlayerWeapon.master_weapon_id) ?? null
     : null;
 
   const ownedListings = weaponListings?.filter(
@@ -167,7 +172,11 @@ export default function WeaponChangeModal({
               const totalCount = pilot?.inventory?.[weaponListing.id] || 0;
               const availableCount = calcAvailableCount(weaponListing.id);
               const isDisabled = availableCount <= 0;
-              const isSelected = previewWeaponId === weaponListing.id;
+              const isSelected =
+                previewWeaponId != null &&
+                (playerWeapons?.some(
+                  (pw) => pw.id === previewWeaponId && pw.master_weapon_id === weaponListing.id
+                ) === true);
               return (
                 <div key={weaponListing.id}>
                   <SciFiCard
@@ -179,10 +188,17 @@ export default function WeaponChangeModal({
                         ? "cursor-pointer border-green-400 ring-1 ring-green-400 transition-colors"
                         : "cursor-pointer hover:border-green-400 transition-colors"
                     }
-                    onClick={() =>
-                      !isDisabled &&
-                      onSetPreviewWeaponId(isSelected ? null : weaponListing.id)
-                    }
+                    onClick={() => {
+                      if (isDisabled) return;
+                      if (isSelected) {
+                        onSetPreviewWeaponId(null);
+                      } else {
+                        const instance = playerWeapons?.find(
+                          (pw) => pw.master_weapon_id === weaponListing.id && pw.equipped_ms_id === null
+                        );
+                        onSetPreviewWeaponId(instance?.id ?? null);
+                      }
+                    }}
                   >
                     <div className="p-4">
                       <div className="flex justify-between items-start mb-2">
