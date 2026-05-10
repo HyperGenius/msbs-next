@@ -11,8 +11,9 @@ Validates:
 8. _get_units_in_weapon_range() performance helper
 """
 
-import numpy as np
 from unittest.mock import patch
+
+import numpy as np
 
 from app.engine.simulation import BattleSimulator, _has_los
 from app.models.models import (

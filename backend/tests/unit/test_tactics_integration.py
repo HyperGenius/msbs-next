@@ -3,8 +3,6 @@
 This test demonstrates the complete tactics functionality end-to-end.
 """
 
-from unittest.mock import patch
-
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 

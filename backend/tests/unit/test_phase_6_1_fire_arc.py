@@ -4,8 +4,9 @@
 _update_body_heading() の動作、fire_arc_deg ゲートの動作を検証する。
 """
 
-import numpy as np
 from unittest.mock import patch
+
+import numpy as np
 
 from app.engine.constants import DEFAULT_FIRE_ARC_DEG
 from app.engine.simulation import BattleSimulator

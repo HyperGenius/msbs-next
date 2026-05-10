@@ -76,8 +76,12 @@ def test_detection_falloff_exponent_constants() -> None:
 def test_detection_probability_at_zero_distance() -> None:
     """距離 0m では発見確率 100%（常に発見）であることをテスト."""
     # 距離 0m: ratio=0, prob=max(0, 1-0^2)=1.0 → 常に発見
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=500.0)
-    enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=0, y=0, z=0), sensor_range=500.0)
+    player = _make_ms(
+        "Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=500.0
+    )
+    enemy = _make_ms(
+        "Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=0, y=0, z=0), sensor_range=500.0
+    )
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
     # random.random() が最大値 (0.9999) でも prob=1.0 なので常に発見
@@ -90,7 +94,13 @@ def test_detection_probability_at_zero_distance() -> None:
 def test_detection_probability_at_effective_range() -> None:
     """effective_sensor_range ちょうどでは発見確率 0%（発見不可）であることをテスト."""
     sensor_range = 500.0
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
+    player = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
     # ちょうど sensor_range の距離に配置
     enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=sensor_range, y=0, z=0))
 
@@ -106,8 +116,16 @@ def test_detection_probability_at_effective_range() -> None:
 def test_detection_probability_outside_sensor_range() -> None:
     """effective_sensor_range 外では発見されないことをテスト."""
     sensor_range = 500.0
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
-    enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=sensor_range + 1.0, y=0, z=0))
+    player = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
+    enemy = _make_ms(
+        "Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=sensor_range + 1.0, y=0, z=0)
+    )
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
     with patch("app.engine.targeting.random.random", return_value=0.0):
@@ -120,7 +138,13 @@ def test_detection_succeeds_when_random_below_prob() -> None:
     """random() が detect_prob 未満の場合に発見が成功することをテスト."""
     sensor_range = 500.0
     distance = 250.0  # ratio=0.5, prob=max(0,1-0.5^2)=0.75
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
+    player = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
     enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=distance, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
@@ -134,7 +158,13 @@ def test_detection_fails_when_random_above_prob() -> None:
     """random() が detect_prob 以上の場合に発見が失敗することをテスト."""
     sensor_range = 500.0
     distance = 250.0  # ratio=0.5, prob=max(0,1-0.5^2)=0.75
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
+    player = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
     enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=distance, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
@@ -153,7 +183,13 @@ def test_already_detected_skips_probability_check() -> None:
     """既に発見済みのユニットへは確率判定がスキップされることをテスト."""
     sensor_range = 500.0
     distance = 250.0  # prob=0.75
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
+    player = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
     enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=distance, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
@@ -174,20 +210,23 @@ def test_already_detected_skips_probability_check() -> None:
 
 
 def test_minovsky_uses_higher_falloff_exponent() -> None:
-    """ミノフスキー粒子時は DETECTION_FALLOFF_EXPONENT_MINOVSKY が使われ、
-    同距離での発見確率が通常より低いことをテスト."""
+    """ミノフスキー粒子時の発見確率判定のテスト.
+
+    ミノフスキー粒子時は DETECTION_FALLOFF_EXPONENT_MINOVSKY が使われ、
+    同距離での発見確率が通常より低いことをテスト.
+    """
     sensor_range = 600.0
     distance = 200.0
 
     # 通常時: effective_range=600, ratio=200/600≈0.333, prob=1-0.333^2≈0.889
     normal_ratio = distance / sensor_range
-    normal_prob = max(0.0, 1.0 - normal_ratio ** DETECTION_FALLOFF_EXPONENT)
+    normal_prob = max(0.0, 1.0 - normal_ratio**DETECTION_FALLOFF_EXPONENT)
 
     # ミノフスキー粒子時: effective_range=600*0.5=300, ratio=200/300≈0.667
     # falloff=DETECTION_FALLOFF_EXPONENT_MINOVSKY=3.0
     minovsky_effective = sensor_range * _MINOVSKY_SENSOR_MULTIPLIER
     minovsky_ratio = distance / minovsky_effective
-    minovsky_prob = max(0.0, 1.0 - minovsky_ratio ** DETECTION_FALLOFF_EXPONENT_MINOVSKY)
+    minovsky_prob = max(0.0, 1.0 - minovsky_ratio**DETECTION_FALLOFF_EXPONENT_MINOVSKY)
 
     # ミノフスキー粒子下の方が確率が低いはず
     assert minovsky_prob < normal_prob
@@ -201,9 +240,15 @@ def test_minovsky_detection_with_high_exponent() -> None:
     # prob = 1 - 0.667^3 ≈ 0.704
     minovsky_effective = sensor_range * _MINOVSKY_SENSOR_MULTIPLIER
     ratio = distance / minovsky_effective
-    minovsky_prob = max(0.0, 1.0 - ratio ** DETECTION_FALLOFF_EXPONENT_MINOVSKY)
+    minovsky_prob = max(0.0, 1.0 - ratio**DETECTION_FALLOFF_EXPONENT_MINOVSKY)
 
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
+    player = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
     enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=distance, y=0, z=0))
 
     # random.random() が minovsky_prob 未満 → 発見成功
@@ -215,7 +260,13 @@ def test_minovsky_detection_with_high_exponent() -> None:
     assert enemy.id in sim_detect.team_detected_units["PLAYER_TEAM"]
 
     # random.random() が minovsky_prob 以上 → 発見失敗
-    player2 = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
+    player2 = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
     enemy2 = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=distance, y=0, z=0))
     sim_miss = BattleSimulator(
         player2, [enemy2], environment="SPACE", special_effects=["MINOVSKY"]
@@ -234,7 +285,13 @@ def test_detection_log_includes_probability_percentage() -> None:
     """発見ログに「索敵確率 XX%」が含まれることをテスト."""
     sensor_range = 500.0
     distance = 100.0  # ratio=0.2, prob=max(0,1-0.04)=0.96 → 96%
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
+    player = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
     enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=distance, y=0, z=0))
 
     sim = BattleSimulator(player, [enemy], environment="SPACE")
@@ -251,7 +308,13 @@ def test_minovsky_detection_log_includes_probability_percentage() -> None:
     """ミノフスキー粒子時の発見ログにも「索敵確率 XX%」が含まれることをテスト."""
     sensor_range = 600.0
     distance = 100.0
-    player = _make_ms("Player", "PLAYER", "PLAYER_TEAM", Vector3(x=0, y=0, z=0), sensor_range=sensor_range)
+    player = _make_ms(
+        "Player",
+        "PLAYER",
+        "PLAYER_TEAM",
+        Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+    )
     enemy = _make_ms("Enemy", "ENEMY", "ENEMY_TEAM", Vector3(x=distance, y=0, z=0))
 
     sim = BattleSimulator(
