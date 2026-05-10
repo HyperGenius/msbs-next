@@ -208,7 +208,7 @@ export default function WeaponEditForm({
         <div className="grid grid-cols-3 gap-3">
           <div>
             <Label>武器 ID</Label>
-            <Input {...register("weapon.id")} disabled={!lockId && false} placeholder="beam_rifle" />
+            <Input {...register("weapon.id")} disabled placeholder="beam_rifle" />
             <FieldError msg={errors.weapon?.id?.message} />
           </div>
           <div className="col-span-2">

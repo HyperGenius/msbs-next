@@ -30,7 +30,7 @@ router = APIRouter(
 
 weapon_router = APIRouter(
     prefix="/api/admin/weapons",
-    tags=["admin"],
+    tags=["admin-weapons"],
     dependencies=[Depends(verify_admin_api_key)],
 )
 
