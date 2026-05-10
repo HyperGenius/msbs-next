@@ -490,28 +490,6 @@ export async function equipWeapon(mobileSuitId: string, request: EquipWeaponRequ
 }
 
 /**
- * 所有武器インスタンス一覧を取得する SWR hook
- */
-export function usePlayerWeapons(unequippedOnly = false) {
-  const { isLoaded, isSignedIn } = useAuth();
-  const authFetcher = useAuthFetcher();
-
-  const url = `${API_BASE_URL}/api/player-weapons${unequippedOnly ? "?unequipped=true" : ""}`;
-
-  const { data, error, isLoading, mutate } = useSWR<PlayerWeapon[]>(
-    isLoaded && isSignedIn ? url : null,
-    authFetcher
-  );
-
-  return {
-    playerWeapons: data,
-    isLoading: !isLoaded || isLoading,
-    isError: error,
-    mutate,
-  };
-}
-
-/**
  * 武器インスタンスを売却・破棄する関数
  */
 export async function deletePlayerWeapon(playerWeaponId: string): Promise<void> {

@@ -232,7 +232,7 @@ async def purchase_weapon(
     """
     player_weapon = WeaponService.purchase_weapon(session, user_id, weapon_id)
 
-    # パイロット情報を取得してクレジットを返す
+    # パイロット情報を取得してクレジットを返す（WeaponService 内で 404 が返るため None にはならない）
     pilot = session.exec(select(Pilot).where(Pilot.user_id == user_id)).first()
 
     listing = get_weapon_listing_by_id(weapon_id)
@@ -241,5 +241,5 @@ async def purchase_weapon(
         message=f"{listing['name']}を購入しました！",
         weapon_id=weapon_id,
         player_weapon_id=player_weapon.id,
-        remaining_credits=pilot.credits if pilot else 0,
+        remaining_credits=pilot.credits,  # type: ignore[union-attr]
     )
