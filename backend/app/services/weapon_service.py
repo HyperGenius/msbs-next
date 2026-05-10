@@ -35,14 +35,14 @@ class WeaponService:
         # id バリデーション: スネークケース英数字のみ
         if not re.fullmatch(r"[a-z0-9_]+", data.id):
             raise ValueError(
-                f"Invalid id format: '{data.id}'. Only lowercase alphanumeric and underscore are allowed."
+                f"不正なID形式: '{data.id}'。小文字英数字とアンダースコアのみ使用可能です。"
             )
 
         current = get_master_weapons()
 
         # 重複チェック
         if any(item["id"] == data.id for item in current):
-            raise LookupError(f"Weapon id '{data.id}' already exists.")
+            raise LookupError(f"武器ID '{data.id}' は既に存在します。")
 
         new_entry = data.model_dump()
         # Weapon オブジェクトを辞書に変換
@@ -117,9 +117,9 @@ class WeaponService:
         for pilot in pilots_with_weapon:
             if weapon_id in pilot.inventory:
                 raise LookupError(
-                    f"Weapon '{weapon_id}' is referenced in pilot inventory "
-                    f"(pilot_id='{pilot.id}'). "
-                    "Remove from all pilot inventories before deleting the master entry."
+                    f"武器 '{weapon_id}' はパイロットインベントリで参照されています "
+                    f"（pilot_id='{pilot.id}'）。"
+                    "マスターエントリを削除する前に、全てのパイロットインベントリから削除してください。"
                 )
 
         current.pop(target_index)

@@ -14,30 +14,30 @@ import { MasterWeaponEntry } from "@/types/battle";
 export const masterWeaponSchema = z.object({
   id: z
     .string()
-    .min(1, "ID is required")
-    .regex(/^[a-z0-9_]+$/, "ID must be lowercase alphanumeric with underscores (snake_case)"),
-  name: z.string().min(1, "Name is required"),
-  price: z.number({ message: "Must be a number" }).int().nonnegative("Must be ≥ 0"),
+    .min(1, "IDは必須です")
+    .regex(/^[a-z0-9_]+$/, "IDは小文字英数字とアンダースコアのみ使用可能です（スネークケース）"),
+  name: z.string().min(1, "名前は必須です"),
+  price: z.number({ message: "数値を入力してください" }).int().nonnegative("0以上の値を入力してください"),
   description: z.string(),
   weapon: z.object({
     id: z
       .string()
-      .min(1, "Weapon ID is required")
-      .regex(/^[a-z0-9_]+$/, "Weapon ID must be snake_case alphanumeric"),
-    name: z.string().min(1, "Weapon name is required"),
-    power: z.number({ message: "Must be a number" }).int().positive("Must be > 0"),
-    range: z.number({ message: "Must be a number" }).positive("Must be > 0"),
-    accuracy: z.number({ message: "Must be a number" }).min(0).max(100, "Must be 0-100"),
+      .min(1, "武器IDは必須です")
+      .regex(/^[a-z0-9_]+$/, "武器IDは小文字英数字とアンダースコアのみ使用可能です"),
+    name: z.string().min(1, "武器名は必須です"),
+    power: z.number({ message: "数値を入力してください" }).int().positive("1以上の値を入力してください"),
+    range: z.number({ message: "数値を入力してください" }).positive("0より大きい値を入力してください"),
+    accuracy: z.number({ message: "数値を入力してください" }).min(0).max(100, "0〜100の範囲で入力してください"),
     type: z.enum(["BEAM", "PHYSICAL"]),
     weapon_type: z.enum(["MELEE", "CLOSE_RANGE", "RANGED"]).optional(),
-    optimal_range: z.number({ message: "Must be a number" }).nonnegative(),
-    decay_rate: z.number({ message: "Must be a number" }).nonnegative(),
+    optimal_range: z.number({ message: "数値を入力してください" }).nonnegative(),
+    decay_rate: z.number({ message: "数値を入力してください" }).nonnegative(),
     is_melee: z.boolean(),
     max_ammo: z.number().int().nonnegative().nullable().optional(),
-    en_cost: z.number({ message: "Must be a number" }).int().nonnegative().optional(),
-    cool_down_turn: z.number({ message: "Must be a number" }).int().nonnegative().optional(),
-    cooldown_sec: z.number({ message: "Must be a number" }).nonnegative().optional(),
-    fire_arc_deg: z.number({ message: "Must be a number" }).min(0).max(360).optional(),
+    en_cost: z.number({ message: "数値を入力してください" }).int().nonnegative().optional(),
+    cool_down_turn: z.number({ message: "数値を入力してください" }).int().nonnegative().optional(),
+    cooldown_sec: z.number({ message: "数値を入力してください" }).nonnegative().optional(),
+    fire_arc_deg: z.number({ message: "数値を入力してください" }).min(0).max(360).optional(),
   }),
 });
 
