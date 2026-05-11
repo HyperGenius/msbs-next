@@ -159,10 +159,10 @@ def main() -> None:
 
     print(f"[INFO] シード開始 (force={args.force})")
     result = seed_master_data(force=args.force)
-    print(f"[INFO] mobile_suits: {result['mobile_suits_inserted']} 件挿入, "
-          f"{result['mobile_suits_skipped']} 件スキップ")
-    print(f"[INFO] weapons: {result['weapons_inserted']} 件挿入, "
-          f"{result['weapons_skipped']} 件スキップ")
+    ms_in, ms_sk = result["mobile_suits_inserted"], result["mobile_suits_skipped"]
+    w_in, w_sk = result["weapons_inserted"], result["weapons_skipped"]
+    print(f"[INFO] mobile_suits: {ms_in} 件挿入, {ms_sk} 件スキップ")
+    print(f"[INFO] weapons: {w_in} 件挿入, {w_sk} 件スキップ")
     print("[INFO] シード完了")
 
 
