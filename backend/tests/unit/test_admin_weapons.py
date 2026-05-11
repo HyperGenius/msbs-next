@@ -1,8 +1,6 @@
 """管理者専用マスター武器 CRUD API のユニットテスト."""
 
-import json
 import os
-from pathlib import Path
 
 import pytest
 from fastapi import status
@@ -43,42 +41,20 @@ SAMPLE_WEAPON = {
 
 
 @pytest.fixture(autouse=True)
-def patch_data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """各テスト前にマスターデータを一時ディレクトリにコピーして隔離する."""
-    original_dir = Path(gd._DATA_DIR)
-    orig_json = original_dir / "weapons.json"
-    with open(orig_json, encoding="utf-8") as f:
-        original_data = json.load(f)
-
-    tmp_json = tmp_path / "weapons.json"
-    with open(tmp_json, mode="w", encoding="utf-8") as f:
-        json.dump(original_data, f, ensure_ascii=False, indent=2)
-
-    # mobile_suits.json も一時ディレクトリにコピー（他テストとの干渉防止）
-    orig_ms_json = original_dir / "mobile_suits.json"
-    with open(orig_ms_json, encoding="utf-8") as f:
-        ms_data = json.load(f)
-    tmp_ms_json = tmp_path / "mobile_suits.json"
-    with open(tmp_ms_json, mode="w", encoding="utf-8") as f:
-        json.dump(ms_data, f, ensure_ascii=False, indent=2)
-
-    # backgrounds.json も一時ディレクトリにコピー
-    orig_bg_json = original_dir / "backgrounds.json"
-    if orig_bg_json.exists():
-        with open(orig_bg_json, encoding="utf-8") as f:
-            bg_data = json.load(f)
-        tmp_bg_json = tmp_path / "backgrounds.json"
-        with open(tmp_bg_json, mode="w", encoding="utf-8") as f:
-            json.dump(bg_data, f, ensure_ascii=False, indent=2)
-
-    monkeypatch.setattr(gd, "_DATA_DIR", tmp_path)
+def patch_data_dir(monkeypatch: pytest.MonkeyPatch):
+    """各テスト前にキャッシュをリセットして DB シードが反映されるようにする."""
+    # DB からロードするため _DATA_DIR パッチは不要になったが、
+    # backgrounds.json 用に _DATA_DIR は残す。
+    # キャッシュのリセットのみ行う。
     monkeypatch.setattr(gd, "_weapon_shop_listings_cache", None)
     monkeypatch.setattr(gd, "_shop_listings_cache", None)
+    monkeypatch.setattr(gd, "_cache_expires_at", None)
 
     yield
 
     monkeypatch.setattr(gd, "_weapon_shop_listings_cache", None)
     monkeypatch.setattr(gd, "_shop_listings_cache", None)
+    monkeypatch.setattr(gd, "_cache_expires_at", None)
 
 
 @pytest.fixture(name="client_admin")
@@ -264,29 +240,32 @@ def test_delete_referenced_returns_409(client_admin, session):
     assert response.status_code == status.HTTP_409_CONFLICT
 
 
-# ===================== JSON 永続化テスト =====================
+# ===================== DB 永続化テスト =====================
 
 
-def test_create_persists_to_json(client_admin, tmp_path):
-    """POST で追加した武器が JSON ファイルに書き込まれること."""
+def test_create_persists_to_db(client_admin, session):
+    """POST で追加した武器が DB に書き込まれること."""
     client_admin.post("/api/admin/weapons", json=SAMPLE_WEAPON, headers=HEADERS)
 
-    json_path = gd._DATA_DIR / "weapons.json"
-    with open(json_path, encoding="utf-8") as f:
-        saved = json.load(f)
+    from app.models.models import MasterWeapon
 
-    ids = [item["id"] for item in saved]
-    assert "test_beam_cannon" in ids
+    record = session.get(MasterWeapon, "test_beam_cannon")
+    assert record is not None
+    assert record.name == SAMPLE_WEAPON["name"]
 
 
-def test_delete_persists_to_json(client_admin, tmp_path):
-    """DELETE した武器が JSON ファイルからも消えること."""
+def test_delete_persists_to_db(client_admin, session):
+    """DELETE した武器が DB からも消えること."""
+    from sqlmodel import select
+
     client_admin.post("/api/admin/weapons", json=SAMPLE_WEAPON, headers=HEADERS)
     client_admin.delete("/api/admin/weapons/test_beam_cannon", headers=HEADERS)
 
-    json_path = gd._DATA_DIR / "weapons.json"
-    with open(json_path, encoding="utf-8") as f:
-        saved = json.load(f)
+    from app.models.models import MasterWeapon
 
-    ids = [item["id"] for item in saved]
-    assert "test_beam_cannon" not in ids
+    # select で最新状態を問い合わせる（identity map のキャッシュを回避）
+    session.expire_all()
+    record = session.exec(
+        select(MasterWeapon).where(MasterWeapon.id == "test_beam_cannon")
+    ).first()
+    assert record is None

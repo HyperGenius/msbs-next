@@ -2,7 +2,8 @@
 
 ## 概要
 
-`data/master/mobile_suits.json` のマスター機体データを Web UI 上で直接編集・追加・削除できる管理者専用画面。
+マスター機体データを Web UI 上で直接編集・追加・削除できる管理者専用画面。
+データは `master_mobile_suits` PostgreSQL テーブルに永続化されるため、デプロイ後も変更が失われない。
 
 ---
 
@@ -104,6 +105,50 @@ Content-Type: application/json
   "description": "改良型仕様。"
 }
 ```
+
+---
+
+## データ永続化
+
+### DB スキーマ (`master_mobile_suits`)
+
+```sql
+CREATE TABLE master_mobile_suits (
+    id          TEXT PRIMARY KEY,       -- スネークケース (例: rx_78_2)
+    name        TEXT NOT NULL,
+    price       INTEGER NOT NULL,
+    faction     TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL,
+    specs       JSONB NOT NULL,         -- MasterMobileSuitSpec の全フィールド
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### マイグレーション
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+### シードデータ投入
+
+初回デプロイ後、`data/master/mobile_suits.json` のデータを DB へ投入する:
+
+```bash
+# 既存レコードは上書きしない（管理画面変更を保護）
+python scripts/seed/seed_master_data.py
+
+# --force で既存レコードも上書き（開発環境リセット用）
+python scripts/seed/seed_master_data.py --force
+```
+
+### キャッシュ
+
+- マスターデータは `MASTER_DATA_CACHE_TTL_SEC` 秒（デフォルト: 60秒）の TTL キャッシュで保持される
+- `GET /api/admin/reload-master` でキャッシュをクリアして最新 DB データを返す
+- テスト環境では `MASTER_DATA_CACHE_TTL_SEC=0` でキャッシュを無効化できる
 
 ---
 
@@ -222,7 +267,7 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" python -m pytest 
 - POST 新規追加（正常 / ID 重複 409 / ID 不正 422 / weapons 空 422）
 - PUT 更新（正常 / 404 / weapons 空 422）
 - DELETE 削除（正常 / 404 / 在庫参照 409）
-- JSON ファイル永続化確認
+- DB 永続化確認
 
 ### Frontend
 
@@ -241,9 +286,12 @@ npx vitest run --project unit
 
 - `backend/app/routers/admin.py` — CRUD API ルーター
 - `backend/app/services/mobile_suit_service.py` — CRUD ロジック
-- `backend/app/core/gamedata.py` — JSON 読み書き・キャッシュ
+- `backend/app/core/gamedata.py` — DB 読み書き・TTL キャッシュ
 - `backend/app/core/auth.py` — `verify_admin_api_key` 依存関数
-- `backend/app/models/models.py` — `MasterMobileSuitEntry` / `MasterMobileSuitCreate` / `MasterMobileSuitUpdate`
-- `backend/data/master/mobile_suits.json` — マスターデータ
+- `backend/app/models/models.py` — `MasterMobileSuit` (テーブルモデル) / `MasterMobileSuitEntry` / `MasterMobileSuitCreate` / `MasterMobileSuitUpdate`
+- `backend/data/master/mobile_suits.json` — シードデータ（Git 管理継続）
+- `backend/scripts/seed/seed_master_data.py` — シードスクリプト
+- `backend/alembic/versions/r1s2t3u4v5w6_add_master_mobile_suits_and_weapons_tables.py` — マイグレーション
 - `frontend/src/app/admin/mobile-suits/page.tsx` — 管理画面
 - `frontend/src/middleware.ts` — 管理者ロールガード
+

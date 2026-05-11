@@ -423,6 +423,56 @@ class MasterWeaponUpdate(SQLModel):
     weapon: Weapon | None = None
 
 
+# --- Master Data Table Models (DBテーブル定義) ---
+
+
+class MasterMobileSuit(SQLModel, table=True):
+    """マスター機体データ テーブルモデル (DBテーブル)."""
+
+    __tablename__ = "master_mobile_suits"
+
+    id: str = Field(primary_key=True, description="スネークケースID (例: rx_78_2)")
+    name: str = Field(description="機体名")
+    price: int = Field(description="購入価格")
+    faction: str = Field(default="", description="勢力 (FEDERATION/ZEON/空文字=共通)")
+    description: str = Field(description="機体説明文")
+    specs: dict = Field(
+        sa_column=Column(JSON),
+        description="機体スペック (MasterMobileSuitSpec の全フィールド)",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="作成日時",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="更新日時",
+    )
+
+
+class MasterWeapon(SQLModel, table=True):
+    """マスター武器データ テーブルモデル (DBテーブル)."""
+
+    __tablename__ = "master_weapons"
+
+    id: str = Field(primary_key=True, description="スネークケースID (例: zaku_mg)")
+    name: str = Field(description="武器名")
+    price: int = Field(description="購入価格")
+    description: str = Field(description="武器説明文")
+    weapon: dict = Field(
+        sa_column=Column(JSON),
+        description="武器スペック (Weapon モデルの全フィールド)",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="作成日時",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="更新日時",
+    )
+
+
 class RetreatPoint(SQLModel):
     """撤退ポイント定義 (Phase 3-3)."""
 

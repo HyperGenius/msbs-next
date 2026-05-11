@@ -51,17 +51,18 @@ class MobileSuitService:
     # --- マスター機体データ CRUD ---
 
     @staticmethod
-    def get_master_mobile_suits() -> list[dict]:
+    def get_master_mobile_suits(session: Session) -> list[dict]:
         """マスター機体データを全件返す（生JSON辞書形式）."""
         from app.core.gamedata import get_master_mobile_suits
 
-        return get_master_mobile_suits()
+        return get_master_mobile_suits(session)
 
     @staticmethod
-    def create_master_mobile_suit(data: MasterMobileSuitCreate) -> dict:
-        """マスター機体を新規追加してJSONファイルを永続化する.
+    def create_master_mobile_suit(session: Session, data: MasterMobileSuitCreate) -> dict:
+        """マスター機体を新規追加してDBを永続化する.
 
         Args:
+            session: DBセッション
             data: 新規機体データ
 
         Returns:
@@ -70,7 +71,10 @@ class MobileSuitService:
         Raises:
             ValueError: idが重複している / idの形式が不正 / weaponsが空の場合
         """
-        from app.core.gamedata import get_master_mobile_suits, save_master_mobile_suits
+        from datetime import UTC, datetime
+
+        from app.core import gamedata as gd
+        from app.models.models import MasterMobileSuit
 
         # idバリデーション: スネークケース英数字のみ
         if not re.fullmatch(r"[a-z0-9_]+", data.id):
@@ -82,27 +86,48 @@ class MobileSuitService:
         if not data.specs.weapons:
             raise ValueError("specs.weapons must have at least one weapon.")
 
-        current = get_master_mobile_suits()
-
         # 重複チェック
-        if any(item["id"] == data.id for item in current):
+        existing = session.get(MasterMobileSuit, data.id)
+        if existing is not None:
             raise LookupError(f"Mobile suit id '{data.id}' already exists.")
 
-        new_entry = data.model_dump()
-        # Weapon オブジェクトを辞書に変換
-        new_entry["specs"]["weapons"] = [w.model_dump() for w in data.specs.weapons]
+        # specs を辞書に変換
+        specs_dict = data.specs.model_dump()
+        specs_dict["weapons"] = [w.model_dump() for w in data.specs.weapons]
 
-        current.append(new_entry)
-        save_master_mobile_suits(current)
-        return new_entry
+        # INSERT
+        record = MasterMobileSuit(
+            id=data.id,
+            name=data.name,
+            price=data.price,
+            faction=data.faction,
+            description=data.description,
+            specs=specs_dict,
+        )
+        session.add(record)
+        session.commit()
+
+        # キャッシュを無効化
+        gd._shop_listings_cache = None
+        gd._cache_expires_at = None
+
+        return {
+            "id": data.id,
+            "name": data.name,
+            "price": data.price,
+            "faction": data.faction,
+            "description": data.description,
+            "specs": specs_dict,
+        }
 
     @staticmethod
     def update_master_mobile_suit(
-        ms_id: str, data: MasterMobileSuitUpdate
+        session: Session, ms_id: str, data: MasterMobileSuitUpdate
     ) -> dict | None:
-        """既存マスター機体を更新してJSONファイルを永続化する.
+        """既存マスター機体を更新してDBを永続化する.
 
         Args:
+            session: DBセッション
             ms_id: 更新対象の機体ID
             data: 更新データ
 
@@ -112,20 +137,18 @@ class MobileSuitService:
         Raises:
             ValueError: weaponsが空になる場合
         """
-        from app.core.gamedata import get_master_mobile_suits, save_master_mobile_suits
+        from datetime import UTC, datetime
 
-        current = get_master_mobile_suits()
-        target_index = next(
-            (i for i, item in enumerate(current) if item["id"] == ms_id), None
-        )
-        if target_index is None:
+        from app.core import gamedata as gd
+        from app.models.models import MasterMobileSuit
+
+        record = session.get(MasterMobileSuit, ms_id)
+        if record is None:
             return None
 
-        target = current[target_index]
-
         update_dict = data.model_dump(exclude_unset=True)
+
         if "specs" in update_dict and update_dict["specs"] is not None:
-            # Weapon オブジェクトを辞書に変換
             specs_data = update_dict["specs"]
             if "weapons" in specs_data:
                 if not specs_data["weapons"]:
@@ -134,18 +157,35 @@ class MobileSuitService:
                     w.model_dump() if hasattr(w, "model_dump") else w
                     for w in data.specs.weapons  # type: ignore[union-attr]
                 ]
-            target["specs"].update(specs_data)
+            # 既存 specs とマージ
+            existing_specs = dict(record.specs)
+            existing_specs.update(specs_data)
+            record.specs = existing_specs
             update_dict.pop("specs")
 
-        target.update(update_dict)
-        current[target_index] = target
+        for key, value in update_dict.items():
+            setattr(record, key, value)
 
-        save_master_mobile_suits(current)
-        return target
+        record.updated_at = datetime.now(UTC)
+        session.add(record)
+        session.commit()
+
+        # キャッシュを無効化
+        gd._shop_listings_cache = None
+        gd._cache_expires_at = None
+
+        return {
+            "id": record.id,
+            "name": record.name,
+            "price": record.price,
+            "faction": record.faction,
+            "description": record.description,
+            "specs": record.specs,
+        }
 
     @staticmethod
     def delete_master_mobile_suit(ms_id: str, session: Session) -> bool:
-        """マスター機体を削除してJSONファイルを永続化する.
+        """マスター機体を削除してDBを永続化する.
 
         Args:
             ms_id: 削除対象の機体ID
@@ -157,21 +197,15 @@ class MobileSuitService:
         Raises:
             LookupError: ショップ在庫で参照されている場合
         """
-        from app.core.gamedata import get_master_mobile_suits, save_master_mobile_suits
+        from app.core import gamedata as gd
+        from app.models.models import MasterMobileSuit
 
-        current = get_master_mobile_suits()
-        target_index = next(
-            (i for i, item in enumerate(current) if item["id"] == ms_id), None
-        )
-        if target_index is None:
+        record = session.get(MasterMobileSuit, ms_id)
+        if record is None:
             return False
 
         # ショップ在庫（プレイヤーが所有する機体）への参照チェック
-        # mobile_suits テーブルで master_id がある場合に照合
-        # 現在の設計では購入済み機体に master_id カラムはないが、
-        # 将来の参照整合性のため name マッチングで確認する
-        # （既存設計に従い、より安全な削除のために name を比較）
-        ms_name = current[target_index]["name"]
+        ms_name = record.name
         existing_ms = session.exec(
             select(MobileSuit).where(MobileSuit.name == ms_name)
         ).first()
@@ -181,6 +215,11 @@ class MobileSuitService:
                 "Remove all owned copies before deleting the master entry."
             )
 
-        current.pop(target_index)
-        save_master_mobile_suits(current)
+        session.delete(record)
+        session.commit()
+
+        # キャッシュを無効化
+        gd._shop_listings_cache = None
+        gd._cache_expires_at = None
+
         return True
