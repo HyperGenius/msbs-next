@@ -9,7 +9,14 @@ from sqlmodel import Session, select
 
 from app.core.gamedata import get_weapon_listing_by_id
 from app.engine.constants import MAX_WEAPON_SLOTS
-from app.models.models import MasterWeaponCreate, MasterWeaponUpdate, MobileSuit, Pilot, PlayerWeapon, Weapon
+from app.models.models import (
+    MasterWeaponCreate,
+    MasterWeaponUpdate,
+    MobileSuit,
+    Pilot,
+    PlayerWeapon,
+    Weapon,
+)
 
 
 class WeaponService:

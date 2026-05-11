@@ -165,9 +165,7 @@ def test_create_duplicate_id_returns_409(client_admin):
 def test_create_invalid_id_returns_422(client_admin):
     """スネークケース以外の id は 422 が返ること."""
     invalid = {**SAMPLE_WEAPON, "id": "Invalid-Weapon-ID"}
-    response = client_admin.post(
-        "/api/admin/weapons", json=invalid, headers=HEADERS
-    )
+    response = client_admin.post("/api/admin/weapons", json=invalid, headers=HEADERS)
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
@@ -239,9 +237,7 @@ def test_delete_master_weapon(client_admin):
 
 def test_delete_nonexistent_returns_404(client_admin):
     """存在しない id を削除しようとすると 404 が返ること."""
-    response = client_admin.delete(
-        "/api/admin/weapons/nonexistent_id", headers=HEADERS
-    )
+    response = client_admin.delete("/api/admin/weapons/nonexistent_id", headers=HEADERS)
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 

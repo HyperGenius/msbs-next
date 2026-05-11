@@ -184,9 +184,7 @@ def create_master_weapon(data: MasterWeaponCreate) -> MasterWeaponEntry:
 
 
 @weapon_router.put("/{weapon_id}", response_model=MasterWeaponEntry)
-def update_master_weapon(
-    weapon_id: str, data: MasterWeaponUpdate
-) -> MasterWeaponEntry:
+def update_master_weapon(weapon_id: str, data: MasterWeaponUpdate) -> MasterWeaponEntry:
     """既存マスター武器を更新する."""
     result = WeaponService.update_master_weapon(weapon_id, data)
 
