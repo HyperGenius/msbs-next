@@ -1,5 +1,6 @@
 """武器インスタンス管理サービス."""
 
+import re
 import uuid
 from datetime import UTC, datetime
 
@@ -8,7 +9,14 @@ from sqlmodel import Session, select
 
 from app.core.gamedata import get_weapon_listing_by_id
 from app.engine.constants import MAX_WEAPON_SLOTS
-from app.models.models import MobileSuit, Pilot, PlayerWeapon, Weapon
+from app.models.models import (
+    MasterWeaponCreate,
+    MasterWeaponUpdate,
+    MobileSuit,
+    Pilot,
+    PlayerWeapon,
+    Weapon,
+)
 
 
 class WeaponService:
@@ -222,3 +230,123 @@ class WeaponService:
             statement = statement.where(PlayerWeapon.equipped_ms_id == None)  # noqa: E711
         results = session.exec(statement).all()
         return list(results)
+
+    # --- マスター武器データ CRUD ---
+
+    @staticmethod
+    def get_master_weapons() -> list[dict]:
+        """マスター武器データを全件返す（生JSON辞書形式）."""
+        from app.core.gamedata import get_master_weapons
+
+        return get_master_weapons()
+
+    @staticmethod
+    def create_master_weapon(data: MasterWeaponCreate) -> dict:
+        """マスター武器を新規追加してJSONファイルを永続化する.
+
+        Args:
+            data: 新規武器データ
+
+        Returns:
+            dict: 追加された武器データ
+
+        Raises:
+            LookupError: id が重複している場合
+            ValueError: id の形式が不正な場合
+        """
+        from app.core.gamedata import get_master_weapons, save_master_weapons
+
+        # id バリデーション: スネークケース英数字のみ
+        if not re.fullmatch(r"[a-z0-9_]+", data.id):
+            raise ValueError(
+                f"Invalid id format: '{data.id}'. Only lowercase alphanumeric and underscore are allowed."
+            )
+
+        current = get_master_weapons()
+
+        # 重複チェック
+        if any(item["id"] == data.id for item in current):
+            raise LookupError(f"Weapon id '{data.id}' already exists.")
+
+        new_entry = {
+            "id": data.id,
+            "name": data.name,
+            "price": data.price,
+            "description": data.description,
+            "weapon": data.weapon.model_dump(),
+        }
+
+        current.append(new_entry)
+        save_master_weapons(current)
+        return new_entry
+
+    @staticmethod
+    def update_master_weapon(weapon_id: str, data: MasterWeaponUpdate) -> dict | None:
+        """既存マスター武器を更新してJSONファイルを永続化する.
+
+        Args:
+            weapon_id: 更新対象の武器 ID
+            data: 更新データ
+
+        Returns:
+            dict | None: 更新された武器データ。見つからない場合は None
+        """
+        from app.core.gamedata import get_master_weapons, save_master_weapons
+
+        current = get_master_weapons()
+        target_index = next(
+            (i for i, item in enumerate(current) if item["id"] == weapon_id), None
+        )
+        if target_index is None:
+            return None
+
+        target = current[target_index]
+        update_dict = data.model_dump(exclude_unset=True)
+
+        if "weapon" in update_dict and update_dict["weapon"] is not None:
+            # Weapon オブジェクトを辞書に変換
+            target["weapon"] = data.weapon.model_dump()  # type: ignore[union-attr]
+            update_dict.pop("weapon")
+
+        target.update(update_dict)
+        current[target_index] = target
+
+        save_master_weapons(current)
+        return target
+
+    @staticmethod
+    def delete_master_weapon(weapon_id: str, session: Session) -> bool:
+        """マスター武器を削除してJSONファイルを永続化する.
+
+        Args:
+            weapon_id: 削除対象の武器 ID
+            session: DBセッション（PlayerWeapon 参照チェック用）
+
+        Returns:
+            bool: 削除に成功した場合 True、対象が存在しない場合 False
+
+        Raises:
+            LookupError: player_weapons テーブルで参照されている場合
+        """
+        from app.core.gamedata import get_master_weapons, save_master_weapons
+
+        current = get_master_weapons()
+        target_index = next(
+            (i for i, item in enumerate(current) if item["id"] == weapon_id), None
+        )
+        if target_index is None:
+            return False
+
+        # PlayerWeapon テーブルで master_weapon_id として参照されていないか確認
+        existing_pw = session.exec(
+            select(PlayerWeapon).where(PlayerWeapon.master_weapon_id == weapon_id)
+        ).first()
+        if existing_pw is not None:
+            raise LookupError(
+                f"Weapon '{weapon_id}' is referenced in player_weapons table. "
+                "Remove all player weapon instances before deleting the master entry."
+            )
+
+        current.pop(target_index)
+        save_master_weapons(current)
+        return True
