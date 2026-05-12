@@ -20,15 +20,14 @@ import argparse
 import json
 import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+
+from sqlmodel import Session, create_engine
 
 # プロジェクトルートを Python パスに追加
 _ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_ROOT))
-
-from datetime import UTC, datetime
-
-from sqlmodel import Session, create_engine, select
 
 
 def _get_engine():

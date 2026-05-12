@@ -401,7 +401,11 @@ def reload_master_data() -> dict[str, int]:
     Returns:
         dict[str, int]: 各マスターデータの件数
     """
-    global _shop_listings_cache, _weapon_shop_listings_cache, _backgrounds_cache, _cache_expires_at
+    global \
+        _shop_listings_cache, \
+        _weapon_shop_listings_cache, \
+        _backgrounds_cache, \
+        _cache_expires_at
     _shop_listings_cache = None
     _weapon_shop_listings_cache = None
     _backgrounds_cache = None

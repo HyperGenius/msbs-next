@@ -58,7 +58,9 @@ class MobileSuitService:
         return get_master_mobile_suits(session)
 
     @staticmethod
-    def create_master_mobile_suit(session: Session, data: MasterMobileSuitCreate) -> dict:
+    def create_master_mobile_suit(
+        session: Session, data: MasterMobileSuitCreate
+    ) -> dict:
         """マスター機体を新規追加してDBを永続化する.
 
         Args:
@@ -71,8 +73,6 @@ class MobileSuitService:
         Raises:
             ValueError: idが重複している / idの形式が不正 / weaponsが空の場合
         """
-        from datetime import UTC, datetime
-
         from app.core import gamedata as gd
         from app.models.models import MasterMobileSuit
 

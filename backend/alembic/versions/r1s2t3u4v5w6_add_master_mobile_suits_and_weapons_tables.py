@@ -28,10 +28,14 @@ def upgrade() -> None:
     # master_mobile_suits テーブル
     op.create_table(
         "master_mobile_suits",
-        sa.Column("id", sa.String(), nullable=False, comment="スネークケースID (例: rx_78_2)"),
+        sa.Column(
+            "id", sa.String(), nullable=False, comment="スネークケースID (例: rx_78_2)"
+        ),
         sa.Column("name", sa.String(), nullable=False, comment="機体名"),
         sa.Column("price", sa.Integer(), nullable=False, comment="購入価格"),
-        sa.Column("faction", sa.String(), nullable=False, server_default="", comment="勢力"),
+        sa.Column(
+            "faction", sa.String(), nullable=False, server_default="", comment="勢力"
+        ),
         sa.Column("description", sa.String(), nullable=False, comment="機体説明文"),
         sa.Column(
             "specs",
@@ -57,7 +61,9 @@ def upgrade() -> None:
     # master_weapons テーブル
     op.create_table(
         "master_weapons",
-        sa.Column("id", sa.String(), nullable=False, comment="スネークケースID (例: zaku_mg)"),
+        sa.Column(
+            "id", sa.String(), nullable=False, comment="スネークケースID (例: zaku_mg)"
+        ),
         sa.Column("name", sa.String(), nullable=False, comment="武器名"),
         sa.Column("price", sa.Integer(), nullable=False, comment="購入価格"),
         sa.Column("description", sa.String(), nullable=False, comment="武器説明文"),

@@ -37,9 +37,7 @@ from main import app  # noqa: E402
 # テーブルを一括作成
 SQLModel.metadata.create_all(_test_engine)
 
-_MASTER_DATA_DIR = (
-    Path(__file__).resolve().parent.parent / "data" / "master"
-)
+_MASTER_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "master"
 
 
 def _seed_master_data(session: Session) -> None:
@@ -47,7 +45,9 @@ def _seed_master_data(session: Session) -> None:
     from app.models.models import MasterMobileSuit, MasterWeapon
 
     # --- mobile_suits ---
-    ms_data = json.loads((_MASTER_DATA_DIR / "mobile_suits.json").read_text(encoding="utf-8"))
+    ms_data = json.loads(
+        (_MASTER_DATA_DIR / "mobile_suits.json").read_text(encoding="utf-8")
+    )
     for item in ms_data:
         specs = dict(item["specs"])
         record = MasterMobileSuit(
@@ -61,7 +61,9 @@ def _seed_master_data(session: Session) -> None:
         session.add(record)
 
     # --- weapons ---
-    weapons_data = json.loads((_MASTER_DATA_DIR / "weapons.json").read_text(encoding="utf-8"))
+    weapons_data = json.loads(
+        (_MASTER_DATA_DIR / "weapons.json").read_text(encoding="utf-8")
+    )
     for item in weapons_data:
         record = MasterWeapon(
             id=item["id"],
