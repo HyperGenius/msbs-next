@@ -2,13 +2,34 @@
 """戦闘ユーティリティ: フォーマット・チャッター関数群のミックスイン."""
 
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.core.npc_data import BATTLE_CHATTER
-from app.models.models import MobileSuit
+from app.models.models import BattleLog, MobileSuit
 
 if TYPE_CHECKING:
     pass
+
+# バトルログ保存時に除去するデバッグ専用フィールドのセット
+_BATTLE_LOG_DEBUG_FIELDS: frozenset[str] = frozenset({"fuzzy_scores"})
+
+
+def strip_debug_fields(logs: list[BattleLog]) -> list[dict[str, Any]]:
+    """バトルログからデバッグ用フィールドを除去した dict リストを返す.
+
+    DBへの保存前に呼び出すことで、不要なストレージ消費を削減する。
+    APIレスポンス（BattleResponse.logs）には影響しない。
+
+    Args:
+        logs: 除去対象のバトルログリスト
+
+    Returns:
+        デバッグフィールド（fuzzy_scores 等）を除いた BattleLog 相当の dict リスト
+    """
+    return [
+        {k: v for k, v in log.model_dump().items() if k not in _BATTLE_LOG_DEBUG_FIELDS}
+        for log in logs
+    ]
 
 
 class BattleUtilsMixin:

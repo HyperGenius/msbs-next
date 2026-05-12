@@ -19,6 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from sqlmodel import Session, select
 
 from app.db import engine
+from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleEntry,
@@ -274,7 +275,7 @@ def _save_battle_results(
             user_id=entry.user_id,
             room_id=room.id,
             win_loss=individual_win_loss,
-            logs=[log.model_dump() for log in simulator.logs],
+            logs=strip_debug_fields(simulator.logs),
             player_info=player_unit.model_dump(),
             enemies_info=[e.model_dump() for e in enemy_units],
             ms_snapshot=entry.mobile_suit_snapshot,

@@ -9,6 +9,7 @@ from sqlmodel import Session, desc, select
 # DB関連
 from app.core.auth import get_current_user, get_current_user_optional
 from app.db import get_session
+from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleLog,
@@ -270,7 +271,7 @@ async def simulate_battle(
         user_id=user_id,
         mission_id=mission_id,
         win_loss=win_loss,
-        logs=sim.logs,
+        logs=strip_debug_fields(sim.logs),
         environment=mission.environment,
         player_info=player.model_dump(),
         enemies_info=[e.model_dump() for e in enemies],
