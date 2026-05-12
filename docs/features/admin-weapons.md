@@ -2,7 +2,8 @@
 
 ## 概要
 
-開発者・運営が `data/master/weapons.json` のマスター武器データを **Web UI 上で直接編集・追加・削除** できる管理者専用画面。
+開発者・運営がマスター武器データを **Web UI 上で直接編集・追加・削除** できる管理者専用画面。
+データは `master_weapons` PostgreSQL テーブルに永続化されるため、デプロイ後も変更が失われない。
 
 ---
 
@@ -89,6 +90,48 @@
 
 ---
 
+## データ永続化
+
+### DB スキーマ (`master_weapons`)
+
+```sql
+CREATE TABLE master_weapons (
+    id          TEXT PRIMARY KEY,       -- スネークケース (例: zaku_mg)
+    name        TEXT NOT NULL,
+    price       INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    weapon      JSONB NOT NULL,         -- Weapon モデルの全フィールド
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### マイグレーション
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+### シードデータ投入
+
+初回デプロイ後、`data/master/weapons.json` のデータを DB へ投入する:
+
+```bash
+# 既存レコードは上書きしない（管理画面変更を保護）
+python scripts/seed/seed_master_data.py
+
+# --force で既存レコードも上書き（開発環境リセット用）
+python scripts/seed/seed_master_data.py --force
+```
+
+### キャッシュ
+
+- マスターデータは `MASTER_DATA_CACHE_TTL_SEC` 秒（デフォルト: 60秒）の TTL キャッシュで保持される
+- `GET /api/admin/reload-master` でキャッシュをクリアして最新 DB データを返す
+
+---
+
 ## フロントエンド
 
 ### ルーティング
@@ -133,10 +176,12 @@ src/
 
 - `backend/app/routers/admin.py` — CRUD API ルーター（`weapon_router`）
 - `backend/app/services/weapon_service.py` — CRUD ロジック
-- `backend/app/core/gamedata.py` — JSON 読み書き・キャッシュ（`get_master_weapons` / `save_master_weapons`）
+- `backend/app/core/gamedata.py` — DB 読み書き・TTL キャッシュ（`get_master_weapons` / `save_master_weapons`）
 - `backend/app/core/auth.py` — `verify_admin_api_key` 依存関数
-- `backend/app/models/models.py` — `MasterWeaponEntry` / `MasterWeaponCreate` / `MasterWeaponUpdate`
-- `backend/data/master/weapons.json` — マスターデータ
+- `backend/app/models/models.py` — `MasterWeapon` (テーブルモデル) / `MasterWeaponEntry` / `MasterWeaponCreate` / `MasterWeaponUpdate`
+- `backend/data/master/weapons.json` — シードデータ（Git 管理継続）
+- `backend/scripts/seed/seed_master_data.py` — シードスクリプト
+- `backend/alembic/versions/r1s2t3u4v5w6_add_master_mobile_suits_and_weapons_tables.py` — マイグレーション
 - `frontend/src/app/admin/weapons/page.tsx` — 管理画面
 - `frontend/src/middleware.ts` — 管理者ロールガード
 
@@ -157,7 +202,7 @@ cd backend && NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" \
 - `POST` 新規追加・重複 409・不正 ID 422
 - `PUT` 更新・スペック更新・存在しない ID 404
 - `DELETE` 削除・存在しない ID 404・参照あり 409
-- JSON ファイル永続化確認
+- DB 永続化確認
 
 ### フロントエンド
 
@@ -168,3 +213,4 @@ cd frontend && npx vitest run tests/unit/weaponEditFormValidation.test.ts
 テスト項目:
 - エントリー ID・名前・価格のバリデーション
 - weapon スペック（power・range・accuracy・type・weapon_type・is_melee など）のバリデーション
+

@@ -1,18 +1,21 @@
 """ゲームデータ定義（ショップマスターデータなど）.
 
-JSONファイルからマスターデータを読み込み、インメモリキャッシュとして保持する。
-管理者用リロードAPIにより、サーバー再起動なしでデータを更新可能。
+DBからマスターデータを読み込み、TTLキャッシュとして保持する。
+管理者用リロードAPIにより、キャッシュを強制クリアして最新DBデータを返す。
 """
 
 import json
 import os
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from app.models.models import Weapon
+from sqlmodel import Session, select
 
-# マスターデータディレクトリのパス
+from app.models.models import MasterMobileSuit, MasterWeapon, Weapon
+
+# マスターデータディレクトリのパス (backgrounds.json / STARTER_KITS 用)
 _DATA_DIR = Path(
     os.environ.get(
         "MASTER_DATA_DIR",
@@ -20,10 +23,14 @@ _DATA_DIR = Path(
     )
 )
 
+# キャッシュ TTL 設定（秒）。0 を設定するとキャッシュ無効化（常にDB参照）
+_CACHE_TTL_SEC: int = int(os.environ.get("MASTER_DATA_CACHE_TTL_SEC", "60"))
+
 # インメモリキャッシュ
 _shop_listings_cache: list[dict] | None = None
 _weapon_shop_listings_cache: list[dict] | None = None
 _backgrounds_cache: dict[str, dict[str, Any]] | None = None
+_cache_expires_at: datetime | None = None
 
 
 # 練習機マスターデータ（ショップには並ばない専用機体）
@@ -137,45 +144,71 @@ def get_starter_kit_by_faction(faction: str) -> dict[str, Any] | None:
     return STARTER_KITS.get(faction)
 
 
-def _load_mobile_suits_json() -> list[dict]:
-    """JSONファイルから機体マスターデータを読み込む."""
-    json_path = _DATA_DIR / "mobile_suits.json"
-    with open(json_path, encoding="utf-8") as f:
-        raw_data = json.load(f)
+# --- TTL キャッシュ補助関数 ---
+
+
+def _is_cache_expired() -> bool:
+    """キャッシュが期限切れかどうかを返す."""
+    if _CACHE_TTL_SEC == 0:
+        return True
+    if _cache_expires_at is None:
+        return True
+    return datetime.now(UTC) >= _cache_expires_at
+
+
+def _refresh_cache_expiry() -> None:
+    """キャッシュの有効期限を更新する."""
+    global _cache_expires_at
+    if _CACHE_TTL_SEC > 0:
+        _cache_expires_at = datetime.now(UTC) + timedelta(seconds=_CACHE_TTL_SEC)
+    else:
+        _cache_expires_at = None
+
+
+# --- DB ロード関数 ---
+
+
+def _load_mobile_suits_from_db() -> list[dict]:
+    """DBから機体マスターデータを読み込む."""
+    from app import db as _app_db
+
+    with Session(_app_db.engine) as db_session:
+        records = db_session.exec(select(MasterMobileSuit)).all()
 
     listings = []
-    for item in raw_data:
-        specs = item["specs"]
-        weapons = [Weapon(**w) for w in specs["weapons"]]
-        specs_copy = {**specs, "weapons": weapons}
+    for record in records:
+        specs_raw = record.specs
+        weapons = [Weapon(**w) for w in specs_raw.get("weapons", [])]
+        specs_copy = {**specs_raw, "weapons": weapons}
         listings.append(
             {
-                "id": item["id"],
-                "name": item["name"],
-                "price": item["price"],
-                "faction": item.get("faction", ""),
-                "description": item["description"],
+                "id": record.id,
+                "name": record.name,
+                "price": record.price,
+                "faction": record.faction,
+                "description": record.description,
                 "specs": specs_copy,
             }
         )
     return listings
 
 
-def _load_weapons_json() -> list[dict]:
-    """JSONファイルから武器マスターデータを読み込む."""
-    json_path = _DATA_DIR / "weapons.json"
-    with open(json_path, encoding="utf-8") as f:
-        raw_data = json.load(f)
+def _load_weapons_from_db() -> list[dict]:
+    """DBから武器マスターデータを読み込む."""
+    from app import db as _app_db
+
+    with Session(_app_db.engine) as db_session:
+        records = db_session.exec(select(MasterWeapon)).all()
 
     listings = []
-    for item in raw_data:
-        weapon = Weapon(**item["weapon"])
+    for record in records:
+        weapon = Weapon(**record.weapon)
         listings.append(
             {
-                "id": item["id"],
-                "name": item["name"],
-                "price": item["price"],
-                "description": item["description"],
+                "id": record.id,
+                "name": record.name,
+                "price": record.price,
+                "description": record.description,
                 "weapon": weapon,
             }
         )
@@ -183,91 +216,213 @@ def _load_weapons_json() -> list[dict]:
 
 
 def _get_shop_listings() -> list[dict]:
-    """キャッシュ済みのショップリストを取得（未ロード時は自動ロード）."""
+    """キャッシュ済みの機体ショップリストを取得（TTL 期限切れ時はDB再取得）."""
     global _shop_listings_cache
-    if _shop_listings_cache is None:
-        _shop_listings_cache = _load_mobile_suits_json()
+    if _shop_listings_cache is None or _is_cache_expired():
+        _shop_listings_cache = _load_mobile_suits_from_db()
+        _refresh_cache_expiry()
     return _shop_listings_cache
 
 
 def _get_weapon_shop_listings() -> list[dict]:
-    """キャッシュ済みの武器ショップリストを取得（未ロード時は自動ロード）."""
+    """キャッシュ済みの武器ショップリストを取得（TTL 期限切れ時はDB再取得）."""
     global _weapon_shop_listings_cache
-    if _weapon_shop_listings_cache is None:
-        _weapon_shop_listings_cache = _load_weapons_json()
+    if _weapon_shop_listings_cache is None or _is_cache_expired():
+        _weapon_shop_listings_cache = _load_weapons_from_db()
+        _refresh_cache_expiry()
     return _weapon_shop_listings_cache
 
 
-def get_master_mobile_suits() -> list[dict]:
+def get_master_mobile_suits(session: Session) -> list[dict]:
     """マスター機体データを生データ（辞書リスト）で返す.
 
-    キャッシュ未ロード時は自動ロードする。
-    Weaponオブジェクトではなく辞書のまま返すため、JSON出力に向く。
+    DBから全件取得する。weaponsフィールドはdictのまま（JSON出力に向く）。
+
+    Args:
+        session: DBセッション
 
     Returns:
         list[dict]: マスター機体データの生辞書リスト
     """
-    json_path = _DATA_DIR / "mobile_suits.json"
-    with open(json_path, encoding="utf-8") as f:
-        return json.load(f)
+    records = session.exec(select(MasterMobileSuit)).all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "price": r.price,
+            "faction": r.faction,
+            "description": r.description,
+            "specs": r.specs,
+        }
+        for r in records
+    ]
 
 
-def save_master_mobile_suits(data: list[dict]) -> None:
-    """マスター機体データをJSONファイルへ保存し、インメモリキャッシュをリロードする.
+def save_master_mobile_suits(session: Session, data: list[dict]) -> None:
+    """マスター機体データをDBへ一括保存し、インメモリキャッシュを無効化する.
+
+    既存レコードは更新し、提供されたリストに存在しないレコードは削除する。
 
     Args:
+        session: DBセッション
         data: 保存するマスター機体データの辞書リスト
     """
-    global _shop_listings_cache
-    json_path = _DATA_DIR / "mobile_suits.json"
-    with open(json_path, mode="w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    # キャッシュをリロード
-    _shop_listings_cache = _load_mobile_suits_json()
+    global _shop_listings_cache, _cache_expires_at
+
+    existing = {r.id: r for r in session.exec(select(MasterMobileSuit)).all()}
+    incoming_ids: set[str] = set()
+
+    for item in data:
+        item_id = item["id"]
+        incoming_ids.add(item_id)
+
+        specs = item.get("specs", {})
+        # Weapon オブジェクトを辞書に変換
+        if isinstance(specs, dict) and "weapons" in specs:
+            specs = {
+                **specs,
+                "weapons": [
+                    w.model_dump() if hasattr(w, "model_dump") else w
+                    for w in specs["weapons"]
+                ],
+            }
+
+        if item_id in existing:
+            record = existing[item_id]
+            record.name = item["name"]
+            record.price = item["price"]
+            record.faction = item.get("faction", "")
+            record.description = item["description"]
+            record.specs = specs
+            record.updated_at = datetime.now(UTC)
+            session.add(record)
+        else:
+            record = MasterMobileSuit(
+                id=item_id,
+                name=item["name"],
+                price=item["price"],
+                faction=item.get("faction", ""),
+                description=item["description"],
+                specs=specs,
+            )
+            session.add(record)
+
+    # 提供されたリストに存在しないレコードを削除
+    for existing_id, record in existing.items():
+        if existing_id not in incoming_ids:
+            session.delete(record)
+
+    session.commit()
+
+    # キャッシュを無効化
+    _shop_listings_cache = None
+    _cache_expires_at = None
 
 
-def get_master_weapons() -> list[dict]:
+def get_master_weapons(session: Session) -> list[dict]:
     """マスター武器データを生データ（辞書リスト）で返す.
 
-    キャッシュ未ロード時は自動ロードする。
-    Weaponオブジェクトではなく辞書のまま返すため、JSON出力に向く。
+    DBから全件取得する。weaponフィールドはdictのまま（JSON出力に向く）。
+
+    Args:
+        session: DBセッション
 
     Returns:
         list[dict]: マスター武器データの生辞書リスト
     """
-    json_path = _DATA_DIR / "weapons.json"
-    with open(json_path, encoding="utf-8") as f:
-        return json.load(f)
+    records = session.exec(select(MasterWeapon)).all()
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "price": r.price,
+            "description": r.description,
+            "weapon": r.weapon,
+        }
+        for r in records
+    ]
 
 
-def save_master_weapons(data: list[dict]) -> None:
-    """マスター武器データをJSONファイルへ保存し、インメモリキャッシュをリロードする.
+def save_master_weapons(session: Session, data: list[dict]) -> None:
+    """マスター武器データをDBへ一括保存し、インメモリキャッシュを無効化する.
+
+    既存レコードは更新し、提供されたリストに存在しないレコードは削除する。
 
     Args:
+        session: DBセッション
         data: 保存するマスター武器データの辞書リスト
     """
-    global _weapon_shop_listings_cache
-    json_path = _DATA_DIR / "weapons.json"
-    with open(json_path, mode="w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    # キャッシュをリロード
-    _weapon_shop_listings_cache = _load_weapons_json()
+    global _weapon_shop_listings_cache, _cache_expires_at
+
+    existing = {r.id: r for r in session.exec(select(MasterWeapon)).all()}
+    incoming_ids: set[str] = set()
+
+    for item in data:
+        item_id = item["id"]
+        incoming_ids.add(item_id)
+
+        weapon_data = item.get("weapon", {})
+        if hasattr(weapon_data, "model_dump"):
+            weapon_data = weapon_data.model_dump()
+
+        if item_id in existing:
+            record = existing[item_id]
+            record.name = item["name"]
+            record.price = item["price"]
+            record.description = item["description"]
+            record.weapon = weapon_data
+            record.updated_at = datetime.now(UTC)
+            session.add(record)
+        else:
+            record = MasterWeapon(
+                id=item_id,
+                name=item["name"],
+                price=item["price"],
+                description=item["description"],
+                weapon=weapon_data,
+            )
+            session.add(record)
+
+    # 提供されたリストに存在しないレコードを削除
+    for existing_id, record in existing.items():
+        if existing_id not in incoming_ids:
+            session.delete(record)
+
+    session.commit()
+
+    # キャッシュを無効化
+    _weapon_shop_listings_cache = None
+    _cache_expires_at = None
 
 
 def reload_master_data() -> dict[str, int]:
-    """マスターデータのキャッシュをリロードする.
+    """マスターデータのTTLキャッシュをクリアし、最新DB件数を返す.
 
     Returns:
-        dict[str, int]: リロードされたデータの件数
+        dict[str, int]: 各マスターデータの件数
     """
-    global _shop_listings_cache, _weapon_shop_listings_cache, _backgrounds_cache
-    _shop_listings_cache = _load_mobile_suits_json()
-    _weapon_shop_listings_cache = _load_weapons_json()
-    _backgrounds_cache = _load_backgrounds_json()
+    global \
+        _shop_listings_cache, \
+        _weapon_shop_listings_cache, \
+        _backgrounds_cache, \
+        _cache_expires_at
+    _shop_listings_cache = None
+    _weapon_shop_listings_cache = None
+    _backgrounds_cache = None
+    _cache_expires_at = None
+
+    from app import db as _app_db
+
+    with Session(_app_db.engine) as db_session:
+        ms_count = len(db_session.exec(select(MasterMobileSuit)).all())
+        w_count = len(db_session.exec(select(MasterWeapon)).all())
+
+    bg_count = len(_get_backgrounds())
+
     return {
-        "mobile_suits": len(_shop_listings_cache),
-        "weapons": len(_weapon_shop_listings_cache),
-        "backgrounds": len(_backgrounds_cache),
+        "mobile_suits": ms_count,
+        "weapons": w_count,
+        "backgrounds": bg_count,
     }
 
 

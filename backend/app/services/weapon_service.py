@@ -234,17 +234,18 @@ class WeaponService:
     # --- マスター武器データ CRUD ---
 
     @staticmethod
-    def get_master_weapons() -> list[dict]:
+    def get_master_weapons(session: Session) -> list[dict]:
         """マスター武器データを全件返す（生JSON辞書形式）."""
         from app.core.gamedata import get_master_weapons
 
-        return get_master_weapons()
+        return get_master_weapons(session)
 
     @staticmethod
-    def create_master_weapon(data: MasterWeaponCreate) -> dict:
-        """マスター武器を新規追加してJSONファイルを永続化する.
+    def create_master_weapon(session: Session, data: MasterWeaponCreate) -> dict:
+        """マスター武器を新規追加してDBを永続化する.
 
         Args:
+            session: DBセッション
             data: 新規武器データ
 
         Returns:
@@ -254,7 +255,8 @@ class WeaponService:
             LookupError: id が重複している場合
             ValueError: id の形式が不正な場合
         """
-        from app.core.gamedata import get_master_weapons, save_master_weapons
+        from app.core import gamedata as gd
+        from app.models.models import MasterWeapon
 
         # id バリデーション: スネークケース英数字のみ
         if not re.fullmatch(r"[a-z0-9_]+", data.id):
@@ -262,61 +264,86 @@ class WeaponService:
                 f"Invalid id format: '{data.id}'. Only lowercase alphanumeric and underscore are allowed."
             )
 
-        current = get_master_weapons()
-
         # 重複チェック
-        if any(item["id"] == data.id for item in current):
+        existing = session.get(MasterWeapon, data.id)
+        if existing is not None:
             raise LookupError(f"Weapon id '{data.id}' already exists.")
 
-        new_entry = {
+        weapon_dict = data.weapon.model_dump()
+
+        record = MasterWeapon(
+            id=data.id,
+            name=data.name,
+            price=data.price,
+            description=data.description,
+            weapon=weapon_dict,
+        )
+        session.add(record)
+        session.commit()
+
+        # キャッシュを無効化
+        gd._weapon_shop_listings_cache = None
+        gd._cache_expires_at = None
+
+        return {
             "id": data.id,
             "name": data.name,
             "price": data.price,
             "description": data.description,
-            "weapon": data.weapon.model_dump(),
+            "weapon": weapon_dict,
         }
 
-        current.append(new_entry)
-        save_master_weapons(current)
-        return new_entry
-
     @staticmethod
-    def update_master_weapon(weapon_id: str, data: MasterWeaponUpdate) -> dict | None:
-        """既存マスター武器を更新してJSONファイルを永続化する.
+    def update_master_weapon(
+        session: Session, weapon_id: str, data: MasterWeaponUpdate
+    ) -> dict | None:
+        """既存マスター武器を更新してDBを永続化する.
 
         Args:
+            session: DBセッション
             weapon_id: 更新対象の武器 ID
             data: 更新データ
 
         Returns:
             dict | None: 更新された武器データ。見つからない場合は None
         """
-        from app.core.gamedata import get_master_weapons, save_master_weapons
+        from datetime import UTC, datetime
 
-        current = get_master_weapons()
-        target_index = next(
-            (i for i, item in enumerate(current) if item["id"] == weapon_id), None
-        )
-        if target_index is None:
+        from app.core import gamedata as gd
+        from app.models.models import MasterWeapon
+
+        record = session.get(MasterWeapon, weapon_id)
+        if record is None:
             return None
 
-        target = current[target_index]
         update_dict = data.model_dump(exclude_unset=True)
 
         if "weapon" in update_dict and update_dict["weapon"] is not None:
-            # Weapon オブジェクトを辞書に変換
-            target["weapon"] = data.weapon.model_dump()  # type: ignore[union-attr]
+            record.weapon = data.weapon.model_dump()  # type: ignore[union-attr]
             update_dict.pop("weapon")
 
-        target.update(update_dict)
-        current[target_index] = target
+        for key, value in update_dict.items():
+            setattr(record, key, value)
 
-        save_master_weapons(current)
-        return target
+        record.updated_at = datetime.now(UTC)
+        session.add(record)
+        session.commit()
+
+        # キャッシュを無効化
+        gd._weapon_shop_listings_cache = None
+        gd._cache_expires_at = None
+
+        return {
+            "id": record.id,
+            "name": record.name,
+            "price": record.price,
+            "description": record.description,
+            "weapon": record.weapon,
+        }
 
     @staticmethod
     def delete_master_weapon(weapon_id: str, session: Session) -> bool:
-        """マスター武器を削除してJSONファイルを永続化する.
+        """マスター武器を削除してDBを永続化する.
 
         Args:
             weapon_id: 削除対象の武器 ID
@@ -328,13 +355,11 @@ class WeaponService:
         Raises:
             LookupError: player_weapons テーブルで参照されている場合
         """
-        from app.core.gamedata import get_master_weapons, save_master_weapons
+        from app.core import gamedata as gd
+        from app.models.models import MasterWeapon
 
-        current = get_master_weapons()
-        target_index = next(
-            (i for i, item in enumerate(current) if item["id"] == weapon_id), None
-        )
-        if target_index is None:
+        record = session.get(MasterWeapon, weapon_id)
+        if record is None:
             return False
 
         # PlayerWeapon テーブルで master_weapon_id として参照されていないか確認
@@ -347,6 +372,11 @@ class WeaponService:
                 "Remove all player weapon instances before deleting the master entry."
             )
 
-        current.pop(target_index)
-        save_master_weapons(current)
+        session.delete(record)
+        session.commit()
+
+        # キャッシュを無効化
+        gd._weapon_shop_listings_cache = None
+        gd._cache_expires_at = None
+
         return True

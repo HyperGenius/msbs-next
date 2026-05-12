@@ -67,16 +67,21 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
 
 
 @router.get("", response_model=list[MasterMobileSuitEntry])
-def list_master_mobile_suits() -> list[MasterMobileSuitEntry]:
+def list_master_mobile_suits(
+    session: Session = Depends(get_session),
+) -> list[MasterMobileSuitEntry]:
     """全マスター機体一覧を返す."""
-    raw_list = MobileSuitService.get_master_mobile_suits()
+    raw_list = MobileSuitService.get_master_mobile_suits(session)
     return [_raw_to_entry(r) for r in raw_list]
 
 
 @router.post(
     "", response_model=MasterMobileSuitEntry, status_code=status.HTTP_201_CREATED
 )
-def create_master_mobile_suit(data: MasterMobileSuitCreate) -> MasterMobileSuitEntry:
+def create_master_mobile_suit(
+    data: MasterMobileSuitCreate,
+    session: Session = Depends(get_session),
+) -> MasterMobileSuitEntry:
     """新規マスター機体を追加する.
 
     - 機体 id はスネークケース英数字のみ許可（例: rx_78_2）
@@ -84,7 +89,7 @@ def create_master_mobile_suit(data: MasterMobileSuitCreate) -> MasterMobileSuitE
     - id が重複している場合は 409 を返す
     """
     try:
-        result = MobileSuitService.create_master_mobile_suit(data)
+        result = MobileSuitService.create_master_mobile_suit(session, data)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ValueError as e:
@@ -96,14 +101,16 @@ def create_master_mobile_suit(data: MasterMobileSuitCreate) -> MasterMobileSuitE
 
 @router.put("/{ms_id}", response_model=MasterMobileSuitEntry)
 def update_master_mobile_suit(
-    ms_id: str, data: MasterMobileSuitUpdate
+    ms_id: str,
+    data: MasterMobileSuitUpdate,
+    session: Session = Depends(get_session),
 ) -> MasterMobileSuitEntry:
     """既存マスター機体を更新する.
 
     - weapons を更新する場合は最低1件必須
     """
     try:
-        result = MobileSuitService.update_master_mobile_suit(ms_id, data)
+        result = MobileSuitService.update_master_mobile_suit(session, ms_id, data)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
@@ -157,23 +164,28 @@ def _raw_weapon_to_entry(raw: dict) -> MasterWeaponEntry:
 
 
 @weapon_router.get("", response_model=list[MasterWeaponEntry])
-def list_master_weapons() -> list[MasterWeaponEntry]:
+def list_master_weapons(
+    session: Session = Depends(get_session),
+) -> list[MasterWeaponEntry]:
     """全マスター武器一覧を返す."""
-    raw_list = WeaponService.get_master_weapons()
+    raw_list = WeaponService.get_master_weapons(session)
     return [_raw_weapon_to_entry(r) for r in raw_list]
 
 
 @weapon_router.post(
     "", response_model=MasterWeaponEntry, status_code=status.HTTP_201_CREATED
 )
-def create_master_weapon(data: MasterWeaponCreate) -> MasterWeaponEntry:
+def create_master_weapon(
+    data: MasterWeaponCreate,
+    session: Session = Depends(get_session),
+) -> MasterWeaponEntry:
     """新規マスター武器を追加する.
 
     - 武器 id はスネークケース英数字のみ許可（例: beam_rifle）
     - id が重複している場合は 409 を返す
     """
     try:
-        result = WeaponService.create_master_weapon(data)
+        result = WeaponService.create_master_weapon(session, data)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ValueError as e:
@@ -184,9 +196,13 @@ def create_master_weapon(data: MasterWeaponCreate) -> MasterWeaponEntry:
 
 
 @weapon_router.put("/{weapon_id}", response_model=MasterWeaponEntry)
-def update_master_weapon(weapon_id: str, data: MasterWeaponUpdate) -> MasterWeaponEntry:
+def update_master_weapon(
+    weapon_id: str,
+    data: MasterWeaponUpdate,
+    session: Session = Depends(get_session),
+) -> MasterWeaponEntry:
     """既存マスター武器を更新する."""
-    result = WeaponService.update_master_weapon(weapon_id, data)
+    result = WeaponService.update_master_weapon(session, weapon_id, data)
 
     if result is None:
         raise HTTPException(
