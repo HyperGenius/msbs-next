@@ -234,7 +234,7 @@ def _save_battle_results(
     # バトルログをルーム単位で1件保存（全参加者で共有）
     battle_log_record = BattleLogRecord(
         room_id=room.id,
-        logs=[log.model_dump() for log in strip_debug_fields(simulator.logs)],
+        logs=strip_debug_fields(simulator.logs),
     )
     session.add(battle_log_record)
     session.flush()

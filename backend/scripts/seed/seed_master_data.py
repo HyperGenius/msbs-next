@@ -23,18 +23,22 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlmodel import Session, create_engine
 
 # プロジェクトルートを Python パスに追加
 _ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_ROOT))
 
+# .env を読み込む（backend/.env）
+load_dotenv(_ROOT / ".env")
+
 
 def _get_engine():
     """DATABASE_URL 環境変数からエンジンを生成する."""
-    url = os.environ.get("DATABASE_URL") or os.environ.get(
-        "NEON_DATABASE_URL", "sqlite:///./dev.db"
-    )
+    url = os.environ.get("DATABASE_URL") or os.environ.get("NEON_DATABASE_URL")
+    if not url:
+        raise ValueError("DATABASE_URL または NEON_DATABASE_URL が設定されていません")
     return create_engine(url)
 
 
