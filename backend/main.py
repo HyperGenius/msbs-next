@@ -13,7 +13,9 @@ from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleLog,
+    BattleLogRecord,
     BattleResult,
+    BattleResultSummary,
     Mission,
     MobileSuit,
     Vector3,
@@ -266,12 +268,21 @@ async def simulate_battle(
             total_credits=pilot.credits,
         )
 
-    # 8. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
+    # 8. バトルログをDBに保存（battle_logsテーブル）
+    battle_log_record = BattleLogRecord(
+        mission_id=mission_id,
+        logs=[log.model_dump() for log in strip_debug_fields(sim.logs)],
+        created_at=datetime.now(UTC),
+    )
+    session.add(battle_log_record)
+    session.flush()
+
+    # 9. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
     battle_result = BattleResult(
         user_id=user_id,
         mission_id=mission_id,
+        battle_log_id=battle_log_record.id,
         win_loss=win_loss,
-        logs=strip_debug_fields(sim.logs),
         environment=mission.environment,
         player_info=player.model_dump(),
         enemies_info=[e.model_dump() for e in enemies],
@@ -307,13 +318,13 @@ async def get_missions(
     return list(missions)
 
 
-@app.get("/api/battles", response_model=list[BattleResult])
+@app.get("/api/battles", response_model=list[BattleResultSummary])
 async def get_battle_history(
     session: Session = Depends(get_session),
     user_id: str | None = Depends(get_current_user_optional),
     limit: int = 50,
 ) -> list[BattleResult]:
-    """バトル履歴を取得する（最新順）."""
+    """バトル履歴を取得する（最新順、logsを除く軽量レスポンス）."""
     statement = (
         select(BattleResult).order_by(desc(BattleResult.created_at)).limit(limit)
     )
@@ -326,7 +337,7 @@ async def get_battle_history(
     return list(battles)
 
 
-@app.get("/api/battles/unread", response_model=list[BattleResult])
+@app.get("/api/battles/unread", response_model=list[BattleResultSummary])
 async def get_unread_battles(
     session: Session = Depends(get_session),
     user_id: str = Depends(get_current_user),
@@ -370,7 +381,7 @@ async def mark_battle_as_read(
     return {"message": "Battle marked as read"}
 
 
-@app.get("/api/battles/{battle_id}", response_model=BattleResult)
+@app.get("/api/battles/{battle_id}", response_model=BattleResultSummary)
 async def get_battle_detail(
     battle_id: str,
     session: Session = Depends(get_session),
@@ -388,3 +399,30 @@ async def get_battle_detail(
         raise HTTPException(status_code=404, detail="Battle not found")
 
     return battle
+
+
+@app.get("/api/battles/{battle_id}/logs", response_model=list[BattleLog])
+async def get_battle_logs(
+    battle_id: str,
+    session: Session = Depends(get_session),
+) -> list[BattleLog]:
+    """バトルリプレイ用ログを取得する（遅延ロード）."""
+    import uuid
+
+    try:
+        battle_uuid = uuid.UUID(battle_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid battle ID format") from e
+
+    battle = session.get(BattleResult, battle_uuid)
+    if not battle:
+        raise HTTPException(status_code=404, detail="Battle not found")
+
+    if battle.battle_log_id is None:
+        return []
+
+    log_record = session.get(BattleLogRecord, battle.battle_log_id)
+    if not log_record:
+        return []
+
+    return [BattleLog(**entry) for entry in log_record.logs]

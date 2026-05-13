@@ -148,6 +148,8 @@ def test_save_battle_results_sets_detail_fields(in_memory_session):
     assert result.level_up == (result.level_after > result.level_before)
     assert result.is_read is False
     assert result.win_loss == "WIN"
+    # battle_log_id が設定されていること
+    assert result.battle_log_id is not None
 
 
 def test_save_battle_results_lose(in_memory_session):
