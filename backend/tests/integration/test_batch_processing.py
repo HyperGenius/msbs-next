@@ -160,12 +160,12 @@ def verify_results(session: Session, room_id) -> bool:
         return False
     print(f"  ✓ Found {len(results)} battle result(s)")
 
-    # Check that results have logs
+    # Check that results reference a battle log
     for result in results:
-        if not result.logs:
-            print(f"  ✗ Battle result {result.id} has no logs")
+        if not result.battle_log_id:
+            print(f"  ✗ Battle result {result.id} has no battle_log_id")
             return False
-    print("  ✓ All results have logs")
+    print("  ✓ All results have battle_log_id")
 
     print("\nVerification complete!")
     return True

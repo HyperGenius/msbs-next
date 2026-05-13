@@ -83,9 +83,6 @@ export default function BattleList({
               <p className="text-xs text-gray-400">
                 {new Date(battle.created_at).toLocaleString("ja-JP")}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Time: {battle.logs.length > 0 ? battle.logs[battle.logs.length - 1].timestamp.toFixed(1) : "0.0"}s
-              </p>
             </button>
           ))}
         </div>

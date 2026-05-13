@@ -8,6 +8,7 @@ import ModalHeader from "./ModalHeader";
 import TurnController from "./TurnController";
 import BattleLogViewer from "./BattleLogViewer";
 import { useBattleLogic } from "@/hooks/useBattleLogic";
+import { useBattleLogs } from "@/services/api";
 import { IS_PRODUCTION } from "@/constants";
 
 interface BattleDetailModalProps {
@@ -28,14 +29,18 @@ export default function BattleDetailModal({
   // 開発環境専用: 本番ログの抽象化をプレビューするトグル
   const [isProductionPreview, setIsProductionPreview] = useState(false);
 
+  // バトルログを遅延ロード（リプレイ用）
+  const { logs: fetchedLogs, isLoading: logsLoading } = useBattleLogs(battle.id);
+  const logs = fetchedLogs ?? [];
+
   const { ownedMobileSuitIds, playerId, filterRelevantLogs } = useBattleLogic(
     battle,
     mobileSuits,
     isFiltered
   );
 
-  const maxTimestamp = battle.logs.length
-    ? battle.logs[battle.logs.length - 1].timestamp
+  const maxTimestamp = logs.length
+    ? logs[logs.length - 1].timestamp
     : 0;
 
   const hasReplayData = !!(
@@ -62,7 +67,7 @@ export default function BattleDetailModal({
             {hasReplayData ? (
               <>
                 <BattleViewer
-                  logs={battle.logs}
+                  logs={logs}
                   player={battle.player_info as MobileSuit}
                   enemies={battle.enemies_info as MobileSuit[]}
                   currentTimestamp={currentTimestamp}
@@ -84,18 +89,24 @@ export default function BattleDetailModal({
           </div>
 
           {/* 下部スクロール: ログ一覧 */}
-          <BattleLogViewer
-            logs={battle.logs}
-            currentTimestamp={currentTimestamp}
-            isFiltered={isFiltered}
-            isProductionPreview={isProductionPreview}
-            hasReplayData={hasReplayData}
-            playerId={playerId}
-            ownedMobileSuitIds={ownedMobileSuitIds}
-            filterRelevantLogs={filterRelevantLogs}
-            onFilterToggle={() => setIsFiltered((v) => !v)}
-            onProductionPreviewToggle={() => setIsProductionPreview((v) => !v)}
-          />
+          {logsLoading ? (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <p className="text-gray-400 text-sm">ログを読み込み中...</p>
+            </div>
+          ) : (
+            <BattleLogViewer
+              logs={logs}
+              currentTimestamp={currentTimestamp}
+              isFiltered={isFiltered}
+              isProductionPreview={isProductionPreview}
+              hasReplayData={hasReplayData}
+              playerId={playerId}
+              ownedMobileSuitIds={ownedMobileSuitIds}
+              filterRelevantLogs={filterRelevantLogs}
+              onFilterToggle={() => setIsFiltered((v) => !v)}
+              onProductionPreviewToggle={() => setIsProductionPreview((v) => !v)}
+            />
+          )}
         </div>
       </div>
     </div>

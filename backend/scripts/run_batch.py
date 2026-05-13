@@ -23,6 +23,7 @@ from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleEntry,
+    BattleLogRecord,
     BattleResult,
     BattleRoom,
     MobileSuit,
@@ -230,6 +231,14 @@ def _save_battle_results(
     """
     pilot_service = PilotService(session)
 
+    # バトルログをルーム単位で1件保存（全参加者で共有）
+    battle_log_record = BattleLogRecord(
+        room_id=room.id,
+        logs=[log.model_dump() for log in strip_debug_fields(simulator.logs)],
+    )
+    session.add(battle_log_record)
+    session.flush()
+
     # 生存しているteam_idを取得
     alive_team_ids = {u.team_id for u in simulator.units if u.current_hp > 0}
 
@@ -274,8 +283,8 @@ def _save_battle_results(
         battle_result = BattleResult(
             user_id=entry.user_id,
             room_id=room.id,
+            battle_log_id=battle_log_record.id,
             win_loss=individual_win_loss,
-            logs=strip_debug_fields(simulator.logs),
             player_info=player_unit.model_dump(),
             enemies_info=[e.model_dump() for e in enemy_units],
             ms_snapshot=entry.mobile_suit_snapshot,

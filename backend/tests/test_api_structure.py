@@ -35,7 +35,7 @@ def test_models():
     assert hasattr(BattleResult, "user_id")
     assert hasattr(BattleResult, "mission_id")
     assert hasattr(BattleResult, "win_loss")
-    assert hasattr(BattleResult, "logs")
+    assert hasattr(BattleResult, "battle_log_id")
     assert hasattr(BattleResult, "created_at")
     # Check new detail fields
     assert hasattr(BattleResult, "kills")
@@ -64,6 +64,7 @@ def test_api_endpoints():
         "/api/battles/unread",
         "/api/battles/{battle_id}",
         "/api/battles/{battle_id}/read",
+        "/api/battles/{battle_id}/logs",
         "/api/battle/simulate",
     ]
 

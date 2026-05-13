@@ -74,7 +74,6 @@ def test_battle_result_with_snapshot(session: Session):
     result = BattleResult(
         user_id="test_user",
         win_loss="WIN",
-        logs=[],
         environment="GROUND",
         player_info=player.model_dump(),
         enemies_info=[enemy.model_dump()],
@@ -97,7 +96,6 @@ def test_battle_result_without_snapshot(session: Session):
     result = BattleResult(
         user_id="test_user",
         win_loss="LOSE",
-        logs=[],
     )
 
     session.add(result)
@@ -111,5 +109,5 @@ def test_battle_result_without_snapshot(session: Session):
 
 def test_battle_result_default_environment():
     """environmentのデフォルト値がSPACEであることを確認."""
-    result = BattleResult(win_loss="DRAW", logs=[])
+    result = BattleResult(win_loss="DRAW")
     assert result.environment == "SPACE"

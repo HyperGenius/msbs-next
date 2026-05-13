@@ -2,7 +2,7 @@
 import useSWR from "swr";
 import { useAuth } from "@clerk/nextjs";
 import { useCallback } from "react";
-import { Mission, BattleResult, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, BulkUpgradeRequest, BulkUpgradeResponse, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile, Friend, Team, TeamEntryRequest, TeamEntryResponse, PlayerWeapon } from "@/types/battle";
+import { Mission, BattleResult, BattleLog, BattleLogRecord, MobileSuit, MobileSuitUpdate, EntryStatusResponse, BattleEntry, Pilot, ShopListing, PurchaseResponse, UpgradeRequest, UpgradeResponse, UpgradePreview, BulkUpgradeRequest, BulkUpgradeResponse, SkillDefinition, SkillUnlockRequest, SkillUnlockResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest, LeaderboardEntry, PlayerProfile, Friend, Team, TeamEntryRequest, TeamEntryResponse, PlayerWeapon } from "@/types/battle";
 import { EnrichedMobileSuit, enrichMobileSuit } from "@/utils/rankUtils";
 
 /** PlayerProfile の mobile_suit フィールドが EnrichedMobileSuit に変換された型 */
@@ -227,6 +227,22 @@ export function useBattleDetail(battleId: string | null) {
   return {
     battle: data,
     isLoading: !isLoaded || isLoading,
+    isError: error,
+  };
+}
+
+/**
+ * バトルリプレイ用ログを取得するSWRフック（遅延ロード）
+ */
+export function useBattleLogs(battleResultId: string | null) {
+  const { data, error, isLoading } = useSWR<BattleLog[]>(
+    battleResultId ? `${API_BASE_URL}/api/battles/${battleResultId}/logs` : null,
+    fetcher
+  );
+
+  return {
+    logs: data,
+    isLoading,
     isError: error,
   };
 }

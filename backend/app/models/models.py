@@ -545,6 +545,32 @@ class BattleLog(SQLModel):
     )
 
 
+class BattleLogRecord(SQLModel, table=True):
+    """バトルログ専用テーブル (バトルセッション単位で1レコード)."""
+
+    __tablename__ = "battle_logs"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    room_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="battle_rooms.id",
+        index=True,
+        description="バッチバトル用ルームID",
+    )
+    mission_id: int | None = Field(
+        default=None,
+        foreign_key="missions.id",
+        index=True,
+        description="ソロミッション用ミッションID",
+    )
+    logs: list[dict] = Field(
+        default_factory=list, sa_column=Column(JSON), description="バトルログ全件"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+
+
 class Mission(SQLModel, table=True):
     """ミッション定義 (DBテーブル)."""
 
@@ -580,10 +606,13 @@ class BattleResult(SQLModel, table=True):
     room_id: uuid.UUID | None = Field(
         default=None, foreign_key="battle_rooms.id", index=True, description="ルームID"
     )
-    win_loss: str = Field(description="勝敗 (WIN/LOSE/DRAW)")
-    logs: list[BattleLog] = Field(
-        default_factory=list, sa_column=Column(JSON), description="バトルログ"
+    battle_log_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="battle_logs.id",
+        index=True,
+        description="バトルログ参照ID (FK → battle_logs.id)",
     )
+    win_loss: str = Field(description="勝敗 (WIN/LOSE/DRAW)")
     environment: str = Field(
         default="SPACE",
         description="戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)",
@@ -613,6 +642,29 @@ class BattleResult(SQLModel, table=True):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
+
+
+class BattleResultSummary(SQLModel):
+    """バトル結果サマリー (logsを含まない軽量レスポンス用)."""
+
+    id: uuid.UUID
+    user_id: str | None = None
+    mission_id: int | None = None
+    room_id: uuid.UUID | None = None
+    battle_log_id: uuid.UUID | None = None
+    win_loss: str
+    environment: str = "SPACE"
+    player_info: dict | None = None
+    enemies_info: list[dict] | None = None
+    ms_snapshot: dict | None = None
+    kills: int = 0
+    exp_gained: int = 0
+    credits_gained: int = 0
+    level_before: int = 0
+    level_after: int = 0
+    level_up: bool = False
+    is_read: bool = False
+    created_at: datetime
 
 
 class BattleRoom(SQLModel, table=True):

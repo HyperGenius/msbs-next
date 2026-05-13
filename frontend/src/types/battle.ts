@@ -176,14 +176,15 @@ export interface Mission {
 }
 
 /**
- * バトル結果（履歴）
+ * バトル結果（履歴）- logsを含まない軽量版
  */
 export interface BattleResult {
     id: string;
     user_id: string | null;
     mission_id: number | null;
+    room_id?: string | null;
+    battle_log_id?: string | null;
     win_loss: "WIN" | "LOSE" | "DRAW";
-    logs: BattleLog[];
     environment?: string;
     player_info?: MobileSuit;
     enemies_info?: MobileSuit[];
@@ -195,6 +196,17 @@ export interface BattleResult {
     level_after?: number;
     level_up?: boolean;
     is_read?: boolean;
+    created_at: string;
+}
+
+/**
+ * バトルログレコード（battle_logsテーブル）
+ */
+export interface BattleLogRecord {
+    id: string;
+    room_id: string | null;
+    mission_id: number | null;
+    logs: BattleLog[];
     created_at: string;
 }
 
