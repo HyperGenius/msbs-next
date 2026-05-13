@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { useAuth } from "@clerk/nextjs";
 import { PlayerWeapon } from "@/types/battle";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 /**
  * SWR キーを認証状態に応じて生成するヘルパー
