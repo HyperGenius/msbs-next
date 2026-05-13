@@ -12,7 +12,7 @@ Create Date: 2026-05-13
 """
 
 import sqlalchemy as sa
-import sqlmodel
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -73,7 +73,9 @@ def upgrade() -> None:
         import uuid
 
         results = bind.execute(
-            sa.text("SELECT id, room_id, mission_id, logs, created_at FROM battle_results WHERE logs IS NOT NULL")
+            sa.text(
+                "SELECT id, room_id, mission_id, logs, created_at FROM battle_results WHERE logs IS NOT NULL"
+            )
         ).fetchall()
 
         for row in results:
@@ -102,17 +104,22 @@ def upgrade() -> None:
                     "id": new_id,
                     "room_id": str(room_id) if room_id else None,
                     "mission_id": mission_id,
-                    "logs": json.dumps(logs_data) if isinstance(logs_data, list) else logs_data,
+                    "logs": json.dumps(logs_data)
+                    if isinstance(logs_data, list)
+                    else logs_data,
                     "created_at": created_at,
                 },
             )
             bind.execute(
-                sa.text("UPDATE battle_results SET battle_log_id = :log_id WHERE id = :id"),
+                sa.text(
+                    "UPDATE battle_results SET battle_log_id = :log_id WHERE id = :id"
+                ),
                 {"log_id": new_id, "id": str(row_id)},
             )
     else:
         # PostgreSQL: gen_random_uuid() と CTE を使って一括移行
-        bind.execute(sa.text("""
+        bind.execute(
+            sa.text("""
             WITH inserted AS (
                 INSERT INTO battle_logs (id, room_id, mission_id, logs, created_at)
                 SELECT
@@ -139,7 +146,8 @@ def upgrade() -> None:
                 WHERE br2.battle_log_id IS NULL
             ) ins
             WHERE br.id = ins.result_id
-        """))
+        """)
+        )
 
     # 4. battle_results.logs カラムを削除
     op.drop_column("battle_results", "logs")
@@ -175,25 +183,27 @@ def downgrade() -> None:
                     "UPDATE battle_results SET logs = :logs WHERE battle_log_id = :log_id"
                 ),
                 {
-                    "logs": json.dumps(logs_data) if isinstance(logs_data, list) else logs_data,
+                    "logs": json.dumps(logs_data)
+                    if isinstance(logs_data, list)
+                    else logs_data,
                     "log_id": str(log_id),
                 },
             )
     else:
-        bind.execute(sa.text("""
+        bind.execute(
+            sa.text("""
             UPDATE battle_results br
             SET logs = bl.logs
             FROM battle_logs bl
             WHERE br.battle_log_id = bl.id
-        """))
+        """)
+        )
 
     # 3. battle_results から battle_log_id カラムを削除
     op.drop_constraint(
         "fk_battle_results_battle_log_id", "battle_results", type_="foreignkey"
     )
-    op.drop_index(
-        op.f("ix_battle_results_battle_log_id"), table_name="battle_results"
-    )
+    op.drop_index(op.f("ix_battle_results_battle_log_id"), table_name="battle_results")
     op.drop_column("battle_results", "battle_log_id")
 
     # 4. battle_logs テーブルを削除

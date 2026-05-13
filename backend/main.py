@@ -272,7 +272,7 @@ async def simulate_battle(
     # 8. バトルログをDBに保存（battle_logsテーブル）
     battle_log_record = BattleLogRecord(
         mission_id=mission_id,
-        logs=[log.model_dump() for log in strip_debug_fields(sim.logs)],
+        logs=strip_debug_fields(sim.logs),
         created_at=datetime.now(UTC),
     )
     session.add(battle_log_record)
