@@ -1,4 +1,5 @@
 import os
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -360,10 +361,8 @@ async def mark_battle_as_read(
     user_id: str = Depends(get_current_user),
 ) -> dict[str, str]:
     """バトル結果を既読にする."""
-    import uuid as _uuid
-
     try:
-        battle_uuid = _uuid.UUID(battle_id)
+        battle_uuid = uuid.UUID(battle_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail="Invalid battle ID format") from e
 
@@ -387,8 +386,6 @@ async def get_battle_detail(
     session: Session = Depends(get_session),
 ) -> BattleResult:
     """特定のバトル結果の詳細を取得する."""
-    import uuid
-
     try:
         battle_uuid = uuid.UUID(battle_id)
     except ValueError as e:
@@ -407,8 +404,6 @@ async def get_battle_logs(
     session: Session = Depends(get_session),
 ) -> list[BattleLog]:
     """バトルリプレイ用ログを取得する（遅延ロード）."""
-    import uuid
-
     try:
         battle_uuid = uuid.UUID(battle_id)
     except ValueError as e:

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { BattleResult, BattleLog, MobileSuit } from "@/types/battle";
+import { BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 import ModalHeader from "./ModalHeader";
 import TurnController from "./TurnController";
@@ -31,7 +31,7 @@ export default function BattleDetailModal({
 
   // バトルログを遅延ロード（リプレイ用）
   const { logs: fetchedLogs, isLoading: logsLoading } = useBattleLogs(battle.id);
-  const logs: BattleLog[] = fetchedLogs ?? [];
+  const logs = fetchedLogs ?? [];
 
   const { ownedMobileSuitIds, playerId, filterRelevantLogs } = useBattleLogic(
     battle,
