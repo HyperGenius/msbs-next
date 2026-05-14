@@ -36,7 +36,8 @@ export default function BattleDetailModal({
   const { ownedMobileSuitIds, playerId, filterRelevantLogs } = useBattleLogic(
     battle,
     mobileSuits,
-    isFiltered
+    isFiltered,
+    IS_PRODUCTION || isProductionPreview
   );
 
   const maxTimestamp = logs.length

@@ -2,6 +2,27 @@
 import { BattleLog } from "@/types/battle";
 
 /**
+ * 本番環境で非表示にすべきデバッグログのパターン。
+ * 「ファジィ推論」「優先度スコア」「UNKNOWN機」「[FUZZY]」を含むメッセージを除外する。
+ */
+const PRODUCTION_DEBUG_PATTERNS: RegExp[] = [
+  /ファジィ推論/,
+  /優先度スコア/,
+  /UNKNOWN機/,
+  /\[FUZZY\]/,
+];
+
+/**
+ * 本番環境で非表示にすべきデバッグログかどうかを判定する。
+ *
+ * @param message チェック対象のログメッセージ
+ * @returns デバッグログであれば `true`
+ */
+export function isProductionDebugLog(message: string): boolean {
+  return PRODUCTION_DEBUG_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+/**
  * UI 表示に特化したログ表現
  */
 export interface DisplayLog {
@@ -207,8 +228,9 @@ export function formatBattleLog(
 
 /**
  * `BattleLog[]` を `DisplayLog[]` へ変換する。
- * 本番環境（`isProduction === true`）では、`playerId` に関連するログのみを残す
- * （actor または target が playerId と一致するもの）。
+ * 本番環境（`isProduction === true`）では以下の順でフィルタリングを適用する:
+ * 1. デバッグパターンを含むログを除外（ファジィ推論・優先度スコア・UNKNOWN機・[FUZZY]）
+ * 2. `playerId` に関連するログのみを残す（actor または target が playerId と一致するもの）
  *
  * @param logs        変換対象のバトルログ配列
  * @param isProduction 本番向け抽象化フラグ
@@ -219,14 +241,21 @@ export function formatBattleLogs(
   isProduction: boolean,
   playerId: string
 ): DisplayLog[] {
-  const filtered =
-    isProduction && playerId
-      ? logs.filter(
-          (log) =>
-            log.actor_id === playerId ||
-            (log.target_id != null && log.target_id === playerId)
-        )
-      : logs;
+  let filtered = logs;
+
+  if (isProduction) {
+    // 1. デバッグログを除外
+    filtered = filtered.filter((log) => !isProductionDebugLog(log.message));
+
+    // 2. 自機フォーカス: actor または target が自機のログのみ
+    if (playerId) {
+      filtered = filtered.filter(
+        (log) =>
+          log.actor_id === playerId ||
+          (log.target_id != null && log.target_id === playerId)
+      );
+    }
+  }
 
   return filtered.map((log) => formatBattleLog(log, isProduction, playerId));
 }

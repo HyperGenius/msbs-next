@@ -1,6 +1,7 @@
 /* frontend/src/hooks/useBattleLogic.ts */
 import { useCallback, useMemo } from "react";
 import { BattleLog, BattleResult, MobileSuit } from "@/types/battle";
+import { isProductionDebugLog } from "@/utils/logFormatter";
 
 /**
  * バトル詳細表示に必要な計算ロジックをカプセル化するカスタムフック。
@@ -11,7 +12,8 @@ import { BattleLog, BattleResult, MobileSuit } from "@/types/battle";
 export function useBattleLogic(
   selectedBattle: BattleResult | null,
   mobileSuits: MobileSuit[] | undefined,
-  isFiltered: boolean
+  isFiltered: boolean,
+  isProduction: boolean = false
 ) {
   const ownedMobileSuitIds = useMemo(
     () => new Set(mobileSuits?.map((ms) => ms.id) ?? []),
@@ -38,17 +40,31 @@ export function useBattleLogic(
 
   const playerId = selectedBattle?.player_info?.id ?? null;
 
-  /** ログフィルタリング: 自機/僚機のアクション or 自機がターゲット */
+  /** ログフィルタリング:
+   * - 本番環境（isProduction）ではデバッグログを除外し、自機フォーカスフィルタを適用
+   * - 開発環境の手動フィルタ（isFiltered）: 自機/僚機のアクション or 自機がターゲット
+   */
   const filterRelevantLogs = useCallback(
     (logs: BattleLog[]): BattleLog[] => {
-      if (!isFiltered || !playerId) return logs;
-      return logs.filter(
-        (log) =>
-          playerTeamIds.has(log.actor_id) ||
-          (log.target_id != null && log.target_id === playerId)
-      );
+      let result = logs;
+
+      // 本番環境ではデバッグログを除外
+      if (isProduction) {
+        result = result.filter((log) => !isProductionDebugLog(log.message));
+      }
+
+      // 自機フォーカスフィルタ（isFiltered または isProduction 時に適用）
+      if ((isFiltered || isProduction) && playerId) {
+        result = result.filter(
+          (log) =>
+            playerTeamIds.has(log.actor_id) ||
+            (log.target_id != null && log.target_id === playerId)
+        );
+      }
+
+      return result;
     },
-    [isFiltered, playerId, playerTeamIds]
+    [isFiltered, isProduction, playerId, playerTeamIds]
   );
 
   return { ownedMobileSuitIds, playerTeamIds, playerId, filterRelevantLogs };
