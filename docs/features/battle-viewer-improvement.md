@@ -19,6 +19,8 @@
 | 5 | BattleViewer (本番) | 未索敵MSの非表示 | High |
 | 6 | BattleViewer | 自機向き・ターゲット方向の可視化 | Medium |
 | 7 | BattleViewer | 攻撃エフェクト（武器・命中結果の表示） | Medium |
+| 8 | BattleViewer | 障害物の3D表示 | High |
+| 9 | BattleViewer | LOS遮断の可視化 | Medium |
 | B | バグ修正 | 格闘ダメージ表示が消えない問題 | High |
 
 ---
@@ -141,6 +143,81 @@
 
 ---
 
+### 8. BattleViewer — 障害物の3D表示
+
+**現状:** フィールド上に障害物（`Obstacle`）が存在するが、3Dビューアには一切描画されていない。  
+障害物は `radius` と `height` を持つ円柱形オブジェクトとしてシミュレーション内で機能している。
+
+**課題:**
+- `BattleResult` に `obstacles_info` フィールドが存在しない（シミュレーション時のみ生成され保存されない）
+- フロントエンド側に `Obstacle` 型が未定義
+
+**方針:**
+- **Backend**: `BattleResult` に `obstacles_info: list[dict] | None` JSON カラムを追加し、  
+  バトル結果保存時に `simulator.obstacles` をシリアライズして格納
+- **Frontend types**: `Obstacle` 型（`obstacle_id`, `position`, `radius`, `height`）を `battle.ts` に追加し、  
+  `BattleResult` に `obstacles_info?: Obstacle[]` を追加
+- **BattleViewer**: `obstacles` プロパティを受け取り、`BattleScene` で `THREE.CylinderGeometry` で描画
+  - 見た目: 半透明グレー/茶色の円柱（ `opacity: 0.7`）
+  - `scale` 係数は既存の MS 座標スケール（`0.05`）と合わせる
+
+**影響ファイル:**
+- `backend/app/models/models.py`（`BattleResult` カラム追加）
+- `backend/app/services/` または `routers/`（obstacles_info 保存処理）
+- `backend/alembic/versions/`（マイグレーション追加）
+- `frontend/src/types/battle.ts`
+- `frontend/src/components/BattleViewer/index.tsx`
+- `frontend/src/components/BattleViewer/scene/BattleScene.tsx`
+- `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx`（新規）
+- `frontend/src/components/history/BattleDetailModal.tsx`
+
+---
+
+### 9. BattleViewer — LOS遮断の可視化
+
+**現状:** 障害物による LOS（Line of Sight）カットはシミュレーション内では機能しているが、  
+ビューア上でプレイヤーは「なぜ攻撃できなかったのか」を視覚的に確認できない。
+
+**方針:**
+- 各タイムスタンプで自機から各敵MSへの視線ラインを描画
+  - **LOS あり（視線が通っている）**: 緑の細線（薄いグロウ付き）
+  - **LOS なし（障害物で遮断）**: 赤の破線。どの障害物で遮断されているかをハイライト
+- LOS 計算は `has_los` と同じ Ray-Sphere 交差判定をフロントエンドで再実装（TypeScript）
+- 常時表示は視認性が悪いため、トグルボタン（「LOS表示: ON/OFF」）で切り替え可能にする
+- 遮断している障害物を一時的に強調表示（赤くなる）
+
+**LOS計算のフロントエンド実装:**
+```typescript
+function hasLos(
+    posA: { x: number; y: number; z: number },
+    posB: { x: number; y: number; z: number },
+    obstacles: Obstacle[]
+): boolean {
+    // Ray-Sphere 交差判定（Python版 has_los と同じアルゴリズム）
+    const dir = { x: posB.x - posA.x, y: posB.y - posA.y, z: posB.z - posA.z };
+    const dist = Math.sqrt(dir.x**2 + dir.y**2 + dir.z**2);
+    if (dist < 1e-6) return true;
+    const ud = { x: dir.x/dist, y: dir.y/dist, z: dir.z/dist };
+    for (const obs of obstacles) {
+        const oc = { x: posA.x - obs.position.x, y: posA.y - obs.position.y, z: posA.z - obs.position.z };
+        const b = 2.0 * (oc.x*ud.x + oc.y*ud.y + oc.z*ud.z);
+        const c = (oc.x**2 + oc.y**2 + oc.z**2) - obs.radius**2;
+        const discriminant = b**2 - 4.0 * c;
+        if (discriminant < 0) continue;
+        const t = (-b - Math.sqrt(discriminant)) / 2.0;
+        if (t > 0.0 && t < dist) return false;
+    }
+    return true;
+}
+```
+
+**影響ファイル:**
+- `frontend/src/components/BattleViewer/scene/BattleScene.tsx`
+- `frontend/src/components/BattleViewer/utils/losUtils.ts`（新規）
+- `frontend/src/components/BattleViewer/index.tsx`
+
+---
+
 ### B. バグ修正 — 格闘攻撃ダメージ表示が消えない
 
 **現状:** 格闘攻撃（`MELEE` 系）のダメージ表示が `animate-bounce` で表示されたままになる。
@@ -169,11 +246,13 @@ Phase 1（即効性・ユーザー体験）
   4. 開発用ログの本番非表示
 
 Phase 2（リアリティ向上）
+  8. 障害物の3D表示（Backend + Frontend）
   5. 未索敵MSの非表示
   2. 自機フォーカスログ
   3. 近距離ログのみ表示
 
 Phase 3（ビジュアル強化）
+  9. LOS遮断の可視化
   6. 自機向き・ターゲット方向の可視化
   7. 攻撃エフェクト（武器・命中結果）
 ```
@@ -190,8 +269,12 @@ Phase 3（ビジュアル強化）
 | `frontend/src/components/BattleViewer/index.tsx` | 3Dビューア |
 | `frontend/src/components/BattleViewer/scene/BattleScene.tsx` | Three.jsシーン |
 | `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx` | MS球体描画 |
+| `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx` | 障害物描画（新規） |
 | `frontend/src/components/BattleViewer/scene/BattleEventDisplay.tsx` | イベントエフェクト |
 | `frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts` | 状態スナップショット |
 | `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts` | イベント管理 |
+| `frontend/src/components/BattleViewer/utils/losUtils.ts` | LOS計算ユーティリティ（新規） |
 | `frontend/src/utils/logFormatter.ts` | ログ整形 |
 | `frontend/src/hooks/useBattleLogic.ts` | ログフィルタロジック |
+| `backend/app/models/models.py` | DBモデル（obstacles_info追加） |
+| `backend/alembic/versions/` | DBマイグレーション |
