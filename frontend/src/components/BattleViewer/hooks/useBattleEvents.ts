@@ -35,6 +35,17 @@ export function useBattleEvents(
                 });
             }
             
+            // 格闘コンボのターゲットダメージ（action_type に依存しない統一処理）
+            if (log.action_type === "MELEE_COMBO" && log.target_id && !battleEventMap.has(log.target_id)) {
+                if (log.damage && log.damage > 0) {
+                    battleEventMap.set(log.target_id, {
+                        type: 'damage',
+                        text: `-${log.damage}`,
+                        color: '#ff5722'
+                    });
+                }
+            }
+            
             // 防御/軽減検出（ダメージを受けた側）
             if (log.action_type === "ATTACK" && log.target_id && !battleEventMap.has(log.target_id)) {
                 if (log.message.includes("対ビーム装甲により") || log.message.includes("対実弾装甲により")) {

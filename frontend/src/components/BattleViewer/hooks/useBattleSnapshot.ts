@@ -45,7 +45,7 @@ export function getBattleSnapshot(
         if (log.action_type === "DAMAGE" && log.actor_id === targetId && log.damage) {
             hp -= log.damage;
         }
-        if (log.action_type === "ATTACK" && log.target_id === targetId && log.damage) {
+        if ((log.action_type === "ATTACK" || log.action_type === "MELEE_COMBO") && log.target_id === targetId && log.damage) {
             hp -= log.damage;
         }
         
