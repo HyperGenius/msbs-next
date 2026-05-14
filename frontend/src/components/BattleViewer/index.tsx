@@ -3,12 +3,13 @@
 "use client";
 
 import { BattleLog, MobileSuit } from "@/types/battle";
-import { getBattleSnapshot } from "./hooks/useBattleSnapshot";
+import { getBattleSnapshot, getDetectedUnits } from "./hooks/useBattleSnapshot";
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
 import { ComboEffect } from "./ui/ComboEffect";
 import { getEnvironmentColor, SIMULATION_STEP_S } from "./utils";
+import { IS_PRODUCTION } from "@/constants";
 
 interface BattleViewerProps {
     logs: BattleLog[];
@@ -35,6 +36,14 @@ export default function BattleViewer({
         const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp - SIMULATION_STEP_S);
         return { enemy, state: { ...snapshot, prevHp: prevSnapshot.hp } };
     });
+
+    // 本番環境では索敵済み敵MSのみ表示（開発環境では全MS表示）
+    const detectedIds = IS_PRODUCTION
+        ? getDetectedUnits(player.id, logs, currentTimestamp)
+        : null;
+    const visibleEnemyStates = detectedIds
+        ? enemyStates.filter(({ enemy }) => detectedIds.has(enemy.id))
+        : enemyStates;
     
     // バトルイベントの取得
     const battleEventMap = useBattleEvents(logs, currentTimestamp);
@@ -55,14 +64,14 @@ export default function BattleViewer({
                 player={player}
                 playerState={playerState}
                 playerEvent={playerEvent}
-                enemyStates={enemyStates}
+                enemyStates={visibleEnemyStates}
                 enemyEvents={enemyEvents}
             />
             
             <BattleOverlay
                 player={player}
                 playerState={playerState}
-                enemyStates={enemyStates}
+                enemyStates={visibleEnemyStates}
                 environment={environment}
                 currentTimestamp={currentTimestamp}
                 logs={logs}
