@@ -41,7 +41,10 @@ export function ComboEffect({ logs, currentTimestamp }: ComboEffectProps) {
                 log.combo_message
         );
 
-        if (!comboLog || !comboLog.combo_message || !comboLog.combo_count) return;
+        if (!comboLog || !comboLog.combo_message || !comboLog.combo_count) {
+            setComboState(null);
+            return;
+        }
 
         setComboState({
             combo_count: comboLog.combo_count,
