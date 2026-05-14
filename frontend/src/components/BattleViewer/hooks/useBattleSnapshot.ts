@@ -4,6 +4,9 @@ import { BattleLog, MobileSuit } from "@/types/battle";
 import { DEFAULT_MAX_EN, EN_WARNING_THRESHOLD } from "../utils";
 import { WarningType } from "../types";
 
+/** 浮動小数点数の誤差許容値（タイムスタンプ比較用） */
+const TIMESTAMP_EPSILON = 1e-9;
+
 export interface UnitSnapshot {
     pos: { x: number; y: number; z: number };
     hp: number;
@@ -34,7 +37,7 @@ export function getBattleSnapshot(
 
     // 開始から現在タイムスタンプまでのログを走査して状態を再現
     for (const log of logs) {
-        if (log.timestamp > currentTimestamp + 1e-9) break;
+        if (log.timestamp > currentTimestamp + TIMESTAMP_EPSILON) break;
 
         // 位置更新
         if (log.actor_id === targetId && log.position_snapshot) {
@@ -95,4 +98,24 @@ export function getBattleSnapshot(
     }
 
     return { pos, hp: Math.max(0, hp), en, ammo, warnings };
+}
+
+/**
+ * 指定タイムスタンプ時点でプレイヤーが索敵済みの敵MSのIDセットを返す。
+ * バトルログから action_type === "DETECTION" かつ actor_id === playerId のエントリを収集する。
+ * 索敵は永続的（一度発見したMSは以降も表示し続ける）。
+ */
+export function getDetectedUnits(
+    playerId: string,
+    logs: BattleLog[],
+    currentTimestamp: number
+): Set<string> {
+    const detected = new Set<string>();
+    for (const log of logs) {
+        if (log.timestamp > currentTimestamp + TIMESTAMP_EPSILON) break;
+        if (log.action_type === "DETECTION" && log.actor_id === playerId && log.target_id) {
+            detected.add(log.target_id);
+        }
+    }
+    return detected;
 }
