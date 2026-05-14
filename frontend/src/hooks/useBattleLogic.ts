@@ -13,7 +13,7 @@ export function useBattleLogic(
   selectedBattle: BattleResult | null,
   mobileSuits: MobileSuit[] | undefined,
   isFiltered: boolean,
-  isProduction: boolean = false
+  isProduction: boolean
 ) {
   const ownedMobileSuitIds = useMemo(
     () => new Set(mobileSuits?.map((ms) => ms.id) ?? []),
