@@ -2,7 +2,7 @@
 
 "use client";
 
-import { BattleLog, MobileSuit } from "@/types/battle";
+import { BattleLog, MobileSuit, Obstacle } from "@/types/battle";
 import { getBattleSnapshot, getDetectedUnits } from "./hooks/useBattleSnapshot";
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
@@ -15,6 +15,7 @@ interface BattleViewerProps {
     logs: BattleLog[];
     player: MobileSuit;
     enemies: MobileSuit[];
+    obstacles?: Obstacle[];
     currentTimestamp: number;
     environment?: string;
 }
@@ -23,6 +24,7 @@ export default function BattleViewer({
     logs, 
     player, 
     enemies, 
+    obstacles,
     currentTimestamp, 
     environment = "SPACE" 
 }: BattleViewerProps) {
@@ -66,6 +68,7 @@ export default function BattleViewer({
                 playerEvent={playerEvent}
                 enemyStates={visibleEnemyStates}
                 enemyEvents={enemyEvents}
+                obstacles={obstacles}
             />
             
             <BattleOverlay

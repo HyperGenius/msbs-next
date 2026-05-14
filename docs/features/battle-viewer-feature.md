@@ -87,6 +87,7 @@ Three.js（`@react-three/fiber`）を使用した 3D バトルリプレイビュ
 | `logs` | `BattleLog[]` | バトルログ配列 |
 | `player` | `MobileSuit` | プレイヤー機体情報 |
 | `enemies` | `MobileSuit[]` | 敵機体情報配列 |
+| `obstacles` | `Obstacle[]` (optional) | フィールド障害物配列 |
 | `currentTimestamp` | `number` | 現在の再生タイムスタンプ |
 | `environment` | `string` | 環境（`"SPACE"` 等） |
 
@@ -141,6 +142,43 @@ BattleViewer
 | `frontend/src/components/BattleViewer/index.tsx` | 3D リプレイビューア |
 | `frontend/src/components/BattleViewer/scene/BattleScene.tsx` | Three.js シーン |
 | `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx` | MS 球体描画 |
+| `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx` | 障害物円柱描画 |
 | `frontend/src/components/BattleViewer/scene/BattleEventDisplay.tsx` | イベントエフェクト表示 |
 | `frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts` | 状態スナップショット管理 |
 | `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts` | イベント管理 |
+
+---
+
+## 障害物（Obstacle）の3D表示
+
+### 概要
+
+バトルシミュレーターが生成する障害物（`Obstacle`）をフィールド上に半透明円柱として描画します。
+
+### `ObstacleMesh` コンポーネント
+
+`frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx`
+
+| プロパティ | 内容 |
+|-----------|------|
+| 形状 | `CylinderGeometry`（上下同径の円柱） |
+| 色 | SPACE: `#5a4a3a` / GROUND: `#4a5a4a` |
+| 透明度 | `opacity: 0.75` |
+| スケール | `0.05`（既存 MS 座標スケールと統一） |
+| Y オフセット | 円柱の底面をグリッド面（y=0）に合わせるため `y + h/2` |
+
+### データフロー
+
+```
+BattleResult.obstacles_info (DB)
+  → BattleDetailModal (obstacles_info を BattleViewer に渡す)
+  → BattleViewer (obstacles prop)
+  → BattleScene (obstacles prop)
+  → ObstacleMesh (各障害物を個別描画)
+```
+
+### 注意事項
+
+- `obstacles_info` が `null` / `undefined` の場合は何も描画しない（既存バトル履歴への後方互換性）
+- バックエンドで障害物が生成されない設定（`obstacle_density: "NONE"` など）では `obstacles_info` は `null` として保存される
+
