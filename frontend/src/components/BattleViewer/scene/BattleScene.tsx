@@ -57,6 +57,15 @@ interface UnitState {
     targetId?: string;
 }
 
+/** LOS 計算結果（1本の視線ライン分） */
+interface LosResult {
+    enemyId: string;
+    clear: boolean;
+    blockedBy: string | null;
+    playerPos: { x: number; y: number; z: number };
+    enemyPos: { x: number; y: number; z: number };
+}
+
 interface BattleSceneProps {
     environment: string;
     player: MobileSuit;
@@ -65,6 +74,8 @@ interface BattleSceneProps {
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     enemyEvents: Array<{ id: string; event: BattleEventEffect | null }>;
     obstacles?: Obstacle[];
+    /** LOS 表示が ON のときのみ渡される計算済み LOS 結果 */
+    losResults?: LosResult[];
 }
 
 /** 自機からターゲット敵MSへの照準線コンポーネント */
@@ -104,6 +115,49 @@ function TargetLine({
     return <primitive object={lineObject} />;
 }
 
+/** LOS 視線ラインコンポーネント（LOS あり: 緑の長破線 / LOS なし: 赤の短破線） */
+function LosLine({
+    playerPos,
+    enemyPos,
+    clear,
+}: {
+    playerPos: { x: number; y: number; z: number };
+    enemyPos: { x: number; y: number; z: number };
+    clear: boolean;
+}) {
+    const lineObject = useMemo(() => {
+        const p1 = new THREE.Vector3(
+            playerPos.x * POSITION_SCALE,
+            playerPos.z * POSITION_SCALE,
+            playerPos.y * POSITION_SCALE,
+        );
+        const p2 = new THREE.Vector3(
+            enemyPos.x * POSITION_SCALE,
+            enemyPos.z * POSITION_SCALE,
+            enemyPos.y * POSITION_SCALE,
+        );
+        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const material = new THREE.LineDashedMaterial({
+            color: clear ? 0x00ff88 : 0xff4444,
+            dashSize: clear ? 3 : 0.8,
+            gapSize: clear ? 1.5 : 0.4,
+            linewidth: 1,
+            transparent: true,
+            opacity: clear ? 0.5 : 0.85,
+        });
+        const line = new THREE.Line(geometry, material);
+        line.computeLineDistances();
+        return line;
+    }, [
+        playerPos.x, playerPos.y, playerPos.z,
+        enemyPos.x, enemyPos.y, enemyPos.z,
+        clear,
+    ]);
+
+    return <primitive object={lineObject} />;
+}
+
+
 export function BattleScene({
     environment,
     player,
@@ -112,6 +166,7 @@ export function BattleScene({
     enemyStates,
     enemyEvents,
     obstacles,
+    losResults,
 }: BattleSceneProps) {
     // 自機MS初期Three.js座標をマウント時のみキャプチャ（MobileSuitMesh と同じ軸変換）
     const initialPos = useRef({
@@ -127,6 +182,16 @@ export function BattleScene({
     const targetedEnemy = playerState.targetId
         ? enemyStates.find(({ enemy }) => enemy.id === playerState.targetId)
         : undefined;
+
+    // LOS によって遮断されている障害物 ID のセット
+    const blockingObstacleIds = useMemo(() => {
+        if (!losResults) return new Set<string>();
+        return new Set<string>(
+            losResults
+                .filter(r => !r.clear && r.blockedBy !== null)
+                .map(r => r.blockedBy as string)
+        );
+    }, [losResults]);
 
     return (
         <Canvas
@@ -221,9 +286,24 @@ export function BattleScene({
                 );
             })}
 
+            {/* LOS 視線ライン（showLos が ON のときのみ表示） */}
+            {losResults && losResults.map((result) => (
+                <LosLine
+                    key={result.enemyId}
+                    playerPos={result.playerPos}
+                    enemyPos={result.enemyPos}
+                    clear={result.clear}
+                />
+            ))}
+
             {/* Obstacles */}
             {obstacles && obstacles.map((obs) => (
-                <ObstacleMesh key={obs.obstacle_id} obstacle={obs} environment={environment} />
+                <ObstacleMesh
+                    key={obs.obstacle_id}
+                    obstacle={obs}
+                    environment={environment}
+                    isBlocking={blockingObstacleIds.has(obs.obstacle_id)}
+                />
             ))}
         </Canvas>
     );

@@ -21,6 +21,10 @@ interface BattleOverlayProps {
     environment: string;
     currentTimestamp: number;
     logs: BattleLog[];
+    /** LOS 表示の現在の状態 */
+    showLos: boolean;
+    /** LOS 表示トグルのコールバック */
+    onToggleLos: () => void;
 }
 
 export function BattleOverlay({
@@ -30,6 +34,8 @@ export function BattleOverlay({
     environment,
     currentTimestamp,
     logs,
+    showLos,
+    onToggleLos,
 }: BattleOverlayProps) {
     return (
         <>
@@ -92,6 +98,20 @@ export function BattleOverlay({
             {/* Environment Label */}
             <div className="absolute top-1 right-1 sm:top-2 sm:right-2 text-white bg-black/60 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-mono pointer-events-none rounded border border-green-900/50">
                 <span className="text-green-400">環境:</span> {environment}
+            </div>
+
+            {/* LOS 表示トグルボタン */}
+            <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2">
+                <button
+                    onClick={onToggleLos}
+                    className={`px-2 py-0.5 text-[10px] sm:text-xs font-mono rounded border transition-colors ${
+                        showLos
+                            ? "bg-green-900/80 border-green-500 text-green-300"
+                            : "bg-black/60 border-green-900/50 text-gray-400"
+                    }`}
+                >
+                    LOS: {showLos ? "ON" : "OFF"}
+                </button>
             </div>
         </>
     );
