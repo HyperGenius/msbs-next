@@ -2,6 +2,7 @@
 
 "use client";
 
+import { useMemo } from "react";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { getHpColor } from "../utils";
@@ -17,6 +18,8 @@ export function MobileSuitMesh({
     sensorRange,
     showSensorRange,
     warnings,
+    heading,
+    isTargeted,
 }: {
     position: { x: number; y: number; z: number };
     maxHp: number;
@@ -26,10 +29,25 @@ export function MobileSuitMesh({
     sensorRange?: number;
     showSensorRange?: boolean;
     warnings?: WarningType[];
+    /** 自機の向き（度数法）— 向き矢印表示に使用（自機のみ） */
+    heading?: number;
+    /** ターゲットされている場合 true — ハイライトリング表示に使用 */
+    isTargeted?: boolean;
 }) {
     const scale = 0.05;
     const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
     const color = getHpColor(currentHp, maxHp);
+
+    // 向き矢印（ArrowHelper）の生成
+    const headingArrow = useMemo(() => {
+        if (heading === undefined) return null;
+        const headingRad = (heading * Math.PI) / 180;
+        const dir = new THREE.Vector3(
+            Math.sin(headingRad), 0, Math.cos(headingRad)
+        ).normalize();
+        return new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), 4, 0x4488ff, 1.5, 1.0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [heading]);
 
     // 撃破されたターンのみ💥を表示（前のターンでHPが残っていた場合のみ）
     if (currentHp <= 0) {
@@ -65,14 +83,25 @@ export function MobileSuitMesh({
                     roughness={0.5}
                     metalness={0.1}
                     emissive={color}
-                    emissiveIntensity={0.3}
+                    emissiveIntensity={isTargeted ? 1.2 : 0.3}
                 />
             </mesh>
+
+            {/* ターゲットハイライトリング */}
+            {isTargeted && (
+                <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                    <ringGeometry args={[1.4, 1.8, 32]} />
+                    <meshBasicMaterial color={0xff4444} side={THREE.DoubleSide} transparent opacity={0.85} />
+                </mesh>
+            )}
             
             {/* Sensor Range Visualization - Enhanced with animation */}
             {showSensorRange && sensorRange && (
                 <AnimatedSensorRing sensorRange={sensorRange} scale={scale} />
             )}
+
+            {/* 向き矢印（自機のみ: heading が指定された場合のみ表示） */}
+            {headingArrow && <primitive object={headingArrow} />}
             
             {/* Status Warning Indicators above the unit */}
             {warnings && warnings.length > 0 && (

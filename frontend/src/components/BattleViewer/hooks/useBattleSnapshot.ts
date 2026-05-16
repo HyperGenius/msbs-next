@@ -13,6 +13,10 @@ export interface UnitSnapshot {
     en: number;
     ammo: Record<string, number>;
     warnings: WarningType[];
+    /** 現在の胴体向き（度数法）— BattleViewer向き矢印表示用 */
+    heading?: number;
+    /** 現在のターゲットMS ID — BattleViewer照準線・ハイライト表示用 */
+    targetId?: string;
 }
 
 // 現在のタイムスタンプ時点での情報を計算する関数（Hookではない）
@@ -27,6 +31,8 @@ export function getBattleSnapshot(
     let en = initialMs.max_en || DEFAULT_MAX_EN;
     const ammo: Record<string, number> = {};
     const warnings: WarningType[] = [];
+    let heading: number | undefined = undefined;
+    let unitTargetId: string | undefined = undefined;
     
     // 武器の初期弾数を設定
     initialMs.weapons.forEach(weapon => {
@@ -42,6 +48,16 @@ export function getBattleSnapshot(
         // 位置更新
         if (log.actor_id === targetId && log.position_snapshot) {
             pos = log.position_snapshot;
+        }
+
+        // 向き更新（自ユニットのログに heading フィールドがあれば取得）
+        if (log.actor_id === targetId && log.heading !== undefined) {
+            heading = log.heading;
+        }
+
+        // ターゲット更新（TARGET_SELECTION ログから現在のターゲットを追跡）
+        if (log.actor_id === targetId && log.action_type === "TARGET_SELECTION" && log.target_id) {
+            unitTargetId = log.target_id;
         }
 
         // HP更新
@@ -97,7 +113,7 @@ export function getBattleSnapshot(
         warnings.push('cooldown');
     }
 
-    return { pos, hp: Math.max(0, hp), en, ammo, warnings };
+    return { pos, hp: Math.max(0, hp), en, ammo, warnings, heading, targetId: unitTargetId };
 }
 
 /**

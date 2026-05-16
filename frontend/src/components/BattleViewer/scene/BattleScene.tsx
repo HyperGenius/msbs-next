@@ -2,9 +2,10 @@
 
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, Grid } from "@react-three/drei";
+import * as THREE from "three";
 import { MobileSuit } from "@/types/battle";
 import { EnvironmentEffects } from "./EnvironmentEffects";
 import { MobileSuitMesh } from "./MobileSuitMesh";
@@ -50,6 +51,10 @@ interface UnitState {
     en: number;
     ammo: Record<string, number>;
     warnings: WarningType[];
+    /** 現在の胴体向き（度数法）— 自機のみ向き矢印に使用 */
+    heading?: number;
+    /** 現在のターゲットMS ID — 照準線・ハイライトに使用 */
+    targetId?: string;
 }
 
 interface BattleSceneProps {
@@ -60,6 +65,43 @@ interface BattleSceneProps {
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     enemyEvents: Array<{ id: string; event: BattleEventEffect | null }>;
     obstacles?: Obstacle[];
+}
+
+/** 自機からターゲット敵MSへの照準線コンポーネント */
+function TargetLine({
+    playerPos,
+    targetPos,
+}: {
+    playerPos: { x: number; y: number; z: number };
+    targetPos: { x: number; y: number; z: number };
+}) {
+    const lineObject = useMemo(() => {
+        const p1 = new THREE.Vector3(
+            playerPos.x * POSITION_SCALE,
+            playerPos.z * POSITION_SCALE,
+            playerPos.y * POSITION_SCALE,
+        );
+        const p2 = new THREE.Vector3(
+            targetPos.x * POSITION_SCALE,
+            targetPos.z * POSITION_SCALE,
+            targetPos.y * POSITION_SCALE,
+        );
+        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        const material = new THREE.LineDashedMaterial({
+            color: 0xff4444,
+            dashSize: 1,
+            gapSize: 0.5,
+            linewidth: 1,
+        });
+        const line = new THREE.Line(geometry, material);
+        line.computeLineDistances();
+        return line;
+    }, [
+        playerPos.x, playerPos.y, playerPos.z,
+        targetPos.x, targetPos.y, targetPos.z,
+    ]);
+
+    return <primitive object={lineObject} />;
 }
 
 export function BattleScene({
@@ -80,6 +122,11 @@ export function BattleScene({
     const { x: px, y: py, z: pz } = initialPos.current;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const controlsRef = useRef<any>(null);
+
+    // 自機のターゲット敵MSの状態（照準線・ハイライト用）
+    const targetedEnemy = playerState.targetId
+        ? enemyStates.find(({ enemy }) => enemy.id === playerState.targetId)
+        : undefined;
 
     return (
         <Canvas
@@ -135,6 +182,7 @@ export function BattleScene({
                 sensorRange={player.sensor_range}
                 showSensorRange={true}
                 warnings={playerState.warnings}
+                heading={playerState.heading}
             />
 
             {/* Enemies */}
@@ -149,8 +197,17 @@ export function BattleScene({
                     sensorRange={enemy.sensor_range}
                     showSensorRange={false}
                     warnings={state.warnings}
+                    isTargeted={enemy.id === playerState.targetId}
                 />
             ))}
+
+            {/* 自機 → ターゲット敵MSへの照準線 */}
+            {targetedEnemy && targetedEnemy.state.hp > 0 && (
+                <TargetLine
+                    playerPos={playerState.pos}
+                    targetPos={targetedEnemy.state.pos}
+                />
+            )}
             
             {/* Battle Event Effects */}
             {playerEvent && (

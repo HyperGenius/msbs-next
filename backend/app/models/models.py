@@ -543,6 +543,9 @@ class BattleLog(SQLModel):
     combo_message: str | None = (
         None  # コンボ演出メッセージ (Phase C — 例: "2Combo 300ダメージ!!")
     )
+    heading: float | None = (
+        None  # 行動時点の胴体向き (度数法, XZ平面) (BattleViewer可視化用)
+    )
 
 
 class BattleLogRecord(SQLModel, table=True):
