@@ -115,7 +115,57 @@ function TargetLine({
     return <primitive object={lineObject} />;
 }
 
-/** LOS 視線ラインコンポーネント（LOS あり: 緑の長破線 / LOS なし: 赤の短破線） */
+/** 攻撃ラインコンポーネント（命中: 黄色実線 / ミス: グレー破線） */
+function AttackLine({
+    fromPos,
+    toPos,
+    hit,
+}: {
+    fromPos: { x: number; y: number; z: number };
+    toPos: { x: number; y: number; z: number };
+    hit: boolean;
+}) {
+    const lineObject = useMemo(() => {
+        const p1 = new THREE.Vector3(
+            fromPos.x * POSITION_SCALE,
+            fromPos.z * POSITION_SCALE,
+            fromPos.y * POSITION_SCALE,
+        );
+        const p2 = new THREE.Vector3(
+            toPos.x * POSITION_SCALE,
+            toPos.z * POSITION_SCALE,
+            toPos.y * POSITION_SCALE,
+        );
+        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        let material: THREE.LineBasicMaterial | THREE.LineDashedMaterial;
+        if (hit) {
+            // 命中: 黄色実線（太め）
+            material = new THREE.LineBasicMaterial({
+                color: 0xffcc00,
+                linewidth: 2,
+            });
+        } else {
+            // ミス: グレー破線（細め）
+            material = new THREE.LineDashedMaterial({
+                color: 0x888888,
+                dashSize: 1,
+                gapSize: 0.5,
+                linewidth: 1,
+            });
+        }
+        const line = new THREE.Line(geometry, material);
+        if (!hit) line.computeLineDistances();
+        return line;
+    }, [
+        fromPos.x, fromPos.y, fromPos.z,
+        toPos.x, toPos.y, toPos.z,
+        hit,
+    ]);
+
+    return <primitive object={lineObject} />;
+}
+
+
 function LosLine({
     playerPos,
     enemyPos,
@@ -278,11 +328,27 @@ export function BattleScene({
             {playerEvent && (
                 <BattleEventDisplay position={playerState.pos} event={playerEvent} />
             )}
+            {playerEvent?.targetPos && (
+                <AttackLine
+                    fromPos={playerState.pos}
+                    toPos={playerEvent.targetPos}
+                    hit={playerEvent.hit ?? true}
+                />
+            )}
             {enemyEvents.map(({ id, event }) => {
                 const enemyData = enemyStates.find(e => e.enemy.id === id);
                 if (!event || !enemyData || enemyData.state.hp <= 0) return null;
                 return (
-                    <BattleEventDisplay key={id} position={enemyData.state.pos} event={event} />
+                    <group key={id}>
+                        <BattleEventDisplay position={enemyData.state.pos} event={event} />
+                        {event.targetPos && (
+                            <AttackLine
+                                fromPos={enemyData.state.pos}
+                                toPos={event.targetPos}
+                                hit={event.hit ?? true}
+                            />
+                        )}
+                    </group>
                 );
             })}
 
