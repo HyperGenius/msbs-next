@@ -141,8 +141,7 @@ class TestScenarioBoostDashApproach:
         """
         mod = _import_scenario("scenario_boost_dash_approach")
         boost_start_occurred = any(
-            mod.run_scenario(max_steps=5000)["boost_start_count"] >= 1
-            for _ in range(5)
+            mod.run_scenario(max_steps=5000)["boost_start_count"] >= 1 for _ in range(5)
         )
         assert boost_start_occurred, (
             "5 回実行中に BOOST_START が少なくとも 1 回出力されること"

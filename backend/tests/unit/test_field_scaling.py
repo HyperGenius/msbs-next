@@ -22,7 +22,6 @@ from app.engine.constants import (
 from app.engine.simulation import BattleSimulator
 from app.models.models import BattleField, MobileSuit, Vector3, Weapon
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -162,7 +161,9 @@ def test_global_map_bounds_not_modified() -> None:
     player = _make_unit("P", "PLAYER", "PT")
     enemies = [_make_unit(f"E{i}", "ENEMY", "ET") for i in range(9)]
     BattleSimulator(player, enemies)
-    assert MAP_BOUNDS == original, "グローバル定数 MAP_BOUNDS が書き換えられてはならない"
+    assert MAP_BOUNDS == original, (
+        "グローバル定数 MAP_BOUNDS が書き換えられてはならない"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +206,9 @@ def test_spawn_zones_use_dynamic_map_bounds() -> None:
     """スポーン領域の中心座標が動的 map_bounds 内に収まること."""
     player = _make_unit("P", "PLAYER", "PT")
     enemies = [_make_unit(f"E{i}", "ENEMY", "ET") for i in range(9)]
-    sim = BattleSimulator(player, enemies, battlefield=BattleField(obstacle_density="NONE"))
+    sim = BattleSimulator(
+        player, enemies, battlefield=BattleField(obstacle_density="NONE")
+    )
 
     map_min, map_max = sim.map_bounds
     for sz in sim.battlefield.spawn_zones:
@@ -222,12 +225,16 @@ def test_spawn_zones_2team_differ_by_unit_count() -> None:
     # 小規模 (2 units) → map_bounds = (0, 2000) (MIN_FIELD_SIZE クランプ)
     p_small = _make_unit("P", "PLAYER", "PT")
     e_small = _make_unit("E", "ENEMY", "ET")
-    sim_small = BattleSimulator(p_small, [e_small], battlefield=BattleField(obstacle_density="NONE"))
+    sim_small = BattleSimulator(
+        p_small, [e_small], battlefield=BattleField(obstacle_density="NONE")
+    )
 
     # 大規模 (20 units, 2 teams) → sqrt(20 * 250000) ≈ 2236 > MIN_FIELD_SIZE
     p_large = _make_unit("P2", "PLAYER", "PT")
     enemies_large = [_make_unit(f"E{i}", "ENEMY", "ET") for i in range(19)]
-    sim_large = BattleSimulator(p_large, enemies_large, battlefield=BattleField(obstacle_density="NONE"))
+    sim_large = BattleSimulator(
+        p_large, enemies_large, battlefield=BattleField(obstacle_density="NONE")
+    )
 
     def _center_dist(sim: BattleSimulator) -> float:
         zones = {sz.team_id: sz for sz in sim.battlefield.spawn_zones}
