@@ -281,10 +281,13 @@ def _save_battle_results(
                 traceback.print_exc()
 
         # そのエントリーのユニットを player_info、残りを enemies_info として保存
-        entry_unit_for_info = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
+        entry_unit_for_info = _convert_snapshot_to_mobile_suit(
+            entry.mobile_suit_snapshot
+        )
         all_units_info = [player_unit] + enemy_units
         enemies_info_for_entry = [
-            u.model_dump() for u in all_units_info
+            u.model_dump()
+            for u in all_units_info
             if str(u.id) != str(entry_unit_for_info.id)
         ]
 
