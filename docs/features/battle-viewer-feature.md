@@ -98,9 +98,9 @@ Three.js（`@react-three/fiber`）を使用した 3D バトルリプレイビュ
 | `useBattleSnapshot` | タイムスタンプに対応するスナップショット取得 |
 | `useBattleEvents` | 攻撃・ダメージイベントの管理 |
 
-### 索敵による表示制御（本番環境）
+### 索敵による表示制御
 
-本番環境（`IS_PRODUCTION === true`）では、プレイヤーが索敵していない敵MSをビューアに表示しません。
+プレイヤーが索敵していない敵MSをビューアに表示しません。環境フラグによる切り替えは行わず、常にフィルタを適用します。
 
 #### `getDetectedUnits` ユーティリティ関数
 
@@ -123,12 +123,11 @@ function getDetectedUnits(
 ```
 BattleViewer
   → getDetectedUnits(player.id, logs, currentTimestamp)
-  → enemyStates.filter(enemy => detectedIds.has(enemy.id))  ← IS_PRODUCTION 時のみ
+  → enemyStates.filter(enemy => detectedIds.has(enemy.id))
   → visibleEnemyStates を BattleScene / BattleOverlay に渡す
 ```
 
-- 開発環境では全 MS を表示（従来動作を維持）
-- 未索敵敵 MS は 3D シーン（球体オブジェクト）にもHPゲージにも表示されない
+- 未索敵敵 MS は 3D シーン（球体オブジェクト）にも HP ゲージにも表示されない
 
 ---
 

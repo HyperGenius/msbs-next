@@ -280,13 +280,24 @@ def _save_battle_results(
                 print(f"  警告: 報酬付与エラー ({entry.user_id}): {e}")
                 traceback.print_exc()
 
+        # そのエントリーのユニットを player_info、残りを enemies_info として保存
+        entry_unit_for_info = _convert_snapshot_to_mobile_suit(
+            entry.mobile_suit_snapshot
+        )
+        all_units_info = [player_unit] + enemy_units
+        enemies_info_for_entry = [
+            u.model_dump()
+            for u in all_units_info
+            if str(u.id) != str(entry_unit_for_info.id)
+        ]
+
         battle_result = BattleResult(
             user_id=entry.user_id,
             room_id=room.id,
             battle_log_id=battle_log_record.id,
             win_loss=individual_win_loss,
-            player_info=player_unit.model_dump(),
-            enemies_info=[e.model_dump() for e in enemy_units],
+            player_info=entry_unit_for_info.model_dump(),
+            enemies_info=enemies_info_for_entry,
             ms_snapshot=entry.mobile_suit_snapshot,
             kills=individual_kills,
             exp_gained=exp_gained,
