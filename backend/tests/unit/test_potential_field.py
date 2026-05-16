@@ -84,10 +84,11 @@ def test_potential_field_constants_defined() -> None:
 def test_potential_field_attack_attracts_to_target() -> None:
     """ATTACK 行動時に攻撃ターゲットへの引力が働くこと."""
     # マップ境界の影響を避けるために中央付近に配置
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
+    # 2ユニット時の動的フィールドは 2000m なので中心 (1000, 1000) 付近を使用する
+    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=800, y=0, z=1000))
     # ターゲットを +x 方向に配置
     enemy = _make_unit(
-        "Enemy", "ENEMY", "ET", Vector3(x=3000, y=0, z=2500), weapon_power=10.0
+        "Enemy", "ENEMY", "ET", Vector3(x=1200, y=0, z=1000), weapon_power=10.0
     )
     sim = BattleSimulator(player, [enemy])
 
@@ -101,9 +102,10 @@ def test_potential_field_attack_attracts_to_target() -> None:
 
 def test_potential_field_move_attracts_to_nearest_enemy() -> None:
     """MOVE 行動時に最近敵への引力が働くこと."""
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
+    # 2ユニット時の動的フィールドは 2000m なので中心 (1000, 1000) 付近を使用する
+    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=800, y=0, z=1000))
     enemy = _make_unit(
-        "Enemy", "ENEMY", "ET", Vector3(x=3000, y=0, z=2500), weapon_power=10.0
+        "Enemy", "ENEMY", "ET", Vector3(x=1200, y=0, z=1000), weapon_power=10.0
     )
     sim = BattleSimulator(player, [enemy])
 

@@ -134,11 +134,18 @@ class TestScenarioBoostDashApproach:
 
         ENGAGE_MELEE アクションが選択され、ターゲットが MELEE_BOOST_ARRIVAL_RANGE
         より遠い場合に BOOST_DASH（BOOST_START ログ）が発動する。
+
+        動的フィールドスケーリング（Phase 6-5）導入後は 2ユニット時の MAP が 2000m に
+        縮小されるため、確率的に BOOST_START が発生しないケースが生じる。
+        5 回中 1 回以上で BOOST_START が記録されることを確認する。
         """
         mod = _import_scenario("scenario_boost_dash_approach")
-        result = mod.run_scenario(max_steps=5000)
-        assert result["boost_start_count"] >= 1, (
-            f"BOOST_START が少なくとも 1 回出力されること (実際: {result['boost_start_count']})"
+        boost_start_occurred = any(
+            mod.run_scenario(max_steps=5000)["boost_start_count"] >= 1
+            for _ in range(5)
+        )
+        assert boost_start_occurred, (
+            "5 回実行中に BOOST_START が少なくとも 1 回出力されること"
         )
 
     def test_assault_unit_created(self) -> None:

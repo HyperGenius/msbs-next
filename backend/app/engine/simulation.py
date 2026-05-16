@@ -12,8 +12,10 @@ from app.engine.calculator import PilotStats
 from app.engine.combat import CombatMixin, has_los
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
+    AREA_PER_UNIT,
     FUZZY_RULES_DIR,
-    MAP_BOUNDS,
+    MAX_FIELD_SIZE,
+    MIN_FIELD_SIZE,
     MOVE_LOG_MIN_DIST,
     OBSTACLE_GRID_PARAMS,
     SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR,
@@ -113,6 +115,13 @@ class BattleSimulator(
         self.special_effects: list[str] = special_effects or []
         self.player_pilot_stats: PilotStats = player_pilot_stats or PilotStats()
         self.retreat_points: list[RetreatPoint] = retreat_points or []
+
+        # フィールドスケーリング: 総ユニット数に応じて map_bounds を動的計算 (Phase 6-5)
+        # グローバル定数 MAP_BOUNDS を変更せず、インスタンス変数として保持する
+        n_total = len(self.units)
+        side_len = math.sqrt(n_total * AREA_PER_UNIT)
+        side_len = max(MIN_FIELD_SIZE, min(MAX_FIELD_SIZE, side_len))
+        self.map_bounds: tuple[float, float] = (0.0, side_len)
 
         # battlefield パラメータの解決 (Phase 6-3)
         # 明示的な obstacles 引数が渡された場合は後方互換性のためそれを優先する
@@ -238,7 +247,7 @@ class BattleSimulator(
         Returns:
             生成されたスポーン領域リスト
         """
-        map_min, map_max = MAP_BOUNDS
+        map_min, map_max = self.map_bounds
         offset = 500.0  # マップ端からのオフセット (m)
 
         # チームIDを収集（順序安定化のためソート）
@@ -406,7 +415,7 @@ class BattleSimulator(
         radius_min: float = params["radius_range"][0]
         radius_max: float = params["radius_range"][1]
 
-        map_min, map_max = MAP_BOUNDS
+        map_min, map_max = self.map_bounds
         cell_size = (map_max - map_min) / n
 
         spawn_zones = self.battlefield.spawn_zones
