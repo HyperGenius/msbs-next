@@ -8,7 +8,9 @@ import { MobileSuit } from "@/types/battle";
 import { EnvironmentEffects } from "./EnvironmentEffects";
 import { MobileSuitMesh } from "./MobileSuitMesh";
 import { BattleEventDisplay } from "./BattleEventDisplay";
+import { ObstacleMesh } from "./ObstacleMesh";
 import { BattleEventEffect, WarningType } from "../types";
+import { Obstacle } from "@/types/battle";
 
 interface UnitState {
     pos: { x: number; y: number; z: number };
@@ -26,6 +28,7 @@ interface BattleSceneProps {
     playerEvent: BattleEventEffect | null;
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     enemyEvents: Array<{ id: string; event: BattleEventEffect | null }>;
+    obstacles?: Obstacle[];
 }
 
 export function BattleScene({
@@ -35,6 +38,7 @@ export function BattleScene({
     playerEvent,
     enemyStates,
     enemyEvents,
+    obstacles,
 }: BattleSceneProps) {
     return (
         <Canvas
@@ -114,6 +118,11 @@ export function BattleScene({
                     <BattleEventDisplay key={id} position={enemyData.state.pos} event={event} />
                 );
             })}
+
+            {/* Obstacles */}
+            {obstacles && obstacles.map((obs) => (
+                <ObstacleMesh key={obs.obstacle_id} obstacle={obs} environment={environment} />
+            ))}
         </Canvas>
     );
 }

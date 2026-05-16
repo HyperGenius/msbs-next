@@ -279,6 +279,15 @@ async def simulate_battle(
     session.flush()
 
     # 9. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
+    obstacles_data = [
+        {
+            "obstacle_id": obs.obstacle_id,
+            "position": {"x": obs.position.x, "y": obs.position.y, "z": obs.position.z},
+            "radius": obs.radius,
+            "height": obs.height,
+        }
+        for obs in sim.obstacles
+    ]
     battle_result = BattleResult(
         user_id=user_id,
         mission_id=mission_id,
@@ -287,6 +296,7 @@ async def simulate_battle(
         environment=mission.environment,
         player_info=player.model_dump(),
         enemies_info=[e.model_dump() for e in enemies],
+        obstacles_info=obstacles_data if obstacles_data else None,
         ms_snapshot=player.model_dump(),
         kills=kills,
         exp_gained=exp_gained,

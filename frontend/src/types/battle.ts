@@ -10,6 +10,16 @@ export interface Vector3 {
 }
 
 /**
+ * フィールド障害物
+ */
+export interface Obstacle {
+    obstacle_id: string;
+    position: { x: number; y: number; z: number };
+    radius: number;
+    height: number;
+}
+
+/**
  * 武器
  */
 export interface Weapon {
@@ -188,6 +198,7 @@ export interface BattleResult {
     environment?: string;
     player_info?: MobileSuit;
     enemies_info?: MobileSuit[];
+    obstacles_info?: Obstacle[];
     ms_snapshot?: MobileSuit;
     kills?: number;
     exp_gained?: number;

@@ -627,6 +627,11 @@ class BattleResult(SQLModel, table=True):
         sa_column=Column(JSON, nullable=True),
         description="敵機体スナップショットリスト",
     )
+    obstacles_info: list[dict] | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="フィールド障害物スナップショットリスト",
+    )
     ms_snapshot: dict | None = Field(
         default=None,
         sa_column=Column(JSON, nullable=True),
@@ -656,6 +661,7 @@ class BattleResultSummary(SQLModel):
     environment: str = "SPACE"
     player_info: dict | None = None
     enemies_info: list[dict] | None = None
+    obstacles_info: list[dict] | None = None
     ms_snapshot: dict | None = None
     kills: int = 0
     exp_gained: int = 0
