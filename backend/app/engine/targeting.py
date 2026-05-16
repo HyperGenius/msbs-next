@@ -30,6 +30,7 @@ class TargetingMixin:
     units: list[MobileSuit]
     team_detected_units: dict[str, set]
     detection_step_map: dict[str, dict[str, int]]
+    _step_count: int
 
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
@@ -251,7 +252,11 @@ class TargetingMixin:
             for t in potential_targets
             if t.id in self.team_detected_units[actor.team_id]  # type: ignore[attr-defined]
             # detection_step_map に未登録（テスト等で手動追加）の場合は即時ターゲット可能とみなす
-            and (self._step_count - detection_steps.get(str(t.id), self._step_count - reaction_delay)) >= reaction_delay  # type: ignore[attr-defined]
+            and (
+                self._step_count
+                - detection_steps.get(str(t.id), self._step_count - reaction_delay)
+            )
+            >= reaction_delay  # type: ignore[attr-defined]
         ]
 
         # ターゲットが存在しない場合はNoneを返す
@@ -334,7 +339,11 @@ class TargetingMixin:
             for t in potential_targets
             if t.id in self.team_detected_units[actor.team_id]  # type: ignore[attr-defined]
             # detection_step_map に未登録（テスト等で手動追加）の場合は即時ターゲット可能とみなす
-            and (self._step_count - detection_steps.get(str(t.id), self._step_count - reaction_delay)) >= reaction_delay  # type: ignore[attr-defined]
+            and (
+                self._step_count
+                - detection_steps.get(str(t.id), self._step_count - reaction_delay)
+            )
+            >= reaction_delay  # type: ignore[attr-defined]
         ]
 
         # ターゲットが存在しない場合はNoneを返す

@@ -2198,8 +2198,12 @@ def test_reaction_delay_suppresses_attack_on_detection_step() -> None:
         sim._detection_phase()
 
     assert enemy.id in sim.team_detected_units["PLAYER_TEAM"], "発見済みであること"
-    assert str(enemy.id) in sim.detection_step_map["PLAYER_TEAM"], "detection_step_map に記録されること"
-    assert sim.detection_step_map["PLAYER_TEAM"][str(enemy.id)] == 0, "発見ステップが 0 であること"
+    assert str(enemy.id) in sim.detection_step_map["PLAYER_TEAM"], (
+        "detection_step_map に記録されること"
+    )
+    assert sim.detection_step_map["PLAYER_TEAM"][str(enemy.id)] == 0, (
+        "発見ステップが 0 であること"
+    )
 
     # step_count=0（発見ステップ）: ターゲットを選択できないこと
     target_at_detection = sim._select_target_legacy(player)
@@ -2268,7 +2272,9 @@ def test_reaction_delay_no_attack_log_on_detection_step() -> None:
         sim.step()
 
     attack_logs_step0 = [
-        log for log in sim.logs if log.action_type in ("ATTACK", "MISS") and log.actor_id == enemy.id
+        log
+        for log in sim.logs
+        if log.action_type in ("ATTACK", "MISS") and log.actor_id == enemy.id
     ]
     assert len(attack_logs_step0) == 0, (
         f"発見ステップ（step 0）では敵の攻撃ログが生成されないこと（実際: {len(attack_logs_step0)} 件）"
@@ -2280,7 +2286,9 @@ def test_reaction_delay_no_attack_log_on_detection_step() -> None:
         sim.step()
 
     attack_logs_step1 = [
-        log for log in sim.logs if log.action_type in ("ATTACK", "MISS") and log.actor_id == enemy.id
+        log
+        for log in sim.logs
+        if log.action_type in ("ATTACK", "MISS") and log.actor_id == enemy.id
     ]
     assert len(attack_logs_step1) > 0, (
         "リアクション遅延経過後（step 1）では敵の攻撃ログが生成されること"
