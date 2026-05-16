@@ -3,12 +3,16 @@
 This test demonstrates the complete tactics functionality end-to-end.
 """
 
+import random
+
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 
 
 def test_tactics_integration() -> None:
     """Integration test demonstrating all tactics options working together."""
+    # テスト順序に依存しない決定論的な実行のためにシードを固定
+    random.seed(42)
     # Create player with WEAKEST priority and RANGED behavior
     player = MobileSuit(
         name="Advanced Gundam",

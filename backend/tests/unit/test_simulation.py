@@ -133,6 +133,11 @@ def test_player_defeat() -> None:
 
     sim = BattleSimulator(player, enemies)
 
+    # 決定論的に発見させ、リアクション遅延を経過させる（確率的索敵に依存しない）
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
+
     # Run simulation
     max_turns = 50
     for _ in range(max_turns):
@@ -2169,3 +2174,135 @@ def test_retreat_weapon_prefers_long_range() -> None:
     )
     # 遠距離スコアが近距離スコアより高いことを確認
     assert far_score.get("weapon_score", 0.0) > close_score.get("weapon_score", 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Phase 6-6: 発見同ステップ内の攻撃抑制（リアクション遅延）
+# ---------------------------------------------------------------------------
+
+
+def test_reaction_delay_suppresses_attack_on_detection_step() -> None:
+    """発見したステップ内では攻撃ターゲットを選択できないこと（リアクション遅延）.
+
+    Phase 6-6 仕様:
+    - 発見ステップ（detection_step）と同一ステップでは攻撃を抑制する
+    - 発見ステップ + 1 以降は攻撃可能になる
+    """
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
+
+    sim = BattleSimulator(player, [enemy])
+
+    # step_count=0 のまま発見させる（発見ステップ = 0）
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
+
+    assert enemy.id in sim.team_detected_units["PLAYER_TEAM"], "発見済みであること"
+    assert str(enemy.id) in sim.detection_step_map["PLAYER_TEAM"], "detection_step_map に記録されること"
+    assert sim.detection_step_map["PLAYER_TEAM"][str(enemy.id)] == 0, "発見ステップが 0 であること"
+
+    # step_count=0（発見ステップ）: ターゲットを選択できないこと
+    target_at_detection = sim._select_target_legacy(player)
+    assert target_at_detection is None, (
+        f"発見ステップでは攻撃ターゲットを選択できないこと（実際: {target_at_detection}）"
+    )
+
+    # step_count=1（発見ステップ+1）: ターゲットを選択できること
+    sim._step_count += 1
+    target_after_delay = sim._select_target_legacy(player)
+    assert target_after_delay is not None, (
+        "リアクション遅延経過後はターゲットを選択できること"
+    )
+    assert target_after_delay.id == enemy.id, "正しいターゲットが選択されること"
+
+
+def test_reaction_delay_fuzzy_suppresses_attack_on_detection_step() -> None:
+    """ファジィターゲット選択でも発見同ステップ内の攻撃が抑制されること.
+
+    _select_target_fuzzy も同様にリアクション遅延チェックを適用すること。
+    """
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
+
+    sim = BattleSimulator(player, [enemy])
+
+    # step_count=0 のまま発見させる（発見ステップ = 0）
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
+
+    assert enemy.id in sim.team_detected_units["PLAYER_TEAM"], "発見済みであること"
+
+    # step_count=0（発見ステップ）: ファジィ選択でもターゲット選択不可
+    target_at_detection = sim._select_target_fuzzy(player)
+    assert target_at_detection is None, (
+        f"発見ステップではファジィ選択でもターゲットを選択できないこと（実際: {target_at_detection}）"
+    )
+
+    # step_count=1: ファジィ選択でターゲット選択可能
+    sim._step_count += 1
+    target_after_delay = sim._select_target_fuzzy(player)
+    assert target_after_delay is not None, (
+        "リアクション遅延経過後はファジィ選択でもターゲットを選択できること"
+    )
+
+
+def test_reaction_delay_no_attack_log_on_detection_step() -> None:
+    """発見ステップの step() 内では ATTACK ログが生成されないこと.
+
+    step() の実行時系列:
+    1. _detection_phase() → 発見（step_count=0）
+    2. _ai_decision_phase() → ターゲット不在 → ATTACK 行動不可
+    3. _action_phase() → 攻撃不実行
+    4. step_count += 1
+    """
+    player = create_fuzzy_test_player()
+    # 敵機はプレイヤーの -X 方向に配置: 初期 body_heading_deg=0（+X向き）がプレイヤー方向と一致
+    enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=-100, y=0, z=0))
+    enemy.weapons[0].power = 9999  # 一撃で倒せる威力
+    enemy.weapons[0].accuracy = 100
+
+    sim = BattleSimulator(player, [enemy])
+
+    # 発見ステップ（step 0）を実行: 発見されるが攻撃は抑制されること
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim.step()
+
+    attack_logs_step0 = [
+        log for log in sim.logs if log.action_type in ("ATTACK", "MISS") and log.actor_id == enemy.id
+    ]
+    assert len(attack_logs_step0) == 0, (
+        f"発見ステップ（step 0）では敵の攻撃ログが生成されないこと（実際: {len(attack_logs_step0)} 件）"
+    )
+    assert player.current_hp > 0, "発見ステップでは player はまだ生存していること"
+
+    # 次ステップ（step 1）を実行: 攻撃が実行されること
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim.step()
+
+    attack_logs_step1 = [
+        log for log in sim.logs if log.action_type in ("ATTACK", "MISS") and log.actor_id == enemy.id
+    ]
+    assert len(attack_logs_step1) > 0, (
+        "リアクション遅延経過後（step 1）では敵の攻撃ログが生成されること"
+    )
+
+
+def test_reaction_delay_manual_detection_immediate_attack() -> None:
+    """手動で team_detected_units に追加した場合は即座に攻撃可能であること.
+
+    detection_step_map 未登録のターゲットは「即時攻撃可能」とみなすフォールバック動作を検証する。
+    既存テストの後方互換性を保つための挙動である。
+    """
+    player = create_fuzzy_test_player()
+    enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=100, y=0, z=0))
+
+    sim = BattleSimulator(player, [enemy])
+
+    # detection_step_map を更新せずに手動でターゲットを追加
+    sim.team_detected_units["PLAYER_TEAM"].add(enemy.id)
+
+    # step_count=0 でも即座にターゲットを選択できること（後方互換フォールバック）
+    target = sim._select_target_legacy(player)
+    assert target is not None, (
+        "detection_step_map 未登録の場合は即座にターゲット選択可能であること（後方互換）"
+    )
