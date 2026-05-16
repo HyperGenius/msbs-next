@@ -29,6 +29,7 @@ class TargetingMixin:
     # BattleSimulator が提供するインスタンス属性 (mypy 向け型宣言のみ; 実体は simulation.py)
     units: list[MobileSuit]
     team_detected_units: dict[str, set]
+    detection_step_map: dict[str, dict[str, int]]
 
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
@@ -104,6 +105,7 @@ class TargetingMixin:
 
         # 発見！
         self.team_detected_units[unit.team_id].add(target.id)  # type: ignore[attr-defined]
+        self.detection_step_map[unit.team_id][str(target.id)] = self._step_count  # type: ignore[attr-defined]
 
         # 発見ログを追加
         dist_label = self._get_distance_label(distance)  # type: ignore[attr-defined]
@@ -199,6 +201,33 @@ class TargetingMixin:
             return 0.0
         return float(max(w.power for w in unit.weapons))
 
+    def _get_reaction_delay(self, actor: MobileSuit) -> int:
+        """発見後に攻撃を開始するまでのリアクション遅延ステップ数を返す.
+
+        将来の拡張ポイント:
+        - パイロット熟練度（REF: 反射神経 / DEX: 器用さ）が高いほど遅延が短い
+        - 認識中の敵 MS 数が多いほど遅延が増加（認知負荷モデル）
+
+        Args:
+            actor: 行動するユニット
+
+        Returns:
+            遅延ステップ数（1 ステップ = dt 秒、デフォルト 0.1s）
+        """
+        # --- 現時点: 固定値 1 ステップ ---
+        base_delay: int = 1
+
+        # --- 将来の実装例（コメントアウト） ---
+        # # パイロット熟練度による短縮（REF ステータスを参照）
+        # ref = self.player_pilot_stats.ref  # 0〜100
+        # base_delay = max(1, 3 - ref // 40)  # REF 0-39: 3ステップ / 40-79: 2 / 80+: 1
+        #
+        # # 認識中の敵 MS 数が多いと遅延増加（認知負荷）
+        # tracked_count = len(self.team_detected_units.get(actor.team_id, set()))
+        # base_delay += max(0, (tracked_count - 3) // 2)  # 3機超えるごとに +1
+
+        return base_delay
+
     def _select_target_legacy(self, actor: MobileSuit) -> MobileSuit | None:
         """ターゲットを選択する（戦術と索敵状態に基づくレガシー実装）.
 
@@ -212,13 +241,17 @@ class TargetingMixin:
             if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
         ]
 
-        # 索敵済みの敵のみをターゲット候補とする
+        # 索敵済みの敵のみをターゲット候補とする（リアクション遅延チェック付き）
         if actor.team_id is None:
             return None
+        detection_steps = self.detection_step_map.get(actor.team_id, {})  # type: ignore[attr-defined]
+        reaction_delay = self._get_reaction_delay(actor)
         detected_targets = [
             t
             for t in potential_targets
             if t.id in self.team_detected_units[actor.team_id]  # type: ignore[attr-defined]
+            # detection_step_map に未登録（テスト等で手動追加）の場合は即時ターゲット可能とみなす
+            and (self._step_count - detection_steps.get(str(t.id), self._step_count - reaction_delay)) >= reaction_delay  # type: ignore[attr-defined]
         ]
 
         # ターゲットが存在しない場合はNoneを返す
@@ -291,13 +324,17 @@ class TargetingMixin:
             if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
         ]
 
-        # 索敵済みの敵のみをターゲット候補とする
+        # 索敵済みの敵のみをターゲット候補とする（リアクション遅延チェック付き）
         if actor.team_id is None:
             return None
+        detection_steps = self.detection_step_map.get(actor.team_id, {})  # type: ignore[attr-defined]
+        reaction_delay = self._get_reaction_delay(actor)
         detected_targets = [
             t
             for t in potential_targets
             if t.id in self.team_detected_units[actor.team_id]  # type: ignore[attr-defined]
+            # detection_step_map に未登録（テスト等で手動追加）の場合は即時ターゲット可能とみなす
+            and (self._step_count - detection_steps.get(str(t.id), self._step_count - reaction_delay)) >= reaction_delay  # type: ignore[attr-defined]
         ]
 
         # ターゲットが存在しない場合はNoneを返す

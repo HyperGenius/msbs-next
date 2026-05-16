@@ -240,16 +240,19 @@ def test_tactics_ranged_behavior() -> None:
     sim.step()
 
     # Player should try to maintain distance (not rush forward)
-    # Check that there's a movement log indicating distance maintenance
+    # Check that there's a movement log indicating distance maintenance or searching
     move_logs = [
         log
         for log in sim.logs
         if log.action_type == "MOVE" and log.actor_id == player.id
     ]
     if move_logs:
-        # Should contain message about maintaining distance or moving away
+        # RANGED 戦術: 索敵中（リアクション遅延で発見ステップは攻撃不可）または距離維持のログを確認する
         assert any(
-            "距離を取る" in log.message or "射程内" in log.message for log in move_logs
+            "距離を取る" in log.message
+            or "射程内" in log.message
+            or "索敵中" in log.message
+            for log in move_logs
         )
 
 
@@ -373,6 +376,7 @@ def test_tactics_strongest_priority() -> None:
     # Run detection phase so enemies are detected (patch random to always succeed)
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     # Get target selection
     target = sim._select_target_legacy(player)
@@ -405,6 +409,7 @@ def test_tactics_threat_priority() -> None:
     # Run detection phase so enemies are detected (patch random to always succeed)
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     # Get target selection
     target = sim._select_target_legacy(player)
@@ -449,6 +454,7 @@ def test_target_selection_with_multiple_tactics() -> None:
     sim = BattleSimulator(player, enemies)
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
     target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Close Zaku"
@@ -459,6 +465,7 @@ def test_target_selection_with_multiple_tactics() -> None:
     sim = BattleSimulator(player, enemies)
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
     target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Damaged GM"
@@ -469,6 +476,7 @@ def test_target_selection_with_multiple_tactics() -> None:
     sim = BattleSimulator(player, enemies)
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
     target = sim._select_target_legacy(player)
     assert target is not None
     assert target.name == "Far Gundam"
@@ -505,6 +513,7 @@ def test_different_team_id_attack() -> None:
     sim = BattleSimulator(player, [enemy])
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     target = sim._select_target_legacy(player)
     assert target is not None
@@ -869,6 +878,7 @@ def test_attack_log_includes_pilot_name() -> None:
     )
     sim = BattleSimulator(player, [enemy])
     sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
     sim.step()
 
     attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS")]
@@ -1025,6 +1035,7 @@ def test_detection_shared_within_team() -> None:
     sim.elapsed_time = 0.1
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     # Scoutが敵を発見 → TEAM_Aの索敵情報に共有される
     assert enemy.id in sim.team_detected_units["TEAM_A"]
@@ -1239,6 +1250,7 @@ def test_action_phase_respects_attack_action() -> None:
     sim = BattleSimulator(player, enemies=[enemy])
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     # ATTACK に設定して行動フェーズを実行
     sim.unit_resources[str(player.id)]["current_action"] = "ATTACK"
@@ -1273,6 +1285,7 @@ def test_select_target_fuzzy_returns_target_when_single_enemy_detected() -> None
     sim = BattleSimulator(player, [enemy])
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     target = sim._select_target_fuzzy(player)
     assert target is not None
@@ -1297,6 +1310,7 @@ def test_select_target_fuzzy_logs_fuzzy_scores_in_target_selection() -> None:
     sim = BattleSimulator(player, [enemy])
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     sim._select_target_fuzzy(player)
 
@@ -1331,6 +1345,7 @@ def test_select_target_fuzzy_prefers_high_priority_target() -> None:
 
     sim = BattleSimulator(player, [close_low_hp, far_high_hp])
     sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     target = sim._select_target_fuzzy(player)
     assert target is not None
@@ -1646,6 +1661,7 @@ def test_action_phase_uses_fuzzy_weapon_selection() -> None:
     sim = BattleSimulator(player, [enemy])
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
     # プレイヤーを ATTACK モードに設定
     sim.unit_resources[str(player.id)]["current_action"] = "ATTACK"
 

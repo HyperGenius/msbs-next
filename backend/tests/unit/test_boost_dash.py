@@ -447,6 +447,7 @@ def test_boost_start_logged_on_boost_dash_action() -> None:
     sim = BattleSimulator(player, [enemy])
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     uid = str(player.id)
     sim.unit_resources[uid]["current_action"] = "BOOST_DASH"

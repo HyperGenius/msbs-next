@@ -153,6 +153,7 @@ def test_update_body_heading_turns_toward_target() -> None:
     # 検出フェーズ実行（確率判定を常に成功させる）
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     uid = str(player.id)
     # body_heading を 0° に設定
@@ -362,6 +363,7 @@ def test_ai_decision_includes_angle_to_target() -> None:
     sim = BattleSimulator(player, [enemy])
     with patch("app.engine.targeting.random.random", return_value=0.0):
         sim._detection_phase()
+    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
 
     uid = str(player.id)
     sim.unit_resources[uid]["body_heading_deg"] = 0.0  # 正面 (+x)

@@ -152,6 +152,14 @@ class BattleSimulator(
             unit.team_id: set() for unit in self.units if unit.team_id is not None
         }
 
+        # 発見ステップ記録: {team_id: {target_unit_id_str: step_count_at_detection}}
+        # _select_target_fuzzy / _select_target_legacy でリアクション遅延チェックに使用する
+        self.detection_step_map: dict[str, dict[str, int]] = {
+            unit.team_id: {}
+            for unit in self.units
+            if unit.team_id is not None
+        }
+
         # リソース状態管理（戦闘中の一時ステータス）
         self.unit_resources: dict = {}
         for unit in self.units:
