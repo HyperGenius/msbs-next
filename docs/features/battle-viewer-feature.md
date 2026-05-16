@@ -275,10 +275,12 @@ interface UnitSnapshot {
 | プロパティ | 内容 |
 |-----------|------|
 | 形状 | `CylinderGeometry`（上下同径の円柱） |
-| 色 | SPACE: `#5a4a3a` / GROUND: `#4a5a4a` |
-| 透明度 | `opacity: 0.75` |
+| 色（通常） | SPACE: `#5a4a3a` / GROUND: `#4a5a4a` |
+| 色（LOS 遮断時） | `#8a3a3a`（赤みがかった色）、`opacity: 0.9` |
+| 透明度（通常） | `opacity: 0.75` |
 | スケール | `0.05`（既存 MS 座標スケールと統一） |
 | Y オフセット | 円柱の底面をグリッド面（y=0）に合わせるため `y + h/2` |
+| `isBlocking` prop | `true` のとき LOS 遮断障害物として強調表示 |
 
 ### データフロー
 
@@ -286,8 +288,8 @@ interface UnitSnapshot {
 BattleResult.obstacles_info (DB)
   → BattleDetailModal (obstacles_info を BattleViewer に渡す)
   → BattleViewer (obstacles prop)
-  → BattleScene (obstacles prop)
-  → ObstacleMesh (各障害物を個別描画)
+  → BattleScene (obstacles prop + blockingObstacleIds)
+  → ObstacleMesh (各障害物を個別描画、isBlocking で色変化)
 ```
 
 ### 注意事項
@@ -496,10 +498,12 @@ function CameraInitializer({ px, py, pz, controlsRef }) {
 | プロパティ | 内容 |
 |-----------|------|
 | 形状 | `CylinderGeometry`（上下同径の円柱） |
-| 色 | SPACE: `#5a4a3a` / GROUND: `#4a5a4a` |
-| 透明度 | `opacity: 0.75` |
+| 色（通常） | SPACE: `#5a4a3a` / GROUND: `#4a5a4a` |
+| 色（LOS 遮断時） | `#8a3a3a`（赤みがかった色）、`opacity: 0.9` |
+| 透明度（通常） | `opacity: 0.75` |
 | スケール | `0.05`（既存 MS 座標スケールと統一） |
 | Y オフセット | 円柱の底面をグリッド面（y=0）に合わせるため `y + h/2` |
+| `isBlocking` prop | `true` のとき LOS 遮断障害物として強調表示 |
 
 ### データフロー
 
@@ -507,8 +511,8 @@ function CameraInitializer({ px, py, pz, controlsRef }) {
 BattleResult.obstacles_info (DB)
   → BattleDetailModal (obstacles_info を BattleViewer に渡す)
   → BattleViewer (obstacles prop)
-  → BattleScene (obstacles prop)
-  → ObstacleMesh (各障害物を個別描画)
+  → BattleScene (obstacles prop + blockingObstacleIds)
+  → ObstacleMesh (各障害物を個別描画、isBlocking で色変化)
 ```
 
 ### 注意事項
@@ -516,3 +520,56 @@ BattleResult.obstacles_info (DB)
 - `obstacles_info` が `null` / `undefined` の場合は何も描画しない（既存バトル履歴への後方互換性）
 - バックエンドで障害物が生成されない設定（`obstacle_density: "NONE"` など）では `obstacles_info` は `null` として保存される
 
+---
+
+## LOS（Line of Sight）可視化
+
+### 概要
+
+自機から各索敵済み敵MSへの視線が障害物で遮断されているかを視覚的に表示します。  
+デフォルト OFF で、トグルボタン（右下）で ON/OFF を切り替えられます。
+
+### アルゴリズム
+
+バックエンド `combat.py` の `has_los` と同じ **Ray-Sphere 交差判定** を TypeScript で再実装。
+
+実装ファイル: `frontend/src/components/BattleViewer/utils/losUtils.ts`
+
+LOS 計算はシミュレーション実座標（スケール前）で行う。  
+BattleViewer 内の 3D 表示は `scale=0.05` で縮小されているが、  
+LOS 判定には `getBattleSnapshot` から取得した実座標をそのまま使用する。
+
+### 視線ライン表示仕様
+
+| 状態 | 線スタイル | 色 | 透明度 |
+|------|-----------|-----|--------|
+| LOS あり（視線が通っている） | `LineDashedMaterial`（長い破線: dashSize=3） | 緑 `#00ff88` | 0.5 |
+| LOS なし（障害物で遮断） | `LineDashedMaterial`（短い破線: dashSize=0.8） | 赤 `#ff4444` | 0.85 |
+
+### コンポーネント構成
+
+| ファイル | 役割 |
+|---------|------|
+| `utils/losUtils.ts` | `hasLos` 関数（Ray-Sphere 交差判定） |
+| `index.tsx` | `showLos` ステート・`losResults` の `useMemo` 計算 |
+| `scene/BattleScene.tsx` | `LosLine` コンポーネントで視線ライン描画・`blockingObstacleIds` で障害物ハイライト制御 |
+| `scene/ObstacleMesh.tsx` | `isBlocking` prop で色変化 |
+| `ui/BattleOverlay.tsx` | LOS トグルボタン（右下） |
+
+### データフロー
+
+```
+BattleViewer (showLos state)
+  → useMemo: hasLos() × 索敵済み敵MS数 で losResults を計算
+  → BattleScene (losResults prop)
+    → LosLine (各敵MSへの視線ライン描画)
+    → blockingObstacleIds → ObstacleMesh (isBlocking ハイライト)
+BattleOverlay
+  → LOS トグルボタン (onToggleLos コールバック)
+```
+
+### パフォーマンス
+
+- LOS 計算は `currentTimestamp` 変更時のみ再計算（`useMemo` で制御）
+- `showLos` が OFF の場合は計算をスキップ（`undefined` を返す）
+- 敵MS数 × 障害物数 = 最大 5 × 50 = 250 回の交差判定（1フレームで軽量）
