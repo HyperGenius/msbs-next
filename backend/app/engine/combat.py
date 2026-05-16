@@ -410,6 +410,7 @@ class CombatMixin:
                     f"のため旋回中"
                 ),
                 position_snapshot=snapshot,
+                heading=self.unit_resources[unit_id].get("body_heading_deg"),  # type: ignore[attr-defined]
             )
         )
         return True
@@ -495,6 +496,7 @@ class CombatMixin:
                     message=f"{log_base} -> 直撃コース！ しかし{target.name}は信じられない反射神経で紙一重の回避！ ★ [LUK]の奇跡が働いた！",
                     position_snapshot=snapshot,
                     chatter=attack_chatter or hit_chatter,
+                    heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
                 )
             )
             return
@@ -547,6 +549,7 @@ class CombatMixin:
                 weapon_name=weapon.name if weapon else None,
                 chatter=attack_chatter or hit_chatter,
                 skill_activated=True if skill_activated else None,
+                heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
             )
         )
 
@@ -744,6 +747,7 @@ class CombatMixin:
                 position_snapshot=snapshot,
                 chatter=attack_chatter or miss_chatter,
                 skill_activated=True if skill_activated else None,
+                heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
             )
         )
 

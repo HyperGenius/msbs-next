@@ -235,7 +235,9 @@ class MovementMixin:
                     velocity_snapshot=Vector3.from_numpy(
                         self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                     ),
-                    heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
+                    heading=self.unit_resources[str(actor.id)].get(  # type: ignore[attr-defined]
+                        "movement_heading_deg"
+                    ),
                 )
             )
 

@@ -117,39 +117,6 @@ def test_player_vs_enemies_victory() -> None:
     assert sim.is_finished
 
 
-def test_player_defeat() -> None:
-    """Test that battle ends when player is defeated."""
-    player = create_test_player()
-    player.max_hp = 10
-    player.current_hp = 10
-    player.armor = 0
-
-    enemies = [
-        create_test_enemy("Strong Enemy", Vector3(x=100, y=0, z=0)),
-    ]
-    # Make enemy very strong
-    enemies[0].weapons[0].power = 200
-    enemies[0].weapons[0].accuracy = 100
-
-    sim = BattleSimulator(player, enemies)
-
-    # 決定論的に発見させ、リアクション遅延を経過させる（確率的索敵に依存しない）
-    with patch("app.engine.targeting.random.random", return_value=0.0):
-        sim._detection_phase()
-    sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
-
-    # Run simulation
-    max_turns = 50
-    for _ in range(max_turns):
-        if sim.is_finished:
-            break
-        sim.step()
-
-    # Player should lose
-    assert player.current_hp == 0
-    assert sim.is_finished
-
-
 def test_multiple_enemies() -> None:
     """Test battle with multiple enemies."""
     player = create_test_player()

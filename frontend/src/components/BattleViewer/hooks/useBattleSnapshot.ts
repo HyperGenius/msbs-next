@@ -7,6 +7,12 @@ import { WarningType } from "../types";
 /** 浮動小数点数の誤差許容値（タイムスタンプ比較用） */
 const TIMESTAMP_EPSILON = 1e-9;
 
+/** 角度を最短回転方向で線形補間する（度数法） */
+function lerpAngle(from: number, to: number, t: number): number {
+    const diff = ((to - from + 180) % 360) - 180;
+    return from + diff * t;
+}
+
 export interface UnitSnapshot {
     pos: { x: number; y: number; z: number };
     hp: number;
@@ -32,6 +38,7 @@ export function getBattleSnapshot(
     const ammo: Record<string, number> = {};
     const warnings: WarningType[] = [];
     let heading: number | undefined = undefined;
+    let prevHeadingTs: number | undefined = undefined;
     let unitTargetId: string | undefined = undefined;
     
     // 武器の初期弾数を設定
@@ -53,6 +60,7 @@ export function getBattleSnapshot(
         // 向き更新（自ユニットのログに heading フィールドがあれば取得）
         if (log.actor_id === targetId && log.heading !== undefined) {
             heading = log.heading;
+            prevHeadingTs = log.timestamp;
         }
 
         // ターゲット更新（TARGET_SELECTION ログから現在のターゲットを追跡）
@@ -83,6 +91,18 @@ export function getBattleSnapshot(
         }
     }
     
+    // heading補間: 前後のheadingログの間を線形補間してスムーズな向き変化を実現する
+    if (heading !== undefined && prevHeadingTs !== undefined) {
+        for (const log of logs) {
+            if (log.timestamp <= currentTimestamp + TIMESTAMP_EPSILON) continue;
+            if (log.actor_id === targetId && log.heading !== undefined) {
+                const t = (currentTimestamp - prevHeadingTs) / (log.timestamp - prevHeadingTs);
+                heading = lerpAngle(heading, log.heading, Math.max(0, Math.min(1, t)));
+                break;
+            }
+        }
+    }
+
     // 警告状態を判定
     // EN不足: EN_WARNING_THRESHOLD以下
     const maxEn = initialMs.max_en || DEFAULT_MAX_EN;
