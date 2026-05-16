@@ -119,6 +119,11 @@ SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR: float = (
     0.5  # 最小間隔緩和係数（試行失敗時に min_dist に乗算）
 )
 
+# フィールドスケーリング定数 (Phase 6-5)
+AREA_PER_UNIT: float = 250_000.0  # 1ユニットあたりの面積 (m²) = 500m × 500m
+MIN_FIELD_SIZE: float = 2000.0  # 最小フィールド辺長 (m)
+MAX_FIELD_SIZE: float = 8000.0  # 最大フィールド辺長 (m)
+
 # ブーストダッシュシステム定数 (Phase B)
 MELEE_RANGE: float = 50.0  # 近接攻撃有効距離 (m)
 MELEE_BOOST_ARRIVAL_RANGE: float = (

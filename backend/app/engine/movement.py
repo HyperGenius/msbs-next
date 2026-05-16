@@ -13,7 +13,6 @@ from app.engine.constants import (
     DEFAULT_BOOST_MAX_DURATION,
     DEFAULT_BOOST_SPEED_MULTIPLIER,
     HIGH_THREAT_THRESHOLD,
-    MAP_BOUNDS,
     MELEE_BOOST_ARRIVAL_RANGE,
     MOVE_LOG_MIN_DIST,
     OBSTACLE_MARGIN,
@@ -72,7 +71,7 @@ class MovementMixin:
     def _boundary_repulsion(self, pos_unit: np.ndarray) -> np.ndarray:
         """マップ境界への斥力ベクトルを返す."""
         force = np.zeros(3)
-        map_min, map_max = MAP_BOUNDS
+        map_min, map_max = self.map_bounds  # type: ignore[attr-defined]
         axes = [(0, np.array([1.0, 0.0, 0.0])), (2, np.array([0.0, 0.0, 1.0]))]
         for axis, direction in axes:
             dist_min = pos_unit[axis] - map_min
