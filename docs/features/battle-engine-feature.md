@@ -2,8 +2,8 @@
 
 **バージョン:** 0.9.0  
 **作成日:** 2026-04-27  
-**更新日:** 2026-05-09  
-**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 / Phase 5-2 / Phase 6-3 / Phase 6-4 実装済み
+**更新日:** 2026-05-16  
+**ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 / Phase 5-2 / Phase 6-3 / Phase 6-4 / Phase 6-5 / Phase 6-6 実装済み
 
 ---
 
@@ -1100,4 +1100,124 @@ self.map_bounds: tuple[float, float] = (0.0, side_len)
 - `BattleSimulator` に `map_bounds` パラメータは追加しない（自動計算のみ）
 - `MAP_BOUNDS` を直接参照していた既存のテストは `constants.MAP_BOUNDS` を引き続き使用できる
 - `_boundary_repulsion()` は `self.map_bounds` を参照するため、ユニットは動的フィールド内に正しく留まる
+
+---
+
+## 17. Phase 6-6: 発見同ステップ内攻撃抑制（リアクション遅延）
+
+### 17.1 概要
+
+Phase 6-4 で導入した確率的索敵との組み合わせで生じる**「発見と攻撃が同一ステップで起きる」問題**を解消する。
+
+- **問題点**: `_detection_phase()` で発見したステップ内で即座に `_select_target_*()` が攻撃ターゲットを返す → 現実的でない即時攻撃が発生する
+- **解決策**: 発見ステップを `detection_step_map` に記録し、発見ステップ + **リアクション遅延（デフォルト 1 ステップ）** を経過するまで、そのターゲットへの攻撃を抑制する
+
+### 17.2 設計方針
+
+| 項目 | 内容 |
+|---|---|
+| リアクション遅延 | 固定 1 ステップ（= 0.1 秒）。将来はパイロットスキルで短縮予定 |
+| 発見ステップ記録 | `detection_step_map[team_id][str(target_id)] = _step_count` |
+| 攻撃可否チェック | `_step_count - detection_step >= reaction_delay` |
+| 後方互換フォールバック | `detection_step_map` 未登録のターゲットは即時攻撃可能とみなす |
+
+### 17.3 変更ファイル
+
+#### `simulation.py` — `BattleSimulator.__init__()`
+
+```python
+# 発見ステップ記録: {team_id: {target_unit_id_str: step_count_at_detection}}
+self.detection_step_map: dict[str, dict[str, int]] = {
+    unit.team_id: {}
+    for unit in self.units
+    if unit.team_id is not None
+}
+```
+
+#### `targeting.py` — `TargetingMixin`
+
+**型宣言の追加（mypy 向け）:**
+
+```python
+detection_step_map: dict[str, dict[str, int]]
+```
+
+**`_process_single_detection()` — 発見時にステップを記録:**
+
+```python
+self.team_detected_units[unit.team_id].add(target.id)
+self.detection_step_map[unit.team_id][str(target.id)] = self._step_count
+```
+
+**`_get_reaction_delay()` — リアクション遅延ステップ数を返す:**
+
+```python
+def _get_reaction_delay(self, actor: MobileSuit) -> int:
+    base_delay: int = 1
+    return base_delay
+```
+
+> 将来の拡張ポイント: パイロット REF/DEX ステータスや認識中の敵数による動的調整
+
+**`_select_target_fuzzy()` / `_select_target_legacy()` — リアクション遅延チェック:**
+
+```python
+detection_steps = self.detection_step_map.get(actor.team_id, {})
+reaction_delay = self._get_reaction_delay(actor)
+detected_targets = [
+    t
+    for t in potential_targets
+    if t.id in self.team_detected_units[actor.team_id]
+    # detection_step_map に未登録（テスト等で手動追加）の場合は即時ターゲット可能とみなす
+    and (self._step_count - detection_steps.get(str(t.id), self._step_count - reaction_delay)) >= reaction_delay
+]
+```
+
+### 17.4 実行フロー（1 ステップの例）
+
+```
+step() 開始 (_step_count = N)
+  │
+  ├─ 1. _detection_phase()
+  │     └─ 敵発見 → detection_step_map[team][enemy_id] = N
+  │
+  ├─ 3. _ai_decision_phase(unit)
+  │     └─ _select_target_fuzzy(unit): N - N = 0 < 1 → ターゲット None
+  │           └─ action = "MOVE" or "SEARCH"
+  │
+  ├─ 5. _action_phase(unit)
+  │     └─ action != "ATTACK" → 攻撃しない
+  │
+  └─ 8. _step_count = N + 1
+
+step() 開始 (_step_count = N+1)
+  │
+  ├─ 1. _detection_phase()
+  │     └─ 既発見 → LOS チェックのみ（detection_step_map 更新なし）
+  │
+  ├─ 3. _ai_decision_phase(unit)
+  │     └─ _select_target_fuzzy(unit): (N+1) - N = 1 >= 1 → ターゲット選択 OK
+  │           └─ action = "ATTACK"
+  │
+  └─ 5. _action_phase(unit) → 攻撃実行 ✓
+```
+
+### 17.5 テストモック
+
+リアクション遅延をスキップしてターゲット選択をテストする場合:
+
+```python
+# 決定論的に発見させ、リアクション遅延を経過させる
+with patch("app.engine.targeting.random.random", return_value=0.0):
+    sim._detection_phase()
+sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
+```
+
+> 後方互換フォールバック: `sim.team_detected_units[team].add(enemy.id)` で手動追加したターゲット（`detection_step_map` 未登録）は即時攻撃可能とみなされる。
+
+### 17.6 後方互換性
+
+- `detection_step_map` は `BattleSimulator.__init__()` で自動生成されるため、既存コードへの影響なし
+- `detection_step_map` 未登録のターゲットへの攻撃は従来どおり即時可能（フォールバック）
+- 既存テストで `sim.team_detected_units[team].add(target.id)` を手動で呼び出しているケースは `_step_count += 1` 不要
 

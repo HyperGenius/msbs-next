@@ -17,5 +17,8 @@
             "path": "${workspaceFolder}/.vscode/project-words.txt",
             "addWords": true
         }
-    }
+    },
+    "mypy-type-checker.args": [
+        "\"mypy-type-chekcer.args\" : [\"--confit-file=./pyproject.toml\"]"
+    ]
 }
