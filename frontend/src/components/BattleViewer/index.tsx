@@ -9,7 +9,6 @@ import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
 import { ComboEffect } from "./ui/ComboEffect";
 import { getEnvironmentColor, SIMULATION_STEP_S } from "./utils";
-import { IS_PRODUCTION } from "@/constants";
 
 interface BattleViewerProps {
     logs: BattleLog[];
@@ -39,13 +38,9 @@ export default function BattleViewer({
         return { enemy, state: { ...snapshot, prevHp: prevSnapshot.hp } };
     });
 
-    // 本番環境では索敵済み敵MSのみ表示（開発環境では全MS表示）
-    const detectedIds = IS_PRODUCTION
-        ? getDetectedUnits(player.id, logs, currentTimestamp)
-        : null;
-    const visibleEnemyStates = detectedIds
-        ? enemyStates.filter(({ enemy }) => detectedIds.has(enemy.id))
-        : enemyStates;
+    // 索敵済み敵MSのみ表示
+    const detectedIds = getDetectedUnits(player.id, logs, currentTimestamp);
+    const visibleEnemyStates = enemyStates.filter(({ enemy }) => detectedIds.has(enemy.id));
     
     // バトルイベントの取得
     const battleEventMap = useBattleEvents(logs, currentTimestamp);
