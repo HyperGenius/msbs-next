@@ -297,6 +297,104 @@ BattleResult.obstacles_info (DB)
 - `obstacles_info` が `null` / `undefined` の場合は何も描画しない（既存バトル履歴への後方互換性）
 - バックエンドで障害物が生成されない設定（`obstacle_density: "NONE"` など）では `obstacles_info` は `null` として保存される
 
+---
+
+## 攻撃エフェクト（武器・命中結果の可視化）
+
+### 概要
+
+攻撃が発生した際に「どの武器で」「どのMSに」「命中したかミスか」を視覚的に表示する。
+
+---
+
+### 1. 攻撃ライン（ビーム/弾道）の表示
+
+攻撃者からターゲットへの攻撃ラインを一時表示する。
+
+| 状態 | 線スタイル | 色 |
+|------|----------|-----|
+| 命中 | 実線（太め） | 黄色 `#ffcc00` |
+| ミス | 破線（細め） | グレー `#888888` |
+
+**表示時間:** 現在のタイムスタンプが変わると消える（次のステップへ進むと自動消去）
+
+#### `AttackLine` コンポーネント（`BattleScene.tsx` 内）
+
+```typescript
+function AttackLine({ fromPos, toPos, hit }) {
+    // 命中: THREE.LineBasicMaterial (color: 0xffcc00, linewidth: 2)
+    // ミス: THREE.LineDashedMaterial (color: 0x888888, dashSize: 1, gapSize: 0.5)
+}
+```
+
+攻撃ラインは `BattleEventEffect.targetPos` が存在するユニットに対して描画される。
+
+---
+
+### 2. 命中エフェクト（テキスト表示）
+
+`BattleEventDisplay` コンポーネントがターゲット位置でエフェクトテキストを表示する。
+
+| 種別 | テキスト | 色 |
+|------|---------|-----|
+| 通常命中 | `💥 -450` | 黄色 `#ffcc00` |
+| クリティカル（ターゲット） | `💥💥 -450` | 赤 `#ff0000` |
+| クリティカル（アクター） | `💥💥 CRITICAL HIT!!` | 赤 `#ff0000` |
+| ミス | `💨 MISS` | グレー `#888888` |
+| 防御軽減 | `RESIST XX%` | 緑 `#4caf50` |
+
+武器名が `weapon_name` フィールドに存在する場合、エフェクトテキストの上に小さく表示される。
+
+---
+
+### 3. `BattleEventEffect` 型拡張
+
+```typescript
+interface BattleEventEffect {
+    type: 'critical' | 'resist' | 'guard' | 'damage' | 'miss' | 'attack_line';
+    text: string;
+    color: string;
+    weaponName?: string;       // 武器名（表示用）
+    targetPos?: { x: number; y: number; z: number }; // 攻撃ライン描画用ターゲット位置
+    hit?: boolean;             // 命中フラグ（true: 命中, false: ミス）
+}
+```
+
+- `type: 'attack_line'` はアクター側に設定され、テキスト表示なし（ライン描画のみ）
+- `targetPos` が設定されたエフェクトは、そのユニットの位置からターゲット位置への攻撃ラインを描画
+
+---
+
+### 4. `useBattleEvents` フック処理フロー
+
+```
+currentTimestampLogs
+  Pass 1: positionMap を構築（actor_id → position_snapshot）
+  Pass 2: エフェクト生成
+    ├── ATTACK + クリティカルヒット → アクター: critical (targetPos付き)
+    │                               → ターゲット: critical damage (💥💥)
+    ├── MELEE_COMBO → アクター: combo テキスト / ターゲット: damage (💥)
+    ├── ATTACK（通常命中） → アクター: attack_line (hit=true, 黄色)
+    │                       → ターゲット: damage (💥) または resist
+    └── MISS → アクター: attack_line (hit=false, グレー破線)
+               → ターゲット: miss (💨 MISS)
+```
+
+---
+
+### 5. レンダリングフロー（`BattleScene.tsx`）
+
+```
+BattleScene
+  ├── playerEvent
+  │   ├── BattleEventDisplay (type !== 'attack_line' の場合)
+  │   └── AttackLine (targetPos が存在する場合)
+  └── enemyEvents
+      ├── BattleEventDisplay (type !== 'attack_line' の場合)
+      └── AttackLine (targetPos が存在する場合)
+```
+
+---
 
 ## 概要
 
