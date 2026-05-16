@@ -406,8 +406,7 @@ class AiDecisionMixin:
 
         旋回ルール:
         - ATTACK / ENGAGE_MELEE かつターゲットあり → ターゲット方向
-        - MOVE かつターゲットあり → ターゲット方向（ストレイフ移動）
-        - それ以外（MOVE でターゲットなし / RETREAT / その他）→ movement_heading_deg
+        - MOVE / RETREAT / その他 → movement_heading_deg（実際の移動方向）
 
         Args:
             actor: 対象ユニット
@@ -426,13 +425,14 @@ class AiDecisionMixin:
         current_action = resources.get("current_action", "MOVE")
         movement_heading: float = resources.get("movement_heading_deg", 0.0)
 
-        # ターゲットを取得（攻撃対象のみ対象; 選択失敗時は None）
+        # ターゲットを取得（攻撃アクション時のみ; 選択失敗時は None）
         target: MobileSuit | None = None
-        if current_action in ("ATTACK", "ENGAGE_MELEE", "MOVE"):
+        if current_action in ("ATTACK", "ENGAGE_MELEE"):
             target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
 
         # 目標方向を決定
-        if target is not None and current_action in ("ATTACK", "ENGAGE_MELEE", "MOVE"):
+        # 攻撃時のみ敵方向を向く。移動時はmovement_heading_degに追従する
+        if target is not None and current_action in ("ATTACK", "ENGAGE_MELEE"):
             pos_actor = actor.position.to_numpy()
             pos_target = target.position.to_numpy()
             target_heading = math.degrees(
