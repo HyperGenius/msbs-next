@@ -25,6 +25,8 @@ export interface BattleLog {
     combo_count?: number;
     /** 格闘コンボ演出メッセージ e.g. "2Combo 300ダメージ!!" */
     combo_message?: string;
+    /** 行動時点の胴体向き（度数法、XZ平面）— BattleViewer向き可視化用 */
+    heading?: number;
 }
 
 /** バトルで得た報酬（経験値・クレジット・レベル変化） */
