@@ -2,7 +2,7 @@
 
 ブラウザベースの定期更新型MSバトルシミュレーションゲーム
 
-[![Phase](https://img.shields.io/badge/Phase-3_β版_Community%26Content-blue)](docs/roadmaps/roadmap.md)
+[![Phase](https://img.shields.io/badge/Phase-3_β版_Community%26Content-blue)](docs/roadmap/overall-roadmap.md)
 [![Backend](https://img.shields.io/badge/Backend-Python%20%2F%20FastAPI-blue)](backend/)
 [![Frontend](https://img.shields.io/badge/Frontend-Next.js%2015-black)](frontend/)
 
@@ -148,7 +148,7 @@ npm run dev
 
 ### 5. 本番環境へのデプロイ
 
-本番環境（Vercel + Cloud Run）へのデプロイ手順については、[デプロイガイド](docs/DEPLOYMENT.md)を参照してください。
+本番環境（Vercel + Cloud Run）へのデプロイ手順については、[デプロイガイド](docs/infrastructure/delployment.md)を参照してください。
 
 ## 📁 プロジェクト構造
 
@@ -191,29 +191,18 @@ msbs-next/
 
 ### 主要ドキュメント
 
-- **[開発ロードマップ](docs/roadmaps/roadmap.md)** - プロジェクト全体像と進捗状況
+- **[開発ロードマップ](docs/roadmap/overall-roadmap.md)** - プロジェクト全体像と進捗状況
 - **[Agent Guidelines](Agent.md)** - AI Agent/開発者向けガイドライン
-- **[次のステップ](docs/NEXT_STEPS.md)** - 開発優先度ガイド
-- **[バトルシミュレーション仕様](docs/roadmaps/battle_simulation_roadmap.md)** - エンジンの詳細
-- **[バッチシステム](docs/BATCH_SYSTEM.md)** - 定期更新処理の仕様
-- **[パイロットシステム](docs/PILOT_SYSTEM.md)** - 成長・スキルシステム
+- **[バトルシミュレーション仕様](docs/roadmap/battle-simulation.md)** - エンジンの詳細
+- **[バッチシステム](docs/architecture/batch-system.md)** - 定期更新処理の仕様
+- **[パイロットシステム](docs/architecture/pilot-system.md)** - 成長・スキルシステム
 
 ### 実装ガイド
 
-- [Clerk認証セットアップ](docs/CLERK_SETUP.md)
-- [Neonマイグレーション](docs/neon_migration.md)
-- [戦術システム](docs/TACTICS_IMPLEMENTATION.md)
-- [デプロイガイド](docs/DEPLOYMENT.md)
-
-### 実装レポート（`docs/reports/`）
-
-- [ランキング・視察機能](docs/reports/RANKING_IMPLEMENTATION_SUMMARY.md)
-- [エースパイロット・NPC性格](docs/reports/ACE_PILOT_IMPLEMENTATION_SUMMARY.md)
-- [Phase 2.5 UI実装完了](docs/reports/PHASE_2_5_COMPLETION_REPORT.md)
-- [バトルビューア強化](docs/reports/IMPLEMENTATION_SUMMARY_BATTLE_VIEWER.md)
-- [ダッシュボード改善](docs/reports/DASHBOARD_IMPLEMENTATION_REPORT.md)
-- [高度な戦闘ロジック](docs/reports/ADVANCED_BATTLE_LOGIC_REPORT.md)
-- [スキルシステム](docs/reports/SKILL_IMPLEMENTATION_REPORT.md)
+- [Clerk認証セットアップ](docs/setup/clerk-setup.md)
+- [Neonマイグレーション](docs/infrastructure/neon-migration.md)
+- [戦術システム](docs/implementaions/tactics.md)
+- [デプロイガイド](docs/infrastructure/delployment.md)
 
 ## 🧪 テスト
 
@@ -288,7 +277,7 @@ npm run build
 コントリビューション歓迎です！以下を参照してください：
 
 1. [Agent.md](Agent.md) - コーディング規約とベストプラクティス
-2. [roadmap.md](docs/roadmap.md) - 開発中の機能と優先順位
+2. [roadmap.md](docs/roadmap/overall-roadmap.md) - 開発中の機能と優先順位
 3. PRは日本語で記述してください
 
 ## 📝 ライセンス
