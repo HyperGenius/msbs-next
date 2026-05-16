@@ -23,6 +23,7 @@ from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleEntry,
+    BattleField,
     BattleLogRecord,
     BattleResult,
     BattleRoom,
@@ -188,7 +189,7 @@ def _run_simulation(
     Returns:
         (シミュレーター, 勝利フラグ, 撃墜数)
     """
-    simulator = BattleSimulator(player_unit, enemy_units)
+    simulator = BattleSimulator(player_unit, enemy_units, battlefield=BattleField())
 
     for _step_count in range(_MAX_SIMULATION_STEPS):
         if simulator.is_finished:

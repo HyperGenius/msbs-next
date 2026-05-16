@@ -145,31 +145,32 @@
 
 ### 8. BattleViewer — 障害物の3D表示
 
-**現状:** フィールド上に障害物（`Obstacle`）が存在するが、3Dビューアには一切描画されていない。  
-障害物は `radius` と `height` を持つ円柱形オブジェクトとしてシミュレーション内で機能している。
+**現状:** フィールド上に障害物（`Obstacle`）が生成され3Dビューアに描画される。  
+障害物は `radius` と `height` を持つ円柱形オブジェクトとして描画される。
 
-**課題:**
-- `BattleResult` に `obstacles_info` フィールドが存在しない（シミュレーション時のみ生成され保存されない）
-- フロントエンド側に `Obstacle` 型が未定義
+**修正済みバグ:**
+- `BattleSimulator` の障害物自動生成は `battlefield` 引数が明示的に渡された場合にのみ実行される設計だったが、
+  `backend/main.py`（`simulate_battle`）および `backend/scripts/run_batch.py`（`_run_simulation`）で
+  `battlefield` 引数が渡されていなかったため、`obstacles_info` が常に `NULL` になっていた。
+- 修正: 両箇所で `battlefield=BattleField()` を明示的に渡すよう変更。
 
-**方針:**
-- **Backend**: `BattleResult` に `obstacles_info: list[dict] | None` JSON カラムを追加し、  
-  バトル結果保存時に `simulator.obstacles` をシリアライズして格納
-- **Frontend types**: `Obstacle` 型（`obstacle_id`, `position`, `radius`, `height`）を `battle.ts` に追加し、  
-  `BattleResult` に `obstacles_info?: Obstacle[]` を追加
-- **BattleViewer**: `obstacles` プロパティを受け取り、`BattleScene` で `THREE.CylinderGeometry` で描画
-  - 見た目: 半透明グレー/茶色の円柱（ `opacity: 0.7`）
-  - `scale` 係数は既存の MS 座標スケール（`0.05`）と合わせる
+**実装済み:**
+- **Backend**: `BattleResult` の `obstacles_info` JSON カラムにシリアライズして格納
+- **Frontend types**: `Obstacle` 型（`obstacle_id`, `position`, `radius`, `height`）を `battle.ts` に定義済み、
+  `BattleResult` に `obstacles_info?: Obstacle[]` を追加済み
+- **BattleViewer**: `BattleScene` で `THREE.CylinderGeometry` で描画済み
+  - 見た目: 半透明グレー/茶色の円柱（`opacity: 0.7`）
+  - `scale` 係数は既存の MS 座標スケール（`0.05`）と統一
 
-**影響ファイル:**
-- `backend/app/models/models.py`（`BattleResult` カラム追加）
-- `backend/app/services/` または `routers/`（obstacles_info 保存処理）
-- `backend/alembic/versions/`（マイグレーション追加）
-- `frontend/src/types/battle.ts`
-- `frontend/src/components/BattleViewer/index.tsx`
-- `frontend/src/components/BattleViewer/scene/BattleScene.tsx`
-- `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx`（新規）
-- `frontend/src/components/history/BattleDetailModal.tsx`
+**影響ファイル（修正済み）:**
+- `backend/main.py`（`battlefield=BattleField()` 追加）
+- `backend/scripts/run_batch.py`（`battlefield=BattleField()` 追加）
+- `backend/app/models/models.py`（`BattleResult.obstacles_info` カラム実装済み）
+- `frontend/src/types/battle.ts`（実装済み）
+- `frontend/src/components/BattleViewer/index.tsx`（実装済み）
+- `frontend/src/components/BattleViewer/scene/BattleScene.tsx`（実装済み）
+- `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx`（実装済み）
+- `frontend/src/components/history/BattleDetailModal.tsx`（実装済み）
 
 ---
 

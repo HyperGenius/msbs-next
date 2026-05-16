@@ -13,6 +13,7 @@ from app.db import get_session
 from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
+    BattleField,
     BattleLog,
     BattleLogRecord,
     BattleResult,
@@ -212,6 +213,7 @@ async def simulate_battle(
         player_skills=player_skills,
         environment=mission.environment,
         player_pilot_stats=player_pilot_stats,
+        battlefield=BattleField(),
     )
     max_steps = 50
     for _ in range(max_steps):
