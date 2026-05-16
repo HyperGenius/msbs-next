@@ -131,6 +131,45 @@ BattleViewer
 
 ---
 
+---
+
+## BattleScene カメラ初期化
+
+### 概要
+
+モーダルオープン時（`BattleScene` マウント時）に、自機MSの初期位置を中心にカメラを自動配置する。
+
+### 仕様
+
+- `CameraInitializer` コンポーネント（`Canvas` の子）が `useEffect` でマウント時に1回だけ実行
+- カメラ位置: `[px + 50, py + 50, pz + 50]`（自機初期 Three.js 座標からの固定オフセット）
+- `OrbitControls` の target（注視点）: `[px, py, pz]`（自機初期 Three.js 座標）
+- 座標変換: `scale = 0.05`、`game.z → three.y`、`game.y → three.z`（`MobileSuitMesh` と統一）
+
+### 実装詳細
+
+```typescript
+// BattleScene.tsx 内部
+const POSITION_SCALE = 0.05;
+
+function CameraInitializer({ px, py, pz, controlsRef }) {
+    const { camera } = useThree();
+    useEffect(() => {
+        camera.position.set(px + 50, py + 50, pz + 50);
+        if (controlsRef.current) {
+            controlsRef.current.target.set(px, py, pz);
+            controlsRef.current.update();
+        }
+    }, []); // マウント時のみ実行（ユーザー操作後のカメラ位置には干渉しない）
+    return null;
+}
+```
+
+- `useRef` で自機MS初期位置をキャプチャするため、タイムスタンプ更新時に再計算されない
+- ユーザーがカメラを操作した後はカメラ位置・target を変更しない
+
+---
+
 ## 関連ファイル一覧
 
 | ファイル | 役割 |

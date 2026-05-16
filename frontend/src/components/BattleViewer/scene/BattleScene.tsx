@@ -2,7 +2,8 @@
 
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { useRef, useEffect } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, Grid } from "@react-three/drei";
 import { MobileSuit } from "@/types/battle";
 import { EnvironmentEffects } from "./EnvironmentEffects";
@@ -11,6 +12,36 @@ import { BattleEventDisplay } from "./BattleEventDisplay";
 import { ObstacleMesh } from "./ObstacleMesh";
 import { BattleEventEffect, WarningType } from "../types";
 import { Obstacle } from "@/types/battle";
+
+// MobileSuitMesh と同じスケール定数（座標変換の一貫性）
+const POSITION_SCALE = 0.05;
+
+// モーダルオープン時に自機MSを中心にカメラを初期配置するコンポーネント
+// Canvas 内部で useThree を呼ぶため、Canvas の子として定義する必要がある
+function CameraInitializer({
+    px, py, pz,
+    controlsRef,
+}: {
+    px: number;
+    py: number;
+    pz: number;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    controlsRef: React.RefObject<any>;
+}) {
+    const { camera } = useThree();
+
+    useEffect(() => {
+        // 自機MS初期位置を中心にカメラを配置（マウント時のみ実行）
+        camera.position.set(px + 50, py + 50, pz + 50);
+        if (controlsRef.current) {
+            controlsRef.current.target.set(px, py, pz);
+            controlsRef.current.update();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    return null;
+}
 
 interface UnitState {
     pos: { x: number; y: number; z: number };
@@ -40,11 +71,24 @@ export function BattleScene({
     enemyEvents,
     obstacles,
 }: BattleSceneProps) {
+    // 自機MS初期Three.js座標をマウント時のみキャプチャ（MobileSuitMesh と同じ軸変換）
+    const initialPos = useRef({
+        x: playerState.pos.x * POSITION_SCALE,
+        y: playerState.pos.z * POSITION_SCALE, // game.z → Three.js の高さ方向 y
+        z: playerState.pos.y * POSITION_SCALE, // game.y → Three.js の奥行き方向 z
+    });
+    const { x: px, y: py, z: pz } = initialPos.current;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const controlsRef = useRef<any>(null);
+
     return (
         <Canvas
             camera={{ position: [50, 50, 50], fov: 60 }}
             dpr={[1, 2]}
         >
+            {/* モーダルオープン時に自機MSを中心にカメラを初期配置 */}
+            <CameraInitializer px={px} py={py} pz={pz} controlsRef={controlsRef} />
+
             <ambientLight intensity={0.5} />
             <pointLight position={[10, 10, 10]} intensity={1.5} />
 
@@ -60,7 +104,8 @@ export function BattleScene({
                 sectionColor={environment === "COLONY" ? "#8a8aaa" : "#00ff00"} 
                 cellColor={environment === "COLONY" ? "#4a4a6a" : "#003300"} 
             />
-            <OrbitControls 
+            <OrbitControls
+                ref={controlsRef}
                 enableZoom={true}
                 enablePan={true}
                 enableRotate={true}
