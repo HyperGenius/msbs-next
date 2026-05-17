@@ -1,9 +1,9 @@
 # バトルバランス改善 機能仕様書（ドラフト）
 
-**バージョン:** 0.2.0（ドラフト）
+**バージョン:** 0.3.0
 **作成日:** 2026-05-17
 **更新日:** 2026-05-17
-**ステータス:** アイデア検討中
+**ステータス:** Phase E-1 実装完了 / Phase E-2〜E-6 設計中
 
 ---
 
@@ -48,17 +48,19 @@ base_damage = max(1, weapon.power - target.armor)
 
 ### 2.2 パイロット能力の未反映
 
-`calculator.py` に `PilotStats`（DEX/INT/REF/TOU/LUK）が定義されているが、`combat.py` の適用ロジック（`_calculate_hit_chance`, `_process_hit`）は **`actor.side == "PLAYER"` の場合にのみ** ステータスを参照している。
+> **Phase E-1 で部分解決済み。** `DEX` フィールドは廃止・`SHT`/`MEL` に分離実装済み。NPC への全面適用は Phase E-2 で対応予定。
+
+**旧実装（廃止済み）:** `calculator.py` に `PilotStats`（DEX/INT/REF/TOU/LUK）が定義されていたが、`combat.py` は **`actor.side == "PLAYER"` の場合にのみ** ステータスを参照し、DEX をそのまま使っていた。
 
 ```python
-# combat.py 190〜191行
+# 旧 combat.py（廃止済み）
 attacker_dex = self.player_pilot_stats.dex if actor.side == "PLAYER" else 0
 defender_int = self.player_pilot_stats.intel if target.side == "PLAYER" else 0
 ```
 
-NPC/Enemy 側のパイロット能力は常に 0 扱いとなるため、NPC 同士の戦闘ではパイロット差が生まれない。
+**現在（Phase E-1 後）:** `DEX` フィールド自体が廃止され `SHT`/`MEL` に置換された。`combat.py` では暫定的に `attacker_dex = 0` を固定で渡している（Phase E-2 で `sht`/`mel` の参照に切り替える）。
 
-また、現行の `DEX`（器用）は射撃・格闘のどちらにも効く汎用ステータスとして定義されているが、これを **射撃系と格闘系に分離**（→ 3.1・3.5 で詳述）することで、パイロットの専門性（射撃巧者 vs 格闘巧者）がゲームに反映されるようになる。
+NPC/Enemy 側のパイロット能力は引き続き 0 扱いとなるため、NPC 同士の戦闘でのパイロット差は Phase E-2 で解消する。
 
 ---
 
@@ -492,6 +494,8 @@ SECTOR_REAR_SIDE_DEG:  float = 150.0
 
 あわせて、汎用的すぎる `DEX`（器用）を **射撃精度（SHT）** と **格闘技巧（MEL）** に分離する。これにより「射撃巧者」「格闘のスペシャリスト」というパイロット専門性がゲームに反映される。
 
+> **Phase E-1 実装済み:** `DEX` の廃止・`SHT`/`MEL` への分離（DB マイグレーション・`PilotStats`・`Pilot` モデル・フロントエンド全レイヤー）は完了。NPC への全面適用（3.5.3〜3.5.4）は Phase E-2 で対応予定。
+
 #### 3.5.2 パイロットスタットの再定義
 
 | フィールド名 | 表示ラベル | 旧スタット | 主な役割 |
@@ -505,7 +509,7 @@ SECTOR_REAR_SIDE_DEG:  float = 150.0
 
 > **DEX の扱い:** 現行の `DEX` が持つ「距離減衰緩和」効果は `sht` に引き継ぎ、「被ダメージカット」は `tou` に統合する（旧 `DEX` フィールドは非推奨化）。フィールド名（`sht`/`mel`）は内部識別子として使用し、UI 表示には表示ラベル（精密／技巧）を用いる。
 
-**`PilotStats` データクラスの変更（`calculator.py`）:**
+**`PilotStats` データクラスの変更（`calculator.py`）** ✅ Phase E-1 実装済み:
 
 ```python
 @dataclass
@@ -518,11 +522,11 @@ class PilotStats:
     luk:   int = field(default=0)  # 幸運 (LUK) — 乱数偏り・完全回避
 ```
 
-**`Pilot` モデルへの追加フィールド（`models.py`）:**
+**`Pilot` モデルへの追加フィールド（`models.py`）** ✅ Phase E-1 実装済み（Alembicマイグレーション `t3u4v5w6x7y8` 適用済み）:
 
 ```python
-sht: int = Field(default=0, description="精密 (SHT) - 射撃攻撃力補正・命中率")
-mel: int = Field(default=0, description="技巧 (MEL) - 格闘攻撃力補正・命中率")
+sht: int = Field(default=0, description="射撃精度 (SHT) - 射撃攻撃力補正率（シグモイド入力）")
+mel: int = Field(default=0, description="格闘技巧 (MEL) - 格闘攻撃力補正率（シグモイド入力）")
 ```
 
 #### 3.5.3 `PilotStats` の参照元
@@ -546,20 +550,25 @@ mel: int = Field(default=0, description="技巧 (MEL) - 格闘攻撃力補正・
 
 #### 3.5.4 適用箇所の変更
 
-`BattleSimulator` に全ユニット分の `PilotStats` を保持するテーブルを追加する。
+> **Phase E-1 暫定対応:** `dex` フィールド廃止に伴い、`combat.py` では `attacker_dex = 0` を固定で渡している。Phase E-2 で全ユニット対応の完全実装を行う。
+
+**Phase E-1 暫定実装（現在の `combat.py`）:**
+
+```python
+# DEX は廃止（Phase E-1: SHT/MEL に置換）
+attacker_dex = 0
+defender_dex = 0
+```
+
+**Phase E-2 で実装予定:** `BattleSimulator` に全ユニット分の `PilotStats` を保持するテーブルを追加し、NPC 含む全ユニットに適用する。
 
 ```python
 # unit_pilot_stats: {unit_id: PilotStats}
 self.unit_pilot_stats: dict[str, PilotStats] = {}
 ```
 
-`combat.py` のパイロットステータス参照を汎用化する：
-
 ```python
-# 変更前（Player 専用）
-attacker_dex = self.player_pilot_stats.dex if actor.side == "PLAYER" else 0
-
-# 変更後（全ユニット対応）
+# Phase E-2 変更後（全ユニット対応）
 attacker_stats = self.unit_pilot_stats.get(str(actor.id), PilotStats())
 attacker_sht = attacker_stats.sht  # 射撃武器時
 attacker_mel = attacker_stats.mel  # 格闘武器時
