@@ -1,8 +1,12 @@
 import os
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, FastAPI, HTTPException
+
+if TYPE_CHECKING:
+    from app.engine.calculator import PilotStats
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, desc, select
@@ -102,6 +106,35 @@ class BattleResponse(BaseModel):
 
 
 # --- API Endpoints ---
+
+
+def _resolve_npc_pilot_stats(enemies: list[MobileSuit]) -> "dict[str, PilotStats]":
+    """エース NPC のパイロットステータスを npc_data マスターから解決する (Phase E-2).
+
+    is_ace=True かつ ace_id が設定されているユニットのみを対象とし、
+    npc_data.ACE_PILOTS の "stats" キーからステータスを取得する。
+    "stats" キーがない場合は simulation.py 側で personality から自動解決される。
+    """
+    from app.core.npc_data import get_ace_pilot_by_id
+    from app.engine.calculator import PilotStats
+
+    result: dict[str, PilotStats] = {}
+    for enemy in enemies:
+        ace_id = enemy.ace_id
+        if not (getattr(enemy, "is_ace", False) and ace_id):
+            continue
+        ace_data = get_ace_pilot_by_id(ace_id)
+        if ace_data and "stats" in ace_data:
+            s = ace_data["stats"]
+            result[str(enemy.id)] = PilotStats(
+                sht=s.get("sht", 8),
+                mel=s.get("mel", 8),
+                intel=s.get("intel", 8),
+                ref=s.get("ref", 8),
+                tou=s.get("tou", 8),
+                luk=s.get("luk", 8),
+            )
+    return result
 
 
 def _build_enemies_from_config(enemy_configs: list[dict]) -> list[MobileSuit]:
@@ -207,6 +240,9 @@ async def simulate_battle(
     enemy_configs = mission.enemy_config.get("enemies", [])
     enemies = _build_enemies_from_config(enemy_configs)
 
+    # 4.5. エース NPC のパイロットステータスを npc_data マスターから解決 (Phase E-2)
+    npc_pilot_stats = _resolve_npc_pilot_stats(enemies)
+
     # 5. シミュレーション実行（スキルと環境を渡す）
     sim = BattleSimulator(
         player,
@@ -214,6 +250,7 @@ async def simulate_battle(
         player_skills=player_skills,
         environment=mission.environment,
         player_pilot_stats=player_pilot_stats,
+        npc_pilot_stats=npc_pilot_stats,
         battlefield=BattleField(),
     )
     max_steps = 50

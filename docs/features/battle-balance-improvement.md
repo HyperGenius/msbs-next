@@ -1,9 +1,9 @@
 # バトルバランス改善 機能仕様書（ドラフト）
 
-**バージョン:** 0.3.0
+**バージョン:** 0.4.0
 **作成日:** 2026-05-17
 **更新日:** 2026-05-17
-**ステータス:** Phase E-1 実装完了 / Phase E-2〜E-6 設計中
+**ステータス:** Phase E-1・E-2 実装完了 / Phase E-3〜E-6 設計中
 
 ---
 
@@ -20,7 +20,7 @@
 | 装甲支配 | 高装甲MSへのダメージがほぼ 0 になる | 減算式 `weapon.power - target.armor` がゼロに張り付く |
 | カスタム価値低下 | 装甲以外のパラメータを上げても戦果が変わらない | 装甲が防御のほぼ唯一の実効指標になっている |
 | 強MSの無リスク化 | 強いMSが有利に戦い続けられる | 「強い = 集中攻撃を受ける」戦略的コストがない |
-| パイロット能力の希薄さ | パイロットのレベルアップが実感されない | 既存のパイロットステータス（DEX/INT 等）が NPC 戦闘に未適用 |
+| パイロット能力の希薄さ | パイロットのレベルアップが実感されない | 既存のパイロットステータス（DEX/INT 等）が NPC 戦闘に未適用 ← **Phase E-2 で解決済み** |
 
 ---
 
@@ -494,7 +494,7 @@ SECTOR_REAR_SIDE_DEG:  float = 150.0
 
 あわせて、汎用的すぎる `DEX`（器用）を **射撃精度（SHT）** と **格闘技巧（MEL）** に分離する。これにより「射撃巧者」「格闘のスペシャリスト」というパイロット専門性がゲームに反映される。
 
-> **Phase E-1 実装済み:** `DEX` の廃止・`SHT`/`MEL` への分離（DB マイグレーション・`PilotStats`・`Pilot` モデル・フロントエンド全レイヤー）は完了。NPC への全面適用（3.5.3〜3.5.4）は Phase E-2 で対応予定。
+> **Phase E-1・E-2 実装済み:** `DEX` の廃止・`SHT`/`MEL` への分離（DB マイグレーション・`PilotStats`・`Pilot` モデル・フロントエンド全レイヤー）は完了。NPC への全面適用（3.5.3〜3.5.4）は Phase E-2 で完了。
 
 #### 3.5.2 パイロットスタットの再定義
 
@@ -509,7 +509,7 @@ SECTOR_REAR_SIDE_DEG:  float = 150.0
 
 > **DEX の扱い:** 現行の `DEX` が持つ「距離減衰緩和」効果は `sht` に引き継ぎ、「被ダメージカット」は `tou` に統合する（旧 `DEX` フィールドは非推奨化）。フィールド名（`sht`/`mel`）は内部識別子として使用し、UI 表示には表示ラベル（精密／技巧）を用いる。
 
-**`PilotStats` データクラスの変更（`calculator.py`）** ✅ Phase E-1 実装済み:
+**`PilotStats` データクラスの変更（`calculator.py`）** ✅ Phase E-1 実装済み・Phase E-2 で全ユニット適用完了:
 
 ```python
 @dataclass
@@ -529,13 +529,13 @@ sht: int = Field(default=0, description="射撃精度 (SHT) - 射撃攻撃力補
 mel: int = Field(default=0, description="格闘技巧 (MEL) - 格闘攻撃力補正率（シグモイド入力）")
 ```
 
-#### 3.5.3 `PilotStats` の参照元
+#### 3.5.3 `PilotStats` の参照元 ✅ Phase E-2 実装済み
 
 | ユニット種別 | 参照元 |
 |---|---|
-| Player | `self.player_pilot_stats`（既存。`sht`/`mel` を追加） |
-| NPC（エース） | `Pilot` テーブルの全スタットフィールド |
-| NPC（通常） | `personality` に基づくデフォルト値（下表） |
+| Player | `self.player_pilot_stats`（`sht`/`mel` 対応済み） |
+| NPC（エース） | `npc_data.py` の `ACE_PILOTS[*]["stats"]` フィールド（`main.py` で解決して渡す） |
+| NPC（通常） | `personality` に基づくデフォルト値（下表）→ `simulation.py::_personality_pilot_stats()` |
 
 **パーソナリティ別デフォルト `PilotStats`:**
 
@@ -546,32 +546,35 @@ mel: int = Field(default=0, description="格闘技巧 (MEL) - 格闘攻撃力補
 | `SNIPER` | 6 | 1 | 3 | 1 | 1 | 2 | 射撃精度特化・距離減衰緩和 |
 | `None`（デフォルト） | 1 | 1 | 1 | 1 | 1 | 1 | 均等な素人パイロット |
 
-**エースパイロット（`is_ace = True`）:** `Pilot` テーブルの実際のスタット値を使用。各スタット 5〜15 程度で通常 NPC との明確な差別化が生まれる。
+**エースパイロット（`is_ace = True`）:** `npc_data.py` の `ACE_PILOTS` に `"stats"` キーで定義。各スタット 5〜15 の範囲で通常 NPC との明確な差別化が生まれる。
 
-#### 3.5.4 適用箇所の変更
+#### 3.5.4 適用箇所の変更 ✅ Phase E-2 実装済み
 
-> **Phase E-1 暫定対応:** `dex` フィールド廃止に伴い、`combat.py` では `attacker_dex = 0` を固定で渡している。Phase E-2 で全ユニット対応の完全実装を行う。
-
-**Phase E-1 暫定実装（現在の `combat.py`）:**
+`BattleSimulator.__init__()` に `npc_pilot_stats: dict[str, PilotStats] | None` 引数を追加。全 NPC を `unit_pilot_stats` に登録する。
 
 ```python
-# DEX は廃止（Phase E-1: SHT/MEL に置換）
-attacker_dex = 0
-defender_dex = 0
+# simulation.py::_personality_pilot_stats() — モジュールレベル純関数
+def _personality_pilot_stats(personality: str | None) -> PilotStats: ...
+
+# simulation.py::BattleSimulator.__init__() での NPC 登録
+_npc_override = npc_pilot_stats or {}
+for _enemy in self.enemies:
+    _uid = str(_enemy.id)
+    if _uid in _npc_override:
+        self.unit_pilot_stats[_uid] = _npc_override[_uid]
+    else:
+        self.unit_pilot_stats[_uid] = _personality_pilot_stats(
+            getattr(_enemy, "personality", None)
+        )
 ```
 
-**Phase E-2 で実装予定:** `BattleSimulator` に全ユニット分の `PilotStats` を保持するテーブルを追加し、NPC 含む全ユニットに適用する。
+`combat.py` の player-only 条件（8 箇所）を `unit_pilot_stats.get()` による汎用参照に置換。武器種別に応じて `SHT`（射撃）か `MEL`（格闘）を `attacker_dex` 引数として渡す：
 
 ```python
-# unit_pilot_stats: {unit_id: PilotStats}
-self.unit_pilot_stats: dict[str, PilotStats] = {}
-```
-
-```python
-# Phase E-2 変更後（全ユニット対応）
-attacker_stats = self.unit_pilot_stats.get(str(actor.id), PilotStats())
-attacker_sht = attacker_stats.sht  # 射撃武器時
-attacker_mel = attacker_stats.mel  # 格闘武器時
+# Phase E-2 実装後（全ユニット対応）
+_attacker_stats = self.unit_pilot_stats.get(str(actor.id), PilotStats())
+_is_melee_weapon = getattr(weapon, "weapon_type", "RANGED") == "MELEE" or getattr(weapon, "is_melee", False)
+attacker_dex = _attacker_stats.mel if _is_melee_weapon else _attacker_stats.sht
 ```
 
 ---
@@ -648,7 +651,7 @@ attacker_mel = attacker_stats.mel  # 格闘武器時
 | フェーズ | 内容 | 優先度 | 依存 |
 |---|---|---|---|
 | **Phase E-1** | シグモイドダメージ計算式の実装・キャッシュ [3.1]、DB `sht`/`mel` 追加・`dex` 削除、フロントエンド成長ページ更新 ✅ | 高 | なし |
-| **Phase E-2** | パイロット能力の全ユニット（NPC含む）適用 [3.5] | 高 | E-1 |
+| **Phase E-2** | パイロット能力の全ユニット（NPC含む）適用 [3.5] ✅ | 高 | E-1 |
 | **Phase E-3** | 攻撃角度によるセクタ補正 [3.4] | 中 | heading_deg（既実装） |
 | **Phase E-4** | ビジー状態システム [3.2] | 中 | E-3（ターゲット選択変更） |
 | **Phase E-5** | 戦略価値スコアのターゲット選択統合 [3.3] | 中 | E-4 |

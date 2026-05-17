@@ -58,6 +58,42 @@ __all__ = [
 ]
 
 
+def _personality_pilot_stats(personality: str | None) -> PilotStats:
+    """パーソナリティから NPC デフォルト PilotStats を返す (Phase E-2).
+
+    仕様書 §3.5.3 の値を使用する。未知の personality は None 扱い（全スタット 1）。
+    """
+    table: dict[str | None, PilotStats] = {
+        "AGGRESSIVE": PilotStats(sht=3, mel=4, intel=2, ref=4, tou=3, luk=1),
+        "CAUTIOUS": PilotStats(sht=3, mel=1, intel=4, ref=2, tou=2, luk=3),
+        "SNIPER": PilotStats(sht=6, mel=1, intel=3, ref=1, tou=1, luk=2),
+        None: PilotStats(sht=1, mel=1, intel=1, ref=1, tou=1, luk=1),
+    }
+    return table.get(personality, table[None])
+
+
+def _build_unit_pilot_stats(
+    player: "MobileSuit",
+    enemies: "list[MobileSuit]",
+    player_pilot_stats: PilotStats,
+    npc_pilot_stats: dict[str, PilotStats] | None,
+) -> dict[str, PilotStats]:
+    """全ユニットの unit_pilot_stats 辞書を構築する (Phase E-2).
+
+    プレイヤーには player_pilot_stats を使用し、NPC は npc_pilot_stats の
+    オーバーライドがあればそれを、なければ personality から解決する。
+    """
+    result: dict[str, PilotStats] = {str(player.id): player_pilot_stats}
+    override = npc_pilot_stats or {}
+    for enemy in enemies:
+        uid = str(enemy.id)
+        if uid in override:
+            result[uid] = override[uid]
+        else:
+            result[uid] = _personality_pilot_stats(getattr(enemy, "personality", None))
+    return result
+
+
 class BattleSimulator(
     BattleUtilsMixin,
     CombatMixin,
@@ -76,6 +112,7 @@ class BattleSimulator(
         environment: str = "SPACE",
         special_effects: list[str] | None = None,
         player_pilot_stats: PilotStats | None = None,
+        npc_pilot_stats: dict[str, PilotStats] | None = None,
         retreat_points: list[RetreatPoint] | None = None,
         strategy_update_interval: int = STRATEGY_UPDATE_INTERVAL,
         enable_hot_reload: bool = False,
@@ -90,7 +127,9 @@ class BattleSimulator(
             player_skills: プレイヤーのスキル (skill_id: level)
             environment: 戦闘環境 (SPACE/GROUND/COLONY/UNDERWATER)
             special_effects: 特殊環境効果リスト (MINOVSKY/GRAVITY_WELL/OBSTACLE)
-            player_pilot_stats: プレイヤーのパイロットステータス (DEX/INT/REF/TOU/LUK)
+            player_pilot_stats: プレイヤーのパイロットステータス (SHT/MEL/INT/REF/TOU/LUK)
+            npc_pilot_stats: ユニット ID → PilotStats の辞書。エース NPC の実ステータスを
+                事前ロードして渡す。None の場合は enemy.personality から自動解決する (Phase E-2)。
             retreat_points: 撤退ポイントのリスト (Phase 3-3)
             strategy_update_interval: 何ステップごとに戦略評価を行うか (Phase 4-2)
             enable_hot_reload: True の場合、シミュレーション実行ごとにファジィルール JSON
@@ -116,11 +155,10 @@ class BattleSimulator(
         self.player_pilot_stats: PilotStats = player_pilot_stats or PilotStats()
         self.retreat_points: list[RetreatPoint] = retreat_points or []
 
-        # ユニット ID → パイロットステータス の対応表 (Phase E-1)
-        # プレイヤーには player_pilot_stats を紐付け、NPC は default PilotStats()（all=0）を使用
-        self.unit_pilot_stats: dict[str, PilotStats] = {
-            str(self.player.id): self.player_pilot_stats
-        }
+        # ユニット ID → パイロットステータス の対応表 (Phase E-2: NPC 全員適用)
+        self.unit_pilot_stats: dict[str, PilotStats] = _build_unit_pilot_stats(
+            self.player, self.enemies, self.player_pilot_stats, npc_pilot_stats
+        )
 
         # フィールドスケーリング: 総ユニット数に応じて map_bounds を動的計算 (Phase 6-5)
         # グローバル定数 MAP_BOUNDS を変更せず、インスタンス変数として保持する
