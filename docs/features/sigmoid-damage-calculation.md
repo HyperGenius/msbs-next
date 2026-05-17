@@ -155,10 +155,18 @@ DEFENSE_SIGMOID_MIDPOINT: float = 100.0  # 防御軽減率が MAX/2 になる合
 
 | ファイル | 変更内容 |
 |---|---|
+| `alembic/versions/t3u4v5w6x7y8_add_sht_mel_drop_dex.py` | DB マイグレーション: `sht`/`mel` 追加、既存 `dex` 値をコピー後に `dex` 削除 |
+| `app/models/models.py` | `Pilot` モデルから `dex` 削除、`sht`/`mel` 追加 |
 | `constants.py` | シグモイド定数 6 件を追加 |
-| `calculator.py` | `PilotStats` に `sht`/`mel` フィールドを追加 |
+| `calculator.py` | `PilotStats` から `dex` 削除、`sht`/`mel` フィールドに更新 |
 | `combat.py` | `_sigmoid_attack()`, `_sigmoid_defense()`, `_shooting_aptitude_score()`, `_melee_aptitude_score()` を module-level 関数として追加。`CombatMixin._build_combat_multiplier_cache()` を追加。`_calculate_hit_base_damage()` を新計算式に更新 |
 | `simulation.py` | `unit_pilot_stats` 辞書の初期化、`_build_combat_multiplier_cache()` 呼び出しを `__init__` 末尾に追加 |
+| `main.py` | `PilotStats` 構築を `sht`/`mel` に更新 |
+| `app/routers/pilots.py` | `bonus_dex` → `bonus_sht`/`bonus_mel`、`StatusAllocateRequest` 更新 |
+| `app/services/pilot_service.py` | `allocate_status_points` の引数・ロジックを `sht`/`mel` に更新 |
+| `frontend/src/types/pilot.ts` | `dex` 削除、`sht`/`mel` 追加 |
+| `frontend/src/components/pilot/ParameterTuningPanel.tsx` | SHT/MEL の表示・割り振り UI に更新 |
+| `frontend/src/data/backgrounds.json` | `DEX` → `SHT`/`MEL`（値はコピー） |
 
 ---
 

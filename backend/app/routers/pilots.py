@@ -30,7 +30,8 @@ class RegisterPilotRequest(BaseModel):
     name: str
     faction: str
     background: str
-    bonus_dex: int = 0
+    bonus_sht: int = 0
+    bonus_mel: int = 0
     bonus_int: int = 0
     bonus_ref: int = 0
     bonus_tou: int = 0
@@ -130,7 +131,8 @@ async def register_pilot(
     # ボーナスポイントバリデーション（合計5ポイント、各値0以上）
     bonus_points_total = 5
     bonus_values = [
-        request.bonus_dex,
+        request.bonus_sht,
+        request.bonus_mel,
         request.bonus_int,
         request.bonus_ref,
         request.bonus_tou,
@@ -158,7 +160,8 @@ async def register_pilot(
         level=1,
         exp=0,
         credits=1000,
-        dex=base_stats["DEX"] + request.bonus_dex,
+        sht=base_stats["SHT"] + request.bonus_sht,
+        mel=base_stats["MEL"] + request.bonus_mel,
         intel=base_stats["INT"] + request.bonus_int,
         ref=base_stats["REF"] + request.bonus_ref,
         tou=base_stats["TOU"] + request.bonus_tou,
@@ -332,7 +335,8 @@ class SkillUnlockResponse(BaseModel):
 class StatusAllocateRequest(BaseModel):
     """ステータスポイント割り振りリクエスト."""
 
-    dex: int = 0
+    sht: int = 0
+    mel: int = 0
     intel: int = 0
     ref: int = 0
     tou: int = 0
@@ -413,7 +417,8 @@ async def allocate_status_points(
         pilot_service = PilotService(session)
         pilot = pilot_service.allocate_status_points(
             pilot,
-            dex=request.dex,
+            sht=request.sht,
+            mel=request.mel,
             intel=request.intel,
             ref=request.ref,
             tou=request.tou,

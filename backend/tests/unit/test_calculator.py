@@ -215,7 +215,8 @@ def test_calculate_initiative_ref_formula() -> None:
 def test_pilot_stats_defaults() -> None:
     """PilotStats のデフォルト値はすべてゼロ."""
     stats = PilotStats()
-    assert stats.dex == 0
+    assert stats.sht == 0
+    assert stats.mel == 0
     assert stats.intel == 0
     assert stats.ref == 0
     assert stats.tou == 0
@@ -224,8 +225,9 @@ def test_pilot_stats_defaults() -> None:
 
 def test_pilot_stats_custom_values() -> None:
     """PilotStats に値を設定できる."""
-    stats = PilotStats(dex=5, intel=3, ref=7, tou=2, luk=4)
-    assert stats.dex == 5
+    stats = PilotStats(sht=6, mel=7, intel=3, ref=7, tou=2, luk=4)
+    assert stats.sht == 6
+    assert stats.mel == 7
     assert stats.intel == 3
     assert stats.ref == 7
     assert stats.tou == 2

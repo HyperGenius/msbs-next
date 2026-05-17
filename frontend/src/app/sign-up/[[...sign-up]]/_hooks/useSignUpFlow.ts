@@ -185,7 +185,8 @@ export function useSignUpFlow() {
     setIsSubmitting(true);
     try {
       await registerPilot(pilotName.trim(), faction, selectedBackground.id, {
-        bonus_dex: bonusAllocation.DEX,
+        bonus_sht: bonusAllocation.SHT,
+        bonus_mel: bonusAllocation.MEL,
         bonus_int: bonusAllocation.INT,
         bonus_ref: bonusAllocation.REF,
         bonus_tou: bonusAllocation.TOU,

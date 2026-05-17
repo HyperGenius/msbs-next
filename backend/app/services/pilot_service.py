@@ -317,7 +317,8 @@ class PilotService:
     def allocate_status_points(
         self,
         pilot: Pilot,
-        dex: int = 0,
+        sht: int = 0,
+        mel: int = 0,
         intel: int = 0,
         ref: int = 0,
         tou: int = 0,
@@ -327,7 +328,8 @@ class PilotService:
 
         Args:
             pilot: 対象パイロット
-            dex: 器用 (DEX) に割り振るポイント数
+            sht: 射撃精度 (SHT) に割り振るポイント数
+            mel: 格闘技巧 (MEL) に割り振るポイント数
             intel: 直感 (INT) に割り振るポイント数
             ref: 反応 (REF) に割り振るポイント数
             tou: 耐久 (TOU) に割り振るポイント数
@@ -339,7 +341,14 @@ class PilotService:
         Raises:
             ValueError: 割り振りポイントが負、または未使用ポイントを超える場合
         """
-        allocations = {"dex": dex, "intel": intel, "ref": ref, "tou": tou, "luk": luk}
+        allocations = {
+            "sht": sht,
+            "mel": mel,
+            "intel": intel,
+            "ref": ref,
+            "tou": tou,
+            "luk": luk,
+        }
 
         # 各値が負でないことを確認
         for stat_name, value in allocations.items():
@@ -357,7 +366,8 @@ class PilotService:
             )
 
         # ステータスに加算
-        pilot.dex += dex
+        pilot.sht += sht
+        pilot.mel += mel
         pilot.intel += intel
         pilot.ref += ref
         pilot.tou += tou

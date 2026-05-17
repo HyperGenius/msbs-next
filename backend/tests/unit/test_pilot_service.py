@@ -272,7 +272,8 @@ def test_allocate_status_points_basic() -> None:
         exp=0,
         credits=1000,
         status_points=10,
-        dex=0,
+        sht=0,
+        mel=0,
         intel=0,
         ref=0,
         tou=0,
@@ -280,15 +281,16 @@ def test_allocate_status_points_basic() -> None:
     )
 
     updated_pilot = service.allocate_status_points(
-        pilot, dex=3, intel=2, ref=1, tou=2, luk=2
+        pilot, sht=2, mel=1, intel=2, ref=1, tou=2, luk=2
     )
 
-    assert updated_pilot.dex == 3
+    assert updated_pilot.sht == 2
+    assert updated_pilot.mel == 1
     assert updated_pilot.intel == 2
     assert updated_pilot.ref == 1
     assert updated_pilot.tou == 2
     assert updated_pilot.luk == 2
-    assert updated_pilot.status_points == 0  # 10 - (3+2+1+2+2)
+    assert updated_pilot.status_points == 0  # 10 - (2+1+2+1+2+2)
 
 
 def test_allocate_status_points_insufficient_points() -> None:
@@ -306,7 +308,7 @@ def test_allocate_status_points_insufficient_points() -> None:
     )
 
     with pytest.raises(ValueError, match="ステータスポイントが不足しています"):
-        service.allocate_status_points(pilot, dex=5)  # 5 > 3
+        service.allocate_status_points(pilot, sht=5)  # 5 > 3
 
 
 def test_allocate_status_points_negative_value_raises() -> None:
@@ -324,7 +326,7 @@ def test_allocate_status_points_negative_value_raises() -> None:
     )
 
     with pytest.raises(ValueError, match="0以上"):
-        service.allocate_status_points(pilot, dex=-1)
+        service.allocate_status_points(pilot, sht=-1)
 
 
 def test_allocate_status_points_partial() -> None:
@@ -339,7 +341,8 @@ def test_allocate_status_points_partial() -> None:
         exp=0,
         credits=1000,
         status_points=10,
-        dex=0,
+        sht=0,
+        mel=0,
         intel=0,
         ref=0,
         tou=0,
@@ -349,7 +352,7 @@ def test_allocate_status_points_partial() -> None:
     updated_pilot = service.allocate_status_points(pilot, luk=4)
 
     assert updated_pilot.luk == 4
-    assert updated_pilot.dex == 0
+    assert updated_pilot.sht == 0
     assert updated_pilot.status_points == 6  # 10 - 4
 
 

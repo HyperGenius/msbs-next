@@ -26,7 +26,6 @@ from app.engine.constants import (
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 
-
 # ---------------------------------------------------------------------------
 # ヘルパー
 # ---------------------------------------------------------------------------
@@ -85,15 +84,14 @@ class TestPilotStatsShtMel:
         assert stats.mel == 0
 
     def test_can_set_sht_mel(self) -> None:
-        """sht / mel に値を設定できる."""
+        """Sht / mel に値を設定できる."""
         stats = PilotStats(sht=20, mel=15)
         assert stats.sht == 20
         assert stats.mel == 15
 
     def test_existing_fields_still_work(self) -> None:
-        """既存フィールド（dex/intel/ref/tou/luk）が引き続き動作する."""
-        stats = PilotStats(dex=1, intel=2, ref=3, tou=4, luk=5, sht=6, mel=7)
-        assert stats.dex == 1
+        """既存フィールド（intel/ref/tou/luk）が引き続き動作する."""
+        stats = PilotStats(intel=2, ref=3, tou=4, luk=5, sht=6, mel=7)
         assert stats.intel == 2
         assert stats.ref == 3
         assert stats.tou == 4
@@ -127,22 +125,26 @@ class TestSigmoidFunctions:
         scores = [0.0, 10.0, 30.0, 50.0, 80.0, 120.0]
         values = [_sigmoid_attack(s) for s in scores]
         for i in range(len(values) - 1):
-            assert values[i] < values[i + 1], f"score={scores[i]}: {values[i]} >= {values[i+1]}"
+            assert values[i] < values[i + 1], (
+                f"score={scores[i]}: {values[i]} >= {values[i + 1]}"
+            )
 
     def test_sigmoid_defense_monotone_increasing(self) -> None:
         """合計防御力が増えるほど防御軽減率が増加する."""
         scores = [0.0, 50.0, 100.0, 150.0, 200.0]
         values = [_sigmoid_defense(s) for s in scores]
         for i in range(len(values) - 1):
-            assert values[i] < values[i + 1], f"score={scores[i]}: {values[i]} >= {values[i+1]}"
+            assert values[i] < values[i + 1], (
+                f"score={scores[i]}: {values[i]} >= {values[i + 1]}"
+            )
 
     def test_sigmoid_attack_at_midpoint_is_half_max(self) -> None:
-        """midpoint において補正率は MAX_ATTACK_BONUS / 2."""
+        """Midpoint において補正率は MAX_ATTACK_BONUS / 2."""
         val = _sigmoid_attack(ATTACK_SIGMOID_MIDPOINT)
         assert val == pytest.approx(MAX_ATTACK_BONUS / 2.0, rel=1e-6)
 
     def test_sigmoid_defense_at_midpoint_is_half_max(self) -> None:
-        """midpoint において軽減率は MAX_DEFENSE_REDUCTION / 2."""
+        """Midpoint において軽減率は MAX_DEFENSE_REDUCTION / 2."""
         val = _sigmoid_defense(DEFENSE_SIGMOID_MIDPOINT)
         assert val == pytest.approx(MAX_DEFENSE_REDUCTION / 2.0, rel=1e-6)
 
@@ -200,8 +202,12 @@ class TestBuildCombatMultiplierCache:
     def test_high_armor_unit_has_higher_defense_reduction(self) -> None:
         """装甲値が高いユニットほど防御軽減率が高い."""
         player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), armor=50)
-        enemy_low = _make_unit("E-low", "ENEMY", "ET", Vector3(x=200, y=0, z=0), armor=10)
-        enemy_high = _make_unit("E-high", "ENEMY", "ET2", Vector3(x=300, y=0, z=0), armor=200)
+        enemy_low = _make_unit(
+            "E-low", "ENEMY", "ET", Vector3(x=200, y=0, z=0), armor=10
+        )
+        enemy_high = _make_unit(
+            "E-high", "ENEMY", "ET2", Vector3(x=300, y=0, z=0), armor=200
+        )
         sim = BattleSimulator(player, [enemy_low, enemy_high])
 
         low_def = sim.unit_resources[str(enemy_low.id)]["cached_defense_reduction"]
@@ -220,8 +226,12 @@ class TestBuildCombatMultiplierCache:
             player, [enemy], player_pilot_stats=PilotStats(sht=50)
         )
 
-        bonus_no_sht = sim_no_sht.unit_resources[str(player.id)]["cached_ranged_attack_bonus"]
-        bonus_high_sht = sim_high_sht.unit_resources[str(player.id)]["cached_ranged_attack_bonus"]
+        bonus_no_sht = sim_no_sht.unit_resources[str(player.id)][
+            "cached_ranged_attack_bonus"
+        ]
+        bonus_high_sht = sim_high_sht.unit_resources[str(player.id)][
+            "cached_ranged_attack_bonus"
+        ]
         assert bonus_high_sht > bonus_no_sht
 
     def test_player_pilot_mel_increases_melee_attack_bonus(self) -> None:
@@ -236,8 +246,12 @@ class TestBuildCombatMultiplierCache:
             player, [enemy], player_pilot_stats=PilotStats(mel=50)
         )
 
-        bonus_no_mel = sim_no_mel.unit_resources[str(player.id)]["cached_melee_attack_bonus"]
-        bonus_high_mel = sim_high_mel.unit_resources[str(player.id)]["cached_melee_attack_bonus"]
+        bonus_no_mel = sim_no_mel.unit_resources[str(player.id)][
+            "cached_melee_attack_bonus"
+        ]
+        bonus_high_mel = sim_high_mel.unit_resources[str(player.id)][
+            "cached_melee_attack_bonus"
+        ]
         assert bonus_high_mel > bonus_no_mel
 
     def test_player_pilot_tou_increases_defense_reduction(self) -> None:
@@ -252,8 +266,12 @@ class TestBuildCombatMultiplierCache:
             player, [enemy], player_pilot_stats=PilotStats(tou=50)
         )
 
-        def_no_tou = sim_no_tou.unit_resources[str(player.id)]["cached_defense_reduction"]
-        def_high_tou = sim_high_tou.unit_resources[str(player.id)]["cached_defense_reduction"]
+        def_no_tou = sim_no_tou.unit_resources[str(player.id)][
+            "cached_defense_reduction"
+        ]
+        def_high_tou = sim_high_tou.unit_resources[str(player.id)][
+            "cached_defense_reduction"
+        ]
         assert def_high_tou > def_no_tou
 
 
@@ -290,7 +308,9 @@ class TestCalculateHitBaseDamageNewFormula:
 
         # 非クリティカルを強制
         with patch("app.engine.combat.random.random", return_value=1.0):
-            base_damage, msg = sim._calculate_hit_base_damage(player, enemy, weapon, log_base)
+            base_damage, msg = sim._calculate_hit_base_damage(
+                player, enemy, weapon, log_base
+            )
 
         assert "命中" in msg
         # キャッシュ値から期待値を計算
@@ -340,8 +360,11 @@ class TestCalculateHitBaseDamageNewFormula:
     def test_melee_weapon_uses_melee_attack_bonus(self) -> None:
         """MELEE 武器は cached_melee_attack_bonus を使用する."""
         player = _make_unit(
-            "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0),
-            weapons=[_make_weapon(power=100, weapon_type="MELEE")]
+            "Player",
+            "PLAYER",
+            "PT",
+            Vector3(x=0, y=0, z=0),
+            weapons=[_make_weapon(power=100, weapon_type="MELEE")],
         )
         enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=30, y=0, z=0))
         # MEL を高く設定
@@ -351,7 +374,10 @@ class TestCalculateHitBaseDamageNewFormula:
 
         # 射撃補正率と格闘補正率が異なることを確認
         resources = sim.unit_resources[str(player.id)]
-        assert resources["cached_melee_attack_bonus"] != resources["cached_ranged_attack_bonus"]
+        assert (
+            resources["cached_melee_attack_bonus"]
+            != resources["cached_ranged_attack_bonus"]
+        )
 
         # 非クリティカルでメレー武器を使用
         melee_w = _make_weapon(power=100, weapon_type="MELEE")
@@ -379,9 +405,7 @@ class TestCalculateHitBaseDamageNewFormula:
         enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=50, y=0, z=0))
         weapon = _make_weapon(power=100)
 
-        sim_low = BattleSimulator(
-            player, [enemy], player_pilot_stats=PilotStats(sht=0)
-        )
+        sim_low = BattleSimulator(player, [enemy], player_pilot_stats=PilotStats(sht=0))
         sim_high = BattleSimulator(
             player, [enemy], player_pilot_stats=PilotStats(sht=80)
         )

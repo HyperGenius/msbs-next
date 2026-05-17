@@ -14,7 +14,8 @@ export interface Pilot {
     inventory?: Record<string, number>;
     /** 未割り振りのステータスポイント残数 */
     status_points: number;
-    dex: number;
+    sht: number;
+    mel: number;
     intel: number;
     ref: number;
     tou: number;

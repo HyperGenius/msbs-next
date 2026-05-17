@@ -25,7 +25,8 @@ const STAT_RANK_COLORS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, { label: string; abbr: string; desc: string }> = {
-  dex: { label: "器用", abbr: "DEX", desc: "命中・距離減衰緩和・被ダメージカット" },
+  sht: { label: "射撃精度", abbr: "SHT", desc: "射撃攻撃力補正率（シグモイド）" },
+  mel: { label: "格闘技巧", abbr: "MEL", desc: "格闘攻撃力補正率（シグモイド）" },
   intel: { label: "直感", abbr: "INT", desc: "クリティカル率・回避率" },
   ref: { label: "反応", abbr: "REF", desc: "イニシアチブ・機動性ボーナス" },
   tou: { label: "耐久", abbr: "TOU", desc: "ダメージ加算・被クリティカル低下・防御加算" },
@@ -39,7 +40,7 @@ interface ParameterTuningPanelProps {
 
 export default function ParameterTuningPanel({ pilot, mutatePilot }: ParameterTuningPanelProps) {
   const [pendingAlloc, setPendingAlloc] = useState<Record<string, number>>({
-    dex: 0, intel: 0, ref: 0, tou: 0, luk: 0,
+    sht: 0, mel: 0, intel: 0, ref: 0, tou: 0, luk: 0,
   });
   const [allocSaving, setAllocSaving] = useState(false);
   const [allocError, setAllocError] = useState<string>("");
@@ -49,7 +50,8 @@ export default function ParameterTuningPanel({ pilot, mutatePilot }: ParameterTu
   const remainingPoints = pilot.status_points - totalPending;
 
   const pilotStatValues: Record<string, number> = {
-    dex: pilot.dex,
+    sht: pilot.sht,
+    mel: pilot.mel,
     intel: pilot.intel,
     ref: pilot.ref,
     tou: pilot.tou,
@@ -74,7 +76,7 @@ export default function ParameterTuningPanel({ pilot, mutatePilot }: ParameterTu
     try {
       await allocateStatusPoints(pendingAlloc);
       setAllocSuccess("ステータスを保存しました");
-      setPendingAlloc({ dex: 0, intel: 0, ref: 0, tou: 0, luk: 0 });
+      setPendingAlloc({ sht: 0, mel: 0, intel: 0, ref: 0, tou: 0, luk: 0 });
       await mutatePilot();
     } catch (err) {
       setAllocError(err instanceof Error ? err.message : "ステータスポイントの保存に失敗しました。もう一度お試しください");

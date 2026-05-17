@@ -257,7 +257,7 @@ class CombatMixin:
             hit_chance -= obstacle["accuracy_penalty"]
 
         # パイロットステータス補正を適用
-        attacker_dex = self.player_pilot_stats.dex if actor.side == "PLAYER" else 0  # type: ignore[attr-defined]
+        attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
         defender_int = self.player_pilot_stats.intel if target.side == "PLAYER" else 0  # type: ignore[attr-defined]
         hit_chance = calculate_hit_chance(
             hit_chance,
@@ -539,7 +539,7 @@ class CombatMixin:
         # パイロットステータス補正: ダメージ乱数変動・LUK 完全回避
         attacker_tou = self.player_pilot_stats.tou if actor.side == "PLAYER" else 0  # type: ignore[attr-defined]
         attacker_luk = self.player_pilot_stats.luk if actor.side == "PLAYER" else 0  # type: ignore[attr-defined]
-        defender_dex = self.player_pilot_stats.dex if target.side == "PLAYER" else 0  # type: ignore[attr-defined]
+        defender_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
         defender_tou = self.player_pilot_stats.tou if target.side == "PLAYER" else 0  # type: ignore[attr-defined]
         defender_luk = self.player_pilot_stats.luk if target.side == "PLAYER" else 0  # type: ignore[attr-defined]
 
@@ -734,9 +734,9 @@ class CombatMixin:
             # シグモイドダメージ計算式 (Phase E-1)
             # キャッシュされた攻撃補正率・防御軽減率を参照する
             resources_actor = self.unit_resources.get(str(actor.id), {})  # type: ignore[attr-defined]
-            is_melee_weapon = getattr(weapon, "weapon_type", "RANGED") == "MELEE" or getattr(
-                weapon, "is_melee", False
-            )
+            is_melee_weapon = getattr(
+                weapon, "weapon_type", "RANGED"
+            ) == "MELEE" or getattr(weapon, "is_melee", False)
             attack_bonus = (
                 resources_actor.get("cached_melee_attack_bonus", 0.0)
                 if is_melee_weapon
@@ -832,9 +832,15 @@ class CombatMixin:
             # 防御軽減率: MS装甲 + パイロット TOU
             total_def = float(getattr(unit, "armor", 0)) + float(pilot.tou)
 
-            unit_resources[uid]["cached_ranged_attack_bonus"] = _sigmoid_attack(ranged_atk)
-            unit_resources[uid]["cached_melee_attack_bonus"] = _sigmoid_attack(melee_atk)
-            unit_resources[uid]["cached_defense_reduction"] = _sigmoid_defense(total_def)
+            unit_resources[uid]["cached_ranged_attack_bonus"] = _sigmoid_attack(
+                ranged_atk
+            )
+            unit_resources[uid]["cached_melee_attack_bonus"] = _sigmoid_attack(
+                melee_atk
+            )
+            unit_resources[uid]["cached_defense_reduction"] = _sigmoid_defense(
+                total_def
+            )
 
     def _process_miss(
         self,

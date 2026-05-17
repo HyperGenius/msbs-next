@@ -87,9 +87,10 @@ describe("定数値", () => {
     expect(BONUS_POINTS_TOTAL).toBe(5);
   });
 
-  it("STAT_KEYS は DEX / INT / REF / TOU / LUK の5種類を含む", () => {
-    expect(STAT_KEYS).toHaveLength(5);
-    expect(STAT_KEYS).toContain("DEX");
+  it("STAT_KEYS は SHT / MEL / INT / REF / TOU / LUK の6種類を含む", () => {
+    expect(STAT_KEYS).toHaveLength(6);
+    expect(STAT_KEYS).toContain("SHT");
+    expect(STAT_KEYS).toContain("MEL");
     expect(STAT_KEYS).toContain("INT");
     expect(STAT_KEYS).toContain("REF");
     expect(STAT_KEYS).toContain("TOU");
