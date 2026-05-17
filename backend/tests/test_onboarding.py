@@ -12,7 +12,8 @@ from main import app
 _BASE_REGISTER_BODY = {
     "faction": "FEDERATION",
     "background": "ACADEMY_ELITE",
-    "bonus_dex": 2,
+    "bonus_sht": 1,
+    "bonus_mel": 1,
     "bonus_int": 1,
     "bonus_ref": 1,
     "bonus_tou": 1,
@@ -42,8 +43,8 @@ def test_register_pilot_federation_success(client, session):
         assert pilot["background"] == "ACADEMY_ELITE"
         assert pilot["credits"] == 1000
 
-        # 経歴 + ボーナスによる初期ステータスの確認 (ACADEMY_ELITE: DEX=10, bonus=2 → 12)
-        assert pilot["dex"] == 12
+        # 経歴 + ボーナスによる初期ステータスの確認 (ACADEMY_ELITE: SHT=10, bonus=1 → 11)
+        assert pilot["sht"] == 11
         assert pilot["intel"] == 9
         assert pilot["ref"] == 13
         assert pilot["tou"] == 11
@@ -70,7 +71,8 @@ def test_register_pilot_zeon_success(client, session):
                 "name": "Char Aznable",
                 "faction": "ZEON",
                 "background": "STREET_SURVIVOR",
-                "bonus_dex": 1,
+                "bonus_sht": 1,
+                "bonus_mel": 0,
                 "bonus_int": 1,
                 "bonus_ref": 2,
                 "bonus_tou": 1,
@@ -113,7 +115,8 @@ def test_register_pilot_trainer_stats_equal(client, session):
             "name": "Zeon Pilot",
             "faction": "ZEON",
             "background": "EX_MECHANIC",
-            "bonus_dex": 0,
+            "bonus_sht": 0,
+            "bonus_mel": 0,
             "bonus_int": 2,
             "bonus_ref": 2,
             "bonus_tou": 1,
@@ -174,7 +177,8 @@ def test_register_pilot_invalid_faction(client, session):
                 "name": "Test Pilot",
                 "faction": "INVALID",
                 "background": "ACADEMY_ELITE",
-                "bonus_dex": 2,
+                "bonus_sht": 1,
+                "bonus_mel": 1,
                 "bonus_int": 1,
                 "bonus_ref": 1,
                 "bonus_tou": 1,
@@ -214,7 +218,8 @@ def test_register_pilot_invalid_background(client, session):
                 "name": "Test Pilot",
                 "faction": "FEDERATION",
                 "background": "INVALID_BACKGROUND",
-                "bonus_dex": 2,
+                "bonus_sht": 1,
+                "bonus_mel": 1,
                 "bonus_int": 1,
                 "bonus_ref": 1,
                 "bonus_tou": 1,
@@ -238,7 +243,8 @@ def test_register_pilot_invalid_bonus_total(client, session):
                 "name": "Test Pilot",
                 "faction": "FEDERATION",
                 "background": "ACADEMY_ELITE",
-                "bonus_dex": 3,
+                "bonus_sht": 2,
+                "bonus_mel": 1,
                 "bonus_int": 1,
                 "bonus_ref": 1,
                 "bonus_tou": 1,
@@ -262,7 +268,8 @@ def test_register_pilot_negative_bonus(client, session):
                 "name": "Test Pilot",
                 "faction": "FEDERATION",
                 "background": "ACADEMY_ELITE",
-                "bonus_dex": -1,
+                "bonus_sht": -1,
+                "bonus_mel": 0,
                 "bonus_int": 2,
                 "bonus_ref": 3,
                 "bonus_tou": 1,

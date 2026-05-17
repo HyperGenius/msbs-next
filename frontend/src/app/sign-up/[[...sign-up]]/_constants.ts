@@ -8,11 +8,12 @@ export const BACKGROUNDS: Background[] = backgroundsData as Background[];
 export const BONUS_POINTS_TOTAL = 5;
 
 /** ステータスポイントを割り振れるステータスキーの一覧 */
-export const STAT_KEYS: StatKey[] = ["DEX", "INT", "REF", "TOU", "LUK"];
+export const STAT_KEYS: StatKey[] = ["SHT", "MEL", "INT", "REF", "TOU", "LUK"];
 
 /** 各ステータスの日本語説明文 */
 export const STAT_DESCRIPTIONS: Record<StatKey, string> = {
-  DEX: "器用 (DEX): 手先の器用さ",
+  SHT: "射撃精度 (SHT): 射撃攻撃力の補正",
+  MEL: "格闘技巧 (MEL): 格闘攻撃力の補正",
   INT: "直感 (INT): 状況判断力",
   REF: "反応 (REF): 反射神経",
   TOU: "耐久 (TOU): 体力・頑丈さ",
@@ -21,7 +22,8 @@ export const STAT_DESCRIPTIONS: Record<StatKey, string> = {
 
 /** ボーナス割り振りの初期状態（全ステータス0） */
 export const INITIAL_BONUS: BonusAllocation = {
-  DEX: 0,
+  SHT: 0,
+  MEL: 0,
   INT: 0,
   REF: 0,
   TOU: 0,

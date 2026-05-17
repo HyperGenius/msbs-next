@@ -752,8 +752,11 @@ class Pilot(SQLModel, table=True):
 
     # ステータスポイントシステム
     status_points: int = Field(default=0, description="未使用のステータスポイント")
-    dex: int = Field(
-        default=0, description="器用 (DEX) - 命中率・距離減衰緩和・被ダメージカット"
+    sht: int = Field(
+        default=0, description="射撃精度 (SHT) - 射撃攻撃力補正率（シグモイド入力）"
+    )
+    mel: int = Field(
+        default=0, description="格闘技巧 (MEL) - 格闘攻撃力補正率（シグモイド入力）"
     )
     intel: int = Field(default=0, description="直感 (INT) - クリティカル率・回避率")
     ref: int = Field(default=0, description="反応 (REF) - イニシアチブ・機動性乗算")

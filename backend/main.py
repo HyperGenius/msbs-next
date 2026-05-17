@@ -195,7 +195,8 @@ async def simulate_battle(
         if pilot:
             player_skills = pilot.skills
             player_pilot_stats = PilotStats(
-                dex=pilot.dex,
+                sht=pilot.sht,
+                mel=pilot.mel,
                 intel=pilot.intel,
                 ref=pilot.ref,
                 tou=pilot.tou,

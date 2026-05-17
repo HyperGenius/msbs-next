@@ -1,6 +1,6 @@
 export type Faction = "FEDERATION" | "ZEON";
 
-export type StatKey = "DEX" | "INT" | "REF" | "TOU" | "LUK";
+export type StatKey = "SHT" | "MEL" | "INT" | "REF" | "TOU" | "LUK";
 
 export interface Background {
   id: string;

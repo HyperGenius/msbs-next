@@ -5,7 +5,8 @@ import { API_BASE_URL, getAuthToken, useAuthFetcher, authKey } from "./auth";
 
 /** ステータスポイント割り振りリクエストの型 */
 export interface StatusAllocateRequest {
-  dex?: number;
+  sht?: number;
+  mel?: number;
   intel?: number;
   ref?: number;
   tou?: number;
@@ -40,7 +41,7 @@ export async function registerPilot(
   name: string,
   faction: "FEDERATION" | "ZEON",
   background: string,
-  bonusStats: { bonus_dex: number; bonus_int: number; bonus_ref: number; bonus_tou: number; bonus_luk: number }
+  bonusStats: { bonus_sht: number; bonus_mel: number; bonus_int: number; bonus_ref: number; bonus_tou: number; bonus_luk: number }
 ): Promise<{ pilot: Pilot; mobile_suit_id: string; message: string }> {
   const token = await getAuthToken();
   const headers: HeadersInit = {
@@ -80,7 +81,8 @@ export async function allocateStatusPoints(request: StatusAllocateRequest): Prom
 
   // 未指定のステータスは0として送信する（APIが部分更新に対応していないため）
   const body = {
-    dex: request.dex ?? 0,
+    sht: request.sht ?? 0,
+    mel: request.mel ?? 0,
     intel: request.intel ?? 0,
     ref: request.ref ?? 0,
     tou: request.tou ?? 0,

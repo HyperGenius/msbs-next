@@ -28,11 +28,11 @@ const meta: Meta<typeof StatAllocationRow> = {
 export default meta;
 type Story = StoryObj<typeof StatAllocationRow>;
 
-/** DEX — ボーナス0（デフォルト） */
-export const DEXDefault: Story = {
+/** SHT — ボーナス0（デフォルト） */
+export const SHTDefault: Story = {
   args: {
-    stat: "DEX",
-    description: "器用 (DEX): 命中率・距離減衰緩和・被ダメージカット",
+    stat: "SHT",
+    description: "射撃精度 (SHT): 射撃攻撃力の補正",
     bonus: 0,
     canDecrement: false,
     canIncrement: true,
