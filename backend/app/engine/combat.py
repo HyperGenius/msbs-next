@@ -256,9 +256,14 @@ class CombatMixin:
             obstacle = SPECIAL_ENVIRONMENT_EFFECTS["OBSTACLE"]
             hit_chance -= obstacle["accuracy_penalty"]
 
-        # パイロットステータス補正を適用
-        attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
-        defender_int = self.player_pilot_stats.intel if target.side == "PLAYER" else 0  # type: ignore[attr-defined]
+        # パイロットステータス補正を適用 (Phase E-2: 全ユニット対応)
+        _attacker_stats = self.unit_pilot_stats.get(str(actor.id), PilotStats())  # type: ignore[attr-defined]
+        _defender_stats = self.unit_pilot_stats.get(str(target.id), PilotStats())  # type: ignore[attr-defined]
+        _is_melee_weapon = getattr(
+            weapon, "weapon_type", "RANGED"
+        ) == "MELEE" or getattr(weapon, "is_melee", False)
+        attacker_dex = _attacker_stats.mel if _is_melee_weapon else _attacker_stats.sht
+        defender_int = _defender_stats.intel
         hit_chance = calculate_hit_chance(
             hit_chance,
             distance_from_optimal=distance_from_optimal,
@@ -536,12 +541,14 @@ class CombatMixin:
             actor, target, weapon, base_damage
         )
 
-        # パイロットステータス補正: ダメージ乱数変動・LUK 完全回避
-        attacker_tou = self.player_pilot_stats.tou if actor.side == "PLAYER" else 0  # type: ignore[attr-defined]
-        attacker_luk = self.player_pilot_stats.luk if actor.side == "PLAYER" else 0  # type: ignore[attr-defined]
+        # パイロットステータス補正: ダメージ乱数変動・LUK 完全回避 (Phase E-2: 全ユニット対応)
+        _attacker_stats = self.unit_pilot_stats.get(str(actor.id), PilotStats())  # type: ignore[attr-defined]
+        _defender_stats = self.unit_pilot_stats.get(str(target.id), PilotStats())  # type: ignore[attr-defined]
+        attacker_tou = _attacker_stats.tou
+        attacker_luk = _attacker_stats.luk
         defender_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
-        defender_tou = self.player_pilot_stats.tou if target.side == "PLAYER" else 0  # type: ignore[attr-defined]
-        defender_luk = self.player_pilot_stats.luk if target.side == "PLAYER" else 0  # type: ignore[attr-defined]
+        defender_tou = _defender_stats.tou
+        defender_luk = _defender_stats.luk
 
         final_damage, perfect_evade = calculate_damage_variance(
             base_damage,
@@ -719,10 +726,11 @@ class CombatMixin:
             crit_skill_level = self.player_skills.get("crit_rate_up", 0)  # type: ignore[attr-defined]
             base_crit_rate += (crit_skill_level * 1.0) / 100.0  # +1% / Lv
 
-        attacker_int = self.player_pilot_stats.intel if actor.side == "PLAYER" else 0  # type: ignore[attr-defined]
-        defender_tou_crit = (
-            self.player_pilot_stats.tou if target.side == "PLAYER" else 0  # type: ignore[attr-defined]
-        )
+        # パイロットステータス補正 (Phase E-2: 全ユニット対応)
+        _attacker_stats = self.unit_pilot_stats.get(str(actor.id), PilotStats())  # type: ignore[attr-defined]
+        _defender_stats = self.unit_pilot_stats.get(str(target.id), PilotStats())  # type: ignore[attr-defined]
+        attacker_int = _attacker_stats.intel
+        defender_tou_crit = _defender_stats.tou
         adjusted_crit_rate = calculate_critical_chance(
             base_crit_rate,
             attacker_int=attacker_int,

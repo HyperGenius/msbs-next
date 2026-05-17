@@ -459,11 +459,18 @@ class TestSigmoidDamageCompat:
         assert str(player.id) in sim.unit_pilot_stats
         assert sim.unit_pilot_stats[str(player.id)] is stats
 
-    def test_enemy_not_in_unit_pilot_stats_gets_default(self) -> None:
-        """NPC（未登録ユニット）は unit_pilot_stats に存在せずデフォルト PilotStats を使う."""
+    def test_enemy_default_pilot_stats_are_ones(self) -> None:
+        """NPC（personality=None）は unit_pilot_stats に登録され、全ステータスが 1 になる (Phase E-2)."""
         player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
         enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=200, y=0, z=0))
+        enemy.personality = None
         sim = BattleSimulator(player, [enemy])
 
-        # enemy は unit_pilot_stats に存在しない（デフォルト PilotStats() が使われる）
-        assert str(enemy.id) not in sim.unit_pilot_stats
+        assert str(enemy.id) in sim.unit_pilot_stats
+        stats = sim.unit_pilot_stats[str(enemy.id)]
+        assert stats.sht == 1
+        assert stats.mel == 1
+        assert stats.intel == 1
+        assert stats.ref == 1
+        assert stats.tou == 1
+        assert stats.luk == 1
