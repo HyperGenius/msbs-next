@@ -195,7 +195,8 @@ afterEach(() => { vi.unstubAllGlobals(); });
 ### テストの実行
 
 ```bash
-cd frontend && npm run test
+# npm run test は存在しない。必ず vitest を直接実行する
+cd frontend && npx vitest run tests/unit/
 ```
 
 ---
@@ -212,6 +213,46 @@ export * from "./mobileSuit";
 ```
 
 これにより `import { usePilot } from "@/services/api"` は引き続き動作する。
+
+---
+
+## パイロットステータス体系
+
+### StatKey と BonusAllocation（Phase E-1 以降）
+
+```typescript
+// frontend/src/app/onboarding/_types.ts
+export type StatKey = "SHT" | "MEL" | "INT" | "REF" | "TOU" | "LUK";
+
+// BonusAllocation = Record<StatKey, number>
+// BONUS_POINTS_TOTAL = 5（サインアップウィザードのボーナス総量）
+```
+
+**`DEX` は廃止済み**。`StatKey` に `"DEX"` を追加してはいけない。
+
+### Pilot 型のステータスフィールド（`frontend/src/types/pilot.ts`）
+
+```typescript
+sht: number;   // 射撃精度
+mel: number;   // 格闘技巧
+intel: number;
+ref: number;
+tou: number;
+luk: number;
+```
+
+---
+
+## backgrounds.json の二重管理
+
+**同名ファイルが2箇所に存在する。両方を必ず同期して更新すること。**
+
+| パス | 用途 |
+|---|---|
+| `frontend/src/data/backgrounds.json` | Next.js オンボーディングページ（`onboarding/page.tsx`）が読み込む |
+| `backend/data/master/backgrounds.json` | FastAPI ルーターが読み込む |
+
+現在のベースステータスキー: `SHT`, `MEL`, `INT`, `REF`, `TOU`, `LUK`（`DEX` は存在しない）
 
 ---
 
