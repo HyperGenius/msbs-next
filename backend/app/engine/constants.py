@@ -196,9 +196,9 @@ RETREAT_WIPE_ALIVE_THRESHOLD: float = 0.20
 
 # ダメージ計算シグモイド定数 (Phase E-1)
 # k・midpoint は balance-cli-tools で検証後に調整する（初期値）
-MAX_ATTACK_BONUS: float = 0.50          # 攻撃力補正率の上限（50%）
-MAX_DEFENSE_REDUCTION: float = 0.50    # 防御軽減率の上限（50%）
-ATTACK_SIGMOID_K: float = 0.05         # 攻撃シグモイドの傾き
+MAX_ATTACK_BONUS: float = 0.50  # 攻撃力補正率の上限（50%）
+MAX_DEFENSE_REDUCTION: float = 0.50  # 防御軽減率の上限（50%）
+ATTACK_SIGMOID_K: float = 0.05  # 攻撃シグモイドの傾き
 ATTACK_SIGMOID_MIDPOINT: float = 50.0  # 攻撃補正率が MAX/2 になる合計攻撃力値
-DEFENSE_SIGMOID_K: float = 0.05        # 防御シグモイドの傾き
+DEFENSE_SIGMOID_K: float = 0.05  # 防御シグモイドの傾き
 DEFENSE_SIGMOID_MIDPOINT: float = 100.0  # 防御軽減率が MAX/2 になる合計防御力値
