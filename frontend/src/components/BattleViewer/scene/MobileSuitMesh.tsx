@@ -42,8 +42,10 @@ export function MobileSuitMesh({
     const headingArrow = useMemo(() => {
         if (heading === undefined) return null;
         const headingRad = (heading * Math.PI) / 180;
+        // ゲーム座標→Three.js座標: game.x→X, game.z→Y, game.y(高さ=0)→Z
+        // バックエンド: direction=[cos,0,sin] (XZ平面) → Three.js: (cos, sin, 0) (XY平面)
         const dir = new THREE.Vector3(
-            Math.sin(headingRad), 0, Math.cos(headingRad)
+            Math.cos(headingRad), Math.sin(headingRad), 0
         ).normalize();
         return new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), 4, 0x4488ff, 1.5, 1.0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
