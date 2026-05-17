@@ -8,17 +8,24 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from app.engine.calculator import (
+    PilotStats,
     calculate_critical_chance,
     calculate_damage_variance,
     calculate_hit_chance,
 )
 from app.engine.constants import (
+    ATTACK_SIGMOID_K,
+    ATTACK_SIGMOID_MIDPOINT,
     CLOSE_RANGE,
     COMBO_BASE_CHANCE,
     COMBO_CHAIN_DECAY,
     COMBO_DAMAGE_MULTIPLIER,
     COMBO_MAX_CHAIN,
     DEFAULT_FIRE_ARC_DEG,
+    DEFENSE_SIGMOID_K,
+    DEFENSE_SIGMOID_MIDPOINT,
+    MAX_ATTACK_BONUS,
+    MAX_DEFENSE_REDUCTION,
     MELEE_CLOSE_ACCURACY_BONUS,
     MELEE_MID_ACCURACY_BONUS,
     MELEE_RANGE,
@@ -72,6 +79,69 @@ def has_los(
         if 0.0 < t < dist:
             return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# シグモイドダメージ計算ヘルパー関数 (Phase E-1)
+# ---------------------------------------------------------------------------
+
+
+def _sigmoid_attack(total_atk: float) -> float:
+    """攻撃力補正率をシグモイド関数で計算する.
+
+    Args:
+        total_atk: 合計攻撃力スコア（MS射撃/格闘適性スコア + パイロット SHT/MEL）
+
+    Returns:
+        攻撃力補正率（0.0〜MAX_ATTACK_BONUS = 0.50）
+    """
+    return MAX_ATTACK_BONUS / (
+        1.0 + math.exp(-ATTACK_SIGMOID_K * (total_atk - ATTACK_SIGMOID_MIDPOINT))
+    )
+
+
+def _sigmoid_defense(total_def: float) -> float:
+    """防御軽減率をシグモイド関数で計算する.
+
+    Args:
+        total_def: 合計防御力スコア（MS装甲 + パイロット TOU）
+
+    Returns:
+        防御軽減率（0.0〜MAX_DEFENSE_REDUCTION = 0.50）
+    """
+    return MAX_DEFENSE_REDUCTION / (
+        1.0 + math.exp(-DEFENSE_SIGMOID_K * (total_def - DEFENSE_SIGMOID_MIDPOINT))
+    )
+
+
+def _shooting_aptitude_score(unit: MobileSuit) -> float:
+    """MS 射撃適性を数値スコアに変換する (Phase E-1: スタブ).
+
+    Phase E-2 で本格実装予定。現在は 0 を返すことで aptitude 乗算との二重適用を避け、
+    パイロット SHT のみがシグモイド入力に寄与する。
+
+    Args:
+        unit: 対象 MS ユニット
+
+    Returns:
+        射撃適性スコア（Phase E-1 では常に 0.0）
+    """
+    return 0.0
+
+
+def _melee_aptitude_score(unit: MobileSuit) -> float:
+    """MS 格闘適性を数値スコアに変換する (Phase E-1: スタブ).
+
+    Phase E-2 で本格実装予定。現在は 0 を返すことで aptitude 乗算との二重適用を避け、
+    パイロット MEL のみがシグモイド入力に寄与する。
+
+    Args:
+        unit: 対象 MS ユニット
+
+    Returns:
+        格闘適性スコア（Phase E-1 では常に 0.0）
+    """
+    return 0.0
 
 
 class CombatMixin:
@@ -661,7 +731,25 @@ class CombatMixin:
 
         is_crit = random.random() < adjusted_crit_rate
         if not is_crit:
-            return max(1, weapon.power - target.armor), f"{log_base} -> 命中！"
+            # シグモイドダメージ計算式 (Phase E-1)
+            # キャッシュされた攻撃補正率・防御軽減率を参照する
+            resources_actor = self.unit_resources.get(str(actor.id), {})  # type: ignore[attr-defined]
+            is_melee_weapon = getattr(weapon, "weapon_type", "RANGED") == "MELEE" or getattr(
+                weapon, "is_melee", False
+            )
+            attack_bonus = (
+                resources_actor.get("cached_melee_attack_bonus", 0.0)
+                if is_melee_weapon
+                else resources_actor.get("cached_ranged_attack_bonus", 0.0)
+            )
+            resources_target = self.unit_resources.get(str(target.id), {})  # type: ignore[attr-defined]
+            defense_reduction = resources_target.get("cached_defense_reduction", 0.0)
+            base_damage = max(
+                1,
+                int(weapon.power * (1.0 + attack_bonus) * (1.0 - defense_reduction)),
+            )
+            return base_damage, f"{log_base} -> 命中！"
+        # クリティカルヒット: 防御軽減率を無視（現行仕様維持）
         return int(weapon.power * 1.2), f"{log_base} -> クリティカルヒット！！"
 
     def _apply_hit_damage_modifiers(
@@ -717,6 +805,36 @@ class CombatMixin:
                     )
 
         return base_damage, resistance_msg
+
+    def _build_combat_multiplier_cache(self) -> None:
+        """全ユニットの攻撃・防御補正率を事前計算して unit_resources にキャッシュする (Phase E-1).
+
+        シグモイド計算（exp() 呼び出し）はステータスが戦闘中に変わらないため、
+        シミュレーション開始時に一括計算する。攻撃判定ごとの exp() 呼び出しをゼロにする。
+
+        キャッシュされるキー:
+            cached_ranged_attack_bonus: 射撃攻撃力補正率（0.0〜MAX_ATTACK_BONUS）
+            cached_melee_attack_bonus:  格闘攻撃力補正率（0.0〜MAX_ATTACK_BONUS）
+            cached_defense_reduction:   防御軽減率（0.0〜MAX_DEFENSE_REDUCTION）
+        """
+        unit_pilot_stats: dict[str, PilotStats] = getattr(self, "unit_pilot_stats", {})  # type: ignore[attr-defined]
+        unit_resources: dict = self.unit_resources  # type: ignore[attr-defined]
+        units = self.units  # type: ignore[attr-defined]
+
+        for unit in units:
+            uid = str(unit.id)
+            pilot = unit_pilot_stats.get(uid, PilotStats())
+
+            # 射撃攻撃補正率: MS射撃適性スコア + パイロット SHT
+            ranged_atk = _shooting_aptitude_score(unit) + pilot.sht
+            # 格闘攻撃補正率: MS格闘適性スコア + パイロット MEL
+            melee_atk = _melee_aptitude_score(unit) + pilot.mel
+            # 防御軽減率: MS装甲 + パイロット TOU
+            total_def = float(getattr(unit, "armor", 0)) + float(pilot.tou)
+
+            unit_resources[uid]["cached_ranged_attack_bonus"] = _sigmoid_attack(ranged_atk)
+            unit_resources[uid]["cached_melee_attack_bonus"] = _sigmoid_attack(melee_atk)
+            unit_resources[uid]["cached_defense_reduction"] = _sigmoid_defense(total_def)
 
     def _process_miss(
         self,

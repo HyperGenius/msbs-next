@@ -21,6 +21,8 @@ class PilotStats:
         ref: 反応 (REF) - イニシアチブ・機動性乗算
         tou: 耐久 (TOU) - 攻撃ダメージ加算・被クリティカル率低下・防御加算
         luk: 幸運 (LUK) - ダメージ乱数偏り・完全回避
+        sht: 射撃精度 (SHT) - 射撃攻撃力補正率（シグモイド入力）(Phase E-1)
+        mel: 格闘技巧 (MEL) - 格闘攻撃力補正率（シグモイド入力）(Phase E-1)
     """
 
     dex: int = field(default=0)
@@ -28,6 +30,8 @@ class PilotStats:
     ref: int = field(default=0)
     tou: int = field(default=0)
     luk: int = field(default=0)
+    sht: int = field(default=0)
+    mel: int = field(default=0)
 
 
 def calculate_hit_chance(

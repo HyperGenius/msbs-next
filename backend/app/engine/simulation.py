@@ -116,6 +116,12 @@ class BattleSimulator(
         self.player_pilot_stats: PilotStats = player_pilot_stats or PilotStats()
         self.retreat_points: list[RetreatPoint] = retreat_points or []
 
+        # ユニット ID → パイロットステータス の対応表 (Phase E-1)
+        # プレイヤーには player_pilot_stats を紐付け、NPC は default PilotStats()（all=0）を使用
+        self.unit_pilot_stats: dict[str, PilotStats] = {
+            str(self.player.id): self.player_pilot_stats
+        }
+
         # フィールドスケーリング: 総ユニット数に応じて map_bounds を動的計算 (Phase 6-5)
         # グローバル定数 MAP_BOUNDS を変更せず、インスタンス変数として保持する
         n_total = len(self.units)
@@ -242,6 +248,9 @@ class BattleSimulator(
                     obstacle_density=self.battlefield.obstacle_density,
                 )
                 self.obstacles = self.battlefield.obstacles
+
+        # シグモイドダメージ計算キャッシュ: 全ユニット分を一括計算 (Phase E-1)
+        self._build_combat_multiplier_cache()
 
     # ---------------------------------------------------------------------------
     # Phase 6-3: スポーン領域・障害物自動生成メソッド
