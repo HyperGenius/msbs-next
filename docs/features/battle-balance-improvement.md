@@ -494,35 +494,35 @@ SECTOR_REAR_SIDE_DEG:  float = 150.0
 
 #### 3.5.2 パイロットスタットの再定義
 
-| 旧スタット | 新スタット | フィールド名 | 主な役割 |
+| フィールド名 | 表示ラベル | 旧スタット | 主な役割 |
 |---|---|---|---|
-| `DEX`（器用） | **射撃精度（SHT）** | `sht` | 射撃武器の攻撃力補正率シグモイド入力・命中率 |
-| `DEX`（器用） | **格闘技巧（MEL）** | `mel` | 格闘武器の攻撃力補正率シグモイド入力・命中率 |
-| `INT`（直感） | 直感（INT） | `intel` | クリティカル率・回避率（変更なし） |
-| `REF`（反応） | 反応（REF） | `ref` | イニシアチブ・機動性乗算（変更なし） |
-| `TOU`（耐久） | 耐久（TOU） | `tou` | 防御軽減率シグモイド入力・被クリ率低下（変更なし） |
-| `LUK`（幸運） | 幸運（LUK） | `luk` | ダメージ乱数偏り・完全回避（変更なし） |
+| `sht` | **精密** | `DEX`（器用）を分離 | 射撃武器の攻撃力補正率シグモイド入力・命中率 |
+| `mel` | **技巧** | `DEX`（器用）を分離 | 格闘武器の攻撃力補正率シグモイド入力・命中率 |
+| `intel` | 直感 | `INT`（変更なし） | クリティカル率・回避率 |
+| `ref` | 反応 | `REF`（変更なし） | イニシアチブ・機動性乗算 |
+| `tou` | 耐久 | `TOU`（変更なし） | 防御軽減率シグモイド入力・被クリ率低下 |
+| `luk` | 幸運 | `LUK`（変更なし） | ダメージ乱数偏り・完全回避 |
 
-> **DEX の扱い:** 現行の `DEX` が持つ「距離減衰緩和」効果は `SHT` に引き継ぎ、「被ダメージカット」は `TOU` に統合する（旧 `DEX` フィールドは非推奨化）。
+> **DEX の扱い:** 現行の `DEX` が持つ「距離減衰緩和」効果は `sht` に引き継ぎ、「被ダメージカット」は `tou` に統合する（旧 `DEX` フィールドは非推奨化）。フィールド名（`sht`/`mel`）は内部識別子として使用し、UI 表示には表示ラベル（精密／技巧）を用いる。
 
 **`PilotStats` データクラスの変更（`calculator.py`）:**
 
 ```python
 @dataclass
 class PilotStats:
-    sht:   int = field(default=0)  # 射撃精度 (SHT) — 射撃攻撃補正・命中
-    mel:   int = field(default=0)  # 格闘技巧 (MEL) — 格闘攻撃補正・命中
-    intel: int = field(default=0)  # 直感   (INT) — クリティカル率・回避率
-    ref:   int = field(default=0)  # 反応   (REF) — イニシアチブ・機動性乗算
-    tou:   int = field(default=0)  # 耐久   (TOU) — 防御補正・被クリ率低下
-    luk:   int = field(default=0)  # 幸運   (LUK) — 乱数偏り・完全回避
+    sht:   int = field(default=0)  # 精密 (SHT) — 射撃攻撃補正・命中
+    mel:   int = field(default=0)  # 技巧 (MEL) — 格闘攻撃補正・命中
+    intel: int = field(default=0)  # 直感 (INT) — クリティカル率・回避率
+    ref:   int = field(default=0)  # 反応 (REF) — イニシアチブ・機動性乗算
+    tou:   int = field(default=0)  # 耐久 (TOU) — 防御補正・被クリ率低下
+    luk:   int = field(default=0)  # 幸運 (LUK) — 乱数偏り・完全回避
 ```
 
 **`Pilot` モデルへの追加フィールド（`models.py`）:**
 
 ```python
-sht: int = Field(default=0, description="射撃精度 (SHT) - 射撃攻撃力補正・命中率")
-mel: int = Field(default=0, description="格闘技巧 (MEL) - 格闘攻撃力補正・命中率")
+sht: int = Field(default=0, description="精密 (SHT) - 射撃攻撃力補正・命中率")
+mel: int = Field(default=0, description="技巧 (MEL) - 格闘攻撃力補正・命中率")
 ```
 
 #### 3.5.3 `PilotStats` の参照元
