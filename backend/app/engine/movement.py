@@ -236,7 +236,7 @@ class MovementMixin:
                         self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                     ),
                     heading=self.unit_resources[str(actor.id)].get(  # type: ignore[attr-defined]
-                        "movement_heading_deg"
+                        "body_heading_deg"
                     ),
                 )
             )
