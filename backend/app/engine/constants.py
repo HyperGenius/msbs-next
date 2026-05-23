@@ -202,3 +202,20 @@ ATTACK_SIGMOID_K: float = 0.05  # 攻撃シグモイドの傾き
 ATTACK_SIGMOID_MIDPOINT: float = 50.0  # 攻撃補正率が MAX/2 になる合計攻撃力値
 DEFENSE_SIGMOID_K: float = 0.05  # 防御シグモイドの傾き
 DEFENSE_SIGMOID_MIDPOINT: float = 100.0  # 防御軽減率が MAX/2 になる合計防御力値
+
+# 攻撃角度セクタ補正 (Phase E-3)
+SECTOR_ACCURACY_MODIFIERS: dict[str, float] = {
+    "FRONT": 0.35,
+    "FRONT_SIDE": 1.00,
+    "REAR_SIDE": 1.15,
+    "REAR": 1.35,
+}
+SECTOR_DAMAGE_MODIFIERS: dict[str, float] = {
+    "FRONT": 0.50,
+    "FRONT_SIDE": 1.00,
+    "REAR_SIDE": 1.15,
+    "REAR": 1.50,
+}
+SECTOR_FRONT_DEG: float = 60.0
+SECTOR_FRONT_SIDE_DEG: float = 120.0
+SECTOR_REAR_SIDE_DEG: float = 150.0

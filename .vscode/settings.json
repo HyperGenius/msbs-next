@@ -11,10 +11,16 @@
     },
     "editor.definitionLinkOpensInPeek": true, // 定義をポップアップで表示
     "editor.cursorSmoothCaretAnimation": "on", // カーソルの動きを滑らかにして視認性UP
+    "cSpell.dictionaries": [
+        "python",
+        "typescript",
+        "softwareTerms"
+    ],
     "cSpell.customDictionaries": {
-        "project-words": {
-            "name": "project-words",
-            "path": "${workspaceFolder}/.vscode/project-words.txt",
+        "msbs-words": {
+            "name": "msbs-words",
+            "path": "${workspaceRoot}/.vscode/msbs-words.txt",
+            "description": "MSBSプロジェクトでよく使われる単語を含むカスタム辞書",
             "addWords": true
         }
     },

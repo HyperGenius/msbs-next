@@ -225,20 +225,25 @@ def test_obstacle_reduces_hit_chance() -> None:
         player, [enemy], environment="SPACE", special_effects=["OBSTACLE"]
     )
 
-    hit_normal, _ = sim_normal._calculate_hit_chance(player, enemy, weapon, distance)
-    hit_obstacle, _ = sim_obstacle._calculate_hit_chance(
+    hit_normal, _, _ = sim_normal._calculate_hit_chance(player, enemy, weapon, distance)
+    hit_obstacle, _, _ = sim_obstacle._calculate_hit_chance(
         player, enemy, weapon, distance
     )
 
     # 障害物下では命中率が低くなる
     assert hit_obstacle < hit_normal
     # Phase C: 距離補正（距離100m: CLOSE_RANGE 範囲の遠距離武器補正 0.7）が
-    # 適用されるため、障害物ペナルティ(10%) も 0.7 倍される → 差は 7.0
-    from app.engine.constants import RANGED_MID_ACCURACY_PENALTY
+    # 適用されるため、障害物ペナルティ(10%) も 0.7 倍される
+    # Phase E-3: セクタ補正も乗算される（player(0,0,0) → enemy(100,0,0) heading=0 → REAR: ×1.35）
+    from app.engine.constants import (
+        RANGED_MID_ACCURACY_PENALTY,
+        SECTOR_ACCURACY_MODIFIERS,
+    )
 
     obstacle_penalty_raw = 10.0
+    sector_modifier = SECTOR_ACCURACY_MODIFIERS["REAR"]
     assert hit_normal - hit_obstacle == pytest.approx(
-        obstacle_penalty_raw * RANGED_MID_ACCURACY_PENALTY, rel=1e-5
+        obstacle_penalty_raw * RANGED_MID_ACCURACY_PENALTY * sector_modifier, rel=1e-5
     )
 
 
@@ -268,10 +273,10 @@ def test_multiple_special_effects() -> None:
     assert modifier < 1.0
 
     # 障害物: 命中率が低下
-    hit_chance, _ = sim._calculate_hit_chance(player, enemy, weapon, distance)
+    hit_chance, _, _ = sim._calculate_hit_chance(player, enemy, weapon, distance)
     # 通常より10%低いはず
     sim_normal = BattleSimulator(player, [enemy], environment="SPACE")
-    hit_normal, _ = sim_normal._calculate_hit_chance(player, enemy, weapon, distance)
+    hit_normal, _, _ = sim_normal._calculate_hit_chance(player, enemy, weapon, distance)
     assert hit_chance < hit_normal
 
 

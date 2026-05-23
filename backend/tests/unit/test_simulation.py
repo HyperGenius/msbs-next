@@ -128,8 +128,8 @@ def test_multiple_enemies() -> None:
 
     sim = BattleSimulator(player, enemies)
 
-    # Run simulation
-    max_turns = 50
+    # Run simulation (Phase E-3: sector correction reduces hit/damage from front → more turns needed)
+    max_turns = 200
     for _ in range(max_turns):
         if sim.is_finished:
             break
@@ -610,8 +610,8 @@ def test_battle_royale_three_solo_units() -> None:
     # 各ユニットのteam_idはそれぞれ異なるはず
     assert len({unit_a.team_id, unit_b.team_id, unit_c.team_id}) == 3
 
-    # バトルを実行
-    max_turns = 100
+    # バトルを実行 (Phase E-3: セクタ補正で長期戦になることがあるため余裕をもたせる)
+    max_turns = 300
     for _ in range(max_turns):
         if sim.is_finished:
             break

@@ -546,6 +546,9 @@ class BattleLog(SQLModel):
     heading: float | None = (
         None  # 行動時点の胴体向き (度数法, XZ平面) (BattleViewer可視化用)
     )
+    attack_sector: str | None = (
+        None  # "FRONT" / "FRONT_SIDE" / "REAR_SIDE" / "REAR" (Phase E-3)
+    )
 
 
 class BattleLogRecord(SQLModel, table=True):

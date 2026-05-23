@@ -183,8 +183,8 @@ def test_accuracy_bonus_increases_hit_chance():
     sim1 = BattleSimulator(attacker_base, [target])
     sim2 = BattleSimulator(attacker_bonus, [target])
 
-    hit1, _ = sim1._calculate_hit_chance(attacker_base, target, weapon, 300.0)
-    hit2, _ = sim2._calculate_hit_chance(attacker_bonus, target, weapon, 300.0)
+    hit1, _, _ = sim1._calculate_hit_chance(attacker_base, target, weapon, 300.0)
+    hit2, _, _ = sim2._calculate_hit_chance(attacker_bonus, target, weapon, 300.0)
 
     # accuracy_bonus=10のほうが10ポイント高い
     assert hit2 > hit1
@@ -213,8 +213,8 @@ def test_evasion_bonus_decreases_hit_chance():
     sim1 = BattleSimulator(attacker, [target_base])
     sim2 = BattleSimulator(attacker, [target_evasive])
 
-    hit1, _ = sim1._calculate_hit_chance(attacker, target_base, weapon, 300.0)
-    hit2, _ = sim2._calculate_hit_chance(attacker, target_evasive, weapon, 300.0)
+    hit1, _, _ = sim1._calculate_hit_chance(attacker, target_base, weapon, 300.0)
+    hit2, _, _ = sim2._calculate_hit_chance(attacker, target_evasive, weapon, 300.0)
 
     # evasion_bonus=10のターゲットのほうが10ポイント命中率が低い
     assert hit1 > hit2

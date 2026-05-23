@@ -31,6 +31,11 @@ from app.engine.constants import (
     MELEE_RANGE,
     RANGED_CLOSE_ACCURACY_PENALTY,
     RANGED_MID_ACCURACY_PENALTY,
+    SECTOR_ACCURACY_MODIFIERS,
+    SECTOR_DAMAGE_MODIFIERS,
+    SECTOR_FRONT_DEG,
+    SECTOR_FRONT_SIDE_DEG,
+    SECTOR_REAR_SIDE_DEG,
     SPECIAL_ENVIRONMENT_EFFECTS,
 )
 from app.models.models import BattleLog, MobileSuit, Obstacle, Vector3, Weapon
@@ -144,6 +149,28 @@ def _melee_aptitude_score(unit: MobileSuit) -> float:
     return 0.0
 
 
+def calculate_attack_sector(
+    attacker_pos: np.ndarray,
+    target_pos: np.ndarray,
+    target_heading_deg: float,
+) -> str:
+    """攻撃者がターゲットのどのセクタから攻撃しているかを返す (Phase E-3)."""
+    dx = attacker_pos[0] - target_pos[0]
+    dz = attacker_pos[2] - target_pos[2]
+    attack_dir_deg = math.degrees(math.atan2(dz, dx))
+    raw_diff = attack_dir_deg - target_heading_deg
+    angle_diff = abs(((raw_diff + 180) % 360) - 180)
+
+    if angle_diff <= SECTOR_FRONT_DEG:
+        return "FRONT"
+    elif angle_diff <= SECTOR_FRONT_SIDE_DEG:
+        return "FRONT_SIDE"
+    elif angle_diff <= SECTOR_REAR_SIDE_DEG:
+        return "REAR_SIDE"
+    else:
+        return "REAR"
+
+
 class CombatMixin:
     """攻撃・命中・ダメージ・破壊処理のミックスイン."""
 
@@ -224,13 +251,13 @@ class CombatMixin:
 
     def _calculate_hit_chance(
         self, actor: MobileSuit, target: MobileSuit, weapon: Weapon, distance: float
-    ) -> tuple[float, float]:
+    ) -> tuple[float, float, str]:
         """命中率を計算する.
 
         距離補正乗数を適用する（Phase C — 近接戦闘システム）。
 
         Returns:
-            tuple[float, float]: (命中率, 最適距離からの差)
+            tuple[float, float, str]: (命中率, 最適距離からの差, 攻撃セクタ)
         """
         distance_from_optimal = abs(distance - weapon.optimal_range)
         dist_penalty = distance_from_optimal * weapon.decay_rate
@@ -280,10 +307,18 @@ class CombatMixin:
         accuracy_modifier = self._get_accuracy_modifier(distance, weapon_type)
         hit_chance = hit_chance * accuracy_modifier
 
+        # セクタ補正を適用 (Phase E-3)
+        _target_resources = self.unit_resources[str(target.id)]  # type: ignore[attr-defined]
+        target_heading = _target_resources.get("body_heading_deg", 0.0)
+        attack_sector = calculate_attack_sector(
+            actor.position.to_numpy(), target.position.to_numpy(), target_heading
+        )
+        hit_chance = hit_chance * SECTOR_ACCURACY_MODIFIERS[attack_sector]
+
         # 命中率を [0.0, 100.0] にクランプ
         hit_chance = max(0.0, min(100.0, hit_chance))
 
-        return hit_chance, distance_from_optimal
+        return hit_chance, distance_from_optimal, attack_sector
 
     def _consume_attack_resources(
         self, weapon: Weapon, weapon_state: dict, resources: dict
@@ -380,7 +415,7 @@ class CombatMixin:
             return
 
         # 命中率計算
-        hit_chance, distance_from_optimal = self._calculate_hit_chance(
+        hit_chance, distance_from_optimal, attack_sector = self._calculate_hit_chance(
             actor, target, weapon, distance
         )
 
@@ -429,6 +464,7 @@ class CombatMixin:
                 attack_chatter,
                 is_optimal_distance,
                 skill_activated,
+                attack_sector=attack_sector,
             )
         else:
             self._process_miss(
@@ -532,10 +568,11 @@ class CombatMixin:
         attack_chatter: str | None = None,
         is_optimal_distance: bool = False,
         skill_activated: bool = False,
+        attack_sector: str = "FRONT_SIDE",
     ) -> None:
         """命中時の処理."""
         base_damage, log_msg = self._calculate_hit_base_damage(
-            actor, target, weapon, log_base
+            actor, target, weapon, log_base, attack_sector=attack_sector
         )
         base_damage, resistance_msg = self._apply_hit_damage_modifiers(
             actor, target, weapon, base_damage
@@ -627,6 +664,7 @@ class CombatMixin:
                 chatter=attack_chatter or hit_chatter,
                 skill_activated=True if skill_activated else None,
                 heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
+                attack_sector=attack_sector,
             )
         )
 
@@ -718,6 +756,7 @@ class CombatMixin:
         target: MobileSuit,
         weapon: Weapon,
         log_base: str,
+        attack_sector: str = "FRONT_SIDE",
     ) -> tuple[int, str]:
         """命中時の基礎ダメージとログメッセージを算出する."""
         base_crit_rate = 0.05
@@ -756,8 +795,12 @@ class CombatMixin:
                 1,
                 int(weapon.power * (1.0 + attack_bonus) * (1.0 - defense_reduction)),
             )
+            # セクタダメージ補正 (Phase E-3) — クリティカル時は適用しない
+            base_damage = max(
+                1, int(base_damage * SECTOR_DAMAGE_MODIFIERS[attack_sector])
+            )
             return base_damage, f"{log_base} -> 命中！"
-        # クリティカルヒット: 防御軽減率を無視（現行仕様維持）
+        # クリティカルヒット: 防御軽減率・セクタ補正を無視（現行仕様維持）
         return int(weapon.power * 1.2), f"{log_base} -> クリティカルヒット！！"
 
     def _apply_hit_damage_modifiers(
