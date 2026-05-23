@@ -43,6 +43,13 @@ SKILL_MASTER_DATA: dict[str, SkillDefinition] = {
         "effect_per_level": 1.0,  # +1% / Lv
         "max_level": 10,
     },
+    "flanking": {
+        "id": "flanking",
+        "name": "フランキング",
+        "description": "目標の背後へ回り込む確率が上昇する。ブーストENを消費する",
+        "effect_per_level": 0.0,  # 効果は FLANKING_ACTIVATION_PROBS で管理
+        "max_level": 3,
+    },
 }
 
 # スキルポイントコスト（一律1 SP）
