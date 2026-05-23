@@ -96,41 +96,42 @@ def test_register_pilot_zeon_success(client, session):
 
 def test_register_pilot_trainer_stats_equal(client, session):
     """連邦・ジオン練習機のステータスが完全に同一であることをテスト."""
-    # 連邦パイロット
-    fed_user_id = "test_stats_fed"
-    app.dependency_overrides[get_current_user] = lambda: fed_user_id
-    res_fed = client.post(
-        "/api/pilots/register",
-        json={"name": "Fed Pilot", **_BASE_REGISTER_BODY},
-    )
-    assert res_fed.status_code == status.HTTP_200_OK
-    ms_fed = session.get(MobileSuit, uuid.UUID(res_fed.json()["mobile_suit_id"]))
+    try:
+        # 連邦パイロット
+        fed_user_id = "test_stats_fed"
+        app.dependency_overrides[get_current_user] = lambda: fed_user_id
+        res_fed = client.post(
+            "/api/pilots/register",
+            json={"name": "Fed Pilot", **_BASE_REGISTER_BODY},
+        )
+        assert res_fed.status_code == status.HTTP_200_OK
+        ms_fed = session.get(MobileSuit, uuid.UUID(res_fed.json()["mobile_suit_id"]))
 
-    # ジオンパイロット
-    zeon_user_id = "test_stats_zeon"
-    app.dependency_overrides[get_current_user] = lambda: zeon_user_id
-    res_zeon = client.post(
-        "/api/pilots/register",
-        json={
-            "name": "Zeon Pilot",
-            "faction": "ZEON",
-            "background": "EX_MECHANIC",
-            "bonus_sht": 0,
-            "bonus_mel": 0,
-            "bonus_int": 2,
-            "bonus_ref": 2,
-            "bonus_tou": 1,
-        },
-    )
-    assert res_zeon.status_code == status.HTTP_200_OK
-    ms_zeon = session.get(MobileSuit, uuid.UUID(res_zeon.json()["mobile_suit_id"]))
+        # ジオンパイロット
+        zeon_user_id = "test_stats_zeon"
+        app.dependency_overrides[get_current_user] = lambda: zeon_user_id
+        res_zeon = client.post(
+            "/api/pilots/register",
+            json={
+                "name": "Zeon Pilot",
+                "faction": "ZEON",
+                "background": "EX_MECHANIC",
+                "bonus_sht": 0,
+                "bonus_mel": 0,
+                "bonus_int": 2,
+                "bonus_ref": 2,
+                "bonus_tou": 1,
+            },
+        )
+        assert res_zeon.status_code == status.HTTP_200_OK
+        ms_zeon = session.get(MobileSuit, uuid.UUID(res_zeon.json()["mobile_suit_id"]))
 
-    # 機体ステータスが同一であることを確認（経歴は機体に影響しない）
-    assert ms_fed.max_hp == ms_zeon.max_hp
-    assert ms_fed.armor == ms_zeon.armor
-    assert ms_fed.mobility == ms_zeon.mobility
-
-    app.dependency_overrides.pop(get_current_user, None)
+        # 機体ステータスが同一であることを確認（経歴は機体に影響しない）
+        assert ms_fed.max_hp == ms_zeon.max_hp
+        assert ms_fed.armor == ms_zeon.armor
+        assert ms_fed.mobility == ms_zeon.mobility
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_register_pilot_duplicate_error(client, session):
