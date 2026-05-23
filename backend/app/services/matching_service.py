@@ -22,6 +22,16 @@ from app.models.models import (
 from app.services.pilot_service import PilotService
 
 
+def _coerce_suit_json_fields(suit: MobileSuit) -> None:
+    """SQLite の JSON カラムが dict で返る場合に正しい型へ変換する."""
+    if isinstance(suit.position, dict):
+        suit.position = Vector3(**suit.position)
+    if isinstance(suit.velocity, dict):
+        suit.velocity = Vector3(**suit.velocity)
+    if isinstance(suit.weapons, list):
+        suit.weapons = [Weapon(**w) if isinstance(w, dict) else w for w in suit.weapons]
+
+
 class MatchingService:
     """マッチング処理サービス."""
 
@@ -104,6 +114,7 @@ class MatchingService:
                     self.session.add(ace_suit)
                     self.session.flush()
 
+                    _coerce_suit_json_fields(ace_suit)
                     npc_entry = BattleEntry(
                         user_id=None,
                         room_id=room.id,
@@ -136,6 +147,7 @@ class MatchingService:
                     self.session.add(npc_suit)
                     self.session.flush()
 
+                    _coerce_suit_json_fields(npc_suit)
                     snapshot = npc_suit.model_dump()
                     snapshot["npc_pilot_level"] = npc_pilot.level
 
@@ -169,6 +181,7 @@ class MatchingService:
                     self.session.add(npc_suit)
                     self.session.flush()
 
+                    _coerce_suit_json_fields(npc_suit)
                     snapshot = npc_suit.model_dump()
                     snapshot["npc_pilot_level"] = npc_pilot.level
 

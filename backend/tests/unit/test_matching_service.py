@@ -88,6 +88,8 @@ def test_create_rooms_with_entries(in_memory_session):
     # Create test mobile suits
     suit1 = create_test_mobile_suit("Player 1")
     suit2 = create_test_mobile_suit("Player 2")
+    snapshot1 = suit1.model_dump()
+    snapshot2 = suit2.model_dump()
     in_memory_session.add(suit1)
     in_memory_session.add(suit2)
     in_memory_session.commit()
@@ -97,14 +99,14 @@ def test_create_rooms_with_entries(in_memory_session):
         user_id="user_1",
         room_id=room.id,
         mobile_suit_id=suit1.id,
-        mobile_suit_snapshot=suit1.model_dump(),
+        mobile_suit_snapshot=snapshot1,
         is_npc=False,
     )
     entry2 = BattleEntry(
         user_id="user_2",
         room_id=room.id,
         mobile_suit_id=suit2.id,
-        mobile_suit_snapshot=suit2.model_dump(),
+        mobile_suit_snapshot=snapshot2,
         is_npc=False,
     )
     in_memory_session.add(entry1)
@@ -220,6 +222,7 @@ def test_create_rooms_fills_to_capacity(in_memory_session):
 
     # Create 1 player entry
     suit = create_test_mobile_suit("Player 1")
+    snapshot = suit.model_dump()
     in_memory_session.add(suit)
     in_memory_session.commit()
 
@@ -227,7 +230,7 @@ def test_create_rooms_fills_to_capacity(in_memory_session):
         user_id="user_1",
         room_id=room.id,
         mobile_suit_id=suit.id,
-        mobile_suit_snapshot=suit.model_dump(),
+        mobile_suit_snapshot=snapshot,
         is_npc=False,
     )
     in_memory_session.add(entry)
@@ -296,6 +299,8 @@ def test_apply_team_grouping_marks_members(in_memory_session):
     suit_a.user_id = "user_a"
     suit_b = create_test_mobile_suit("Suit B")
     suit_b.user_id = "user_b"
+    snapshot_a = suit_a.model_dump()
+    snapshot_b = suit_b.model_dump()
     in_memory_session.add(suit_a)
     in_memory_session.add(suit_b)
     in_memory_session.commit()
@@ -304,14 +309,14 @@ def test_apply_team_grouping_marks_members(in_memory_session):
         user_id="user_a",
         room_id=team.id,  # room_id doesn't matter for grouping test
         mobile_suit_id=suit_a.id,
-        mobile_suit_snapshot=suit_a.model_dump(),
+        mobile_suit_snapshot=snapshot_a,
         is_npc=False,
     )
     entry_b = BattleEntry(
         user_id="user_b",
         room_id=team.id,
         mobile_suit_id=suit_b.id,
-        mobile_suit_snapshot=suit_b.model_dump(),
+        mobile_suit_snapshot=snapshot_b,
         is_npc=False,
     )
 
@@ -331,6 +336,7 @@ def test_apply_team_grouping_skips_solo_players(in_memory_session):
     """Test that _apply_team_grouping does not mark entries with no team."""
     suit = create_test_mobile_suit("Solo Suit")
     suit.user_id = "solo_user"
+    snapshot = suit.model_dump()
     in_memory_session.add(suit)
     in_memory_session.commit()
 
@@ -338,7 +344,7 @@ def test_apply_team_grouping_skips_solo_players(in_memory_session):
         user_id="solo_user",
         room_id=suit.id,
         mobile_suit_id=suit.id,
-        mobile_suit_snapshot=suit.model_dump(),
+        mobile_suit_snapshot=snapshot,
         is_npc=False,
     )
     entries = [entry]

@@ -151,6 +151,7 @@ def test_ace_spawn_rate(in_memory_session):
         side="PLAYER",
         user_id="test_user",
     )
+    player_snapshot = player_suit.model_dump()
     in_memory_session.add(player_suit)
     in_memory_session.commit()
 
@@ -158,7 +159,7 @@ def test_ace_spawn_rate(in_memory_session):
         user_id="test_user",
         room_id=room.id,
         mobile_suit_id=player_suit.id,
-        mobile_suit_snapshot=player_suit.model_dump(),
+        mobile_suit_snapshot=player_snapshot,
         is_npc=False,
     )
     in_memory_session.add(player_entry)
@@ -224,6 +225,7 @@ def test_no_ace_spawn_with_zero_rate(in_memory_session):
         side="PLAYER",
         user_id="test_user",
     )
+    player_snapshot = player_suit.model_dump()
     in_memory_session.add(player_suit)
     in_memory_session.commit()
 
@@ -231,7 +233,7 @@ def test_no_ace_spawn_with_zero_rate(in_memory_session):
         user_id="test_user",
         room_id=room.id,
         mobile_suit_id=player_suit.id,
-        mobile_suit_snapshot=player_suit.model_dump(),
+        mobile_suit_snapshot=player_snapshot,
         is_npc=False,
     )
     in_memory_session.add(player_entry)
