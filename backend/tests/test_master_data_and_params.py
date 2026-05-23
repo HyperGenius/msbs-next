@@ -183,8 +183,10 @@ def test_accuracy_bonus_increases_hit_chance():
     sim1 = BattleSimulator(attacker_base, [target])
     sim2 = BattleSimulator(attacker_bonus, [target])
 
-    hit1, _, _ = sim1._calculate_hit_chance(attacker_base, target, weapon, 300.0)
-    hit2, _, _ = sim2._calculate_hit_chance(attacker_bonus, target, weapon, 300.0)
+    # distance=500 を渡して距離ペナルティを発生させ、ベース命中率を下げる
+    # (optimal_range=300 から外れるため dist_penalty=10 が加算され、クランプ回避)
+    hit1, _, _ = sim1._calculate_hit_chance(attacker_base, target, weapon, 500.0)
+    hit2, _, _ = sim2._calculate_hit_chance(attacker_bonus, target, weapon, 500.0)
 
     # accuracy_bonus=10のほうが10ポイント高い
     assert hit2 > hit1

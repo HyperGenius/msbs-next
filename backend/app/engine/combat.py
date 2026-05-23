@@ -264,10 +264,6 @@ class CombatMixin:
         evasion_bonus = target.mobility * 10
         hit_chance = float(weapon.accuracy - dist_penalty - evasion_bonus)
 
-        # 機体パラメータ補正: 命中補正と回避補正を適用
-        hit_chance += getattr(actor, "accuracy_bonus", 0.0)
-        hit_chance -= getattr(target, "evasion_bonus", 0.0)
-
         # プレイヤーの攻撃時はスキル補正を適用
         if actor.side == "PLAYER":
             accuracy_skill_level = self.player_skills.get("accuracy_up", 0)  # type: ignore[attr-defined]
@@ -314,6 +310,10 @@ class CombatMixin:
             actor.position.to_numpy(), target.position.to_numpy(), target_heading
         )
         hit_chance = hit_chance * SECTOR_ACCURACY_MODIFIERS[attack_sector]
+
+        # 機体パラメータ補正: 乗算補正後にフラット加算（accuracy_bonus=+N は最終命中率を常に+N%変化させる）
+        hit_chance += getattr(actor, "accuracy_bonus", 0.0)
+        hit_chance -= getattr(target, "evasion_bonus", 0.0)
 
         # 命中率を [0.0, 100.0] にクランプ
         hit_chance = max(0.0, min(100.0, hit_chance))
