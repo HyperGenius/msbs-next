@@ -392,7 +392,7 @@ STRATEGIC_VALUE_MAX_SPEED: float = 300.0
 
 現在は「ターゲットとの距離」だけが命中率に影響するが、「どの方向から攻撃するか」も現実の戦闘では極めて重要。後ろから攻撃すれば命中しやすく、防御が薄い背面を狙えばダメージも増大する。
 
-この仕組みを実装することで「背後を取る戦術」の価値が生まれ、将来的な「背後を取られないための立ち回り」の基盤になる。
+この仕組みを実装することで「背後を取る戦術」の価値が生まれ、ジャイアントキリングが生まれやすくなり将来的な「背後を取られないための立ち回り」の基盤になる。
 
 #### 角度セクタの定義
 
@@ -436,10 +436,10 @@ def calculate_attack_sector(
 
 | セクタ | 命中率補正（乗算） | ダメージ補正（乗算） | 設計意図 |
 |---|---|---|---|
-| FRONT | ×0.85 | ×0.90 | 正面は防御が固く、素直に回避もしやすい |
+| FRONT | ×0.35 | ×0.50 | 正面は防御が固く、素直に回避もしやすい |
 | FRONT_SIDE | ×1.00 | ×1.00 | 基準値（補正なし） |
 | REAR_SIDE | ×1.15 | ×1.15 | 視野外から接近しており回避困難・防御が薄い |
-| REAR | ×1.35 | ×1.30 | 完全に背後を取られた状態（最大ペナルティ） |
+| REAR | ×1.35 | ×1.50 | 完全に背後を取られた状態（最大ペナルティ）、性能差や技量差を覆しやすい |
 
 **適用箇所（`_calculate_hit_chance` 最後尾に追加）:**
 
@@ -468,16 +468,16 @@ attack_sector: str | None = None  # "FRONT" / "FRONT_SIDE" / "REAR_SIDE" / "REAR
 
 ```python
 SECTOR_ACCURACY_MODIFIERS: dict[str, float] = {
-    "FRONT":      0.85,
+    "FRONT":      0.35,
     "FRONT_SIDE": 1.00,
     "REAR_SIDE":  1.15,
     "REAR":       1.35,
 }
 SECTOR_DAMAGE_MODIFIERS: dict[str, float] = {
-    "FRONT":      0.90,
+    "FRONT":      0.50,
     "FRONT_SIDE": 1.00,
     "REAR_SIDE":  1.15,
-    "REAR":       1.30,
+    "REAR":       1.50,
 }
 SECTOR_FRONT_DEG:      float = 60.0
 SECTOR_FRONT_SIDE_DEG: float = 120.0
