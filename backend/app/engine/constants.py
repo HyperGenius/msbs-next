@@ -219,3 +219,14 @@ SECTOR_DAMAGE_MODIFIERS: dict[str, float] = {
 SECTOR_FRONT_DEG: float = 60.0
 SECTOR_FRONT_SIDE_DEG: float = 120.0
 SECTOR_REAR_SIDE_DEG: float = 150.0
+
+# フランキング（背後移動）パッシブスキル定数 (Phase E-3.5)
+FLANKING_OFFSET_DISTANCE: float = 30.0
+FLANKING_ATTRACTION_WEIGHT: float = 1.5
+FLANKING_ENERGY_COST_RATE: float = 1.5  # DEFAULT_BOOST_EN_COST に対する乗数
+FLANKING_ACTIVATION_PROBS: dict[int, float] = {
+    0: 0.05,  # スキルなし: 5%（偶発的な背後取得）
+    1: 0.30,  # Lv.1: 30%（経験者）
+    2: 0.60,  # Lv.2: 60%（ベテラン）
+    3: 0.90,  # Lv.3: 90%（エース級）
+}
