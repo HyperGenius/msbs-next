@@ -10,8 +10,13 @@ from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
     BOUNDARY_MARGIN,
     DEFAULT_BOOST_COOLDOWN,
+    DEFAULT_BOOST_EN_COST,
     DEFAULT_BOOST_MAX_DURATION,
     DEFAULT_BOOST_SPEED_MULTIPLIER,
+    FLANKING_ACTIVATION_PROBS,
+    FLANKING_ATTRACTION_WEIGHT,
+    FLANKING_ENERGY_COST_RATE,
+    FLANKING_OFFSET_DISTANCE,
     HIGH_THREAT_THRESHOLD,
     MELEE_BOOST_ARRIVAL_RANGE,
     MOVE_LOG_MIN_DIST,
@@ -128,11 +133,59 @@ class MovementMixin:
                 force += RETREAT_ATTRACTION_COEFF * vec / dist
         return force
 
+    def _flanking_attraction(
+        self,
+        unit: MobileSuit,
+        target: MobileSuit,
+        dt: float,
+    ) -> np.ndarray:
+        """フランキング引力ベクトルを計算し EN を消費する (Phase E-3.5).
+
+        スキルレベルに応じた確率でターゲット後方への引力ベクトルを返す。
+        EN 不足時はゼロベクトルを返してフォールバックする。
+
+        Args:
+            unit: 移動するユニット
+            target: 攻撃対象ユニット
+            dt: 時間ステップ幅 (s)
+
+        Returns:
+            3D 引力ベクトル（未正規化）。未発動または EN 不足時はゼロベクトル。
+        """
+        unit_id = str(unit.id)
+        resources = self.unit_resources[unit_id]  # type: ignore[attr-defined]
+
+        skill_level = resources.get("flanking_skill_level", 0)
+        prob = FLANKING_ACTIVATION_PROBS.get(skill_level, 0.0)
+        if prob <= 0.0 or random.random() > prob:
+            return np.zeros(3)
+
+        boost_en_cost = getattr(unit, "boost_en_cost", DEFAULT_BOOST_EN_COST)
+        flanking_en_cost = FLANKING_ENERGY_COST_RATE * boost_en_cost * dt
+        if resources.get("current_en", 0.0) < flanking_en_cost:
+            return np.zeros(3)
+        resources["current_en"] -= flanking_en_cost
+
+        # ターゲット後方 = body_heading + 180°
+        target_heading_deg = self.unit_resources[str(target.id)].get(  # type: ignore[attr-defined]
+            "body_heading_deg", 0.0
+        )
+        rear_rad = math.radians(target_heading_deg + 180.0)
+        rear_dir = np.array([math.cos(rear_rad), 0.0, math.sin(rear_rad)])
+        rear_point = target.position.to_numpy() + rear_dir * FLANKING_OFFSET_DISTANCE
+
+        vec = rear_point - unit.position.to_numpy()
+        dist = float(np.linalg.norm(vec))
+        if dist < 1e-6:
+            return np.zeros(3)
+        return FLANKING_ATTRACTION_WEIGHT * vec / dist
+
     def _calculate_potential_field(
         self,
         unit: MobileSuit,
         target: MobileSuit | None = None,
         retreat_points: list[RetreatPoint] | None = None,
+        dt: float = 0.1,
     ) -> np.ndarray:
         """ポテンシャルフィールド法による目標方向ベクトルを計算する.
 
@@ -145,6 +198,7 @@ class MovementMixin:
             unit: 移動するユニット
             target: 攻撃対象ユニット（ATTACK 行動時に強引力を与える）
             retreat_points: 撤退ポイントのリスト（Phase 3-3 用）
+            dt: 時間ステップ幅 (s)（フランキング EN 消費計算に使用）
 
         Returns:
             3D 単位ベクトル（XZ 平面）
@@ -193,6 +247,11 @@ class MovementMixin:
                 away_vec = (pos_unit - obs_pos) / max(obs_dist, 1.0)
                 total_force += OBSTACLE_REPULSION_COEFF * away_vec
 
+        # 8. フランキング引力: 目標の背後方向への引力 (Phase E-3.5)
+        # ATTACK / MOVE 行動かつターゲットが存在する場合のみ有効
+        if current_action in ("ATTACK", "MOVE") and target is not None:
+            total_force += self._flanking_attraction(unit, target, dt)
+
         # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
         total_force[1] = 0.0  # Y 成分を XZ 平面に固定
         magnitude = float(np.linalg.norm(total_force))
@@ -220,6 +279,7 @@ class MovementMixin:
             actor,
             target,
             self.retreat_points,  # type: ignore[attr-defined]
+            dt,
         )
         self._apply_inertia(actor, desired_direction, dt)
 
@@ -487,6 +547,7 @@ class MovementMixin:
                         actor,
                         target=None,
                         retreat_points=self.retreat_points,  # type: ignore[attr-defined]
+                        dt=dt,
                     )
                     self._apply_inertia(actor, desired_direction, dt)
                     if distance >= MOVE_LOG_MIN_DIST:
@@ -525,6 +586,7 @@ class MovementMixin:
             actor,
             target=None,
             retreat_points=self.retreat_points,  # type: ignore[attr-defined]
+            dt=dt,
         )
         self._apply_inertia(actor, desired_direction, dt)
 
