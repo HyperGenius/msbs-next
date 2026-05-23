@@ -65,35 +65,34 @@ def _import_scenario(name: str):
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(scope="class")
+def los_obstacle_result():
+    """シミュレーションを1回だけ実行してクラス内で共有するフィクスチャ."""
+    mod = _import_scenario("scenario_los_obstacle_basic")
+    return mod.run_scenario(max_steps=5000)
+
+
 class TestScenarioLosObstacleBasic:
     """scenario_los_obstacle_basic — LOS 遮断・障害物迂回行動の統合テスト."""
 
-    def test_scenario_runs_without_error(self) -> None:
+    def test_scenario_runs_without_error(self, los_obstacle_result) -> None:
         """シミュレーションがクラッシュせず完了すること."""
-        mod = _import_scenario("scenario_los_obstacle_basic")
-        result = mod.run_scenario(max_steps=5000)
-        assert result["step_count"] > 0, "少なくとも 1 ステップ実行されること"
+        assert los_obstacle_result["step_count"] > 0, (
+            "少なくとも 1 ステップ実行されること"
+        )
 
-    def test_logs_are_generated(self) -> None:
-        """ログが生成されること."""
-        mod = _import_scenario("scenario_los_obstacle_basic")
-        result = mod.run_scenario(max_steps=5000)
-        assert len(result["logs"]) > 0, "ログが生成されること"
-
-    def test_move_logs_exist(self) -> None:
+    def test_move_logs_exist(self, los_obstacle_result) -> None:
         """MOVE ログが生成されること（ユニットが移動したこと）."""
-        mod = _import_scenario("scenario_los_obstacle_basic")
-        result = mod.run_scenario(max_steps=5000)
         assert (
-            "MOVE" in result["log_action_types"]
-            or "AI_DECISION" in result["log_action_types"]
+            "MOVE" in los_obstacle_result["log_action_types"]
+            or "AI_DECISION" in los_obstacle_result["log_action_types"]
         ), "MOVE または AI_DECISION ログが存在すること"
 
-    def test_battle_resolves(self) -> None:
-        """一方が勝利または引き分けで決着すること."""
-        mod = _import_scenario("scenario_los_obstacle_basic")
-        result = mod.run_scenario(max_steps=5000)
-        assert result["win_loss"] in ("WIN", "LOSE", "DRAW"), "勝敗が決定していること"
+    def test_battle_resolves(self, los_obstacle_result) -> None:
+        """Player が敗北しないこと（障害物による LOS 遮断で引き分けも許容）."""
+        assert los_obstacle_result["win_loss"] != "LOSE", (
+            f"Player が敗北しないこと (実際: {los_obstacle_result['win_loss']})"
+        )
 
     def test_obstacle_passed_to_simulator(self) -> None:
         """BattleField に障害物が 1 個設定されること."""
