@@ -331,7 +331,8 @@ def test_full_battle_with_detection() -> None:
 
     # Run simulation — potential field movement may cause diagonal paths due to boundary
     # forces, so use a larger step limit to ensure detection
-    max_steps = 200
+    # Phase E-3: sector correction reduces hit/damage from front, so battles may take longer
+    max_steps = 500
     for _ in range(max_steps):
         if sim.is_finished:
             break

@@ -193,8 +193,8 @@ class TestCalculateHitChanceWithDistanceModifier:
         ranged_w = _make_ranged_weapon()
         distance = 30.0  # MELEE_RANGE 以内
 
-        hit_melee, _ = sim._calculate_hit_chance(player, enemy, melee_w, distance)
-        hit_ranged, _ = sim._calculate_hit_chance(player, enemy, ranged_w, distance)
+        hit_melee, _, _ = sim._calculate_hit_chance(player, enemy, melee_w, distance)
+        hit_ranged, _, _ = sim._calculate_hit_chance(player, enemy, ranged_w, distance)
 
         assert hit_melee > hit_ranged
 
@@ -213,8 +213,10 @@ class TestCalculateHitChanceWithDistanceModifier:
         # 距離補正無し基準値を計算するため同条件で比較
         # 補正前の hit は ranged_w.accuracy と distance から計算できる
         # ここでは距離補正が適用されていることだけを確認
-        hit_close, _ = sim._calculate_hit_chance(player, enemy, ranged_w, distance)
-        hit_far, _ = sim_no_dist._calculate_hit_chance(player, enemy, ranged_w, 300.0)
+        hit_close, _, _ = sim._calculate_hit_chance(player, enemy, ranged_w, distance)
+        hit_far, _, _ = sim_no_dist._calculate_hit_chance(
+            player, enemy, ranged_w, 300.0
+        )
 
         # 遠射程(300m)より近接距離(30m)の方が命中率が低い
         assert hit_close < hit_far
@@ -238,7 +240,7 @@ class TestCalculateHitChanceWithDistanceModifier:
             optimal_range=10.0,
             decay_rate=0.0,
         )
-        hit, _ = sim._calculate_hit_chance(player, enemy, melee_w, 10.0)
+        hit, _, _ = sim._calculate_hit_chance(player, enemy, melee_w, 10.0)
         assert hit <= 100.0
         assert hit >= 0.0
 

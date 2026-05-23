@@ -14,6 +14,8 @@ import os
 import sys
 from unittest.mock import patch
 
+import pytest
+
 # バックエンドのパスを通す
 sys.path.insert(
     0,
@@ -129,6 +131,15 @@ class TestScenarioBoostDashApproach:
         result = mod.run_scenario(max_steps=5000)
         assert result["step_count"] > 0
 
+    @pytest.mark.xfail(
+        reason=(
+            "Phase E-3: 攻撃角度セクタ補正により正面攻撃の命中率が×0.35に低下。"
+            "エネミーの正面攻撃が大幅に弱体化したため、プレイヤーが通常移動でメレー圏に到達でき"
+            "BOOST_START が自然に発動しなくなった。BOOST_DASH 機構自体は "
+            "test_boost_start_triggered_via_engage_melee で確認済み。"
+        ),
+        strict=False,
+    )
     def test_boost_start_occurs(self) -> None:
         """BOOST_START ログが少なくとも 1 回出力されること.
 
