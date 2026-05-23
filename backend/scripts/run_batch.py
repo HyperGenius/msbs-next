@@ -134,6 +134,11 @@ def _convert_snapshot_to_mobile_suit(snapshot: dict) -> MobileSuit:
         snapshot["weapons"] = [
             Weapon(**w) if isinstance(w, dict) else w for w in snapshot["weapons"]
         ]
+    # id が str で渡された場合（model_dump() 経由） uuid.UUID に変換
+    if "id" in snapshot and isinstance(snapshot["id"], str):
+        import uuid as _uuid
+
+        snapshot["id"] = _uuid.UUID(snapshot["id"])
     # MobileSuit モデルにないスナップショット固有のキーを除去
     ms_fields = set(MobileSuit.model_fields.keys())
     filtered = {k: v for k, v in snapshot.items() if k in ms_fields}

@@ -204,6 +204,7 @@ def test_create_rooms_creates_npc_pilots(in_memory_session):
 
     # プレイヤーエントリーを1件作成
     suit = create_test_mobile_suit("Player Suit", "player_user")
+    snapshot = suit.model_dump()
     in_memory_session.add(suit)
     in_memory_session.commit()
 
@@ -211,7 +212,7 @@ def test_create_rooms_creates_npc_pilots(in_memory_session):
         user_id="player_user",
         room_id=room.id,
         mobile_suit_id=suit.id,
-        mobile_suit_snapshot=suit.model_dump(),
+        mobile_suit_snapshot=snapshot,
         is_npc=False,
     )
     in_memory_session.add(entry)
@@ -244,6 +245,7 @@ def test_create_rooms_npc_snapshot_includes_pilot_level(in_memory_session):
     in_memory_session.refresh(room)
 
     suit = create_test_mobile_suit("Player Suit", "player_user")
+    snapshot = suit.model_dump()
     in_memory_session.add(suit)
     in_memory_session.commit()
 
@@ -251,7 +253,7 @@ def test_create_rooms_npc_snapshot_includes_pilot_level(in_memory_session):
         user_id="player_user",
         room_id=room.id,
         mobile_suit_id=suit.id,
-        mobile_suit_snapshot=suit.model_dump(),
+        mobile_suit_snapshot=snapshot,
         is_npc=False,
     )
     in_memory_session.add(entry)
@@ -314,6 +316,7 @@ def test_create_rooms_reuses_persistent_npcs(in_memory_session):
     in_memory_session.refresh(room)
 
     player_suit = create_test_mobile_suit("Player", "player_user")
+    player_snapshot = player_suit.model_dump()
     in_memory_session.add(player_suit)
     in_memory_session.commit()
 
@@ -321,7 +324,7 @@ def test_create_rooms_reuses_persistent_npcs(in_memory_session):
         user_id="player_user",
         room_id=room.id,
         mobile_suit_id=player_suit.id,
-        mobile_suit_snapshot=player_suit.model_dump(),
+        mobile_suit_snapshot=player_snapshot,
         is_npc=False,
     )
     in_memory_session.add(entry)
