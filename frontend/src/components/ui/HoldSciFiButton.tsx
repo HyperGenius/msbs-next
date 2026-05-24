@@ -37,28 +37,33 @@ export default function HoldSciFiButton({
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const firedRef = useRef(false);
+  // setInterval コールバック内で最新の進行度を参照するための ref
+  const progressRef = useRef(0);
 
   const startHold = useCallback(() => {
     if (disabled || loading) return;
     firedRef.current = false;
+    progressRef.current = 0;
 
     intervalRef.current = setInterval(() => {
-      setProgress((prev) => {
-        const next = prev + (TICK_MS / HOLD_DURATION_MS) * 100;
-        if (next >= 100) {
-          // 満タン → インターバルを止めて発火
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-          if (!firedRef.current) {
-            firedRef.current = true;
-            onHoldComplete();
-          }
-          return 100;
+      const next = Math.min(
+        progressRef.current + (TICK_MS / HOLD_DURATION_MS) * 100,
+        100,
+      );
+      progressRef.current = next;
+      setProgress(next);
+
+      if (next >= 100 && !firedRef.current) {
+        // 満タン → インターバルを止めて発火
+        // onHoldComplete は updater 関数の外（setInterval コールバック直下）で呼び出す。
+        // updater 内で親コンポーネントの setState を呼ぶとレンダー中の setState 警告が出るため。
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
         }
-        return next;
-      });
+        firedRef.current = true;
+        onHoldComplete();
+      }
     }, TICK_MS);
   }, [disabled, loading, onHoldComplete]);
 
@@ -69,6 +74,7 @@ export default function HoldSciFiButton({
     }
     // 発火済みの場合はリセットしない（ローディング中の見た目を保つ）
     if (!firedRef.current) {
+      progressRef.current = 0;
       setProgress(0);
     }
   }, []);
@@ -76,6 +82,7 @@ export default function HoldSciFiButton({
   // loading が終わったらゲージをリセット
   useEffect(() => {
     if (!loading) {
+      progressRef.current = 0;
       setProgress(0);
       firedRef.current = false;
     }
