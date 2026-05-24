@@ -76,6 +76,8 @@ interface BattleSceneProps {
     obstacles?: Obstacle[];
     /** LOS 表示が ON のときのみ渡される計算済み LOS 結果 */
     losResults?: LosResult[];
+    /** 現在タイムスタンプで攻撃アクション中のユニット ID セット（射撃反動アニメーション用）*/
+    attackingUnitIds?: Set<string>;
 }
 
 /** 自機からターゲット敵MSへの照準線コンポーネント */
@@ -217,6 +219,7 @@ export function BattleScene({
     enemyEvents,
     obstacles,
     losResults,
+    attackingUnitIds,
 }: BattleSceneProps) {
     // 自機MS初期Three.js座標をマウント時のみキャプチャ（MobileSuitMesh と同じ軸変換）
     const initialPos = useRef({
@@ -298,6 +301,7 @@ export function BattleScene({
                 showSensorRange={true}
                 warnings={playerState.warnings}
                 heading={playerState.heading}
+                isAttacking={attackingUnitIds?.has(String(player.id))}
             />
 
             {/* Enemies */}
@@ -313,6 +317,7 @@ export function BattleScene({
                     showSensorRange={false}
                     warnings={state.warnings}
                     isTargeted={enemy.id === playerState.targetId}
+                    isAttacking={attackingUnitIds?.has(String(enemy.id))}
                 />
             ))}
 

@@ -5,10 +5,18 @@ import { BattleLog } from "@/types/battle";
 import { BattleEventEffect } from "../types";
 import { RESIST_PATTERN } from "../utils";
 
+/** useBattleEvents の返却型 */
+export interface BattleEventsResult {
+    /** ユニット ID → 現在タイムスタンプのバトルエフェクト */
+    events: Map<string, BattleEventEffect | null>;
+    /** 現在タイムスタンプで攻撃アクション中のユニット ID セット（射撃反動アニメーション用） */
+    attackingUnitIds: Set<string>;
+}
+
 export function useBattleEvents(
     logs: BattleLog[],
     currentTimestamp: number
-): Map<string, BattleEventEffect | null> {
+): BattleEventsResult {
     return useMemo(() => {
         const currentTimestampLogs = logs.filter(log => Math.abs(log.timestamp - currentTimestamp) < 1e-9);
         const battleEventMap = new Map<string, BattleEventEffect | null>();
@@ -18,6 +26,17 @@ export function useBattleEvents(
         for (const log of currentTimestampLogs) {
             if (log.actor_id && log.position_snapshot) {
                 positionMap.set(log.actor_id, log.position_snapshot);
+            }
+        }
+
+        // 攻撃中ユニット ID セットを構築（射撃反動アニメーション用）(Issue #365)
+        const attackingUnitIds = new Set<string>();
+        for (const log of currentTimestampLogs) {
+            if (
+                (log.action_type === "ATTACK" || log.action_type === "MELEE_COMBO") &&
+                log.actor_id
+            ) {
+                attackingUnitIds.add(log.actor_id);
             }
         }
 
@@ -139,6 +158,6 @@ export function useBattleEvents(
             }
         }
 
-        return battleEventMap;
+        return { events: battleEventMap, attackingUnitIds };
     }, [logs, currentTimestamp]);
 }

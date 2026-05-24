@@ -49,6 +49,17 @@ class ActionHandlerMixin:
             # 攻撃行動: 攻撃可能なら攻撃、そうでなければ移動
             if weapon and distance <= weapon.range:
                 self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
+                # 攻撃中も慣性を継続させるため移動処理を実行 (Issue #365/#366)
+                # _process_attack() は actor.position を変更しないため pos_actor/diff_vector は有効
+                self._process_movement(  # type: ignore[attr-defined]
+                    actor,
+                    pos_actor,
+                    pos_target,
+                    diff_vector,
+                    distance,
+                    dt,
+                    target=target,
+                )
             else:
                 self._process_movement(  # type: ignore[attr-defined]
                     actor,
@@ -113,6 +124,16 @@ class ActionHandlerMixin:
             # キャンセル後は遠距離攻撃試行
             if weapon and isinstance(weapon, Weapon) and distance <= weapon.range:
                 self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
+                # ブーストキャンセル後も慣性を継続させる (Issue #365/#366)
+                self._process_movement(  # type: ignore[attr-defined]
+                    actor,
+                    pos_actor,
+                    pos_target,
+                    diff_vector,
+                    distance,
+                    dt,
+                    target=target,
+                )
             else:
                 self._process_movement(  # type: ignore[attr-defined]
                     actor,

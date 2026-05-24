@@ -24,6 +24,8 @@ from app.engine.constants import (
     OBSTACLE_REPULSION_COEFF,
     RETREAT_ATTRACTION_COEFF,
     SPECIAL_ENVIRONMENT_EFFECTS,
+    STRAFE_ATTRACTION_COEFF,
+    STRAFE_MIN_RANGE_RATIO,
     TERRAIN_ADAPTABILITY_MODIFIERS,
 )
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3
@@ -180,6 +182,53 @@ class MovementMixin:
             return np.zeros(3)
         return FLANKING_ATTRACTION_WEIGHT * vec / dist
 
+    def _strafe_attraction(
+        self,
+        unit: MobileSuit,
+        target: MobileSuit,
+    ) -> np.ndarray:
+        """攻撃中の軌道旋回（ストレイフ）引力ベクトルを計算する (Issue #366).
+
+        ターゲットを中心とした接線方向への引力を返す。
+        ユニット ID の決定論的ハッシュで旋回方向を固定し、各機が一定方向に周回する。
+        格闘武器使用中・有効射程の STRAFE_MIN_RANGE_RATIO 外ではゼロベクトルを返す。
+
+        Args:
+            unit: 移動するユニット
+            target: 攻撃対象ユニット
+
+        Returns:
+            3D 接線方向引力ベクトル（未正規化）。未発動時はゼロベクトル。
+        """
+        # 格闘武器は体当たりのためストレイフ不要
+        weapon = unit.get_active_weapon()
+        if weapon is None or getattr(weapon, "is_melee", False):
+            return np.zeros(3)
+
+        pos_unit = unit.position.to_numpy()
+        pos_target = target.position.to_numpy()
+
+        radial_vec = pos_unit - pos_target  # ターゲットからユニットへの方向
+        radial_vec[1] = 0.0  # XZ 平面に固定
+        dist = float(np.linalg.norm(radial_vec))
+        if dist < 1e-6:
+            return np.zeros(3)
+
+        # 有効射程の STRAFE_MIN_RANGE_RATIO 以内のときのみ発動
+        if dist > float(weapon.range) * STRAFE_MIN_RANGE_RATIO:
+            return np.zeros(3)
+
+        # 上向きベクトルとのクロス積で接線方向（XZ 平面の垂直方向）を計算
+        up = np.array([0.0, 1.0, 0.0])
+        tangent = np.cross(up, radial_vec / dist)  # 正規化済みの接線ベクトル
+
+        # ユニット ID の決定論的ハッシュで旋回方向を固定 (-1 or +1)
+        # hash() は session ごとに変わるため UUID 文字列の数値変換を使用
+        uid_int = int(str(unit.id).replace("-", ""), 16)
+        direction = 1 if uid_int % 2 == 0 else -1
+
+        return STRAFE_ATTRACTION_COEFF * direction * tangent
+
     def _calculate_potential_field(
         self,
         unit: MobileSuit,
@@ -251,6 +300,11 @@ class MovementMixin:
         # ATTACK / MOVE 行動かつターゲットが存在する場合のみ有効
         if current_action in ("ATTACK", "MOVE") and target is not None:
             total_force += self._flanking_attraction(unit, target, dt)
+
+        # 9. ストレイフ引力: 攻撃中の軌道旋回（接線方向への引力）(Issue #366)
+        # ATTACK 行動かつターゲットが存在する場合のみ有効
+        if current_action == "ATTACK" and target is not None:
+            total_force += self._strafe_attraction(unit, target)
 
         # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
         total_force[1] = 0.0  # Y 成分を XZ 平面に固定

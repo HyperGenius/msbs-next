@@ -2,7 +2,8 @@
 
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { getHpColor } from "../utils";
@@ -20,6 +21,7 @@ export function MobileSuitMesh({
     warnings,
     heading,
     isTargeted,
+    isAttacking,
 }: {
     position: { x: number; y: number; z: number };
     maxHp: number;
@@ -33,10 +35,36 @@ export function MobileSuitMesh({
     heading?: number;
     /** ターゲットされている場合 true — ハイライトリング表示に使用 */
     isTargeted?: boolean;
+    /** 現在攻撃中の場合 true — 射撃反動アニメーション用 (Issue #365) */
+    isAttacking?: boolean;
 }) {
     const scale = 0.05;
     const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
     const color = getHpColor(currentHp, maxHp);
+
+    // 射撃反動アニメーション用内側グループ ref と経過タイマー (Issue #365)
+    const innerGroupRef = useRef<THREE.Group>(null);
+    const recoilTimeRef = useRef(0);
+    const RECOIL_DURATION = 0.25; // 反動アニメーション持続時間（秒）
+
+    useFrame((_, delta) => {
+        if (!innerGroupRef.current) return;
+
+        if (isAttacking) {
+            // 攻撃イベント検出時にタイマーをリセット
+            recoilTimeRef.current = RECOIL_DURATION;
+        }
+
+        if (recoilTimeRef.current > 0) {
+            recoilTimeRef.current = Math.max(0, recoilTimeRef.current - delta);
+            const t = 1 - recoilTimeRef.current / RECOIL_DURATION; // 0 → 1
+            // 減衰振動: sin波 × 線形減衰
+            const recoil = Math.sin(t * Math.PI * 5) * 0.12 * (1 - t);
+            innerGroupRef.current.position.x = recoil;
+        } else {
+            innerGroupRef.current.position.x = 0;
+        }
+    });
 
     // 向き矢印（ArrowHelper）の生成
     const headingArrow = useMemo(() => {
@@ -78,57 +106,60 @@ export function MobileSuitMesh({
 
     return (
         <group position={vec}>
-            <mesh scale={[2, 2, 2]}>
-                <sphereGeometry args={[0.5, 32, 32]} />
-                <meshStandardMaterial
-                    color={color}
-                    roughness={0.5}
-                    metalness={0.1}
-                    emissive={color}
-                    emissiveIntensity={isTargeted ? 1.2 : 0.3}
-                />
-            </mesh>
-
-            {/* ターゲットハイライトリング */}
-            {isTargeted && (
-                <mesh rotation={[-Math.PI / 2, 0, 0]}>
-                    <ringGeometry args={[1.4, 1.8, 32]} />
-                    <meshBasicMaterial color={0xff4444} side={THREE.DoubleSide} transparent opacity={0.85} />
+            {/* 射撃反動アニメーション用内側グループ (Issue #365) */}
+            <group ref={innerGroupRef}>
+                <mesh scale={[2, 2, 2]}>
+                    <sphereGeometry args={[0.5, 32, 32]} />
+                    <meshStandardMaterial
+                        color={color}
+                        roughness={0.5}
+                        metalness={0.1}
+                        emissive={color}
+                        emissiveIntensity={isTargeted ? 1.2 : 0.3}
+                    />
                 </mesh>
-            )}
-            
-            {/* Sensor Range Visualization - Enhanced with animation */}
-            {showSensorRange && sensorRange && (
-                <AnimatedSensorRing sensorRange={sensorRange} scale={scale} />
-            )}
 
-            {/* 向き矢印（自機のみ: heading が指定された場合のみ表示） */}
-            {headingArrow && <primitive object={headingArrow} />}
-            
-            {/* Status Warning Indicators above the unit */}
-            {warnings && warnings.length > 0 && (
-                <Html position={[0, 3, 0]} center>
-                    <div className="flex gap-1 items-center pointer-events-none">
-                        {warnings.map((warning, idx) => {
-                            const info = warningIcons[warning];
-                            return (
-                                <div 
-                                    key={idx}
-                                    className="flex flex-col items-center text-xs font-bold px-2 py-1 rounded"
-                                    style={{ 
-                                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                        border: `2px solid ${info.color}`,
-                                        color: info.color
-                                    }}
-                                >
-                                    <span className="text-lg">{info.icon}</span>
-                                    <span className="text-[10px] whitespace-nowrap">{info.label}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </Html>
-            )}
+                {/* ターゲットハイライトリング */}
+                {isTargeted && (
+                    <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                        <ringGeometry args={[1.4, 1.8, 32]} />
+                        <meshBasicMaterial color={0xff4444} side={THREE.DoubleSide} transparent opacity={0.85} />
+                    </mesh>
+                )}
+
+                {/* Sensor Range Visualization - Enhanced with animation */}
+                {showSensorRange && sensorRange && (
+                    <AnimatedSensorRing sensorRange={sensorRange} scale={scale} />
+                )}
+
+                {/* 向き矢印（自機のみ: heading が指定された場合のみ表示） */}
+                {headingArrow && <primitive object={headingArrow} />}
+
+                {/* Status Warning Indicators above the unit */}
+                {warnings && warnings.length > 0 && (
+                    <Html position={[0, 3, 0]} center>
+                        <div className="flex gap-1 items-center pointer-events-none">
+                            {warnings.map((warning, idx) => {
+                                const info = warningIcons[warning];
+                                return (
+                                    <div
+                                        key={idx}
+                                        className="flex flex-col items-center text-xs font-bold px-2 py-1 rounded"
+                                        style={{
+                                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                            border: `2px solid ${info.color}`,
+                                            color: info.color
+                                        }}
+                                    >
+                                        <span className="text-lg">{info.icon}</span>
+                                        <span className="text-[10px] whitespace-nowrap">{info.label}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </Html>
+                )}
+            </group>
         </group>
     );
 }
