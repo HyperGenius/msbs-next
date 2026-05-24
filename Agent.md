@@ -112,17 +112,25 @@
    - データの整形、フィルタリング、複雑な状態計算ロジックはコンポーネント内に記述せず、必ず **Custom Hooks** (`useLogicName`) に切り出す。
    - コンポーネントは「描画」に専念し、ロジックを持たないようにする (View vs Logic の分離)。
    - 実装例: `BattleViewer` → `useBattleSnapshot`, `useBattleEvents` に状態計算を分離
+
 5. **React Three Fiber (R3F) Separation**:
    - 3Dシーン (`Canvas` 内部) と 2D UI (HTML オーバーレイ) は、同じファイルに混在させず、それぞれ別のコンポーネントファイルに分割する。
    - `Canvas` を含む親コンポーネントは、レイアウトとデータの受け渡しのみを行う構成（Container Component）にする。
    - 実装例: `BattleViewer/index.tsx` (Container) → `scene/BattleScene.tsx` (3D) + `ui/BattleOverlay.tsx` (2D UI)
+
 6. **Constants & Utils**:
    - 複数の場所で使用される定数や、3行以上の計算ロジック（色計算など）は `utils/` や `constants.ts` に移動し、純粋関数として定義する。
    - 実装例: `BattleViewer/utils.ts` - HPバー色計算、環境色取得
+
 7. **SciFi Design System**:
    - UIコンポーネントは `src/components/ui/` のカスタムコンポーネントを使用する。
    - 利用可能: `SciFiButton`, `SciFiPanel`, `SciFiHeading`, `SciFiSelect`, `SciFiInput` 等
    - 統一感のあるサイバーパンク風デザインを維持する。
+
+8. **Function Comments**:
+   - 関数を定義する際は、必ずJSDoc等の形式でコメントを記述する。
+   - コメントには、その関数の**概要（目的・何をする処理か）とパラメータ（引数）の説明**を必ず含めること。
+
 
 ### Database (Neon/PostgreSQL)
 
