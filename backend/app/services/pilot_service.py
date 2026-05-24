@@ -303,7 +303,9 @@ class PilotService:
             raise ValueError(f"スキルポイントが不足しています (必要: {SKILL_COST})")
 
         # スキルレベルアップとSP消費
-        pilot.skills[skill_id] = current_level + 1
+        # JSON カラムは dict のインプレース変更を SQLAlchemy が追跡できないため、
+        # 新しい dict を代入して変更を確実に検知させる
+        pilot.skills = {**pilot.skills, skill_id: current_level + 1}
         pilot.skill_points -= SKILL_COST
         pilot.updated_at = datetime.now(UTC)
 

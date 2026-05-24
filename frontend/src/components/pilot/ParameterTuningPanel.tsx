@@ -125,10 +125,10 @@ export default function ParameterTuningPanel({ pilot, mutatePilot }: ParameterTu
                 </div>
                 <div className="text-right shrink-0 ml-2">
                   <p className="text-xl font-bold text-[#ffb000]">
-                    <p className={`font-bold ${rankColor}`}>
+                    <span className={`font-bold ${rankColor}`}>
                       Rank {rank}
                       ({displayVal})
-                    </p>
+                    </span>
                     {pendingVal > 0 && (
                       <span className="text-sm text-[#00ff41]"> (+{pendingVal})</span>
                     )}
