@@ -537,7 +537,12 @@ def test_full_simulation_with_obstacles_completes() -> None:
 
 
 def test_full_simulation_without_obstacles_unchanged() -> None:
-    """obstacles=[] でシミュレーション結果が従来と変わらないこと（後方互換性）."""
+    """obstacles=[] でシミュレーションが正常に完了すること（後方互換性）.
+
+    Note: Issue #365/#366 の攻撃中移動継続・ストレイフ機能追加により、
+    MSが攻撃しながら軌道旋回するようになったため、完了までのステップ数が
+    増加する場合がある。最大 500 ステップで完了することを確認する。
+    """
     import random
 
     random.seed(42)
@@ -549,7 +554,7 @@ def test_full_simulation_without_obstacles_unchanged() -> None:
     )
 
     sim = BattleSimulator(player, [enemy])
-    for _ in range(200):
+    for _ in range(500):
         if sim.is_finished:
             break
         sim.step()

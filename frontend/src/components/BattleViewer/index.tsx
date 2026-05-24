@@ -47,9 +47,9 @@ export default function BattleViewer({
     const detectedIds = getDetectedUnits(player.id, logs, currentTimestamp);
     const visibleEnemyStates = enemyStates.filter(({ enemy }) => detectedIds.has(enemy.id));
     
-    // バトルイベントの取得
-    const battleEventMap = useBattleEvents(logs, currentTimestamp);
-    
+    // バトルイベントの取得（攻撃中ユニット ID セットを含む）(Issue #365)
+    const { events: battleEventMap, attackingUnitIds } = useBattleEvents(logs, currentTimestamp);
+
     const playerEvent = battleEventMap.get(player.id) || null;
     const enemyEvents = enemies.map(enemy => ({
         id: enemy.id,
@@ -89,6 +89,7 @@ export default function BattleViewer({
                 enemyEvents={enemyEvents}
                 obstacles={obstacles}
                 losResults={losResults}
+                attackingUnitIds={attackingUnitIds}
             />
             
             <BattleOverlay

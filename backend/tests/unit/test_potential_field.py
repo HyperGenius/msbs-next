@@ -614,3 +614,132 @@ def test_potential_field_empty_retreat_points_no_error() -> None:
     # 例外が発生しないこと
     direction = sim._calculate_potential_field(player, retreat_points=[])
     assert np.linalg.norm(direction) > 0.99
+
+
+# ---------------------------------------------------------------------------
+# Issue #365: 攻撃中移動継続テスト
+# ---------------------------------------------------------------------------
+
+
+def test_attack_in_range_continues_moving() -> None:
+    """ATTACK かつ射程内でも位置が更新されること (#365).
+
+    _process_attack() の後に _process_movement() も呼ばれ、
+    慣性が継続して位置が変化することを確認する。
+    """
+    # 距離 100m、射程 500m なので射程内
+    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=100, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+
+    uid = str(player.id)
+
+    # 発見済みにする（detection_step_map 未登録 → 即時ターゲット可能フォールバック）
+    sim.team_detected_units[player.team_id].add(enemy.id)
+
+    # ATTACK アクションを強制設定
+    sim.unit_resources[uid]["current_action"] = "ATTACK"
+
+    # ステップカウントを進めてリアクション遅延を経過させる
+    sim._step_count = 10
+    sim.detection_step_map[player.team_id][str(enemy.id)] = 1
+
+    initial_pos = (player.position.x, player.position.z)
+
+    # _action_phase を直接呼び出し（AI 意思決定フェーズをスキップ）
+    sim._action_phase(player, dt=0.1)
+
+    final_pos = (player.position.x, player.position.z)
+    assert initial_pos != final_pos, (
+        "ATTACK 射程内でも _process_movement() が呼ばれ位置が変わること"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Issue #366: ストレイフ引力テスト
+# ---------------------------------------------------------------------------
+
+
+def test_strafe_attraction_returns_tangential_vector() -> None:
+    """_strafe_attraction() がターゲットへの径方向に垂直な接線ベクトルを返すこと (#366)."""
+    # ターゲットが原点、ユニットが +x 方向（距離 100m）で射程 500m 内
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=100, y=0, z=0), weapon_range=500.0
+    )
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+
+    result = sim._strafe_attraction(player, enemy)
+
+    # ゼロベクトルではないこと（ストレイフが発動）
+    assert float(np.linalg.norm(result)) > 1e-6, "ストレイフ引力が生成されること"
+
+    # Y 成分はゼロ（XZ 平面）
+    assert abs(result[1]) < 1e-6, "Y 成分はゼロ (XZ 平面移動)"
+
+    # 径方向（X 軸: ターゲット→ユニット方向）と直交する（内積 ≒ 0）
+    radial = np.array([1.0, 0.0, 0.0])
+    norm_result = result / np.linalg.norm(result)
+    dot = float(np.dot(norm_result, radial))
+    assert abs(dot) < 1e-6, f"接線方向でないこと (dot={dot:.6f})"
+
+
+def test_strafe_attraction_zero_for_melee_weapon() -> None:
+    """格闘武器使用中はストレイフ引力がゼロになること (#366)."""
+    melee_weapon = Weapon(
+        id="melee_w",
+        name="Beam Saber",
+        power=200,
+        range=50.0,
+        accuracy=90,
+        is_melee=True,
+    )
+    player = MobileSuit(
+        name="Player",
+        max_hp=1000,
+        current_hp=1000,
+        armor=0,
+        mobility=1.0,
+        position=Vector3(x=30, y=0, z=0),
+        weapons=[melee_weapon],
+        side="PLAYER",
+        team_id="PT",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+        max_speed=80.0,
+        acceleration=30.0,
+        deceleration=50.0,
+        max_turn_rate=360.0,
+    )
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+
+    result = sim._strafe_attraction(player, enemy)
+    assert np.allclose(result, np.zeros(3)), "格闘武器ではストレイフ引力がゼロ"
+
+
+def test_strafe_attraction_zero_outside_effective_range() -> None:
+    """射程の STRAFE_MIN_RANGE_RATIO 外ではストレイフ引力がゼロになること (#366)."""
+    # 武器射程 200m、距離 500m → 500 > 200 * 0.8 = 160m → 射程外
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=500, y=0, z=0), weapon_range=200.0
+    )
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+
+    result = sim._strafe_attraction(player, enemy)
+    assert np.allclose(result, np.zeros(3)), "射程外ではストレイフ引力がゼロ"
+
+
+def test_strafe_attraction_consistent_direction() -> None:
+    """同じユニット ID では旋回方向が一定であること (#366)."""
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=100, y=0, z=0), weapon_range=500.0
+    )
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+
+    result1 = sim._strafe_attraction(player, enemy)
+    result2 = sim._strafe_attraction(player, enemy)
+
+    # 同じ呼び出しで同じ方向ベクトルが返ること
+    assert np.allclose(result1, result2), "同一ユニットの旋回方向は一定"

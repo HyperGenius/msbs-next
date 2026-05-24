@@ -90,6 +90,12 @@ MOVE_LOG_MIN_DIST: float = (
 # 撤退ポイント引力係数 (Phase 3-3)
 RETREAT_ATTRACTION_COEFF: float = 5.0  # 撤退ポイントへの強引力係数
 
+# 軌道旋回（ストレイフ）定数 (Issue #366)
+STRAFE_ATTRACTION_COEFF: float = 1.0  # ストレイフ引力係数
+STRAFE_MIN_RANGE_RATIO: float = (
+    0.8  # 射程のこの割合以内のとき発動（0.8 = 射程の80%以内）
+)
+
 # 戦略評価インターバル (Phase 4-2)
 STRATEGY_UPDATE_INTERVAL: int = 10  # 何ステップごとに戦略評価を行うか
 
