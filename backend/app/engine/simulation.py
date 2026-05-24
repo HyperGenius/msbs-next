@@ -94,6 +94,35 @@ def _build_unit_pilot_stats(
     return result
 
 
+def _resolve_flanking_skill_level(
+    unit: "MobileSuit",
+    is_player: bool,
+    player_skills: dict[str, int] | None,
+) -> int:
+    """ユニットのフランキングスキルレベルを解決する (Phase E-3.5).
+
+    Args:
+        unit: 対象ユニット
+        is_player: プレイヤーユニットかどうか
+        player_skills: プレイヤーのスキル辞書
+
+    Returns:
+        フランキングスキルレベル (0〜3)
+    """
+    from app.core.npc_data import get_ace_pilot_by_id  # noqa: PLC0415
+
+    if is_player:
+        return (player_skills or {}).get("flanking", 0)
+
+    ace_id: str | None = getattr(unit, "ace_id", None)
+    if getattr(unit, "is_ace", False) and ace_id is not None:
+        ace_data = get_ace_pilot_by_id(ace_id)
+        if ace_data and "skills" in ace_data:
+            return int(ace_data["skills"].get("flanking", 0))
+
+    return 1 if getattr(unit, "personality", None) == "AGGRESSIVE" else 0
+
+
 class BattleSimulator(
     BattleUtilsMixin,
     CombatMixin,
@@ -219,6 +248,7 @@ class BattleSimulator(
                 "is_boosting": False,  # ブースト中フラグ (Phase B)
                 "boost_elapsed": 0.0,  # 現ブーストの継続時間 (s) (Phase B)
                 "boost_cooldown_remaining": 0.0,  # 残クールダウン時間 (s) (Phase B)
+                "flanking_skill_level": 0,  # フランキングスキルレベル (Phase E-3.5)
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:
@@ -229,6 +259,15 @@ class BattleSimulator(
                     else None,
                     "cooldown_remaining_sec": 0.0,  # 残りクールダウン時間（秒）(Phase 6-2)
                 }
+
+            # フランキングスキルレベルの解決 (Phase E-3.5)
+            self.unit_resources[unit_id]["flanking_skill_level"] = (
+                _resolve_flanking_skill_level(
+                    unit,
+                    is_player=str(unit.id) == str(self.player.id),
+                    player_skills=self.player_skills,
+                )
+            )
 
         # 中階層ファジィ推論エンジン（AGGRESSIVEルールセット）
         self._fuzzy_engine: FuzzyEngine = FuzzyEngine.from_json(

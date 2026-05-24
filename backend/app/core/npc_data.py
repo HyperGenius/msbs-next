@@ -131,6 +131,7 @@ ACE_PILOTS = [
         "bounty_exp": 500,
         "bounty_credits": 1000,
         "stats": {"sht": 10, "mel": 10, "intel": 9, "ref": 15, "tou": 7, "luk": 8},
+        "skills": {"flanking": 3},
     },
     {
         "id": "ace_ramba_ral",
@@ -175,6 +176,7 @@ ACE_PILOTS = [
         "bounty_exp": 450,
         "bounty_credits": 900,
         "stats": {"sht": 7, "mel": 14, "intel": 8, "ref": 10, "tou": 12, "luk": 6},
+        "skills": {"flanking": 3},
     },
     {
         "id": "ace_yazan_gable",
@@ -220,6 +222,7 @@ ACE_PILOTS = [
         "bounty_exp": 480,
         "bounty_credits": 950,
         "stats": {"sht": 10, "mel": 13, "intel": 7, "ref": 11, "tou": 13, "luk": 5},
+        "skills": {"flanking": 3},
     },
     {
         "id": "ace_amuro_ray",
@@ -266,6 +269,7 @@ ACE_PILOTS = [
         "bounty_exp": 800,
         "bounty_credits": 2000,
         "stats": {"sht": 13, "mel": 11, "intel": 15, "ref": 14, "tou": 9, "luk": 12},
+        "skills": {"flanking": 2},
     },
     {
         "id": "ace_haman_karn",
@@ -312,6 +316,7 @@ ACE_PILOTS = [
         "bounty_exp": 750,
         "bounty_credits": 1800,
         "stats": {"sht": 11, "mel": 10, "intel": 14, "ref": 11, "tou": 8, "luk": 13},
+        "skills": {"flanking": 2},
     },
 ]
 
