@@ -40,6 +40,10 @@ export function getBattleSnapshot(
     let heading: number | undefined = undefined;
     let prevHeadingTs: number | undefined = undefined;
     let unitTargetId: string | undefined = undefined;
+    // 物理補間用: velocity_snapshot を持つ最後のログの情報を保持
+    let lastVelocity: { x: number; y: number; z: number } | undefined = undefined;
+    let lastVelocityPos: { x: number; y: number; z: number } | undefined = undefined;
+    let lastVelocityTs: number | undefined = undefined;
     
     // 武器の初期弾数を設定
     initialMs.weapons.forEach(weapon => {
@@ -55,6 +59,13 @@ export function getBattleSnapshot(
         // 位置更新
         if (log.actor_id === targetId && log.position_snapshot) {
             pos = log.position_snapshot;
+        }
+
+        // velocity_snapshot を記録（ログ間の物理補間用）
+        if (log.actor_id === targetId && log.velocity_snapshot) {
+            lastVelocity = log.velocity_snapshot;
+            lastVelocityPos = log.position_snapshot;
+            lastVelocityTs = log.timestamp;
         }
 
         // 向き更新（自ユニットのログに heading フィールドがあれば取得）
@@ -100,6 +111,18 @@ export function getBattleSnapshot(
                 heading = lerpAngle(heading, log.heading, Math.max(0, Math.min(1, t)));
                 break;
             }
+        }
+    }
+
+    // 物理補間: pos = prev_pos + velocity × dt（ログ間の滑らかな移動表示）
+    if (lastVelocity && lastVelocityTs !== undefined && lastVelocityPos !== undefined) {
+        const dt = currentTimestamp - lastVelocityTs;
+        if (dt > 0) {
+            pos = {
+                x: lastVelocityPos.x + lastVelocity.x * dt,
+                y: lastVelocityPos.y + lastVelocity.y * dt,
+                z: lastVelocityPos.z + lastVelocity.z * dt,
+            };
         }
     }
 

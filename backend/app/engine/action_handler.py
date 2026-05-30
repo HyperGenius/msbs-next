@@ -78,11 +78,51 @@ class ActionHandlerMixin:
             self._handle_boost_dash_action(
                 actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
             )
+        elif current_action == "HIT_AND_AWAY":
+            self._handle_hit_and_away_action(
+                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
+            )
         else:
             # MOVE 行動（RETREAT フォールバックを含む）: 移動のみ（攻撃対象引力なし）
             self._process_movement(  # type: ignore[attr-defined]
                 actor, pos_actor, pos_target, diff_vector, distance, dt
             )
+
+    def _handle_hit_and_away_action(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: object,
+        pos_actor: np.ndarray,
+        pos_target: np.ndarray,
+        diff_vector: np.ndarray,
+        distance: float,
+        dt: float,
+    ) -> None:
+        """Hit-and-Away行動処理 (Issue #368 A-2).
+
+        1ステップ内で3フェーズを処理:
+        ① ターゲットが射程外 → 接近移動
+        ② 射程内 → _process_attack() で攻撃
+        ③ 攻撃完了後 → ターゲットを斥力源として離脱移動
+        """
+        unit_id = str(actor.id)
+        if weapon and isinstance(weapon, Weapon) and distance <= weapon.range:
+            # フェーズ②: 射程内 → 攻撃
+            self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
+            # フェーズ③: 攻撃後 → ターゲットを斥力源として離脱
+            # _calculate_potential_field() の HIT_AND_AWAY ケースでターゲット斥力を適用
+            self._process_movement(  # type: ignore[attr-defined]
+                actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+            )
+        else:
+            # フェーズ①: 射程外 → 接近移動
+            # MOVE アクション扱いで最近敵への引力を有効化し、処理後に HIT_AND_AWAY に戻す
+            self.unit_resources[unit_id]["current_action"] = "MOVE"  # type: ignore[attr-defined]
+            self._process_movement(  # type: ignore[attr-defined]
+                actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+            )
+            self.unit_resources[unit_id]["current_action"] = "HIT_AND_AWAY"  # type: ignore[attr-defined]
 
     def _handle_boost_dash_action(
         self,

@@ -145,6 +145,28 @@
       ],
       "operator": "AND",
       "output": { "variable": "action", "set": "BOOST_DASH" }
+    },
+    {
+      "id": "rule_014",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "MEDIUM" },
+        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" },
+        { "variable": "ranged_ammo_ratio", "set": "SUFFICIENT" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "HIT_AND_AWAY" },
+      "comment": "HP中程度・近距離・弾薬十分なら一撃離脱"
+    },
+    {
+      "id": "rule_015",
+      "conditions": [
+        { "variable": "hp_ratio", "set": "LOW" },
+        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" },
+        { "variable": "los_blocked", "set": "CLEAR" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "HIT_AND_AWAY" },
+      "comment": "HP低下・近距離・LOS確保なら一撃離脱で生存優先"
     }
   ],
   "membership_functions": {
@@ -190,6 +212,7 @@
     "action": {
       "ATTACK":       { "type": "trapezoid", "params": [0.0, 0.0, 0.10, 0.20] },
       "MOVE":         { "type": "triangle",  "params": [0.15, 0.30, 0.45] },
+      "HIT_AND_AWAY": { "type": "triangle",  "params": [0.30, 0.45, 0.60] },
       "ENGAGE_MELEE": { "type": "triangle",  "params": [0.40, 0.55, 0.70] },
       "BOOST_DASH":   { "type": "triangle",  "params": [0.60, 0.75, 0.90] },
       "RETREAT":      { "type": "trapezoid", "params": [0.80, 0.90, 1.0, 1.0] }
