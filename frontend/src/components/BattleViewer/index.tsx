@@ -90,6 +90,7 @@ export default function BattleViewer({
                 obstacles={obstacles}
                 losResults={losResults}
                 attackingUnitIds={attackingUnitIds}
+                currentTimestamp={currentTimestamp}
             />
             
             <BattleOverlay
