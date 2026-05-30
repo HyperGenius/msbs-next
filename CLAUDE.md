@@ -9,6 +9,15 @@
 MSBS（Mobile Suit Battle Simulator）は Next.js (App Router) + FastAPI で構成されたオンライン対戦ゲームです。
 詳細なシステム設計は `Agent.md` および `docs/` を参照してください。
 
-## ルール
+## Git ワークフロー
+
+### Issueの起票ルール
 - Issueは必ず `.github/ISSUE_TEMPLATE/` ディレクトリにあるテンプレートを参照してから起票すること
-- 機能を実装したら必ず `docs/features` ディレクトリ内の該当ドキュメントを更新すること
+
+### Issueの作業ルール
+- Issueに着手する前に必ずブランチを作成すること
+- ブランチ命名規則: `feature/issue-{番号}-{概要}` または `fix/issue-{番号}-{概要}`
+
+### Pull Requestのルール
+- 作業が完了したらプルリクエストを作成すること
+- プルリクエストを作成したら必ず `docs/features` ディレクトリ内の該当ドキュメントを更新すること
