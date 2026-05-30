@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, Grid } from "@react-three/drei";
 import * as THREE from "three";
@@ -11,11 +11,35 @@ import { EnvironmentEffects } from "./EnvironmentEffects";
 import { MobileSuitMesh } from "./MobileSuitMesh";
 import { BattleEventDisplay } from "./BattleEventDisplay";
 import { ObstacleMesh } from "./ObstacleMesh";
+import { ProjectileMesh, isBeamWeapon } from "./ProjectileMesh";
+import { HitEffectMesh } from "./HitEffectMesh";
 import { BattleEventEffect, WarningType } from "../types";
 import { Obstacle } from "@/types/battle";
 
 // MobileSuitMesh と同じスケール定数（座標変換の一貫性）
 const POSITION_SCALE = 0.05;
+
+// 飛翔体・ヒットエフェクトの上限数と飛翔時間
+const MAX_PROJECTILES = 20;
+const MAX_HIT_EFFECTS = 15;
+const PROJECTILE_DURATION_MS = 800;
+
+/** 飛翔中の発射体の状態 (B-3) */
+interface ProjectileState {
+    id: string;
+    fromPos: { x: number; y: number; z: number };
+    toPos: { x: number; y: number; z: number };
+    weaponType: "BEAM" | "BULLET";
+    startTime: number;
+}
+
+/** 命中エフェクトの状態 (B-5) */
+interface HitEffectState {
+    id: string;
+    position: { x: number; y: number; z: number };
+    effectType: "hit" | "critical" | "miss";
+    startTime: number;
+}
 
 // モーダルオープン時に自機MSを中心にカメラを初期配置するコンポーネント
 // Canvas 内部で useThree を呼ぶため、Canvas の子として定義する必要がある
@@ -78,6 +102,8 @@ interface BattleSceneProps {
     losResults?: LosResult[];
     /** 現在タイムスタンプで攻撃アクション中のユニット ID セット（射撃反動アニメーション用）*/
     attackingUnitIds?: Set<string>;
+    /** 現在の再生タイムスタンプ（飛翔体・ヒットエフェクトのスポーン検出用） */
+    currentTimestamp: number;
 }
 
 /** 自機からターゲット敵MSへの照準線コンポーネント */
@@ -220,6 +246,7 @@ export function BattleScene({
     obstacles,
     losResults,
     attackingUnitIds,
+    currentTimestamp,
 }: BattleSceneProps) {
     // 自機MS初期Three.js座標をマウント時のみキャプチャ（MobileSuitMesh と同じ軸変換）
     const initialPos = useRef({
@@ -230,6 +257,70 @@ export function BattleScene({
     const { x: px, y: py, z: pz } = initialPos.current;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const controlsRef = useRef<any>(null);
+
+    // 飛翔体・ヒットエフェクトの状態管理 (B-3, B-5)
+    const [projectiles, setProjectiles] = useState<ProjectileState[]>([]);
+    const [hitEffects, setHitEffects] = useState<HitEffectState[]>([]);
+
+    // タイムスタンプ変化を検出して飛翔体・ヒットエフェクトをスポーン
+    useEffect(() => {
+        const now = Date.now();
+        const newProjectiles: ProjectileState[] = [];
+        const newHitEffects: HitEffectState[] = [];
+
+        // 自機の攻撃イベントを処理
+        if (playerEvent?.targetPos && playerEvent.hit !== undefined) {
+            const weaponType = isBeamWeapon(playerEvent.weaponName) ? "BEAM" : "BULLET";
+            newProjectiles.push({
+                id: `p-player-${now}`,
+                fromPos: playerState.pos,
+                toPos: playerEvent.targetPos,
+                weaponType,
+                startTime: now,
+            });
+            const effectType =
+                playerEvent.type === "critical" ? "critical" :
+                playerEvent.hit ? "hit" : "miss";
+            newHitEffects.push({
+                id: `h-player-${now}`,
+                position: playerEvent.targetPos,
+                effectType,
+                startTime: now + PROJECTILE_DURATION_MS,
+            });
+        }
+
+        // 敵ユニットの攻撃イベントを処理
+        enemyEvents.forEach(({ id, event }) => {
+            if (!event?.targetPos || event.hit === undefined) return;
+            const enemyData = enemyStates.find(e => e.enemy.id === id);
+            if (!enemyData || enemyData.state.hp <= 0) return;
+            const weaponType = isBeamWeapon(event.weaponName) ? "BEAM" : "BULLET";
+            newProjectiles.push({
+                id: `p-${id}-${now}`,
+                fromPos: enemyData.state.pos,
+                toPos: event.targetPos,
+                weaponType,
+                startTime: now,
+            });
+            const effectType =
+                event.type === "critical" ? "critical" :
+                event.hit ? "hit" : "miss";
+            newHitEffects.push({
+                id: `h-${id}-${now}`,
+                position: event.targetPos,
+                effectType,
+                startTime: now + PROJECTILE_DURATION_MS,
+            });
+        });
+
+        if (newProjectiles.length > 0) {
+            setProjectiles(prev => [...prev, ...newProjectiles].slice(-MAX_PROJECTILES));
+        }
+        if (newHitEffects.length > 0) {
+            setHitEffects(prev => [...prev, ...newHitEffects].slice(-MAX_HIT_EFFECTS));
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentTimestamp]);
 
     // 自機のターゲット敵MSの状態（照準線・ハイライト用）
     const targetedEnemy = playerState.targetId
@@ -246,6 +337,22 @@ export function BattleScene({
         );
     }, [losResults]);
 
+    // クリティカルヒット被弾中かどうかをユニット ID で判定 (B-5)
+    // ターゲット側（テキストが damage 形式: "-xxx"）の critical イベントをフラッシュさせる
+    const flashingUnitIds = useMemo(() => {
+        const ids = new Set<string>();
+        if (playerEvent?.type === "critical" && !playerEvent.targetPos) {
+            // player が被弾側: targetPos なし = damage 表示側
+            ids.add(String(player.id));
+        }
+        enemyEvents.forEach(({ id, event }) => {
+            if (event?.type === "critical" && !event.targetPos) {
+                ids.add(id);
+            }
+        });
+        return ids;
+    }, [player.id, playerEvent, enemyEvents]);
+
     return (
         <Canvas
             camera={{ position: [50, 50, 50], fov: 60 }}
@@ -261,13 +368,13 @@ export function BattleScene({
             {environment === "SPACE" && (
                 <Stars radius={100} depth={50} count={2000} factor={4} fade speed={1} />
             )}
-            <Grid 
-                infiniteGrid 
-                sectionSize={10} 
-                cellSize={1} 
-                fadeDistance={100} 
-                sectionColor={environment === "COLONY" ? "#8a8aaa" : "#00ff00"} 
-                cellColor={environment === "COLONY" ? "#4a4a6a" : "#003300"} 
+            <Grid
+                infiniteGrid
+                sectionSize={10}
+                cellSize={1}
+                fadeDistance={100}
+                sectionColor={environment === "COLONY" ? "#8a8aaa" : "#00ff00"}
+                cellColor={environment === "COLONY" ? "#4a4a6a" : "#003300"}
             />
             <OrbitControls
                 ref={controlsRef}
@@ -302,6 +409,7 @@ export function BattleScene({
                 warnings={playerState.warnings}
                 heading={playerState.heading}
                 isAttacking={attackingUnitIds?.has(String(player.id))}
+                isFlashing={flashingUnitIds.has(String(player.id))}
             />
 
             {/* Enemies */}
@@ -318,6 +426,7 @@ export function BattleScene({
                     warnings={state.warnings}
                     isTargeted={enemy.id === playerState.targetId}
                     isAttacking={attackingUnitIds?.has(String(enemy.id))}
+                    isFlashing={flashingUnitIds.has(String(enemy.id))}
                 />
             ))}
 
@@ -328,7 +437,7 @@ export function BattleScene({
                     targetPos={targetedEnemy.state.pos}
                 />
             )}
-            
+
             {/* Battle Event Effects */}
             {playerEvent && (
                 <BattleEventDisplay position={playerState.pos} event={playerEvent} />
@@ -356,6 +465,30 @@ export function BattleScene({
                     </group>
                 );
             })}
+
+            {/* 飛翔体エフェクト (B-3) */}
+            {projectiles.map(p => (
+                <ProjectileMesh
+                    key={p.id}
+                    fromPos={p.fromPos}
+                    toPos={p.toPos}
+                    weaponType={p.weaponType}
+                    startTime={p.startTime}
+                    duration={PROJECTILE_DURATION_MS}
+                    onComplete={() => setProjectiles(prev => prev.filter(x => x.id !== p.id))}
+                />
+            ))}
+
+            {/* 3Dヒットエフェクト (B-5) */}
+            {hitEffects.map(h => (
+                <HitEffectMesh
+                    key={h.id}
+                    position={h.position}
+                    effectType={h.effectType}
+                    startTime={h.startTime}
+                    onComplete={() => setHitEffects(prev => prev.filter(x => x.id !== h.id))}
+                />
+            ))}
 
             {/* LOS 視線ライン（showLos が ON のときのみ表示） */}
             {losResults && losResults.map((result) => (

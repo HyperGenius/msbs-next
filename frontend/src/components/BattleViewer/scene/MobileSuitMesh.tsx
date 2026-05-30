@@ -16,12 +16,14 @@ export function MobileSuitMesh({
     maxHp,
     currentHp,
     prevHp,
+    name,
     sensorRange,
     showSensorRange,
     warnings,
     heading,
     isTargeted,
     isAttacking,
+    isFlashing,
 }: {
     position: { x: number; y: number; z: number };
     maxHp: number;
@@ -37,24 +39,48 @@ export function MobileSuitMesh({
     isTargeted?: boolean;
     /** 現在攻撃中の場合 true — 射撃反動アニメーション用 (Issue #365) */
     isAttacking?: boolean;
+    /** クリティカルヒット被弾時 true — emissiveIntensity フラッシュ用 (Issue #367) */
+    isFlashing?: boolean;
 }) {
     const scale = 0.05;
     const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
     const color = getHpColor(currentHp, maxHp);
+
+    // ホバリングアニメーション用グループ ref (B-4)
+    const hoverGroupRef = useRef<THREE.Group>(null);
+    // MS名称から固定シードを生成（各機がバラバラのタイミングで揺れる）
+    const seedOffset = useMemo(
+        () => Array.from(name).reduce((acc, c) => acc + c.charCodeAt(0), 0),
+        [name],
+    );
 
     // 射撃反動アニメーション用内側グループ ref と経過タイマー (Issue #365)
     const innerGroupRef = useRef<THREE.Group>(null);
     const recoilTimeRef = useRef(0);
     const RECOIL_DURATION = 0.25; // 反動アニメーション持続時間（秒）
 
-    useFrame((_, delta) => {
-        if (!innerGroupRef.current) return;
+    // クリティカルフラッシュ用球体 ref と経過タイマー (B-5)
+    const sphereMeshRef = useRef<THREE.Mesh>(null);
+    const flashTimeRef = useRef(0);
+    const FLASH_DURATION = 0.4;
 
-        if (isAttacking) {
-            // 攻撃イベント検出時にタイマーをリセット
-            recoilTimeRef.current = RECOIL_DURATION;
+    useFrame((state, delta) => {
+        // B-4: ホバリングアニメーション（宇宙浮遊感）
+        if (hoverGroupRef.current) {
+            const hpRatio = maxHp > 0 ? currentHp / maxHp : 1;
+            // HP 20% 以下: 振幅・周波数を大きくして被弾感を演出
+            const amplitude = hpRatio <= 0.2 ? 0.08 : 0.05;
+            const frequency = hpRatio <= 0.2 ? 1.2 : 0.8;
+            hoverGroupRef.current.position.y =
+                Math.sin(state.clock.elapsedTime * frequency + seedOffset) * amplitude;
         }
 
+        if (!innerGroupRef.current) return;
+
+        // 射撃反動アニメーション (Issue #365)
+        if (isAttacking) {
+            recoilTimeRef.current = RECOIL_DURATION;
+        }
         if (recoilTimeRef.current > 0) {
             recoilTimeRef.current = Math.max(0, recoilTimeRef.current - delta);
             const t = 1 - recoilTimeRef.current / RECOIL_DURATION; // 0 → 1
@@ -63,6 +89,21 @@ export function MobileSuitMesh({
             innerGroupRef.current.position.x = recoil;
         } else {
             innerGroupRef.current.position.x = 0;
+        }
+
+        // B-5: クリティカルフラッシュ（emissiveIntensity を瞬間的に上げて減衰）
+        if (isFlashing) flashTimeRef.current = FLASH_DURATION;
+        if (sphereMeshRef.current) {
+            const baseIntensity = isTargeted ? 1.2 : 0.3;
+            if (flashTimeRef.current > 0) {
+                flashTimeRef.current = Math.max(0, flashTimeRef.current - delta);
+                const decay = flashTimeRef.current / FLASH_DURATION; // 1 → 0
+                (sphereMeshRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity =
+                    baseIntensity + 3.0 * decay;
+            } else {
+                (sphereMeshRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity =
+                    baseIntensity;
+            }
         }
     });
 
@@ -106,9 +147,11 @@ export function MobileSuitMesh({
 
     return (
         <group position={vec}>
+            {/* B-4: ホバリングアニメーション用グループ (Issue #367) */}
+            <group ref={hoverGroupRef}>
             {/* 射撃反動アニメーション用内側グループ (Issue #365) */}
             <group ref={innerGroupRef}>
-                <mesh scale={[2, 2, 2]}>
+                <mesh ref={sphereMeshRef} scale={[2, 2, 2]}>
                     <sphereGeometry args={[0.5, 32, 32]} />
                     <meshStandardMaterial
                         color={color}
@@ -159,6 +202,7 @@ export function MobileSuitMesh({
                         </div>
                     </Html>
                 )}
+            </group>
             </group>
         </group>
     );
