@@ -188,6 +188,11 @@ class AiDecisionMixin:
         if action == "ENGAGE_MELEE" and strategy_mode == "RETREAT":
             return "MOVE"
 
+        if action == "HIT_AND_AWAY":
+            current_en = self.unit_resources[unit_id].get("current_en", 999)  # type: ignore[attr-defined]
+            if current_en < 10:
+                return "ATTACK"
+
         return action
 
     def _ai_decision_phase(self, unit: MobileSuit) -> None:

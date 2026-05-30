@@ -229,6 +229,29 @@ class MovementMixin:
 
         return STRAFE_ATTRACTION_COEFF * direction * tangent
 
+    def _obstacle_repulsion(self, pos_unit: np.ndarray) -> np.ndarray:
+        """障害物への斥力ベクトルを返す (Phase A — LOS システム)."""
+        force = np.zeros(3)
+        for obs in self.obstacles:  # type: ignore[attr-defined]
+            obs_pos = np.array([obs.position.x, obs.position.y, obs.position.z])
+            obs_dist = float(np.linalg.norm(pos_unit - obs_pos))
+            if obs_dist <= obs.radius + OBSTACLE_MARGIN:
+                away_vec = (pos_unit - obs_pos) / max(obs_dist, 1.0)
+                force += OBSTACLE_REPULSION_COEFF * away_vec
+        return force
+
+    def _hit_and_away_target_repulsion(
+        self, pos_unit: np.ndarray, target: MobileSuit | None
+    ) -> np.ndarray:
+        """HIT_AND_AWAY 行動時のターゲット斥力ベクトルを返す (Issue #368)."""
+        force = np.zeros(3)
+        if target is not None:
+            vec_away = pos_unit - target.position.to_numpy()
+            dist = float(np.linalg.norm(vec_away))
+            if dist > 0:
+                force += 2.0 * vec_away / dist
+        return force
+
     def _calculate_potential_field(
         self,
         unit: MobileSuit,
@@ -268,6 +291,10 @@ class MovementMixin:
         if current_action == "MOVE":
             total_force += self._closest_enemy_attraction(unit, pos_unit)
 
+        # 2b. HIT_AND_AWAY: ターゲットを斥力源として離脱移動 (Issue #368)
+        if current_action == "HIT_AND_AWAY":
+            total_force += self._hit_and_away_target_repulsion(pos_unit, target)
+
         # 3. 高脅威敵（自機射程外）への斥力
         weapon = unit.get_active_weapon()
         weapon_range = float(weapon.range) if weapon else 0.0
@@ -289,22 +316,14 @@ class MovementMixin:
             total_force += self._retreat_points_attraction(pos_unit, applicable_rps)
 
         # 7. 障害物への斥力 (Phase A — LOS システム)
-        for obs in self.obstacles:  # type: ignore[attr-defined]
-            obs_pos = np.array([obs.position.x, obs.position.y, obs.position.z])
-            obs_dist = float(np.linalg.norm(pos_unit - obs_pos))
-            if obs_dist <= obs.radius + OBSTACLE_MARGIN:
-                away_vec = (pos_unit - obs_pos) / max(obs_dist, 1.0)
-                total_force += OBSTACLE_REPULSION_COEFF * away_vec
+        total_force += self._obstacle_repulsion(pos_unit)
 
-        # 8. フランキング引力: 目標の背後方向への引力 (Phase E-3.5)
-        # ATTACK / MOVE 行動かつターゲットが存在する場合のみ有効
-        if current_action in ("ATTACK", "MOVE") and target is not None:
-            total_force += self._flanking_attraction(unit, target, dt)
-
-        # 9. ストレイフ引力: 攻撃中の軌道旋回（接線方向への引力）(Issue #366)
-        # ATTACK 行動かつターゲットが存在する場合のみ有効
-        if current_action == "ATTACK" and target is not None:
-            total_force += self._strafe_attraction(unit, target)
+        # 8. フランキング引力・ストレイフ引力（ターゲット存在時のみ）
+        if target is not None:
+            if current_action in ("ATTACK", "MOVE"):
+                total_force += self._flanking_attraction(unit, target, dt)
+            if current_action == "ATTACK":
+                total_force += self._strafe_attraction(unit, target)
 
         # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
         total_force[1] = 0.0  # Y 成分を XZ 平面に固定

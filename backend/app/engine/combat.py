@@ -373,6 +373,9 @@ class CombatMixin:
                 action_type="WAIT",
                 message=wait_message,
                 position_snapshot=snapshot,
+                velocity_snapshot=Vector3.from_numpy(
+                    self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
+                ),  # type: ignore[attr-defined]
             )
         )
 
@@ -522,6 +525,9 @@ class CombatMixin:
                 ),
                 position_snapshot=snapshot,
                 heading=self.unit_resources[unit_id].get("body_heading_deg"),  # type: ignore[attr-defined]
+                velocity_snapshot=Vector3.from_numpy(
+                    self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
+                ),  # type: ignore[attr-defined]
             )
         )
         return True
@@ -554,6 +560,9 @@ class CombatMixin:
                     f"{target.name}への射線が確保できない"
                 ),
                 position_snapshot=snapshot,
+                velocity_snapshot=Vector3.from_numpy(
+                    self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
+                ),  # type: ignore[attr-defined]
             )
         )
         return True
@@ -611,6 +620,9 @@ class CombatMixin:
                     position_snapshot=snapshot,
                     chatter=attack_chatter or hit_chatter,
                     heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
+                    velocity_snapshot=Vector3.from_numpy(
+                        self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
+                    ),  # type: ignore[attr-defined]
                 )
             )
             return
@@ -665,6 +677,9 @@ class CombatMixin:
                 skill_activated=True if skill_activated else None,
                 heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
                 attack_sector=attack_sector,
+                velocity_snapshot=Vector3.from_numpy(
+                    self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
+                ),  # type: ignore[attr-defined]
             )
         )
 
@@ -744,6 +759,9 @@ class CombatMixin:
                     chatter=attack_chatter,
                     combo_count=combo_count,
                     combo_message=combo_message,
+                    velocity_snapshot=Vector3.from_numpy(
+                        self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
+                    ),  # type: ignore[attr-defined]
                 )
             )
 
@@ -923,6 +941,9 @@ class CombatMixin:
                 chatter=attack_chatter or miss_chatter,
                 skill_activated=True if skill_activated else None,
                 heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
+                velocity_snapshot=Vector3.from_numpy(
+                    self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
+                ),  # type: ignore[attr-defined]
             )
         )
 
