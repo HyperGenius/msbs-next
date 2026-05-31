@@ -4,12 +4,13 @@ import { StatKey } from "./StatusRadarChart";
 
 /** ステータス表示名・略称・ゲーム効果説明 */
 export const STATUS_LABELS: Record<StatKey, { label: string; abbr: string; desc: string }> = {
-  sht:   { label: "射撃精度", abbr: "SHT", desc: "射撃攻撃力補正率（シグモイド）" },
-  mel:   { label: "格闘技巧", abbr: "MEL", desc: "格闘攻撃力補正率（シグモイド）" },
-  intel: { label: "直感",    abbr: "INT", desc: "クリティカル率・回避率" },
-  ref:   { label: "反応",    abbr: "REF", desc: "イニシアチブ・機動性ボーナス" },
-  tou:   { label: "耐久",    abbr: "TOU", desc: "ダメージ加算・被クリティカル低下・防御加算" },
-  luk:   { label: "幸運",    abbr: "LUK", desc: "ダメージ乱数偏り・完全回避" },
+  // TODO: 各ステータスの説明文を充実させる（エンジンでの補正値ではなくユーザーの直感的な理解を優先）
+  sht:   { label: "射撃精度", abbr: "SHT", desc: "" },
+  mel:   { label: "格闘技巧", abbr: "MEL", desc: "" },
+  intel: { label: "直感",    abbr: "INT", desc: "" },
+  ref:   { label: "反応",    abbr: "REF", desc: "" },
+  tou:   { label: "耐久",    abbr: "TOU", desc: "" },
+  luk:   { label: "幸運",    abbr: "LUK", desc: "" },
 };
 
 /** ランク色（S〜D の5段階） */
@@ -79,30 +80,9 @@ export default function StatusStatCard({
         <p className="text-[10px] text-gray-500 leading-snug mt-0.5">{info.desc}</p>
       </div>
 
-      {/* プログレスバー（現在値=緑・保留分=シアンで重ねて表示） */}
-      <div className="w-full h-2 bg-[#ffffff]/5 relative overflow-hidden">
-        {/* 現在値バー */}
-        <div
-          className="absolute left-0 top-0 h-full transition-all duration-200"
-          style={{ width: `${currentPct}%`, backgroundColor: STAT_RANK_COLORS[currentRank] }}
-        />
-        {/* 保留分バー（シアン） */}
-        {pending > 0 && (
-          <div
-            className="absolute top-0 h-full transition-all duration-200"
-            style={{
-              left: `${currentPct}%`,
-              width: `${pendingPct}%`,
-              backgroundColor: "#00f0ff",
-            }}
-          />
-        )}
-      </div>
-
       {/* 値の変化表示: 現在 → +N → 保留後 */}
       <div className="flex items-center justify-between text-xs">
         <span className="text-gray-400">
-          現在:{" "}
           <span className={`font-bold`} style={{ color: STAT_RANK_COLORS[currentRank] }}>
             {currentRank}({currentValue})
           </span>
@@ -111,7 +91,6 @@ export default function StatusStatCard({
           <>
             <span className="text-[#00f0ff] font-bold">→ +{pending}</span>
             <span>
-              保留後:{" "}
               <span className="font-bold" style={{ color: afterColor }}>
                 {afterRank}({afterValue})
               </span>

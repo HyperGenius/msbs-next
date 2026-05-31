@@ -43,21 +43,6 @@ export default function StatusPointGauge({ total, remaining }: StatusPointGaugeP
           <span className="text-xs text-gray-500 font-normal"> / {total} pt</span>
         </span>
       </div>
-
-      {/* バッテリー型ゲージバー */}
-      <div className="w-full h-3 bg-[#ffffff]/5 relative overflow-hidden border border-[#ffb000]/20">
-        <div
-          className="absolute left-0 top-0 h-full transition-all duration-300"
-          style={{ width: `${gaugePct}%`, backgroundColor: gaugeColor }}
-        />
-      </div>
-
-      {/* 状態テキスト */}
-      <p className="text-[10px] text-gray-500 leading-none">
-        {isEmpty
-          ? "ポイントがありません"
-          : `${remaining} pt 残り`}
-      </p>
     </div>
   );
 }
