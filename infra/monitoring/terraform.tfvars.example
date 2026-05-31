@@ -1,0 +1,30 @@
+# ==========================================
+# GCP 基本設定
+# ==========================================
+project_id  = "your-gcp-project-id"
+region      = "asia-northeast1"
+environment = "prod"
+
+# ==========================================
+# 監視対象 Cloud Run リソース名
+# ==========================================
+cloud_run_service_name = "msbs-next-api-prod"
+cloud_run_job_name     = "msbs-next-batch-prod"
+
+# ==========================================
+# Grafana Cloud 接続設定
+# Grafana Cloud コンソール → My Account → Stack → API Keys で取得
+# ==========================================
+grafana_url  = "https://yourorg.grafana.net"
+grafana_auth = "glsa_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Service Account Token
+
+# Grafana Cloud コンソール → Connections → Data Sources → Loki → Details で確認
+loki_url      = "https://logs-prod-xxx.grafana.net"
+loki_username = "123456"                                    # 数値 ID
+loki_password = "glc_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Grafana Cloud token
+
+# ==========================================
+# Cloud Functions ソースの格納先 GCS バケット
+# 既存の Terraform state バケットを流用可
+# ==========================================
+gcs_functions_bucket = "your-terraform-state-bucket"
