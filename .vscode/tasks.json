@@ -117,6 +117,26 @@
             "options": {
                 "cwd": "${workspaceFolder}/frontend"
             }
+        },
+        {
+            "label": "GCloud Auth Login",
+            "type": "shell",
+            "command": "gcloud auth login",
+            "problemMatcher": [],
+            "presentation": {
+                "group": "terraform",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "GCloud Auth Application Default Login",
+            "type": "shell",
+            "command": "gcloud auth application-default login",
+            "problemMatcher": [],
+            "presentation": {
+                "group": "terraform",
+                "panel": "dedicated"
+            }
         }
     ]
 }
