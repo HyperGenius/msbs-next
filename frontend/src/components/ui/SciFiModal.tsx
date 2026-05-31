@@ -17,8 +17,8 @@ interface SciFiModalProps {
 
 /**
  * SF テーマの汎用モーダルシェル。
- * - モバイル: 画面下部からスライドアップするボトムシート
- * - sm以上: 画面中央に表示
+ * - 全サイズで画面中央に表示（上下均等な余白）
+ * - z-[60] により BottomNav（z-50）の上に重なる
  * - 内部コンテンツは max-h-[85dvh] + overflow-y-auto で独立スクロール
  * - Esc キーおよびオーバーレイクリックで閉じる
  */
@@ -55,12 +55,12 @@ export default function SciFiModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className={`w-full ${maxWidthClass} mx-0 sm:mx-4 max-h-[85dvh] overflow-y-auto
-          animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0 duration-300`}
+        className={`w-full ${maxWidthClass} mx-4 max-h-[85dvh] overflow-y-auto
+          animate-in slide-in-from-bottom-4 duration-300`}
         onClick={(e) => e.stopPropagation()}
       >
         <SciFiPanel variant={variant} className="p-0">
