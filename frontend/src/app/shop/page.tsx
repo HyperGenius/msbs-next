@@ -4,42 +4,72 @@
 import { useState } from "react";
 import { useShopListings, purchaseMobileSuit, usePilot, useWeaponListings, purchaseWeapon } from "@/services/api";
 import { ShopListing, WeaponListing } from "@/types/battle";
-import Link from "next/link";
-import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
-import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
-import { getRankColor, getRank, getWeaponRank, getOptimalRangeLabel, getDecayRateRank } from "@/utils/rankUtils";
-import { STATUS_LABELS, WEAPON_LABELS } from "@/utils/displayUtils";
+import { SciFiPanel } from "@/components/ui";
+import ShopCreditHeader from "./_components/ShopCreditHeader";
+import MobileSuitCard from "./_components/MobileSuitCard";
+import WeaponCard from "./_components/WeaponCard";
+import MobileSuitDetailPanel from "./_components/MobileSuitDetailPanel";
+import WeaponDetailPanel from "./_components/WeaponDetailPanel";
 
 type TabType = "mobile_suits" | "weapons";
+type FilterType = "all" | "affordable";
 
 export default function ShopPage() {
   const { listings, isLoading, isError } = useShopListings();
   const { weaponListings, isLoading: weaponsLoading, isError: weaponsError } = useWeaponListings();
   const { pilot, mutate: mutatePilot } = usePilot();
+
   const [activeTab, setActiveTab] = useState<TabType>("mobile_suits");
+  const [filter, setFilter] = useState<FilterType>("all");
+  const [selectedMsId, setSelectedMsId] = useState<string | null>(null);
+  const [selectedWeaponId, setSelectedWeaponId] = useState<string | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
 
-  const handleMobileSuitHoldComplete = async (item: ShopListing) => {
-    if (isPurchasing) return;
-    setIsPurchasing(true);
-    setPurchasingId(item.id);
-    setPurchaseMessage(null);
+  const credits = pilot?.credits ?? 0;
+  const canAfford = (price: number) => credits >= price;
 
+  // フィルタリング後のアイテム一覧
+  const visibleListings = filter === "affordable"
+    ? listings?.filter((item) => canAfford(item.price))
+    : listings;
+  const visibleWeapons = filter === "affordable"
+    ? weaponListings?.filter((w) => canAfford(w.price))
+    : weaponListings;
+
+  // 選択中アイテム（PC インラインパネル用）
+  const selectedMs = listings?.find((item) => item.id === selectedMsId)
+    ?? (visibleListings && visibleListings.length > 0 ? visibleListings[0] : null);
+  const selectedWeapon = weaponListings?.find((w) => w.id === selectedWeaponId)
+    ?? (visibleWeapons && visibleWeapons.length > 0 ? visibleWeapons[0] : null);
+
+  const handleMsSelect = (id: string) => {
+    setSelectedMsId(id);
+    setIsDetailOpen(true);
+  };
+
+  const handleWeaponSelect = (id: string) => {
+    setSelectedWeaponId(id);
+    setIsDetailOpen(true);
+  };
+
+  const handleMobileSuitPurchase = async (itemId: string) => {
+    if (isPurchasing) return;
+    const item = listings?.find((i) => i.id === itemId);
+    if (!item) return;
+    setIsPurchasing(true);
+    setPurchasingId(itemId);
+    setPurchaseMessage(null);
     try {
-      const result = await purchaseMobileSuit(item.id);
+      const result = await purchaseMobileSuit(itemId);
       setPurchaseMessage(result.message);
       mutatePilot();
-      setTimeout(() => {
-        setPurchaseMessage(null);
-      }, 3000);
+      setIsDetailOpen(false);
+      setTimeout(() => setPurchaseMessage(null), 3000);
     } catch (error) {
-      if (error instanceof Error) {
-        setPurchaseMessage(`エラー: ${error.message}`);
-      } else {
-        setPurchaseMessage("購入に失敗しました");
-      }
+      setPurchaseMessage(error instanceof Error ? `エラー: ${error.message}` : "購入に失敗しました");
       setTimeout(() => setPurchaseMessage(null), 3000);
     } finally {
       setIsPurchasing(false);
@@ -47,40 +77,30 @@ export default function ShopPage() {
     }
   };
 
-  const handleWeaponHoldComplete = async (weapon: WeaponListing) => {
+  const handleWeaponPurchase = async (weaponId: string) => {
     if (isPurchasing) return;
     setIsPurchasing(true);
-    setPurchasingId(weapon.id);
+    setPurchasingId(weaponId);
     setPurchaseMessage(null);
-
     try {
-      const result = await purchaseWeapon(weapon.id);
+      const result = await purchaseWeapon(weaponId);
       setPurchaseMessage(result.message);
       mutatePilot();
-      setTimeout(() => {
-        setPurchaseMessage(null);
-      }, 3000);
+      setIsDetailOpen(false);
+      setTimeout(() => setPurchaseMessage(null), 3000);
     } catch (error) {
-      if (error instanceof Error) {
-        setPurchaseMessage(`エラー: ${error.message}`);
-      } else {
-        setPurchaseMessage("購入に失敗しました");
-      }
+      setPurchaseMessage(error instanceof Error ? `エラー: ${error.message}` : "購入に失敗しました");
       setTimeout(() => setPurchaseMessage(null), 3000);
     } finally {
       setIsPurchasing(false);
       setPurchasingId(null);
     }
-  };
-
-  const canAfford = (price: number): boolean => {
-    return pilot ? pilot.credits >= price : false;
   };
 
   if (isError || weaponsError) {
     return (
-      <div className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
-        <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-[#050505] text-[#00ff41] font-mono">
+        <div className="max-w-7xl mx-auto p-8">
           <SciFiPanel variant="secondary">
             <div className="p-6">
               <p className="text-[#ffb000] font-bold text-xl mb-2">ERROR: データ取得失敗</p>
@@ -93,43 +113,20 @@ export default function ShopPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
-      <div className="max-w-7xl mx-auto">
+    <main className="min-h-screen bg-[#050505] text-[#00ff41] font-mono">
+      {/* Sticky クレジットヘッダー */}
+      <ShopCreditHeader
+        credits={credits}
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          setIsDetailOpen(false);
+        }}
+        filter={filter}
+        onFilterChange={setFilter}
+      />
 
-        {/* Page Title */}
-        <div className="mb-4 sm:mb-8 border-b-2 border-[#ffb000]/30 pb-4">
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
-            <div>
-              <SciFiHeading level={2} variant="secondary" className="text-xl sm:text-2xl">
-                {activeTab === "mobile_suits" ? "MOBILE SUIT SHOP" : "WEAPON SHOP"}
-              </SciFiHeading>
-              <p className="text-xs sm:text-sm text-[#ffb000]/60 ml-0 sm:ml-5">
-                {activeTab === "mobile_suits" ? "モビルスーツ販売所" : "武器販売所"}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-4">
-          <SciFiButton
-            variant={activeTab === "mobile_suits" ? "secondary" : "primary"}
-            onClick={() => setActiveTab("mobile_suits")}
-            size="md"
-            className="w-full sm:w-auto"
-          >
-            モビルスーツ (Mobile Suits)
-          </SciFiButton>
-          <SciFiButton
-            variant={activeTab === "weapons" ? "secondary" : "primary"}
-            onClick={() => setActiveTab("weapons")}
-            size="md"
-            className="w-full sm:w-auto"
-          >
-            武器 (Weapons)
-          </SciFiButton>
-        </div>
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-4">
         {(isLoading || weaponsLoading) ? (
           <div className="flex justify-center items-center h-64">
             <SciFiPanel variant="secondary">
@@ -140,263 +137,128 @@ export default function ShopPage() {
           </div>
         ) : (
           <>
-            {/* Mobile Suits Tab */}
+            {/* Mobile Suits タブ */}
             {activeTab === "mobile_suits" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {listings?.map((item) => {
-                const affordable = canAfford(item.price);
-                
-                return (
-                  <SciFiCard
-                    key={item.id}
-                    variant={affordable ? "secondary" : "primary"}
-                    className={affordable ? "" : "opacity-60"}
-                  >
-                    {/* Item Header */}
-                    <div className="mb-4">
-                      <h3 className="text-xl font-bold text-[#ffb000] mb-2">
-                        {item.name}
-                      </h3>
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-2xl font-bold text-[#ffb000]">
-                          {item.price.toLocaleString()} C
-                        </span>
-                        {!affordable && (
-                          <span className="text-sm text-red-400 font-bold">
-                            所持金不足
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-[#00ff41]/60">{item.description}</p>
+              <div className="lg:flex lg:gap-6">
+                {/* カードリスト */}
+                <div className="lg:w-2/5 lg:overflow-y-auto lg:max-h-[calc(100vh-200px)]">
+                  {visibleListings && visibleListings.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-3">
+                      {visibleListings.map((item: ShopListing) => (
+                        <MobileSuitCard
+                          key={item.id}
+                          listing={item}
+                          credits={credits}
+                          onSelect={handleMsSelect}
+                          isSelected={selectedMs?.id === item.id}
+                        />
+                      ))}
                     </div>
+                  ) : (
+                    <p className="text-[#00ff41]/40 text-sm text-center py-8">
+                      {filter === "affordable" ? "現在の所持金で購入できるアイテムはありません" : "アイテムがありません"}
+                    </p>
+                  )}
+                </div>
 
-                    {/* Specs */}
-                    <div className="mb-4 p-3 bg-[#0a0a0a] border-2 border-[#ffb000]/30">
-                      <h4 className="text-sm font-bold mb-2 text-[#ffb000]">
-                        SPECIFICATIONS
-                      </h4>
-                      <div className="grid grid-cols-3 gap-2 text-sm mb-3 text-[#00ff41]">
-                        <div>
-                          <span className="text-[#00ff41]/60">{STATUS_LABELS.max_hp}:</span>
-                          <span className={`ml-2 font-bold ${getRankColor(getRank("hp", item.specs.max_hp))}`}>
-                            {getRank("hp", item.specs.max_hp)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[#00ff41]/60">{STATUS_LABELS.armor}:</span>
-                          <span className={`ml-2 font-bold ${getRankColor(getRank("armor", item.specs.armor))}`}>
-                            {getRank("armor", item.specs.armor)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[#00ff41]/60">{STATUS_LABELS.mobility}:</span>
-                          <span className={`ml-2 font-bold ${getRankColor(getRank("mobility", item.specs.mobility))}`}>
-                            {getRank("mobility", item.specs.mobility)}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Weapon Details */}
-                      {item.specs.weapons && item.specs.weapons.length > 0 && (
-                        <div className="border-t-2 border-[#ffb000]/30 pt-2">
-                          <h4 className="text-sm font-bold mb-2 text-[#ffb000]">
-                            MAIN WEAPON
-                          </h4>
-                          <div className="text-xs">
-                            <div className="font-bold text-[#00ff41] mb-1">
-                              {item.specs.weapons[0].name}
-                            </div>
-                            <div className="grid grid-cols-2 gap-1">
-                              <div>
-                                <span className="text-[#00ff41]/60">{WEAPON_LABELS.type}:</span>
-                                <span className={`ml-1 font-bold ${
-                                  item.specs.weapons[0].type === "BEAM" 
-                                    ? "text-[#00f0ff]" 
-                                    : "text-[#ffb000]"
-                                }`}>
-                                  {item.specs.weapons[0].type || "PHYSICAL"}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-[#00ff41]/60">{WEAPON_LABELS.optimal_range}:</span>
-                                <span className={`ml-1 font-bold ${getOptimalRangeLabel(item.specs.weapons[0].optimal_range || 300).colorClass}`}>
-                                  {getOptimalRangeLabel(item.specs.weapons[0].optimal_range || 300).label}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Purchase Button */}
-                    {affordable ? (
-                      <HoldSciFiButton
-                        onHoldComplete={() => handleMobileSuitHoldComplete(item)}
-                        disabled={isPurchasing && purchasingId !== item.id}
-                        loading={purchasingId === item.id}
-                        label="長押しで購入 (HOLD TO BUY)"
-                        className="w-full"
-                      />
-                    ) : (
-                      <SciFiButton
-                        disabled
-                        variant="danger"
-                        size="md"
-                        className="w-full"
-                      >
-                        購入不可
-                      </SciFiButton>
-                    )}
-                  </SciFiCard>
-                );
-              })}
-            </div>
+                {/* PC インライン詳細パネル */}
+                {selectedMs && (
+                  <div className="hidden lg:block lg:w-3/5 lg:sticky lg:top-[148px] lg:self-start">
+                    <MobileSuitDetailPanel
+                      listing={selectedMs}
+                      credits={credits}
+                      isPurchasing={isPurchasing}
+                      purchasingId={purchasingId}
+                      onPurchase={handleMobileSuitPurchase}
+                      isModal={false}
+                    />
+                  </div>
+                )}
+              </div>
             )}
 
-            {/* Weapons Tab */}
+            {/* Weapons タブ */}
             {activeTab === "weapons" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {weaponListings?.map((weapon) => {
-                  const affordable = canAfford(weapon.price);
-                  
-                  return (
-                    <SciFiCard
-                      key={weapon.id}
-                      variant={affordable ? "secondary" : "primary"}
-                      className={affordable ? "" : "opacity-60"}
-                    >
-                      {/* Weapon Header */}
-                      <div className="mb-4">
-                        <h3 className="text-xl font-bold text-[#ffb000] mb-2">
-                          {weapon.name}
-                        </h3>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-2xl font-bold text-[#ffb000]">
-                            {weapon.price.toLocaleString()} C
-                          </span>
-                          {!affordable && (
-                            <span className="text-sm text-red-400 font-bold">
-                              所持金不足
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-[#00ff41]/60">{weapon.description}</p>
-                      </div>
-
-                      {/* Weapon Specs */}
-                      <div className="mb-4 p-3 bg-[#0a0a0a] border-2 border-[#ffb000]/30">
-                        <h4 className="text-sm font-bold mb-2 text-[#ffb000]">
-                          SPECIFICATIONS
-                        </h4>
-                        <div className="grid grid-cols-2 gap-2 text-sm text-[#00ff41]">
-                          <div>
-                            <span className="text-[#00ff41]/60">{WEAPON_LABELS.type}:</span>
-                            <span className={`ml-2 font-bold ${
-                              weapon.weapon.type === "BEAM" 
-                                ? "text-[#00f0ff]" 
-                                : "text-[#ffb000]"
-                            }`}>
-                              {weapon.weapon.type || "PHYSICAL"}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{WEAPON_LABELS.power}:</span>
-                            <span className={`ml-2 font-bold ${getRankColor(weapon.weapon.power_rank ?? getWeaponRank("weapon_power", weapon.weapon.power))}`}>
-                              {weapon.weapon.power_rank ?? getWeaponRank("weapon_power", weapon.weapon.power)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{WEAPON_LABELS.range}:</span>
-                            <span className={`ml-2 font-bold ${getRankColor(weapon.weapon.range_rank ?? getWeaponRank("weapon_range", weapon.weapon.range))}`}>
-                              {weapon.weapon.range_rank ?? getWeaponRank("weapon_range", weapon.weapon.range)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{WEAPON_LABELS.accuracy}:</span>
-                            <span className={`ml-2 font-bold ${getRankColor(weapon.weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.weapon.accuracy))}`}>
-                              {weapon.weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", weapon.weapon.accuracy)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{WEAPON_LABELS.optimal_range}:</span>
-                            <span className={`ml-2 font-bold ${getOptimalRangeLabel(weapon.weapon.optimal_range || 300).colorClass}`}>
-                              {getOptimalRangeLabel(weapon.weapon.optimal_range || 300).label}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[#00ff41]/60">{WEAPON_LABELS.decay_rate}:</span>
-                            <span className={`ml-2 font-bold ${getRankColor(getDecayRateRank(weapon.weapon.decay_rate || 0.05))}`}>
-                              {getDecayRateRank(weapon.weapon.decay_rate || 0.05)}
-                            </span>
-                          </div>
-                          {weapon.weapon.max_ammo !== null && weapon.weapon.max_ammo !== undefined && (
-                            <div>
-                              <span className="text-[#00ff41]/60">{WEAPON_LABELS.max_ammo}:</span>
-                              <span className="ml-2 font-bold text-orange-400">
-                                有
-                              </span>
-                            </div>
-                          )}
-                          {weapon.weapon.en_cost !== undefined && weapon.weapon.en_cost > 0 && (
-                            <div>
-                              <span className="text-[#00ff41]/60">{WEAPON_LABELS.en_cost}:</span>
-                              <span className="ml-2 font-bold text-cyan-400">
-                                有
-                              </span>
-                            </div>
-                          )}
-                          {weapon.weapon.cool_down_turn !== undefined && weapon.weapon.cool_down_turn > 0 && (
-                            <div>
-                              <span className="text-[#00ff41]/60">{WEAPON_LABELS.cool_down_turn}:</span>
-                              <span className="ml-2 font-bold text-pink-400">
-                                有
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Purchase Button */}
-                      {affordable ? (
-                        <HoldSciFiButton
-                          onHoldComplete={() => handleWeaponHoldComplete(weapon)}
-                          disabled={isPurchasing && purchasingId !== weapon.id}
-                          loading={purchasingId === weapon.id}
-                          label="長押しで購入 (HOLD TO BUY)"
-                          className="w-full"
+              <div className="lg:flex lg:gap-6">
+                {/* カードリスト */}
+                <div className="lg:w-2/5 lg:overflow-y-auto lg:max-h-[calc(100vh-200px)]">
+                  {visibleWeapons && visibleWeapons.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-3">
+                      {visibleWeapons.map((weapon: WeaponListing) => (
+                        <WeaponCard
+                          key={weapon.id}
+                          listing={weapon}
+                          credits={credits}
+                          onSelect={handleWeaponSelect}
+                          isSelected={selectedWeapon?.id === weapon.id}
                         />
-                      ) : (
-                        <SciFiButton
-                          disabled
-                          variant="danger"
-                          className="w-full"
-                        >
-                          所持金不足 (INSUFFICIENT FUNDS)
-                        </SciFiButton>
-                      )}
-                    </SciFiCard>
-                  );
-                })}
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[#00ff41]/40 text-sm text-center py-8">
+                      {filter === "affordable" ? "現在の所持金で購入できるアイテムはありません" : "アイテムがありません"}
+                    </p>
+                  )}
+                </div>
+
+                {/* PC インライン詳細パネル */}
+                {selectedWeapon && (
+                  <div className="hidden lg:block lg:w-3/5 lg:sticky lg:top-[148px] lg:self-start">
+                    <WeaponDetailPanel
+                      listing={selectedWeapon}
+                      credits={credits}
+                      isPurchasing={isPurchasing}
+                      purchasingId={purchasingId}
+                      onPurchase={handleWeaponPurchase}
+                      isModal={false}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </>
         )}
-
-        {/* Purchase Result Toast */}
-        {purchaseMessage && (
-          <div className="fixed top-4 right-4 z-50 max-w-sm">
-            <SciFiPanel
-              variant={purchaseMessage.startsWith("エラー") ? "secondary" : "primary"}
-              chiseled={false}
-            >
-              <div className="p-4 font-mono text-sm">
-                {purchaseMessage}
-              </div>
-            </SciFiPanel>
-          </div>
-        )}
       </div>
+
+      {/* モバイル: 詳細モーダル（MS） */}
+      {isDetailOpen && activeTab === "mobile_suits" && selectedMs && (
+        <MobileSuitDetailPanel
+          listing={selectedMs}
+          credits={credits}
+          isPurchasing={isPurchasing}
+          purchasingId={purchasingId}
+          onPurchase={handleMobileSuitPurchase}
+          onClose={() => setIsDetailOpen(false)}
+          isModal
+        />
+      )}
+
+      {/* モバイル: 詳細モーダル（武器） */}
+      {isDetailOpen && activeTab === "weapons" && selectedWeapon && (
+        <WeaponDetailPanel
+          listing={selectedWeapon}
+          credits={credits}
+          isPurchasing={isPurchasing}
+          purchasingId={purchasingId}
+          onPurchase={handleWeaponPurchase}
+          onClose={() => setIsDetailOpen(false)}
+          isModal
+        />
+      )}
+
+      {/* 購入結果トースト */}
+      {purchaseMessage && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm">
+          <SciFiPanel
+            variant={purchaseMessage.startsWith("エラー") ? "secondary" : "primary"}
+            chiseled={false}
+          >
+            <div className="p-4 font-mono text-sm">
+              {purchaseMessage}
+            </div>
+          </SciFiPanel>
+        </div>
+      )}
     </main>
   );
 }
