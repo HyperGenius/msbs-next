@@ -265,3 +265,4 @@ luk: number;
 | `vi.mock` が hoisting されない | `vi.mock(...)` はファイル先頭の `import` より前に動作する（Vitest が自動 hoist） |
 | SSR で `getAuthToken` が null を返す | 正常動作。`window.Clerk` はクライアントサイドのみ存在する |
 | `types/battle.ts` の名前衝突 | バトル実装型は `battleCore.ts` に置く。`battle.ts` はバレル専用 |
+| モーダルが BottomNav の裏に隠れる | `BottomNav` は `z-50 h-16 fixed bottom-0 md:hidden`。モーダルは `z-[60]` 以上にすること。また `items-center p-4` で上下均等マージンを確保すること |
