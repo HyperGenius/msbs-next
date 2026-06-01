@@ -165,7 +165,8 @@ export default function MobileSuitDetailPanel({
   if (isModal) {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+        // z-[60] で BottomNav(z-50) の上に重ねる。p-4 で上下均等マージンを確保
+        className="fixed inset-0 z-[60] flex items-center justify-center p-4"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose?.();
         }}
@@ -174,7 +175,7 @@ export default function MobileSuitDetailPanel({
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
         {/* モーダル本体 */}
-        <div className="relative z-10 w-full sm:max-w-lg max-h-[92vh] sm:max-h-[85vh] overflow-y-auto">
+        <div className="relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto">
           <SciFiPanel variant="secondary" scanline>
             <div className="p-4 sm:p-6">
               {content}
