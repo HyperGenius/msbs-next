@@ -152,31 +152,31 @@ python scripts/seed/seed_master_data.py --force
 
 ---
 
-## Frontend
+## Frontend（`admin-tool/` — 独立アプリ）
+
+マスタデータ管理UIは `frontend/` から分離され、リポジトリ直下の独立した Next.js アプリ `admin-tool/`（ポート3100）として提供される。
+ゲームバランス調整用のローカル専用ツールであり、アプリ本体のユーザー向け認証（Clerk）とは無関係。
 
 ### ルーティング
 
-`/admin/mobile-suits`
+`/mobile-suits`（`admin-tool/` は全体が管理画面のため `/admin` プレフィックスなし）
 
 ### アクセス制御
 
-`src/middleware.ts` で Clerk の `publicMetadata.role === "admin"` をチェック。
-非管理者はトップページ (`/`) にリダイレクト。
+`admin-tool/` に認証機構は無い（localhost 専用ツールとして運用）。データ保護は下記の `X-API-Key` のみに依存する。
 
 ### 環境変数
 
 | 変数名 | 説明 |
 |---|---|
 | `NEXT_PUBLIC_API_URL` | バックエンド API の URL（デフォルト: `http://127.0.0.1:8000`） |
-| `NEXT_PUBLIC_ADMIN_API_KEY` | 管理者 API キー（フロントエンドからバックエンドへの X-API-Key） |
+| `NEXT_PUBLIC_ADMIN_API_KEY` | 管理者 API キー（admin-tool からバックエンドへの X-API-Key） |
 
 #### `NEXT_PUBLIC_ADMIN_API_KEY` の設定方法
 
-フロントエンドが `X-API-Key` ヘッダーに付与する値は、バックエンドの `ADMIN_API_KEY` 環境変数と一致させる必要がある。
+`admin-tool` が `X-API-Key` ヘッダーに付与する値は、バックエンドの `ADMIN_API_KEY` 環境変数と一致させる必要がある。
 
-**ローカル開発**
-
-`frontend/.env.local` に記載する（`.gitignore` 対象なのでコミットしない）：
+`admin-tool/.env.local` に記載する（`.gitignore` 対象なのでコミットしない）：
 
 ```env
 NEXT_PUBLIC_ADMIN_API_KEY=your_secret_key_here
@@ -191,28 +191,32 @@ ADMIN_API_KEY=your_secret_key_here
 
 `your_secret_key_here` は任意の安全なランダム文字列を使用する（例: `openssl rand -hex 32` で生成）。
 
-**本番環境（Vercel）**
+> [!NOTE]
+> 現状は「まずローカル開発環境で完結するツール」として構築されている。本番公開する場合はアクセス制御方式を別途検討すること。
 
-Vercel ダッシュボードの **Settings → Environment Variables** から `NEXT_PUBLIC_ADMIN_API_KEY` を追加する。
-値はバックエンド（Cloud Run）のシークレットマネージャーに設定した `ADMIN_API_KEY` と同一にする。
+### 起動方法
 
-> [!WARNING]
-> `NEXT_PUBLIC_` プレフィックスの変数はブラウザバンドルに含まれる。本番では IP 制限・Clerk ロールチェック等のアクセス制御と併用し、管理者画面 URL を公開しないこと。
+```bash
+cd admin-tool && npm run dev   # http://localhost:3100
+# もしくはリポジトリルートから ./scripts/dev.sh で frontend/backend と同時起動
+```
 
 ### コンポーネント構成
 
 ```
-src/
+admin-tool/src/
 ├── app/
-│   └── admin/
-│       └── mobile-suits/
-│           └── page.tsx           # 管理画面エントリーポイント
+│   ├── mobile-suits/
+│   │   └── page.tsx               # 管理画面エントリーポイント
+│   └── weapons/
+│       └── page.tsx
 ├── components/
-│   └── admin/
-│       ├── MobileSuitTable.tsx    # 機体一覧テーブル（ソート・フィルタ付き）
-│       ├── MobileSuitEditForm.tsx # 全パラメータ編集フォーム（Zod バリデーション）
-│       ├── MobileSuitRadarChart.tsx # バランス比較レーダーチャート（recharts）
-│       └── CloneDialog.tsx        # Clone & Edit ダイアログ
+│   ├── admin/
+│   │   ├── MobileSuitTable.tsx    # 機体一覧テーブル（ソート・フィルタ付き）
+│   │   ├── MobileSuitEditForm.tsx # 全パラメータ編集フォーム（Zod バリデーション）
+│   │   ├── MobileSuitRadarChart.tsx # バランス比較レーダーチャート（recharts）
+│   │   └── CloneDialog.tsx        # Clone & Edit ダイアログ
+│   └── ui/                        # SciFiPanel / SciFiButton / SciFiHeading（frontendから移植）
 └── hooks/
     └── useAdminMobileSuits.ts     # SWR を用いた CRUD フック
 ```
@@ -269,11 +273,11 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" python -m pytest 
 - DELETE 削除（正常 / 404 / 在庫参照 409）
 - DB 永続化確認
 
-### Frontend
+### admin-tool
 
 ```bash
-cd frontend
-npx vitest run --project unit
+cd admin-tool
+npx vitest run tests/unit/
 ```
 
 テスト内容 (`tests/unit/mobileSuitEditFormValidation.test.ts`):
@@ -292,6 +296,7 @@ npx vitest run --project unit
 - `backend/data/master/mobile_suits.json` — シードデータ（Git 管理継続）
 - `backend/scripts/seed/seed_master_data.py` — シードスクリプト
 - `backend/alembic/versions/r1s2t3u4v5w6_add_master_mobile_suits_and_weapons_tables.py` — マイグレーション
-- `frontend/src/app/admin/mobile-suits/page.tsx` — 管理画面
-- `frontend/src/middleware.ts` — 管理者ロールガード
+- `admin-tool/src/app/mobile-suits/page.tsx` — 管理画面（独立アプリ、ポート3100）
+- `admin-tool/src/hooks/useAdminMobileSuits.ts` — CRUD フック
+- `scripts/dev-admin.sh` — admin-tool 起動スクリプト
 

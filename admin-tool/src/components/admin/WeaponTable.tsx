@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { MasterWeapon } from "@/types/battle";
+import { MasterWeapon } from "@/types/admin";
 
 interface WeaponTableProps {
   weapons: MasterWeapon[];

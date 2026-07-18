@@ -1,13 +1,13 @@
-/* frontend/src/app/admin/weapons/page.tsx */
+/* frontend/src/app/admin/mobile-suits/page.tsx */
 "use client";
 
 import { useState } from "react";
-import { useAdminWeapons } from "@/hooks/useAdminWeapons";
-import { MasterWeapon, MasterWeaponCreate } from "@/types/battle";
-import WeaponTable from "@/components/admin/WeaponTable";
-import WeaponEditForm, { WeaponFormValues } from "@/components/admin/WeaponEditForm";
-import WeaponRadarChart from "@/components/admin/WeaponRadarChart";
-import WeaponCloneDialog from "@/components/admin/WeaponCloneDialog";
+import { useAdminMobileSuits } from "@/hooks/useAdminMobileSuits";
+import { MasterMobileSuit, MasterMobileSuitCreate } from "@/types/admin";
+import MobileSuitTable from "@/components/admin/MobileSuitTable";
+import MobileSuitEditForm, { MobileSuitFormValues } from "@/components/admin/MobileSuitEditForm";
+import MobileSuitRadarChart from "@/components/admin/MobileSuitRadarChart";
+import CloneDialog from "@/components/admin/CloneDialog";
 import { SciFiPanel, SciFiHeading, SciFiButton } from "@/components/ui";
 
 type Mode = "idle" | "edit" | "create";
@@ -17,29 +17,29 @@ interface Toast {
   type: "success" | "error";
 }
 
-export default function AdminWeaponsPage() {
-  const { weapons, isLoading, isError, createWeapon, updateWeapon, deleteWeapon } =
-    useAdminWeapons();
+export default function AdminMobileSuitsPage() {
+  const { mobileSuits, isLoading, isError, createMobileSuit, updateMobileSuit, deleteMobileSuit } =
+    useAdminMobileSuits();
 
-  const [selectedWeapon, setSelectedWeapon] = useState<MasterWeapon | null>(null);
+  const [selectedMs, setSelectedMs] = useState<MasterMobileSuit | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [cloneSource, setCloneSource] = useState<MasterWeapon | null>(null);
-  const [deleteConfirmWeapon, setDeleteConfirmWeapon] = useState<MasterWeapon | null>(null);
+  const [cloneSource, setCloneSource] = useState<MasterMobileSuit | null>(null);
+  const [deleteConfirmMs, setDeleteConfirmMs] = useState<MasterMobileSuit | null>(null);
 
   function showToast(message: string, type: "success" | "error") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   }
 
-  function handleSelectWeapon(weapon: MasterWeapon) {
-    setSelectedWeapon(weapon);
+  function handleSelectMs(ms: MasterMobileSuit) {
+    setSelectedMs(ms);
     setMode("edit");
   }
 
-  function handleNewWeapon() {
-    setSelectedWeapon(null);
+  function handleNewMs() {
+    setSelectedMs(null);
     setMode("create");
   }
 
@@ -47,17 +47,17 @@ export default function AdminWeaponsPage() {
     setMode("idle");
   }
 
-  async function handleSubmit(values: WeaponFormValues) {
+  async function handleSubmit(values: MobileSuitFormValues) {
     setIsSubmitting(true);
     try {
       if (mode === "create") {
-        await createWeapon(values as MasterWeaponCreate);
+        await createMobileSuit(values as MasterMobileSuitCreate);
         showToast(`${values.name} を新規追加しました`, "success");
         setMode("idle");
-        setSelectedWeapon(null);
-      } else if (mode === "edit" && selectedWeapon) {
-        const updated = await updateWeapon(selectedWeapon.id, values);
-        setSelectedWeapon(updated);
+        setSelectedMs(null);
+      } else if (mode === "edit" && selectedMs) {
+        const updated = await updateMobileSuit(selectedMs.id, values);
+        setSelectedMs(updated);
         showToast(`${values.name} を更新しました`, "success");
       }
     } catch (e) {
@@ -67,33 +67,29 @@ export default function AdminWeaponsPage() {
     }
   }
 
-  function handleDeleteRequest(weapon: MasterWeapon) {
-    setDeleteConfirmWeapon(weapon);
+  function handleDeleteRequest(ms: MasterMobileSuit) {
+    setDeleteConfirmMs(ms);
   }
 
   async function handleDeleteConfirm() {
-    if (!deleteConfirmWeapon) return;
+    if (!deleteConfirmMs) return;
     try {
-      await deleteWeapon(deleteConfirmWeapon.id);
-      showToast(`${deleteConfirmWeapon.name} を削除しました`, "success");
-      if (selectedWeapon?.id === deleteConfirmWeapon.id) {
-        setSelectedWeapon(null);
+      await deleteMobileSuit(deleteConfirmMs.id);
+      showToast(`${deleteConfirmMs.name} を削除しました`, "success");
+      if (selectedMs?.id === deleteConfirmMs.id) {
+        setSelectedMs(null);
         setMode("idle");
       }
     } catch (e) {
       showToast(e instanceof Error ? e.message : "削除に失敗しました", "error");
     } finally {
-      setDeleteConfirmWeapon(null);
+      setDeleteConfirmMs(null);
     }
   }
 
   async function handleCloneConfirm(newId: string) {
     if (!cloneSource) return;
-    await createWeapon({
-      ...cloneSource,
-      id: newId,
-      weapon: { ...cloneSource.weapon, id: newId },
-    });
+    await createMobileSuit({ ...cloneSource, id: newId });
     showToast(`${cloneSource.name} を ID "${newId}" でクローンしました`, "success");
     setCloneSource(null);
   }
@@ -120,21 +116,21 @@ export default function AdminWeaponsPage() {
         <div className="mb-6 border-b-2 border-[#ffb000]/30 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <SciFiHeading level={2} variant="secondary" className="text-xl sm:text-2xl">
-              ADMIN: MASTER WEAPONS
+              ADMIN: MASTER MOBILE SUITS
             </SciFiHeading>
             <p className="text-xs text-[#ffb000]/60 ml-0 sm:ml-5">
-              マスター武器データ管理
+              マスター機体データ管理
             </p>
           </div>
           <div className="flex gap-2">
-            <SciFiButton variant="secondary" size="sm" onClick={handleNewWeapon}>
+            <SciFiButton variant="secondary" size="sm" onClick={handleNewMs}>
               + 新規追加
             </SciFiButton>
-            {selectedWeapon && mode === "edit" && (
+            {selectedMs && mode === "edit" && (
               <SciFiButton
                 variant="primary"
                 size="sm"
-                onClick={() => setCloneSource(selectedWeapon)}
+                onClick={() => setCloneSource(selectedMs)}
               >
                 Clone &amp; Edit
               </SciFiButton>
@@ -143,22 +139,22 @@ export default function AdminWeaponsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* 左カラム: 武器一覧 */}
+          {/* 左カラム: 機体一覧 */}
           <div>
             <SciFiPanel variant="primary">
               <div className="p-4">
                 <SciFiHeading level={3} className="mb-3 text-base">
-                  武器一覧
+                  機体一覧
                 </SciFiHeading>
                 {isLoading ? (
                   <p className="text-[#ffb000] animate-pulse py-8 text-center">
                     LOADING...
                   </p>
                 ) : (
-                  <WeaponTable
-                    weapons={weapons ?? []}
-                    selectedId={selectedWeapon?.id ?? null}
-                    onSelect={handleSelectWeapon}
+                  <MobileSuitTable
+                    mobileSuits={mobileSuits ?? []}
+                    selectedId={selectedMs?.id ?? null}
+                    onSelect={handleSelectMs}
                     onDelete={handleDeleteRequest}
                   />
                 )}
@@ -166,15 +162,15 @@ export default function AdminWeaponsPage() {
             </SciFiPanel>
 
             {/* レーダーチャート */}
-            {selectedWeapon && weapons && (
+            {selectedMs && mobileSuits && (
               <SciFiPanel variant="primary" className="mt-4">
                 <div className="p-4">
                   <SciFiHeading level={3} className="mb-2 text-base">
                     バランス比較
                   </SciFiHeading>
-                  <WeaponRadarChart
-                    selected={selectedWeapon}
-                    allWeapons={weapons}
+                  <MobileSuitRadarChart
+                    selected={selectedMs}
+                    allSuits={mobileSuits}
                   />
                 </div>
               </SciFiPanel>
@@ -187,10 +183,10 @@ export default function AdminWeaponsPage() {
               <SciFiPanel variant="secondary">
                 <div className="p-4">
                   <SciFiHeading level={3} className="mb-3 text-base">
-                    {mode === "create" ? "新規武器追加" : `編集: ${selectedWeapon?.name}`}
+                    {mode === "create" ? "新規機体追加" : `編集: ${selectedMs?.name}`}
                   </SciFiHeading>
-                  <WeaponEditForm
-                    initialData={mode === "edit" ? selectedWeapon : null}
+                  <MobileSuitEditForm
+                    initialData={mode === "edit" ? selectedMs : null}
                     lockId={mode === "edit"}
                     onSubmit={handleSubmit}
                     onCancel={handleCancel}
@@ -202,7 +198,7 @@ export default function AdminWeaponsPage() {
               <SciFiPanel variant="primary">
                 <div className="p-4 flex items-center justify-center h-48">
                   <p className="text-[#00ff41]/40 text-sm text-center">
-                    武器を選択するか「新規追加」ボタンを押してください
+                    機体を選択するか「新規追加」ボタンを押してください
                   </p>
                 </div>
               </SciFiPanel>
@@ -225,13 +221,13 @@ export default function AdminWeaponsPage() {
       )}
 
       {/* 削除確認ダイアログ */}
-      {deleteConfirmWeapon && (
+      {deleteConfirmMs && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-[#050505] border border-red-500/50 p-6 w-full max-w-sm font-mono text-[#00ff41]">
             <h2 className="text-base font-bold text-red-400 mb-3">削除確認</h2>
             <p className="text-sm text-[#00ff41]/80 mb-5">
-              <span className="text-red-300 font-bold">{deleteConfirmWeapon.name}</span>{" "}
-              を削除しますか？この操作は取り消せません。
+              <span className="text-red-300 font-bold">{deleteConfirmMs.name}</span> を削除しますか？
+              この操作は取り消せません。
             </p>
             <div className="flex gap-3">
               <button
@@ -241,7 +237,7 @@ export default function AdminWeaponsPage() {
                 削除する
               </button>
               <button
-                onClick={() => setDeleteConfirmWeapon(null)}
+                onClick={() => setDeleteConfirmMs(null)}
                 className="flex-1 border border-[#00ff41]/30 text-[#00ff41]/60 py-2 text-sm hover:border-[#00ff41]/60"
               >
                 キャンセル
@@ -253,7 +249,7 @@ export default function AdminWeaponsPage() {
 
       {/* Clone ダイアログ */}
       {cloneSource && (
-        <WeaponCloneDialog
+        <CloneDialog
           source={cloneSource}
           onConfirm={handleCloneConfirm}
           onClose={() => setCloneSource(null)}

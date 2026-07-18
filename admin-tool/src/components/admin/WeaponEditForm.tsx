@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { MasterWeapon } from "@/types/battle";
+import { MasterWeapon } from "@/types/admin";
 
 // ============================================================
 // Zod バリデーションスキーマ

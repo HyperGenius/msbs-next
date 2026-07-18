@@ -1,0 +1,235 @@
+@import "tailwindcss";
+
+:root {
+  /* SF Design Tokens - Base Colors */
+  --sf-deep-black: #050505;
+  --sf-dark-black: #0a0a0a;
+  --sf-darker-gray: #0f0f0f;
+  
+  /* SF Design Tokens - Primary (System/Friendly) */
+  --sf-neon-green: #00ff41;
+  --sf-green-dark: #00cc33;
+  --sf-green-darker: #009922;
+  
+  /* SF Design Tokens - Secondary (Warning/Physical) */
+  --sf-amber: #ffb000;
+  --sf-amber-dark: #cc8800;
+  
+  /* SF Design Tokens - Accent (Info/Energy) */
+  --sf-cyan: #00f0ff;
+  --sf-cyan-dark: #00b8cc;
+  
+  --background: var(--sf-deep-black);
+  --foreground: var(--sf-neon-green);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  
+  /* SF Theme Colors */
+  --color-sf-deep-black: var(--sf-deep-black);
+  --color-sf-dark-black: var(--sf-dark-black);
+  --color-sf-neon-green: var(--sf-neon-green);
+  --color-sf-green-dark: var(--sf-green-dark);
+  --color-sf-amber: var(--sf-amber);
+  --color-sf-cyan: var(--sf-cyan);
+}
+
+body {
+  background: var(--sf-deep-black);
+  color: var(--sf-neon-green);
+  font-family: var(--font-geist-mono), 'Courier New', monospace;
+  /* Improve text rendering on mobile */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Mobile Touch Optimizations */
+/* Ensure touch targets are accessible (apply to main interactive elements) */
+button:not(.no-min-size),
+a:not(.no-min-size),
+[role="button"]:not(.no-min-size) {
+  /* Minimum touch target size for accessibility (44x44px recommended) */
+  /* Can be disabled with .no-min-size class for special cases */
+  min-height: 44px;
+  min-width: 44px;
+  /* Disable tap highlight on iOS/Android */
+  -webkit-tap-highlight-color: transparent;
+  /* Prevent text selection on buttons */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Touch-action for better scrolling and gesture handling */
+.touch-scroll {
+  touch-action: pan-y pinch-zoom;
+}
+
+.touch-none {
+  touch-action: none;
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* SF Effects - Neon Glow */
+.sf-glow-green {
+  box-shadow: 
+    0 0 5px rgba(0, 255, 65, 0.5),
+    0 0 10px rgba(0, 255, 65, 0.3),
+    0 0 15px rgba(0, 255, 65, 0.2);
+}
+
+.sf-glow-cyan {
+  box-shadow: 
+    0 0 5px rgba(0, 240, 255, 0.5),
+    0 0 10px rgba(0, 240, 255, 0.3),
+    0 0 15px rgba(0, 240, 255, 0.2);
+}
+
+.sf-glow-amber {
+  box-shadow: 
+    0 0 5px rgba(255, 176, 0, 0.5),
+    0 0 10px rgba(255, 176, 0, 0.3),
+    0 0 15px rgba(255, 176, 0, 0.2);
+}
+
+/* SF Effects - Scanline */
+.sf-scanline {
+  position: relative;
+  overflow: hidden;
+}
+
+.sf-scanline::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 65, 0.03) 0px,
+    transparent 2px,
+    transparent 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* SF Effects - Chiseled Corner */
+.sf-chiseled {
+  clip-path: polygon(
+    0 8px,
+    8px 0,
+    calc(100% - 8px) 0,
+    100% 8px,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    8px 100%,
+    0 calc(100% - 8px)
+  );
+}
+
+/* SF Effects - Border Glow */
+.sf-border-glow-green {
+  border-color: var(--sf-neon-green);
+  box-shadow: 
+    inset 0 0 10px rgba(0, 255, 65, 0.2),
+    0 0 5px rgba(0, 255, 65, 0.3);
+}
+
+.sf-border-glow-cyan {
+  border-color: var(--sf-cyan);
+  box-shadow: 
+    inset 0 0 10px rgba(0, 240, 255, 0.2),
+    0 0 5px rgba(0, 240, 255, 0.3);
+}
+
+.sf-border-glow-amber {
+  border-color: var(--sf-amber);
+  box-shadow: 
+    inset 0 0 10px rgba(255, 176, 0, 0.2),
+    0 0 5px rgba(255, 176, 0, 0.3);
+}
+
+/* Tutorial Highlight Effect */
+.tutorial-highlight {
+  position: relative;
+  z-index: 60 !important;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.8) !important;
+  border-radius: 4px;
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+/* Tutorial Highlight with Neon Glow */
+.tutorial-highlight::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--sf-neon-green);
+  border-radius: 6px;
+  box-shadow: 
+    0 0 10px rgba(0, 255, 65, 0.6),
+    0 0 20px rgba(0, 255, 65, 0.4),
+    inset 0 0 10px rgba(0, 255, 65, 0.2);
+  pointer-events: none;
+  animation: tutorial-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tutorial-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* Custom Scrollbar */
+/* Firefox (標準仕様) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sf-green-dark) var(--sf-dark-black);
+}
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--sf-dark-black);
+  border-left: 1px solid var(--sf-darker-gray);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--sf-green-dark);
+  /* ほんの少しだけ角を丸めるか、0にしてソリッドにするかはお好みで */
+  border-radius: 2px;
+  /* トラックとの間に少し余白を持たせるテクニック */
+  border: 2px solid var(--sf-dark-black);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sf-neon-green);
+  /* ホバー時に発光しているようなエフェクトを疑似的に追加 */
+  box-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--sf-deep-black);
+}

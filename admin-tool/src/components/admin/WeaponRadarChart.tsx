@@ -1,7 +1,7 @@
-/* frontend/src/components/admin/MobileSuitRadarChart.tsx */
+/* frontend/src/components/admin/WeaponRadarChart.tsx */
 "use client";
 
-import { MasterMobileSuit } from "@/types/battle";
+import { MasterWeapon } from "@/types/admin";
 import {
   Radar,
   RadarChart,
@@ -12,56 +12,65 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-interface MobileSuitRadarChartProps {
-  selected: MasterMobileSuit;
-  allSuits: MasterMobileSuit[];
+interface WeaponRadarChartProps {
+  selected: MasterWeapon;
+  allWeapons: MasterWeapon[];
 }
 
 interface AxisConfig {
-  key: keyof MasterMobileSuit["specs"];
+  key: keyof MasterWeapon["weapon"];
   label: string;
-  max: number;
+  invert?: boolean;
 }
 
 const AXES: AxisConfig[] = [
-  { key: "max_hp", label: "HP", max: 2000 },
-  { key: "armor", label: "装甲", max: 200 },
-  { key: "mobility", label: "機動性", max: 3.0 },
-  { key: "shooting_aptitude", label: "射撃適性", max: 2.0 },
-  { key: "melee_aptitude", label: "格闘適性", max: 2.0 },
+  { key: "power", label: "威力" },
+  { key: "range", label: "射程" },
+  { key: "accuracy", label: "命中率" },
+  { key: "optimal_range", label: "最適射程" },
+  { key: "decay_rate", label: "減衰率", invert: true },
 ];
 
 function buildChartData(
-  selected: MasterMobileSuit,
-  allSuits: MasterMobileSuit[]
+  selected: MasterWeapon,
+  allWeapons: MasterWeapon[]
 ): { subject: string; selected: number; average: number }[] {
-  return AXES.map(({ key, label, max }) => {
-    const rawSelected = selected.specs[key] as number;
-    // 全機体平均
-    const sum = allSuits.reduce((acc, ms) => acc + (ms.specs[key] as number), 0);
-    const avg = allSuits.length > 0 ? sum / allSuits.length : 0;
+  return AXES.map(({ key, label, invert }) => {
+    const rawSelected = (selected.weapon[key] as number) ?? 0;
+
+    // 全武器の最大値で正規化
+    const maxVal = Math.max(...allWeapons.map((w) => (w.weapon[key] as number) ?? 0), 1);
+
+    // 全武器平均
+    const sum = allWeapons.reduce((acc, w) => acc + ((w.weapon[key] as number) ?? 0), 0);
+    const avg = allWeapons.length > 0 ? sum / allWeapons.length : 0;
 
     // 0-100 に正規化
-    const normalize = (v: number) => Math.min(100, Math.round((v / max) * 100));
+    const normalize = (v: number) => Math.min(100, Math.round((v / maxVal) * 100));
+
+    // decay_rate は小さいほど高性能なので反転
+    const transform = invert
+      ? (v: number) => 100 - normalize(v)
+      : normalize;
 
     return {
       subject: label,
-      selected: normalize(rawSelected),
-      average: normalize(avg),
+      selected: transform(rawSelected),
+      average: transform(avg),
     };
   });
 }
 
-export default function MobileSuitRadarChart({
+export default function WeaponRadarChart({
   selected,
-  allSuits,
-}: MobileSuitRadarChartProps) {
-  const data = buildChartData(selected, allSuits);
+  allWeapons,
+}: WeaponRadarChartProps) {
+  const data = buildChartData(selected, allWeapons);
 
   return (
     <div className="w-full">
       <p className="text-xs text-[#ffb000]/60 mb-2 text-center">
-        バランス比較チャート（全機体平均との比較）
+        バランス比較チャート（全武器最大値で正規化・減衰率は反転表示）
       </p>
       <ResponsiveContainer width="100%" height={280}>
         <RadarChart data={data} cx="50%" cy="50%" outerRadius="65%">
@@ -85,7 +94,7 @@ export default function MobileSuitRadarChart({
             strokeWidth={2}
           />
           <Radar
-            name="全機体平均"
+            name="全武器平均"
             dataKey="average"
             stroke="#00f0ff"
             fill="#00f0ff"

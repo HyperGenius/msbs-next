@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { MasterMobileSuit } from "@/types/battle";
+import { MasterMobileSuit } from "@/types/admin";
 
 interface MobileSuitTableProps {
   mobileSuits: MasterMobileSuit[];
