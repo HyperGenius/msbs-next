@@ -86,6 +86,10 @@ class MobileSuitService:
         if not data.specs.weapons:
             raise ValueError("specs.weapons must have at least one weapon.")
 
+        MobileSuitService._validate_weapon_constraints(
+            data.specs.weapons, data.weapon_slot_count, data.beam_generator_lv
+        )
+
         # 重複チェック
         existing = session.get(MasterMobileSuit, data.id)
         if existing is not None:
@@ -99,9 +103,13 @@ class MobileSuitService:
         record = MasterMobileSuit(
             id=data.id,
             name=data.name,
+            name_ja=data.name_ja,
+            model_number=data.model_number,
             price=data.price,
             faction=data.faction,
             description=data.description,
+            weapon_slot_count=data.weapon_slot_count,
+            beam_generator_lv=data.beam_generator_lv,
             specs=specs_dict,
         )
         session.add(record)
@@ -114,11 +122,50 @@ class MobileSuitService:
         return {
             "id": data.id,
             "name": data.name,
+            "name_ja": data.name_ja,
+            "model_number": data.model_number,
             "price": data.price,
             "faction": data.faction,
             "description": data.description,
+            "weapon_slot_count": data.weapon_slot_count,
+            "beam_generator_lv": data.beam_generator_lv,
             "specs": specs_dict,
         }
+
+    @staticmethod
+    def _validate_weapon_constraints(
+        weapons: list, weapon_slot_count: int, beam_generator_lv: int
+    ) -> None:
+        """武器スロット数・ビームジェネレータLvの制約を検証する.
+
+        Args:
+            weapons: 検証対象の武器リスト (Weapon または dict)
+            weapon_slot_count: 装備可能な武器スロット数
+            beam_generator_lv: 機体のビームジェネレータLv
+
+        Raises:
+            ValueError: 武器数がスロット数を超える、または要求ビームLvが
+                機体のビームジェネレータLvを超えるビーム属性武器が含まれる場合
+        """
+        if len(weapons) > weapon_slot_count:
+            raise ValueError(
+                f"Number of weapons ({len(weapons)}) exceeds weapon_slot_count "
+                f"({weapon_slot_count})."
+            )
+        for w in weapons:
+            w_type = w.type if hasattr(w, "type") else w.get("type", "PHYSICAL")
+            required_lv = (
+                w.required_beam_generator_lv
+                if hasattr(w, "required_beam_generator_lv")
+                else w.get("required_beam_generator_lv", 0)
+            )
+            if w_type == "BEAM" and required_lv > beam_generator_lv:
+                w_name = w.name if hasattr(w, "name") else w.get("name", "?")
+                raise ValueError(
+                    f"Weapon '{w_name}' requires beam_generator_lv "
+                    f"{required_lv}, but the mobile suit's beam_generator_lv "
+                    f"is {beam_generator_lv}."
+                )
 
     @staticmethod
     def update_master_mobile_suit(
@@ -163,6 +210,16 @@ class MobileSuitService:
             record.specs = existing_specs
             update_dict.pop("specs")
 
+        weapon_slot_count = update_dict.get(
+            "weapon_slot_count", record.weapon_slot_count
+        )
+        beam_generator_lv = update_dict.get(
+            "beam_generator_lv", record.beam_generator_lv
+        )
+        MobileSuitService._validate_weapon_constraints(
+            record.specs.get("weapons", []), weapon_slot_count, beam_generator_lv
+        )
+
         for key, value in update_dict.items():
             setattr(record, key, value)
 
@@ -177,9 +234,13 @@ class MobileSuitService:
         return {
             "id": record.id,
             "name": record.name,
+            "name_ja": record.name_ja,
+            "model_number": record.model_number,
             "price": record.price,
             "faction": record.faction,
             "description": record.description,
+            "weapon_slot_count": record.weapon_slot_count,
+            "beam_generator_lv": record.beam_generator_lv,
             "specs": record.specs,
         }
 

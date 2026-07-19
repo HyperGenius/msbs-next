@@ -68,9 +68,13 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
     return MasterMobileSuitEntry(
         id=raw["id"],
         name=raw["name"],
+        name_ja=raw.get("name_ja", ""),
+        model_number=raw.get("model_number", ""),
         price=raw["price"],
         faction=raw.get("faction", ""),
         description=raw["description"],
+        weapon_slot_count=raw.get("weapon_slot_count", 1),
+        beam_generator_lv=raw.get("beam_generator_lv", 0),
         specs=specs,
     )
 

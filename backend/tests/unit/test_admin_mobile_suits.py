@@ -298,3 +298,133 @@ def test_delete_persists_to_db(client_admin, session):
         select(MasterMobileSuit).where(MasterMobileSuit.id == "test_gm")
     ).first()
     assert record is None
+
+
+# ===================== 型番/日本語名/武器スロット数/ビームジェネレータLv =====================
+
+
+def test_create_with_new_fields(client_admin):
+    """POST で model_number/name_ja/weapon_slot_count/beam_generator_lv を保存できること."""
+    payload = {
+        **SAMPLE_MS,
+        "name_ja": "ジム",
+        "model_number": "RGM-79",
+        "weapon_slot_count": 2,
+        "beam_generator_lv": 1,
+    }
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["name_ja"] == "ジム"
+    assert data["model_number"] == "RGM-79"
+    assert data["weapon_slot_count"] == 2
+    assert data["beam_generator_lv"] == 1
+
+
+def test_create_defaults_for_new_fields(client_admin):
+    """新フィールドを指定しない場合、既定値 (name_ja='', model_number='', weapon_slot_count=1, beam_generator_lv=0) が使われること."""
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["name_ja"] == ""
+    assert data["model_number"] == ""
+    assert data["weapon_slot_count"] == 1
+    assert data["beam_generator_lv"] == 0
+
+
+def test_create_weapon_count_exceeds_slot_returns_422(client_admin):
+    """武器数が weapon_slot_count を超える場合は 422 が返ること."""
+    payload = json.loads(json.dumps(SAMPLE_MS))
+    payload["id"] = "too_many_weapons_ms"
+    payload["weapon_slot_count"] = 1
+    payload["specs"]["weapons"].append(
+        {
+            "id": "test_beam_saber",
+            "name": "Test Beam Saber",
+            "power": 200,
+            "range": 50,
+            "accuracy": 90,
+            "type": "PHYSICAL",
+            "optimal_range": 30.0,
+            "decay_rate": 0.0,
+            "is_melee": True,
+        }
+    )
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def test_create_beam_weapon_exceeds_generator_lv_returns_422(client_admin):
+    """BEAM武器の要求Lvが beam_generator_lv を超える場合は 422 が返ること."""
+    payload = json.loads(json.dumps(SAMPLE_MS))
+    payload["id"] = "beam_lv_over_ms"
+    payload["beam_generator_lv"] = 0
+    payload["specs"]["weapons"][0]["required_beam_generator_lv"] = 2
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def test_create_beam_weapon_within_generator_lv_succeeds(client_admin):
+    """BEAM武器の要求Lvが beam_generator_lv 以下の場合は成功すること."""
+    payload = json.loads(json.dumps(SAMPLE_MS))
+    payload["id"] = "beam_lv_ok_ms"
+    payload["beam_generator_lv"] = 2
+    payload["specs"]["weapons"][0]["required_beam_generator_lv"] = 2
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+
+
+def test_update_weapon_slot_count_below_current_weapon_count_returns_422(
+    client_admin,
+):
+    """既存の武器数を下回る weapon_slot_count への更新は 422 が返ること."""
+    payload = json.loads(json.dumps(SAMPLE_MS))
+    payload["weapon_slot_count"] = 2
+    payload["specs"]["weapons"].append(
+        {
+            "id": "test_beam_saber",
+            "name": "Test Beam Saber",
+            "power": 200,
+            "range": 50,
+            "accuracy": 90,
+            "type": "PHYSICAL",
+            "optimal_range": 30.0,
+            "decay_rate": 0.0,
+            "is_melee": True,
+        }
+    )
+    client_admin.post("/api/admin/mobile-suits", json=payload, headers=HEADERS)
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"weapon_slot_count": 1},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def test_update_beam_generator_lv_below_existing_weapon_requirement_returns_422(
+    client_admin,
+):
+    """既存のBEAM武器の要求Lvを上回れないbeam_generator_lvへの更新は 422 が返ること."""
+    payload = json.loads(json.dumps(SAMPLE_MS))
+    payload["beam_generator_lv"] = 3
+    payload["specs"]["weapons"][0]["required_beam_generator_lv"] = 3
+    client_admin.post("/api/admin/mobile-suits", json=payload, headers=HEADERS)
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"beam_generator_lv": 1},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY

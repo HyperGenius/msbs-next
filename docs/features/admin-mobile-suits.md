@@ -5,6 +5,11 @@
 マスター機体データを Web UI 上で直接編集・追加・削除できる管理者専用画面。
 データは `master_mobile_suits` PostgreSQL テーブルに永続化されるため、デプロイ後も変更が失われない。
 
+> [!NOTE]
+> Issue #383 で `name_ja`（日本語表示名）を追加したが、ゲーム側フロントエンド（`frontend/`）に
+> 言語切替UI・国際化（i18n）フレームワークは未導入のため、現状は管理画面での編集・保存までがスコープ。
+> 言語選択に応じた表示切替は別途対応が必要。
+
 ---
 
 ## Backend API
@@ -47,6 +52,8 @@ X-API-Key: <ADMIN_API_KEY>
 
 - 機体 `id`: スネークケース英数字のみ（例: `rx_78_2`）。正規表現 `^[a-z0-9_]+$`
 - `specs.weapons`: 最低1件必須
+- `weapon_slot_count`: 1以上の整数。`specs.weapons` の件数が `weapon_slot_count` を超える場合は `422`（Issue #383）
+- `beam_generator_lv`: 0以上の整数。`specs.weapons` 内に `type == "BEAM"` かつ `required_beam_generator_lv` が `beam_generator_lv` を超える武器が含まれる場合は `422`（Issue #383）
 - DELETE 時: 同名機体がプレイヤー所有の mobile_suits テーブルに存在する場合は `409`
 
 ### リクエスト例
@@ -61,9 +68,13 @@ Content-Type: application/json
 {
   "id": "rx_78_2",
   "name": "RX-78-2 Gundam",
+  "name_ja": "ガンダム",
+  "model_number": "RX-78-2",
   "price": 1500,
   "faction": "FEDERATION",
   "description": "宇宙世紀を代表する機体。",
+  "weapon_slot_count": 2,
+  "beam_generator_lv": 1,
   "specs": {
     "max_hp": 1000,
     "armor": 80,
@@ -87,12 +98,16 @@ Content-Type: application/json
         "type": "BEAM",
         "optimal_range": 320,
         "decay_rate": 0.09,
-        "is_melee": false
+        "is_melee": false,
+        "required_beam_generator_lv": 1
       }
     ]
   }
 }
 ```
+
+> `name_ja` / `model_number` / `weapon_slot_count` / `beam_generator_lv` を省略した場合、それぞれ既定値
+> (`""` / `""` / `1` / `0`) が使われる（Issue #383）。
 
 #### PUT — 既存機体の部分更新
 
@@ -193,16 +208,22 @@ Content-Type: application/json
 
 ```sql
 CREATE TABLE master_mobile_suits (
-    id          TEXT PRIMARY KEY,       -- スネークケース (例: rx_78_2)
-    name        TEXT NOT NULL,
-    price       INTEGER NOT NULL,
-    faction     TEXT NOT NULL DEFAULT '',
-    description TEXT NOT NULL,
-    specs       JSONB NOT NULL,         -- MasterMobileSuitSpec の全フィールド
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                 TEXT PRIMARY KEY,       -- スネークケース (例: rx_78_2)
+    name               TEXT NOT NULL,
+    name_ja            TEXT NOT NULL DEFAULT '',  -- 日本語表示名（Issue #383）
+    model_number       TEXT NOT NULL DEFAULT '',  -- 型番 例: RGM-79（Issue #383）
+    price              INTEGER NOT NULL,
+    faction            TEXT NOT NULL DEFAULT '',
+    description        TEXT NOT NULL,
+    weapon_slot_count  INTEGER NOT NULL DEFAULT 1,  -- 武器スロット数、1以上（Issue #383）
+    beam_generator_lv  INTEGER NOT NULL DEFAULT 0,  -- ビームジェネレータLv、0以上（Issue #383）
+    specs              JSONB NOT NULL,         -- MasterMobileSuitSpec の全フィールド
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
+
+`Weapon`（`specs.weapons` 内の各要素）には `required_beam_generator_lv`（装備に必要なビームジェネレータLv、`type == "BEAM"` の武器のみ有効、既定値0）が追加されている（Issue #383）。
 
 ### マイグレーション
 
@@ -306,17 +327,18 @@ admin-tool/src/
 
 #### 機体一覧テーブル (`MobileSuitTable`)
 
-- 名前・勢力・価格・HP・装甲・機動性を表示
+- ID・型番・名前・勢力・価格・HP・装甲・機動性を表示（型番列は Issue #383 で追加）
 - 各列ヘッダークリックでソート（昇順/降順）
-- テキストフィルタ（name / id / faction で絞り込み）
+- テキストフィルタ（name / name_ja / model_number / id / faction で絞り込み、Issue #383 で name_ja / model_number を追加）
 - 編集中の機体は行がハイライト表示
 
 #### 詳細編集フォーム (`MobileSuitEditForm`)
 
 - `react-hook-form` + `zod` によるバリデーション
-- 全スペック・武装パラメータを編集可能
+- 全スペック・武装パラメータを編集可能（型番・日本語名・武器スロット数・ビームジェネレータLvを含む、Issue #383）
 - フィールド横にインラインエラーメッセージ表示
 - 武装リストの動的追加・削除
+- 武器数が武器スロット数を超える場合、およびBEAM武器の要求ビームジェネレータLvが機体のビームジェネレータLvを超える場合はクライアント側 (`zod.superRefine`) でもエラー表示（Issue #383）
 
 #### バランス比較チャート (`MobileSuitRadarChart`)
 
@@ -361,6 +383,9 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" python -m pytest 
 - PUT 更新（正常 / 404 / weapons 空 422）
 - DELETE 削除（正常 / 404 / 在庫参照 409）
 - DB 永続化確認
+- `name_ja` / `model_number` / `weapon_slot_count` / `beam_generator_lv` の保存・既定値（Issue #383）
+- 武器数が `weapon_slot_count` を超える場合の 422（新規追加・更新の両方）（Issue #383）
+- BEAM武器の `required_beam_generator_lv` が `beam_generator_lv` を超える場合の 422（Issue #383）
 
 ```bash
 cd backend
@@ -398,6 +423,7 @@ npx vitest run tests/unit/
 - `backend/data/master/mobile_suits.json` — シードデータ（Git 管理継続）
 - `backend/scripts/seed/seed_master_data.py` — シードスクリプト
 - `backend/alembic/versions/r1s2t3u4v5w6_add_master_mobile_suits_and_weapons_tables.py` — マイグレーション
+- `backend/alembic/versions/u4v5w6x7y8z9_add_model_number_name_ja_slots_beam_lv.py` — 型番/日本語名/武器スロット数/ビームジェネレータLv追加マイグレーション（Issue #383）
 - `admin-tool/src/app/mobile-suits/page.tsx` — 管理画面（独立アプリ、ポート3100）
 - `admin-tool/src/hooks/useAdminMobileSuits.ts` — CRUD フック
 - `backend/app/engine/combat_preview.py` — 1対1 攻撃シミュレーション計算ロジック（決定論値・モンテカルロ）（Issue #381）

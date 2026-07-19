@@ -13,6 +13,8 @@ export interface Weapon {
     en_cost?: number;
     cool_down_turn?: number;
     is_melee?: boolean;
+    /** 装備に必要なビームジェネレータLv (BEAM属性武器のみ有効) */
+    required_beam_generator_lv?: number;
     /** 威力ランク (S〜E) - APIから付与される */
     power_rank?: string;
     /** 射程ランク (S〜E) - APIから付与される */

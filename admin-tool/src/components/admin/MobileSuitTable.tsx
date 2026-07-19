@@ -11,7 +11,7 @@ interface MobileSuitTableProps {
   onDelete: (ms: MasterMobileSuit) => void;
 }
 
-type SortKey = "id" | "name" | "faction" | "price" | "max_hp" | "armor" | "mobility";
+type SortKey = "id" | "model_number" | "name" | "faction" | "price" | "max_hp" | "armor" | "mobility";
 type SortDir = "asc" | "desc";
 
 export default function MobileSuitTable({
@@ -36,6 +36,8 @@ export default function MobileSuitTable({
   const filtered = mobileSuits.filter(
     (ms) =>
       ms.name.toLowerCase().includes(filter.toLowerCase()) ||
+      ms.name_ja?.toLowerCase().includes(filter.toLowerCase()) ||
+      ms.model_number?.toLowerCase().includes(filter.toLowerCase()) ||
       ms.id.toLowerCase().includes(filter.toLowerCase()) ||
       ms.faction.toLowerCase().includes(filter.toLowerCase())
   );
@@ -86,6 +88,9 @@ export default function MobileSuitTable({
               <th className={thClass} onClick={() => handleSort("id")}>
                 ID <SortIcon k="id" />
               </th>
+              <th className={thClass} onClick={() => handleSort("model_number")}>
+                型番 <SortIcon k="model_number" />
+              </th>
               <th className={thClass} onClick={() => handleSort("name")}>
                 名前 <SortIcon k="name" />
               </th>
@@ -121,6 +126,7 @@ export default function MobileSuitTable({
                   }`}
                 >
                   <td className={`${tdClass} text-[#00ff41]/60`}>{ms.id}</td>
+                  <td className={`${tdClass} text-[#00ff41]/60`}>{ms.model_number || "—"}</td>
                   <td className={`${tdClass} font-bold ${isSelected ? "text-[#ffb000]" : ""}`}>
                     {ms.name}
                   </td>
@@ -154,7 +160,7 @@ export default function MobileSuitTable({
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-[#00ff41]/40 py-8 text-sm">
+                <td colSpan={9} className="text-center text-[#00ff41]/40 py-8 text-sm">
                   機体データが見つかりません
                 </td>
               </tr>

@@ -24,33 +24,58 @@ export const weaponSchema = z.object({
   max_ammo: z.number().int().nonnegative().nullable().optional(),
   en_cost: z.number().int().nonnegative().optional(),
   cool_down_turn: z.number().int().nonnegative().optional(),
+  required_beam_generator_lv: z.number({ message: "Must be a number" }).int().nonnegative().optional(),
 });
 
-export const masterMobileSuitSchema = z.object({
-  id: z
-    .string()
-    .min(1, "ID is required")
-    .regex(/^[a-z0-9_]+$/, "ID must be lowercase alphanumeric with underscores (snake_case)"),
-  name: z.string().min(1, "Name is required"),
-  price: z.number({ message: "Must be a number" }).int().nonnegative("Must be ≥ 0"),
-  faction: z.string(),
-  description: z.string(),
-  specs: z.object({
-    max_hp: z.number({ message: "Must be a number" }).int().positive("Must be > 0"),
-    armor: z.number({ message: "Must be a number" }).int().nonnegative(),
-    mobility: z.number({ message: "Must be a number" }).positive("Must be > 0"),
-    sensor_range: z.number({ message: "Must be a number" }).positive(),
-    beam_resistance: z.number({ message: "Must be a number" }).min(0).max(1),
-    physical_resistance: z.number({ message: "Must be a number" }).min(0).max(1),
-    melee_aptitude: z.number({ message: "Must be a number" }).positive(),
-    shooting_aptitude: z.number({ message: "Must be a number" }).positive(),
-    accuracy_bonus: z.number({ message: "Must be a number" }),
-    evasion_bonus: z.number({ message: "Must be a number" }),
-    acceleration_bonus: z.number({ message: "Must be a number" }).positive(),
-    turning_bonus: z.number({ message: "Must be a number" }).positive(),
-    weapons: z.array(weaponSchema).min(1, "At least one weapon is required"),
-  }),
-});
+export const masterMobileSuitSchema = z
+  .object({
+    id: z
+      .string()
+      .min(1, "ID is required")
+      .regex(/^[a-z0-9_]+$/, "ID must be lowercase alphanumeric with underscores (snake_case)"),
+    name: z.string().min(1, "Name is required"),
+    name_ja: z.string(),
+    model_number: z.string(),
+    price: z.number({ message: "Must be a number" }).int().nonnegative("Must be ≥ 0"),
+    faction: z.string(),
+    description: z.string(),
+    weapon_slot_count: z.number({ message: "Must be a number" }).int().min(1, "Must be ≥ 1"),
+    beam_generator_lv: z.number({ message: "Must be a number" }).int().nonnegative("Must be ≥ 0"),
+    specs: z.object({
+      max_hp: z.number({ message: "Must be a number" }).int().positive("Must be > 0"),
+      armor: z.number({ message: "Must be a number" }).int().nonnegative(),
+      mobility: z.number({ message: "Must be a number" }).positive("Must be > 0"),
+      sensor_range: z.number({ message: "Must be a number" }).positive(),
+      beam_resistance: z.number({ message: "Must be a number" }).min(0).max(1),
+      physical_resistance: z.number({ message: "Must be a number" }).min(0).max(1),
+      melee_aptitude: z.number({ message: "Must be a number" }).positive(),
+      shooting_aptitude: z.number({ message: "Must be a number" }).positive(),
+      accuracy_bonus: z.number({ message: "Must be a number" }),
+      evasion_bonus: z.number({ message: "Must be a number" }),
+      acceleration_bonus: z.number({ message: "Must be a number" }).positive(),
+      turning_bonus: z.number({ message: "Must be a number" }).positive(),
+      weapons: z.array(weaponSchema).min(1, "At least one weapon is required"),
+    }),
+  })
+  .superRefine((data, ctx) => {
+    if (data.specs.weapons.length > data.weapon_slot_count) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Number of weapons (${data.specs.weapons.length}) exceeds weapon slot count (${data.weapon_slot_count})`,
+        path: ["weapon_slot_count"],
+      });
+    }
+    data.specs.weapons.forEach((w, index) => {
+      const requiredLv = w.required_beam_generator_lv ?? 0;
+      if (w.type === "BEAM" && requiredLv > data.beam_generator_lv) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Requires beam generator Lv ${requiredLv}, but mobile suit's Lv is ${data.beam_generator_lv}`,
+          path: ["specs", "weapons", index, "required_beam_generator_lv"],
+        });
+      }
+    });
+  });
 
 export type MobileSuitFormValues = z.infer<typeof masterMobileSuitSchema>;
 
@@ -80,14 +105,19 @@ const defaultWeapon: MobileSuitFormValues["specs"]["weapons"][0] = {
   is_melee: false,
   en_cost: 0,
   cool_down_turn: 0,
+  required_beam_generator_lv: 0,
 };
 
 const defaultValues: MobileSuitFormValues = {
   id: "",
   name: "",
+  name_ja: "",
+  model_number: "",
   price: 500,
   faction: "",
   description: "",
+  weapon_slot_count: 1,
+  beam_generator_lv: 0,
   specs: {
     max_hp: 800,
     armor: 50,
@@ -109,9 +139,13 @@ function toFormValues(ms: MasterMobileSuit): MobileSuitFormValues {
   return {
     id: ms.id,
     name: ms.name,
+    name_ja: ms.name_ja ?? "",
+    model_number: ms.model_number ?? "",
     price: ms.price,
     faction: ms.faction ?? "",
     description: ms.description,
+    weapon_slot_count: ms.weapon_slot_count ?? 1,
+    beam_generator_lv: ms.beam_generator_lv ?? 0,
     specs: {
       max_hp: ms.specs.max_hp,
       armor: ms.specs.armor,
@@ -138,6 +172,7 @@ function toFormValues(ms: MasterMobileSuit): MobileSuitFormValues {
         max_ammo: w.max_ammo ?? null,
         en_cost: w.en_cost ?? 0,
         cool_down_turn: w.cool_down_turn ?? 0,
+        required_beam_generator_lv: w.required_beam_generator_lv ?? 0,
       })),
     },
   };
@@ -211,12 +246,40 @@ export default function MobileSuitEditForm({
             <FieldError msg={errors.name?.message} />
           </div>
           <div>
+            <Label>日本語名</Label>
+            <Input {...register("name_ja")} placeholder="ガンダム" />
+            <FieldError msg={errors.name_ja?.message} />
+          </div>
+          <div>
+            <Label>型番</Label>
+            <Input {...register("model_number")} placeholder="RGM-79" />
+            <FieldError msg={errors.model_number?.message} />
+          </div>
+          <div>
             <Label>価格 (C)</Label>
             <Input
               type="number"
               {...register("price", { valueAsNumber: true })}
             />
             <FieldError msg={errors.price?.message} />
+          </div>
+          <div>
+            <Label>武器スロット数</Label>
+            <Input
+              type="number"
+              min={1}
+              {...register("weapon_slot_count", { valueAsNumber: true })}
+            />
+            <FieldError msg={errors.weapon_slot_count?.message} />
+          </div>
+          <div>
+            <Label>ビームジェネレータLv</Label>
+            <Input
+              type="number"
+              min={0}
+              {...register("beam_generator_lv", { valueAsNumber: true })}
+            />
+            <FieldError msg={errors.beam_generator_lv?.message} />
           </div>
           <div>
             <Label>勢力</Label>
@@ -380,6 +443,15 @@ export default function MobileSuitEditForm({
                 <div>
                   <Label>減衰係数</Label>
                   <Input type="number" step="0.01" {...register(`specs.weapons.${index}.decay_rate`, { valueAsNumber: true })} />
+                </div>
+                <div>
+                  <Label>要求ビームジェネレータLv</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    {...register(`specs.weapons.${index}.required_beam_generator_lv`, { valueAsNumber: true })}
+                  />
+                  <FieldError msg={errors.specs?.weapons?.[index]?.required_beam_generator_lv?.message} />
                 </div>
                 <div className="flex items-center gap-2 mt-3">
                   <Controller
