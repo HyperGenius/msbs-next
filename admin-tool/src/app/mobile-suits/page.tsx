@@ -7,6 +7,7 @@ import { MasterMobileSuit, MasterMobileSuitCreate } from "@/types/admin";
 import MobileSuitTable from "@/components/admin/MobileSuitTable";
 import MobileSuitEditForm, { MobileSuitFormValues } from "@/components/admin/MobileSuitEditForm";
 import MobileSuitRadarChart from "@/components/admin/MobileSuitRadarChart";
+import CombatSimulationPanel from "@/components/admin/CombatSimulationPanel";
 import CloneDialog from "@/components/admin/CloneDialog";
 import { SciFiPanel, SciFiHeading, SciFiButton } from "@/components/ui";
 
@@ -172,6 +173,18 @@ export default function AdminMobileSuitsPage() {
                     selected={selectedMs}
                     allSuits={mobileSuits}
                   />
+                </div>
+              </SciFiPanel>
+            )}
+
+            {/* ダメージ・命中率シミュレーション */}
+            {selectedMs && mobileSuits && (
+              <SciFiPanel variant="accent" className="mt-4">
+                <div className="p-4">
+                  <SciFiHeading level={3} variant="accent" className="mb-3 text-base">
+                    ダメージ・命中率シミュレーション
+                  </SciFiHeading>
+                  <CombatSimulationPanel attacker={selectedMs} allSuits={mobileSuits} />
                 </div>
               </SciFiPanel>
             )}

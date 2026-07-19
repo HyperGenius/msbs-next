@@ -10,6 +10,8 @@ from sqlmodel import Session
 from app.core.auth import verify_admin_api_key
 from app.db import get_session
 from app.models.models import (
+    CombatSimulationRequest,
+    CombatSimulationResponse,
     MasterMobileSuitCreate,
     MasterMobileSuitEntry,
     MasterMobileSuitSpec,
@@ -19,6 +21,7 @@ from app.models.models import (
     MasterWeaponUpdate,
     Weapon,
 )
+from app.services.combat_simulation_service import CombatSimulationService
 from app.services.mobile_suit_service import MobileSuitService
 from app.services.weapon_service import WeaponService
 
@@ -31,6 +34,12 @@ router = APIRouter(
 weapon_router = APIRouter(
     prefix="/api/admin/weapons",
     tags=["admin-weapons"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
+simulation_router = APIRouter(
+    prefix="/api/admin",
+    tags=["admin-simulation"],
     dependencies=[Depends(verify_admin_api_key)],
 )
 
@@ -231,3 +240,24 @@ def delete_master_weapon(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Master weapon '{weapon_id}' not found.",
         )
+
+
+# ===========================================================
+# 1対1 攻撃シミュレーション エンドポイント (Issue #381)
+# ===========================================================
+
+
+@simulation_router.post("/simulate-combat", response_model=CombatSimulationResponse)
+def simulate_combat(data: CombatSimulationRequest) -> CombatSimulationResponse:
+    """機体・武器・パイロットステータスから命中率・クリティカル率・ダメージを計算する.
+
+    - `trials` を指定すると、決定論値に加えてモンテカルロ試行の統計値を返す
+    - `attacker_weapon_id` が `attacker_spec.weapons` に存在しない場合は 422 を返す
+    - `attack_sector` が不正な値の場合は 422 を返す
+    """
+    try:
+        return CombatSimulationService.simulate(data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
