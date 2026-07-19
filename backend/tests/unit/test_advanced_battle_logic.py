@@ -166,25 +166,38 @@ def test_physical_weapon_vs_physical_resistance() -> None:
 
 
 def test_optimal_range_hit_bonus() -> None:
-    """Test that attacking at optimal range provides better hit chance."""
-    player = create_player_with_beam()
-    # Position enemy at optimal range (400m for beam rifle)
-    enemy = create_enemy_beam_resistant()
-    enemy.position = Vector3(x=400, y=0, z=0)
+    """Test that attacking at optimal range provides better hit chance.
 
-    sim = BattleSimulator(player, [enemy])
+    命中判定は乱数に依存するため、1回の試行では低確率で該当ログが
+    1件も発生しないことがある（モンテカルロ的アサーション、Issue #385）。
+    敵の撃破によりバトルが早期終了する場合もあるため、複数回試行して
+    いずれかで発生することを確認する。
+    """
+    max_turns = 30
+    attempts = 3
+    optimal_logs: list = []
 
-    # Run multiple turns to ensure at least one non-crit hit at optimal range
-    max_turns = 10
-    for _ in range(max_turns):
-        if sim.is_finished:
+    for _ in range(attempts):
+        player = create_player_with_beam()
+        # Position enemy at optimal range (400m for beam rifle)
+        enemy = create_enemy_beam_resistant()
+        enemy.position = Vector3(x=400, y=0, z=0)
+
+        sim = BattleSimulator(player, [enemy])
+
+        # Run multiple turns to ensure at least one non-crit hit at optimal range
+        for _ in range(max_turns):
+            if sim.is_finished:
+                break
+            sim.step()
+
+        # Check for optimal distance message
+        optimal_logs = [log for log in sim.logs if "最適射程" in log.message]
+        if optimal_logs:
             break
-        sim.step()
 
-    # Check for optimal distance message
-    optimal_logs = [log for log in sim.logs if "最適射程" in log.message]
     assert len(optimal_logs) > 0, (
-        "Optimal distance message should appear when at optimal range"
+        f"{attempts} 回中いずれかで Optimal distance message should appear"
     )
 
 
@@ -243,7 +256,10 @@ def test_battle_with_mixed_weapon_types() -> None:
     sim = BattleSimulator(player, [enemy])
 
     # Run simulation
-    max_turns = 20
+    # 命中判定は乱数に依存するため、20ターンでは低確率で ATTACK が
+    # 1件も発生しないことがある（モンテカルロ的アサーション、Issue #385）。
+    # 余裕を持たせて 50 ターンまで実行する。
+    max_turns = 50
     for _ in range(max_turns):
         if sim.is_finished:
             break
