@@ -26,12 +26,12 @@ const SECTOR_OPTIONS: { value: AttackSector; label: string }[] = [
 ];
 
 const PILOT_STAT_FIELDS: { key: keyof PilotStatsInput; label: string }[] = [
-  { key: "sht", label: "SHT" },
-  { key: "mel", label: "MEL" },
-  { key: "intel", label: "INT" },
-  { key: "ref", label: "REF" },
-  { key: "tou", label: "TOU" },
-  { key: "luk", label: "LUK" },
+  { key: "sht", label: "射撃" },
+  { key: "mel", label: "格闘" },
+  { key: "intel", label: "直感" },
+  { key: "ref", label: "反応" },
+  { key: "tou", label: "耐久" },
+  { key: "luk", label: "幸運" },
 ];
 
 function PilotStatsInputRow({
@@ -130,7 +130,7 @@ export default function CombatSimulationPanel({ attacker, allSuits }: CombatSimu
           >
             {attacker.specs.weapons.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name}（{w.power}dmg / acc{w.accuracy}%）
+                {w.name} (攻撃力: {w.power} / 命中率: {w.accuracy}%)
               </option>
             ))}
           </select>
@@ -152,7 +152,7 @@ export default function CombatSimulationPanel({ attacker, allSuits }: CombatSimu
           >
             {defenderCandidates.map((ms) => (
               <option key={ms.id} value={ms.id}>
-                {ms.name}（装甲{ms.specs.armor} / 機動{ms.specs.mobility}）
+                {ms.name} (装甲: {ms.specs.armor} / 機動: {ms.specs.mobility})
               </option>
             ))}
           </select>
