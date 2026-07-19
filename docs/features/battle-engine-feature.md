@@ -1355,3 +1355,35 @@ if current_action == "ATTACK" and target is not None:
 | フランキング | 引力（接線） | `+1.5` | フランキングスキル + 確率発動 |
 | **ストレイフ** | **引力（接線）** | **`+1.0`** | **`ATTACK` かつ距離 ≤ `weapon.range × 0.8` かつ非格闘武器** |
 
+---
+
+## 20. Issue #385: 戦闘シミュレーション系テストの flaky 対策
+
+### 20.1 概要
+
+`backend/tests/unit` の戦闘シミュレーション系テストが、単体実行では成功するにもかかわらず `pytest tests/unit` でスイート全体を実行すると乱数依存で不定期に失敗する問題を修正した。
+
+原因は主に2つ:
+
+1. **グローバルな `random` モジュール状態のテスト間リーク**: 一部のテスト（例: `test_simulation.py` の `random.seed(12345)`）が明示的にシードを固定すると、それ以降に実行される全テストが同じ乱数列を引き継いでしまい、モンテカルロ的な確率アサーションの結果がテストの実行順序に依存して変化していた。
+2. **確率アサーションのターン数不足**: 「N ターン以内に少なくとも1回発生すること」のようなアサーションで、ターン数の余裕が小さすぎて低確率ながら発生しないケースがあった。
+
+### 20.2 対応内容
+
+- `backend/tests/unit/conftest.py` に `autouse` の `_isolate_random_state` フィクスチャを追加し、各テスト実行前に `random.seed()`（引数なし = OS エントロピーで再初期化）を呼び出すことで、あるテストの乱数消費・明示的なシード固定が後続のテストへ波及しないようにした。
+- モンテカルロ的アサーションを含むテスト（`test_boost_start_occurs_with_full_field` 等）は、1回の試行で低確率に失敗しうるため、複数回試行していずれかで期待する事象が発生することを確認する方式に変更した。
+- 「N ターン以内に完了すること」を検証するテスト（`test_three_team_battle_runs_without_error` 等）は、ターン数に余裕を持たせる、または複数回試行に変更した。
+
+### 20.3 今後のテスト作成における注意
+
+- 戦闘シミュレーションの結果（命中・撃破・イベント発生など）を検証するアサーションは本質的に確率的である。1回の試行のみに依存する `assert` は避け、十分なターン数を確保するか、複数回試行して「いずれかで成立すること」を確認するパターンを使うこと。
+- `random.seed()` をテスト内で明示的に呼び出す場合、`tests/unit/conftest.py` の `_isolate_random_state` フィクスチャにより次のテストへは影響しないが、同一テスト内での再現性が必要な場合を除き、テストコード側で無用な `random.seed()` 固定は避けることが望ましい。
+
+### 20.4 Issue #387: `app.routes` 直接走査に依存したテストの脆弱性
+
+`backend/tests` フル実行時に `AttributeError: '_IncludedRouter' object has no attribute 'path'` が偶発的に発生する問題を修正した。
+
+- **原因**: `backend/requirements.txt` の `fastapi` にバージョン指定がなく、インストールタイミングにより取得されるバージョンが変わる。FastAPI 0.137 以降、`include_router()` で追加されたルーターが `app.routes` 内で遅延解決の `_IncludedRouter`（`.path` 属性を持たない）としてまとめて格納されることがあり、`route.path for route in app.routes` のように直接走査するコードが壊れる。
+- **対応**: `tests/test_api_structure.py` / `tests/test_entry_feature.py` / `tests/test_ranking_system.py` で `app.routes` の直接走査をやめ、`app.openapi()["paths"].keys()` からエンドポイント一覧を取得するように変更した（FastAPI のバージョンに依存しない安定した方法）。
+- **今後の注意**: 登録済みエンドポイントの存在を確認するテストは `app.routes` を直接走査せず、`app.openapi()["paths"]` を使うこと。
+

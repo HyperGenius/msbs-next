@@ -561,8 +561,7 @@ def test_solo_participants_auto_team_id() -> None:
     assert player.team_id != enemy.team_id
 
 
-def test_battle_royale_three_solo_units() -> None:
-    """3機のソロ参加者によるバトルロイヤルが成立すること."""
+def _make_battle_royale_sim() -> BattleSimulator:
     unit_a = MobileSuit(
         name="Unit A",
         max_hp=100,
@@ -609,18 +608,38 @@ def test_battle_royale_three_solo_units() -> None:
 
     # 各ユニットのteam_idはそれぞれ異なるはず
     assert len({unit_a.team_id, unit_b.team_id, unit_c.team_id}) == 3
+    return sim
 
-    # バトルを実行 (Phase E-3: セクタ補正で長期戦になることがあるため余裕をもたせる)
+
+def test_battle_royale_three_solo_units() -> None:
+    """3機のソロ参加者によるバトルロイヤルが成立すること.
+
+    命中判定の乱数次第でごく稀に決着が長引くケースがあるため
+    （モンテカルロ的アサーション）、複数回試行していずれかが
+    max_turns 以内に完了することを確認する（Issue #385）。
+    """
     max_turns = 300
-    for _ in range(max_turns):
-        if sim.is_finished:
+    attempts = 3
+    finished = False
+    alive_teams: set[str | None] = set()
+
+    for _ in range(attempts):
+        sim = _make_battle_royale_sim()
+
+        # バトルを実行 (Phase E-3: セクタ補正で長期戦になることがあるため余裕をもたせる)
+        for _ in range(max_turns):
+            if sim.is_finished:
+                break
+            sim.step()
+
+        finished = sim.is_finished
+        if finished:
+            alive_teams = {u.team_id for u in sim.units if u.current_hp > 0}
             break
-        sim.step()
 
     # 戦闘が正常に終了すること
-    assert sim.is_finished
+    assert finished, f"{attempts} 回中いずれかで {max_turns} ターン以内に完了すること"
     # 生存者のteam_idは1種類以下
-    alive_teams = {u.team_id for u in sim.units if u.current_hp > 0}
     assert len(alive_teams) <= 1
 
 
@@ -690,7 +709,9 @@ def test_team_battle_finishes_correctly() -> None:
 
     sim = BattleSimulator(team_a_1, [team_a_2, team_b_1])
 
-    max_turns = 50
+    # 命中判定の乱数次第でごく稀に決着が長引くことがあるため
+    # 余裕を持たせる（モンテカルロ的アサーション、Issue #385）。
+    max_turns = 300
     for _ in range(max_turns):
         if sim.is_finished:
             break
@@ -851,10 +872,20 @@ def test_attack_log_includes_pilot_name() -> None:
     sim = BattleSimulator(player, [enemy])
     sim._detection_phase()
     sim._step_count += 1  # 発見ステップの次ステップに進める（リアクション遅延を経過）
-    sim.step()
 
-    attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS")]
-    player_attack_logs = [log for log in attack_logs if log.actor_id == player.id]
+    # AI の行動選択は乱数に依存するため、1ステップでは低確率で ATTACK/MISS
+    # ログが出ないことがある（モンテカルロ的アサーション、Issue #385）。
+    # 余裕を持たせて複数ステップ実行する。
+    player_attack_logs: list = []
+    for _ in range(10):
+        if sim.is_finished:
+            break
+        sim.step()
+        attack_logs = [log for log in sim.logs if log.action_type in ("ATTACK", "MISS")]
+        player_attack_logs = [log for log in attack_logs if log.actor_id == player.id]
+        if player_attack_logs:
+            break
+
     assert len(player_attack_logs) > 0
     # パイロット名が含まれること
     assert any("[Amuro]のGundam" in log.message for log in player_attack_logs)
@@ -1169,9 +1200,16 @@ def test_step_includes_ai_decision_phase() -> None:
     enemy = create_fuzzy_test_enemy("Close Enemy", Vector3(x=200, y=0, z=0))
 
     sim = BattleSimulator(player, enemies=[enemy])
-    sim.step()
 
-    ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
+    # 索敵は確率的（Phase 6-4）なため、1ステップでは低確率で AI_DECISION
+    # ログが出ないことがある（モンテカルロ的アサーション、Issue #385）。
+    ai_logs: list = []
+    for _ in range(10):
+        sim.step()
+        ai_logs = [log for log in sim.logs if log.action_type == "AI_DECISION"]
+        if ai_logs:
+            break
+
     assert len(ai_logs) >= 1
 
 
@@ -1861,30 +1899,47 @@ def _make_team_unit(
 
 
 def test_three_team_battle_runs_without_error() -> None:
-    """3チーム構成でシミュレーションがクラッシュせず完了すること."""
-    # チームA: 1機（強い）
-    unit_a = _make_team_unit("TeamA", "TEAM_A", Vector3(x=100, y=0, z=100), power=200)
-    # チームB: 1機
-    unit_b = _make_team_unit("TeamB", "TEAM_B", Vector3(x=200, y=0, z=100))
-    # チームC: 1機
-    unit_c = _make_team_unit("TeamC", "TEAM_C", Vector3(x=150, y=0, z=200))
+    """3チーム構成でシミュレーションがクラッシュせず完了すること.
 
-    sim = BattleSimulator(unit_a, [unit_b, unit_c])
+    命中判定の乱数次第でごく稀に決着が長引くケースがあるため
+    （モンテカルロ的アサーション）、複数回試行していずれかが
+    max_turns 以内に完了することを確認する（Issue #385）。
+    """
+    max_turns = 500
+    attempts = 5
+    finished = False
+    active_teams: set[str | None] = set()
 
-    max_turns = 200
-    for _ in range(max_turns):
-        if sim.is_finished:
+    for _ in range(attempts):
+        # チームA: 1機（強い）
+        unit_a = _make_team_unit(
+            "TeamA", "TEAM_A", Vector3(x=100, y=0, z=100), power=200
+        )
+        # チームB: 1機
+        unit_b = _make_team_unit("TeamB", "TEAM_B", Vector3(x=200, y=0, z=100))
+        # チームC: 1機
+        unit_c = _make_team_unit("TeamC", "TEAM_C", Vector3(x=150, y=0, z=200))
+
+        sim = BattleSimulator(unit_a, [unit_b, unit_c])
+
+        for _ in range(max_turns):
+            if sim.is_finished:
+                break
+            sim.step()
+
+        finished = sim.is_finished
+        if finished:
+            active_teams = {
+                u.team_id
+                for u in sim.units
+                if u.current_hp > 0
+                and sim.unit_resources[str(u.id)]["status"] == "ACTIVE"
+            }
             break
-        sim.step()
 
     # クラッシュなく完了、かつシミュレーションが終了していること
-    assert sim.is_finished
+    assert finished, f"{attempts} 回中いずれかで {max_turns} ターン以内に完了すること"
     # 生存・ACTIVE なチームは最大 1 つ
-    active_teams = {
-        u.team_id
-        for u in sim.units
-        if u.current_hp > 0 and sim.unit_resources[str(u.id)]["status"] == "ACTIVE"
-    }
     assert len(active_teams) <= 1
 
 

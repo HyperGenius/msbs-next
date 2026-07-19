@@ -54,8 +54,11 @@ def test_api_endpoints():
     print("Testing API endpoints...")
     from main import app
 
-    # Get all routes
-    routes = [route.path for route in app.routes]
+    # OpenAPI スキーマから登録済みパスを取得する。
+    # FastAPI 0.137 以降、app.routes には include_router() でまとめて
+    # 追加されたルーターが遅延解決の _IncludedRouter（.path を持たない）
+    # として格納されることがあるため、route.path を直接読むのは避ける（Issue #387）。
+    routes = list(app.openapi()["paths"].keys())
 
     # Check required endpoints
     required_endpoints = [
