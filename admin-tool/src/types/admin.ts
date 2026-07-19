@@ -58,3 +58,58 @@ export interface MasterWeaponUpdate {
     description?: string;
     weapon?: Weapon;
 }
+
+/** 攻撃セクタ（正面・側面・背面） */
+export type AttackSector = "FRONT" | "FRONT_SIDE" | "REAR_SIDE" | "REAR";
+
+/** シミュレーション用パイロットステータス入力 */
+export interface PilotStatsInput {
+    sht: number;
+    mel: number;
+    intel: number;
+    ref: number;
+    tou: number;
+    luk: number;
+}
+
+export const DEFAULT_PILOT_STATS: PilotStatsInput = {
+    sht: 0,
+    mel: 0,
+    intel: 0,
+    ref: 0,
+    tou: 0,
+    luk: 0,
+};
+
+/** 1対1 攻撃シミュレーションリクエスト */
+export interface CombatSimulationRequest {
+    attacker_spec: MasterMobileSuitSpec;
+    attacker_weapon_id: string;
+    attacker_pilot?: PilotStatsInput;
+    defender_spec: MasterMobileSuitSpec;
+    defender_pilot?: PilotStatsInput;
+    distance?: number;
+    attack_sector?: AttackSector;
+    trials?: number;
+}
+
+/** モンテカルロ試行の実測統計 */
+export interface MonteCarloCombatStats {
+    trials: number;
+    actual_hit_rate: number;
+    actual_crit_rate: number;
+    avg_damage: number;
+    min_damage: number;
+    max_damage: number;
+    perfect_evade_rate: number;
+}
+
+/** 1対1 攻撃シミュレーションレスポンス */
+export interface CombatSimulationResponse {
+    hit_chance: number;
+    crit_chance: number;
+    base_damage: number;
+    crit_damage: number;
+    resistance_applied_damage: number;
+    monte_carlo: MonteCarloCombatStats | null;
+}

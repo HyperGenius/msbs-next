@@ -19,6 +19,7 @@
 | `POST` | `/api/admin/mobile-suits` | 新規機体追加 |
 | `PUT` | `/api/admin/mobile-suits/{ms_id}` | 既存機体の更新 |
 | `DELETE` | `/api/admin/mobile-suits/{ms_id}` | 機体削除 |
+| `POST` | `/api/admin/simulate-combat` | 1対1 攻撃シミュレーション（ダメージ・命中率）（Issue #381） |
 
 ### 認証
 
@@ -105,6 +106,84 @@ Content-Type: application/json
   "description": "改良型仕様。"
 }
 ```
+
+---
+
+## ダメージ・命中率シミュレーション API（Issue #381）
+
+`POST /api/admin/simulate-combat` は、機体スペック・武器・パイロットステータスを入力として、
+実戦（`backend/app/engine/combat.py`）と同一の計算式で命中率・クリティカル率・ダメージを算出する。
+
+### 計算の実装
+
+`backend/app/engine/combat_preview.py` に `BattleSimulator` インスタンス状態に依存しない純粋関数として実装。
+シグモイドダメージ式（[`docs/features/sigmoid-damage-calculation.md`](./sigmoid-damage-calculation.md)）や
+`calculator.py` のパイロットステータス補正関数をそのまま再利用しており、実戦の挙動と乖離しない。
+
+### 乱数を含む計算への対応
+
+命中判定・クリティカル判定・ダメージ分散は本来 `random` モジュールに依存するため、同一入力でも結果が毎回変わる。
+これに対応するため、本APIは2種類の値を返す:
+
+- **決定論値**（常に返す）: 乱数を振らず、命中率(%)・クリティカル率(%)・理論ダメージ値を返す
+- **モンテカルロ試行**（`trials` 指定時のみ）: サーバー側で実際に乱数判定をN回（最大5000回）試行し、
+  実測命中率・平均/最小/最大ダメージ・クリティカル発生率・完全回避発生率（LUKステータス由来）を集計して返す
+
+### リクエスト例
+
+```json
+POST /api/admin/simulate-combat
+X-API-Key: <key>
+Content-Type: application/json
+
+{
+  "attacker_spec": { "...": "MasterMobileSuitSpec と同形" },
+  "attacker_weapon_id": "beam_rifle",
+  "attacker_pilot": { "sht": 50, "mel": 0, "intel": 0, "ref": 0, "tou": 0, "luk": 0 },
+  "defender_spec": { "...": "MasterMobileSuitSpec と同形" },
+  "defender_pilot": { "sht": 0, "mel": 0, "intel": 0, "ref": 0, "tou": 20, "luk": 0 },
+  "distance": 320,
+  "attack_sector": "FRONT_SIDE",
+  "trials": 1000
+}
+```
+
+### レスポンス例
+
+```json
+{
+  "hit_chance": 65.0,
+  "crit_chance": 5.0,
+  "base_damage": 116,
+  "crit_damage": 180,
+  "resistance_applied_damage": 116,
+  "monte_carlo": {
+    "trials": 1000,
+    "actual_hit_rate": 66.2,
+    "actual_crit_rate": 5.4,
+    "avg_damage": 119.1,
+    "min_damage": 104,
+    "max_damage": 197,
+    "perfect_evade_rate": 0.0
+  }
+}
+```
+
+`trials` を省略した場合は `monte_carlo` が `null` になり、決定論値のみが返る。
+
+### バリデーション
+
+| ケース | ステータスコード |
+|---|---|
+| `attacker_weapon_id` が `attacker_spec.weapons` に存在しない | `422` |
+| `attack_sector` が `FRONT`/`FRONT_SIDE`/`REAR_SIDE`/`REAR` 以外 | `422` |
+| `trials` が範囲外（1〜5000）| `422` |
+
+### 管理画面UI
+
+マスター機体編集画面の「ダメージ・命中率シミュレーション」パネル（`CombatSimulationPanel`）から利用できる。
+攻撃側は選択中の機体、防御側はマスター機体一覧から選択する。距離・攻撃セクタ・双方のパイロットステータスを
+調整しながら「理論値を計算」（決定論値のみ）・「N回試行」（モンテカルロ統計付き）を実行できる。
 
 ---
 
@@ -215,10 +294,12 @@ admin-tool/src/
 │   │   ├── MobileSuitTable.tsx    # 機体一覧テーブル（ソート・フィルタ付き）
 │   │   ├── MobileSuitEditForm.tsx # 全パラメータ編集フォーム（Zod バリデーション）
 │   │   ├── MobileSuitRadarChart.tsx # バランス比較レーダーチャート（recharts）
+│   │   ├── CombatSimulationPanel.tsx # ダメージ・命中率シミュレーションパネル（Issue #381）
 │   │   └── CloneDialog.tsx        # Clone & Edit ダイアログ
 │   └── ui/                        # SciFiPanel / SciFiButton / SciFiHeading（frontendから移植）
 └── hooks/
-    └── useAdminMobileSuits.ts     # SWR を用いた CRUD フック
+    ├── useAdminMobileSuits.ts     # SWR を用いた CRUD フック
+    └── useCombatSimulation.ts     # シミュレーションAPI呼び出しフック（Issue #381）
 ```
 
 ### 機能詳細
@@ -249,6 +330,14 @@ admin-tool/src/
 - 選択中の機体をコピーして新しい ID を付けて新規追加
 - ID バリデーション（スネークケース英数字のみ）
 
+#### ダメージ・命中率シミュレーション (`CombatSimulationPanel`, Issue #381)
+
+- 攻撃側（選択中の機体・武装・パイロットステータス）と防御側（機体一覧から選択・パイロットステータス）を入力
+- 距離スライダー・攻撃セクタ選択で条件を調整可能
+- 「理論値を計算」で決定論値（命中率・クリティカル率・非クリ/クリダメージ）を表示
+- 「N回試行」でモンテカルロ試行を実行し、実測統計値を理論値と並べて表示
+- バックエンドAPI: `POST /api/admin/simulate-combat`（詳細は本ドキュメント上部「ダメージ・命中率シミュレーション API」セクション参照）
+
 #### 楽観的更新とロールバック
 
 `useAdminMobileSuits` フックで SWR の `mutate` を使用し、API 呼び出し前にキャッシュを先行更新。
@@ -272,6 +361,19 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" python -m pytest 
 - PUT 更新（正常 / 404 / weapons 空 422）
 - DELETE 削除（正常 / 404 / 在庫参照 409）
 - DB 永続化確認
+
+```bash
+cd backend
+NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" python -m pytest tests/unit/test_admin_combat_simulation.py -v
+```
+
+テスト内容 (`tests/unit/test_admin_combat_simulation.py`, Issue #381):
+- 認証チェック（キーなし / 不正キー）
+- 決定論値の計算式検証（命中率・クリティカル率・クリダメージ倍率）
+- パイロットステータス（SHT/INT/TOU）が命中率・クリティカル率に反映されること
+- 格闘武器は耐性計算をスキップする現行仕様との整合性
+- モンテカルロ試行の実測値が理論値に近似すること（大数の法則）
+- 武器ID不正・攻撃セクタ不正・試行回数範囲外の 422 エラー
 
 ### admin-tool
 
@@ -298,5 +400,10 @@ npx vitest run tests/unit/
 - `backend/alembic/versions/r1s2t3u4v5w6_add_master_mobile_suits_and_weapons_tables.py` — マイグレーション
 - `admin-tool/src/app/mobile-suits/page.tsx` — 管理画面（独立アプリ、ポート3100）
 - `admin-tool/src/hooks/useAdminMobileSuits.ts` — CRUD フック
+- `backend/app/engine/combat_preview.py` — 1対1 攻撃シミュレーション計算ロジック（決定論値・モンテカルロ）（Issue #381）
+- `backend/app/services/combat_simulation_service.py` — シミュレーションサービス（Issue #381）
+- `backend/tests/unit/test_admin_combat_simulation.py` — シミュレーションAPIテスト（Issue #381）
+- `admin-tool/src/components/admin/CombatSimulationPanel.tsx` — シミュレーションパネルUI（Issue #381）
+- `admin-tool/src/hooks/useCombatSimulation.ts` — シミュレーションAPI呼び出しフック（Issue #381）
 - `scripts/dev-admin.sh` — admin-tool 起動スクリプト
 

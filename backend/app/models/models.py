@@ -423,6 +423,65 @@ class MasterWeaponUpdate(SQLModel):
     weapon: Weapon | None = None
 
 
+# --- Combat Simulation Models (管理画面用 1対1 攻撃シミュレーション, Issue #381) ---
+
+
+class PilotStatsInput(SQLModel):
+    """シミュレーション用パイロットステータス入力."""
+
+    sht: int = Field(default=0, description="射撃精度 (SHT)")
+    mel: int = Field(default=0, description="格闘技巧 (MEL)")
+    intel: int = Field(default=0, description="直感 (INT)")
+    ref: int = Field(default=0, description="反応 (REF)")
+    tou: int = Field(default=0, description="耐久 (TOU)")
+    luk: int = Field(default=0, description="幸運 (LUK)")
+
+
+class CombatSimulationRequest(SQLModel):
+    """1対1 攻撃シミュレーションリクエスト."""
+
+    attacker_spec: MasterMobileSuitSpec
+    attacker_weapon_id: str = Field(description="attacker_spec.weapons 内の武器ID")
+    attacker_pilot: PilotStatsInput = Field(default_factory=PilotStatsInput)
+    defender_spec: MasterMobileSuitSpec
+    defender_pilot: PilotStatsInput = Field(default_factory=PilotStatsInput)
+    distance: float | None = Field(
+        default=None, description="攻撃距離(m)。省略時は武器の optimal_range"
+    )
+    attack_sector: str = Field(
+        default="FRONT_SIDE", description="攻撃セクタ (FRONT/FRONT_SIDE/REAR_SIDE/REAR)"
+    )
+    trials: int | None = Field(
+        default=None,
+        ge=1,
+        le=5000,
+        description="モンテカルロ試行回数（省略時は理論値のみ）",
+    )
+
+
+class MonteCarloCombatStats(SQLModel):
+    """モンテカルロ試行の実測統計."""
+
+    trials: int
+    actual_hit_rate: float
+    actual_crit_rate: float
+    avg_damage: float
+    min_damage: int
+    max_damage: int
+    perfect_evade_rate: float
+
+
+class CombatSimulationResponse(SQLModel):
+    """1対1 攻撃シミュレーションレスポンス."""
+
+    hit_chance: float
+    crit_chance: float
+    base_damage: int
+    crit_damage: int
+    resistance_applied_damage: int
+    monte_carlo: MonteCarloCombatStats | None = None
+
+
 # --- Master Data Table Models (DBテーブル定義) ---
 
 
