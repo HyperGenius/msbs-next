@@ -1379,3 +1379,11 @@ if current_action == "ATTACK" and target is not None:
 - 戦闘シミュレーションの結果（命中・撃破・イベント発生など）を検証するアサーションは本質的に確率的である。1回の試行のみに依存する `assert` は避け、十分なターン数を確保するか、複数回試行して「いずれかで成立すること」を確認するパターンを使うこと。
 - `random.seed()` をテスト内で明示的に呼び出す場合、`tests/unit/conftest.py` の `_isolate_random_state` フィクスチャにより次のテストへは影響しないが、同一テスト内での再現性が必要な場合を除き、テストコード側で無用な `random.seed()` 固定は避けることが望ましい。
 
+### 20.4 Issue #387: `app.routes` 直接走査に依存したテストの脆弱性
+
+`backend/tests` フル実行時に `AttributeError: '_IncludedRouter' object has no attribute 'path'` が偶発的に発生する問題を修正した。
+
+- **原因**: `backend/requirements.txt` の `fastapi` にバージョン指定がなく、インストールタイミングにより取得されるバージョンが変わる。FastAPI 0.137 以降、`include_router()` で追加されたルーターが `app.routes` 内で遅延解決の `_IncludedRouter`（`.path` 属性を持たない）としてまとめて格納されることがあり、`route.path for route in app.routes` のように直接走査するコードが壊れる。
+- **対応**: `tests/test_api_structure.py` / `tests/test_entry_feature.py` / `tests/test_ranking_system.py` で `app.routes` の直接走査をやめ、`app.openapi()["paths"].keys()` からエンドポイント一覧を取得するように変更した（FastAPI のバージョンに依存しない安定した方法）。
+- **今後の注意**: 登録済みエンドポイントの存在を確認するテストは `app.routes` を直接走査せず、`app.openapi()["paths"]` を使うこと。
+
