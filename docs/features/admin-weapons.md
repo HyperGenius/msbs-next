@@ -132,11 +132,21 @@ python scripts/seed/seed_master_data.py --force
 
 ---
 
-## フロントエンド
+## フロントエンド（`admin-tool/` — 独立アプリ）
+
+マスタデータ管理UIは `frontend/` から分離され、リポジトリ直下の独立した Next.js アプリ `admin-tool/`（ポート3100）として提供される。
+ゲームバランス調整用のローカル専用ツールであり、アプリ本体のユーザー向け認証（Clerk）とは無関係。アクセス制御は `X-API-Key` のみに依存する（localhost 専用ツールとして運用）。
 
 ### ルーティング
 
-`/admin/weapons` — 管理者専用ページ（`middleware.ts` の Clerk `publicMetadata.role === "admin"` チェックにより保護）
+`/weapons`（`admin-tool` は全体が管理画面のため `/admin` プレフィックスなし）
+
+### 起動方法
+
+```bash
+cd admin-tool && npm run dev   # http://localhost:3100
+# もしくはリポジトリルートから ./scripts/dev.sh で frontend/backend と同時起動
+```
 
 ### 機能一覧
 
@@ -153,8 +163,8 @@ python scripts/seed/seed_master_data.py --force
 ### コンポーネント構成
 
 ```
-src/
-├── app/admin/weapons/page.tsx          # ページコンポーネント
+admin-tool/src/
+├── app/weapons/page.tsx                # ページコンポーネント
 ├── hooks/useAdminWeapons.ts            # SWR フック（CRUD + 楽観的更新）
 └── components/admin/
     ├── WeaponTable.tsx                 # 武器一覧テーブル
@@ -182,8 +192,9 @@ src/
 - `backend/data/master/weapons.json` — シードデータ（Git 管理継続）
 - `backend/scripts/seed/seed_master_data.py` — シードスクリプト
 - `backend/alembic/versions/r1s2t3u4v5w6_add_master_mobile_suits_and_weapons_tables.py` — マイグレーション
-- `frontend/src/app/admin/weapons/page.tsx` — 管理画面
-- `frontend/src/middleware.ts` — 管理者ロールガード
+- `admin-tool/src/app/weapons/page.tsx` — 管理画面（独立アプリ、ポート3100）
+- `admin-tool/src/hooks/useAdminWeapons.ts` — CRUD フック
+- `scripts/dev-admin.sh` — admin-tool 起動スクリプト
 
 ---
 
@@ -204,10 +215,10 @@ cd backend && NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" \
 - `DELETE` 削除・存在しない ID 404・参照あり 409
 - DB 永続化確認
 
-### フロントエンド
+### admin-tool
 
 ```bash
-cd frontend && npx vitest run tests/unit/weaponEditFormValidation.test.ts
+cd admin-tool && npx vitest run tests/unit/weaponEditFormValidation.test.ts
 ```
 
 テスト項目:

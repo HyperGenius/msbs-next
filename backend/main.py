@@ -47,6 +47,9 @@ app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    # admin-tool（ゲームバランス調整用ローカルツール）
+    "http://localhost:3100",
+    "http://127.0.0.1:3100",
 ]
 
 # 本番環境のVercelドメインを追加

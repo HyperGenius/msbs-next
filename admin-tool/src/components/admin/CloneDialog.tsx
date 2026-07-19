@@ -1,20 +1,16 @@
-/* frontend/src/components/admin/WeaponCloneDialog.tsx */
+/* frontend/src/components/admin/CloneDialog.tsx */
 "use client";
 
 import { useState } from "react";
-import { MasterWeapon } from "@/types/battle";
+import { MasterMobileSuit } from "@/types/admin";
 
-interface WeaponCloneDialogProps {
-  source: MasterWeapon;
+interface CloneDialogProps {
+  source: MasterMobileSuit;
   onConfirm: (newId: string) => Promise<void>;
   onClose: () => void;
 }
 
-export default function WeaponCloneDialog({
-  source,
-  onConfirm,
-  onClose,
-}: WeaponCloneDialogProps) {
+export default function CloneDialog({ source, onConfirm, onClose }: CloneDialogProps) {
   const [newId, setNewId] = useState(`${source.id}_copy`);
   const [error, setError] = useState<string | null>(null);
   const [isCloning, setIsCloning] = useState(false);
@@ -23,7 +19,7 @@ export default function WeaponCloneDialog({
 
   async function handleConfirm() {
     if (!SNAKE_CASE_RE.test(newId)) {
-      setError("IDはスネークケース英数字のみ（例: beam_rifle_copy）");
+      setError("IDはスネークケース英数字のみ（例: rx_78_2_copy）");
       return;
     }
     setError(null);
@@ -42,13 +38,11 @@ export default function WeaponCloneDialog({
       <div className="bg-[#050505] border border-[#00ff41]/40 p-6 w-full max-w-sm font-mono text-[#00ff41]">
         <h2 className="text-base font-bold text-[#ffb000] mb-4">Clone &amp; Edit</h2>
         <p className="text-sm text-[#00ff41]/70 mb-4">
-          <span className="text-[#ffb000]">{source.name}</span>{" "}
-          をコピーして新規武器を作成します。新しい ID を入力してください。
+          <span className="text-[#ffb000]">{source.name}</span> をコピーして新規機体を作成します。
+          新しい ID を入力してください。
         </p>
         <div className="mb-3">
-          <label className="block text-xs text-[#ffb000]/80 mb-1">
-            新しい ID (snake_case)
-          </label>
+          <label className="block text-xs text-[#ffb000]/80 mb-1">新しい ID (snake_case)</label>
           <input
             type="text"
             value={newId}

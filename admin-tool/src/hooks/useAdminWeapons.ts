@@ -1,13 +1,13 @@
-/* frontend/src/hooks/useAdminMobileSuits.ts */
+/* frontend/src/hooks/useAdminWeapons.ts */
 "use client";
 
 import useSWR from "swr";
-import { MasterMobileSuit, MasterMobileSuitCreate, MasterMobileSuitUpdate } from "@/types/battle";
+import { MasterWeapon, MasterWeaponCreate, MasterWeaponUpdate } from "@/types/admin";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const ADMIN_API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY || "";
 
-const ENDPOINT = `${API_BASE_URL}/api/admin/mobile-suits`;
+const ENDPOINT = `${API_BASE_URL}/api/admin/weapons`;
 
 function adminFetcher(url: string) {
   return fetch(url, {
@@ -23,19 +23,19 @@ function adminFetcher(url: string) {
 }
 
 /**
- * 管理者用マスター機体データを取得・変更する SWR フック
+ * 管理者用マスター武器データを取得・変更する SWR フック
  */
-export function useAdminMobileSuits() {
-  const { data, error, isLoading, mutate } = useSWR<MasterMobileSuit[]>(
+export function useAdminWeapons() {
+  const { data, error, isLoading, mutate } = useSWR<MasterWeapon[]>(
     ENDPOINT,
     adminFetcher
   );
 
   /**
-   * 新規機体を追加する（楽観的更新）
+   * 新規武器を追加する（楽観的更新）
    */
-  async function createMobileSuit(payload: MasterMobileSuitCreate): Promise<MasterMobileSuit> {
-    const optimisticData = data ? [...data, payload as MasterMobileSuit] : [payload as MasterMobileSuit];
+  async function createWeapon(payload: MasterWeaponCreate): Promise<MasterWeapon> {
+    const optimisticData = data ? [...data, payload as MasterWeapon] : [payload as MasterWeapon];
 
     return mutate(
       async () => {
@@ -51,28 +51,28 @@ export function useAdminMobileSuits() {
           const detail = await res.json().catch(() => ({}));
           throw new Error(detail.detail || `Create failed: ${res.status}`);
         }
-        const created: MasterMobileSuit = await res.json();
+        const created: MasterWeapon = await res.json();
         return data ? [...data, created] : [created];
       },
       { optimisticData, rollbackOnError: true }
     ).then((list) => {
-      const latest = list?.find((ms) => ms.id === payload.id);
+      const latest = list?.find((w) => w.id === payload.id);
       if (!latest) throw new Error("Unexpected: created item not found in cache");
       return latest;
     });
   }
 
   /**
-   * 既存機体を更新する（楽観的更新）
+   * 既存武器を更新する（楽観的更新）
    */
-  async function updateMobileSuit(msId: string, payload: MasterMobileSuitUpdate): Promise<MasterMobileSuit> {
-    const optimisticData = data?.map((ms) =>
-      ms.id === msId ? { ...ms, ...payload, specs: payload.specs ?? ms.specs } : ms
+  async function updateWeapon(weaponId: string, payload: MasterWeaponUpdate): Promise<MasterWeapon> {
+    const optimisticData = data?.map((w) =>
+      w.id === weaponId ? { ...w, ...payload, weapon: payload.weapon ?? w.weapon } : w
     );
 
     return mutate(
       async () => {
-        const res = await fetch(`${ENDPOINT}/${msId}`, {
+        const res = await fetch(`${ENDPOINT}/${weaponId}`, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -84,26 +84,26 @@ export function useAdminMobileSuits() {
           const detail = await res.json().catch(() => ({}));
           throw new Error(detail.detail || `Update failed: ${res.status}`);
         }
-        const updated: MasterMobileSuit = await res.json();
-        return data?.map((ms) => (ms.id === msId ? updated : ms)) ?? [updated];
+        const updated: MasterWeapon = await res.json();
+        return data?.map((w) => (w.id === weaponId ? updated : w)) ?? [updated];
       },
       { optimisticData, rollbackOnError: true }
     ).then((list) => {
-      const latest = list?.find((ms) => ms.id === msId);
+      const latest = list?.find((w) => w.id === weaponId);
       if (!latest) throw new Error("Unexpected: updated item not found in cache");
       return latest;
     });
   }
 
   /**
-   * 機体を削除する（楽観的更新）
+   * 武器を削除する（楽観的更新）
    */
-  async function deleteMobileSuit(msId: string): Promise<void> {
-    const optimisticData = data?.filter((ms) => ms.id !== msId);
+  async function deleteWeapon(weaponId: string): Promise<void> {
+    const optimisticData = data?.filter((w) => w.id !== weaponId);
 
     await mutate(
       async () => {
-        const res = await fetch(`${ENDPOINT}/${msId}`, {
+        const res = await fetch(`${ENDPOINT}/${weaponId}`, {
           method: "DELETE",
           headers: { "X-API-Key": ADMIN_API_KEY },
         });
@@ -111,19 +111,19 @@ export function useAdminMobileSuits() {
           const detail = await res.json().catch(() => ({}));
           throw new Error(detail.detail || `Delete failed: ${res.status}`);
         }
-        return data?.filter((ms) => ms.id !== msId) ?? [];
+        return data?.filter((w) => w.id !== weaponId) ?? [];
       },
       { optimisticData, rollbackOnError: true }
     );
   }
 
   return {
-    mobileSuits: data,
+    weapons: data,
     isLoading,
     isError: error,
     mutate,
-    createMobileSuit,
-    updateMobileSuit,
-    deleteMobileSuit,
+    createWeapon,
+    updateWeapon,
+    deleteWeapon,
   };
 }

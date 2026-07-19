@@ -15,6 +15,7 @@ trap cleanup EXIT
 
 bash "$REPO_ROOT/scripts/dev-back.sh" &   # バックエンドをバックグラウンドで起動
 bash "$REPO_ROOT/scripts/dev-front.sh" &  # フロントエンドをバックグラウンドで起動
+bash "$REPO_ROOT/scripts/dev-admin.sh" &  # 管理ツール(admin-tool)をバックグラウンドで起動
 
 # 両プロセスが終了するまで待機
 wait
