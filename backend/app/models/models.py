@@ -43,6 +43,10 @@ class Weapon(SQLModel):
     optimal_range: float = Field(default=300.0, description="最適射程距離")
     decay_rate: float = Field(default=0.05, description="距離による命中率減衰係数")
     is_melee: bool = Field(default=False, description="近接武器かどうか")
+    required_beam_generator_lv: int = Field(
+        default=0,
+        description="装備に必要なビームジェネレータLv (BEAM属性武器のみ有効。機体のビームジェネレータLv以下でのみ装備可能)",
+    )
     max_ammo: int | None = Field(
         default=None, description="最大弾数 (Noneまたは0の場合は無限/EN兵器)"
     )
@@ -364,9 +368,13 @@ class MasterMobileSuitEntry(SQLModel):
 
     id: str
     name: str
+    name_ja: str = ""
+    model_number: str = ""
     price: int
     faction: str = ""
     description: str
+    weapon_slot_count: int = 1
+    beam_generator_lv: int = 0
     specs: MasterMobileSuitSpec
 
 
@@ -375,9 +383,13 @@ class MasterMobileSuitCreate(SQLModel):
 
     id: str
     name: str
+    name_ja: str = ""
+    model_number: str = ""
     price: int
     faction: str = ""
     description: str
+    weapon_slot_count: int = Field(default=1, ge=1)
+    beam_generator_lv: int = Field(default=0, ge=0)
     specs: MasterMobileSuitSpec
 
 
@@ -385,9 +397,13 @@ class MasterMobileSuitUpdate(SQLModel):
     """マスター機体更新リクエスト."""
 
     name: str | None = None
+    name_ja: str | None = None
+    model_number: str | None = None
     price: int | None = None
     faction: str | None = None
     description: str | None = None
+    weapon_slot_count: int | None = Field(default=None, ge=1)
+    beam_generator_lv: int | None = Field(default=None, ge=0)
     specs: MasterMobileSuitSpec | None = None
 
 
@@ -492,9 +508,15 @@ class MasterMobileSuit(SQLModel, table=True):
 
     id: str = Field(primary_key=True, description="スネークケースID (例: rx_78_2)")
     name: str = Field(description="機体名")
+    name_ja: str = Field(default="", description="日本語表示名")
+    model_number: str = Field(default="", description="型番 (例: RGM-79)")
     price: int = Field(description="購入価格")
     faction: str = Field(default="", description="勢力 (FEDERATION/ZEON/空文字=共通)")
     description: str = Field(description="機体説明文")
+    weapon_slot_count: int = Field(default=1, description="武器スロット数 (1以上)")
+    beam_generator_lv: int = Field(
+        default=0, description="ビームジェネレータLv (0以上)"
+    )
     specs: dict = Field(
         sa_column=Column(JSON),
         description="機体スペック (MasterMobileSuitSpec の全フィールド)",

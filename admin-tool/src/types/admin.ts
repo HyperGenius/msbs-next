@@ -21,9 +21,17 @@ export interface MasterMobileSuitSpec {
 export interface MasterMobileSuit {
     id: string;
     name: string;
+    /** 日本語表示名 */
+    name_ja: string;
+    /** 型番 (例: RGM-79) */
+    model_number: string;
     price: number;
     faction: string;
     description: string;
+    /** 武器スロット数 (1以上) */
+    weapon_slot_count: number;
+    /** ビームジェネレータLv (0以上) */
+    beam_generator_lv: number;
     specs: MasterMobileSuitSpec;
 }
 
@@ -33,9 +41,13 @@ export type MasterMobileSuitCreate = MasterMobileSuit;
 /** マスター機体の部分更新リクエスト */
 export interface MasterMobileSuitUpdate {
     name?: string;
+    name_ja?: string;
+    model_number?: string;
     price?: number;
     faction?: string;
     description?: string;
+    weapon_slot_count?: number;
+    beam_generator_lv?: number;
     specs?: MasterMobileSuitSpec;
 }
 

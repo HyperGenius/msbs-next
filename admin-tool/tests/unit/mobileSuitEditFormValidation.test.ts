@@ -23,9 +23,13 @@ const validWeapon = {
 const validMobileSuit = {
   id: "rx_78_2",
   name: "RX-78-2 Gundam",
+  name_ja: "ガンダム",
+  model_number: "RX-78-2",
   price: 1500,
   faction: "FEDERATION",
   description: "宇宙世紀を代表するモビルスーツ。",
+  weapon_slot_count: 2,
+  beam_generator_lv: 1,
   specs: {
     max_hp: 1000,
     armor: 80,
@@ -224,6 +228,66 @@ describe("masterMobileSuitSchema", () => {
     const result = masterMobileSuitSchema.safeParse({
       ...validMobileSuit,
       specs: { ...validMobileSuit.specs, accuracy_bonus: -5.0 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("weapon_slot_count が 0 以下の場合はエラー", () => {
+    const result = masterMobileSuitSchema.safeParse({ ...validMobileSuit, weapon_slot_count: 0 });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((i) => i.path.includes("weapon_slot_count"))).toBe(true);
+  });
+
+  it("beam_generator_lv が負の値の場合はエラー", () => {
+    const result = masterMobileSuitSchema.safeParse({ ...validMobileSuit, beam_generator_lv: -1 });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((i) => i.path.includes("beam_generator_lv"))).toBe(true);
+  });
+
+  it("beam_generator_lv が 0 は許可される", () => {
+    const result = masterMobileSuitSchema.safeParse({ ...validMobileSuit, beam_generator_lv: 0 });
+    expect(result.success).toBe(true);
+  });
+
+  it("武器数が weapon_slot_count を超える場合はエラー", () => {
+    const result = masterMobileSuitSchema.safeParse({
+      ...validMobileSuit,
+      weapon_slot_count: 1,
+      specs: {
+        ...validMobileSuit.specs,
+        weapons: [
+          validWeapon,
+          { ...validWeapon, id: "beam_saber", name: "Beam Saber", type: "PHYSICAL", is_melee: true },
+        ],
+      },
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((i) => i.path.includes("weapon_slot_count"))).toBe(true);
+  });
+
+  it("BEAM武器の要求Lvがbeam_generator_lvを超える場合はエラー", () => {
+    const result = masterMobileSuitSchema.safeParse({
+      ...validMobileSuit,
+      beam_generator_lv: 0,
+      specs: {
+        ...validMobileSuit.specs,
+        weapons: [{ ...validWeapon, required_beam_generator_lv: 2 }],
+      },
+    });
+    expect(result.success).toBe(false);
+    expect(
+      result.error?.issues.some((i) => i.path.includes("required_beam_generator_lv"))
+    ).toBe(true);
+  });
+
+  it("PHYSICAL武器はrequired_beam_generator_lvがbeam_generator_lvを超えても許可される", () => {
+    const result = masterMobileSuitSchema.safeParse({
+      ...validMobileSuit,
+      beam_generator_lv: 0,
+      specs: {
+        ...validMobileSuit.specs,
+        weapons: [{ ...validWeapon, type: "PHYSICAL", required_beam_generator_lv: 5 }],
+      },
     });
     expect(result.success).toBe(true);
   });

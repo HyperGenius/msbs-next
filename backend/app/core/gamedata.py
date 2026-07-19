@@ -249,9 +249,13 @@ def get_master_mobile_suits(session: Session) -> list[dict]:
         {
             "id": r.id,
             "name": r.name,
+            "name_ja": r.name_ja,
+            "model_number": r.model_number,
             "price": r.price,
             "faction": r.faction,
             "description": r.description,
+            "weapon_slot_count": r.weapon_slot_count,
+            "beam_generator_lv": r.beam_generator_lv,
             "specs": r.specs,
         }
         for r in records
@@ -290,9 +294,13 @@ def save_master_mobile_suits(session: Session, data: list[dict]) -> None:
         if item_id in existing:
             record = existing[item_id]
             record.name = item["name"]
+            record.name_ja = item.get("name_ja", "")
+            record.model_number = item.get("model_number", "")
             record.price = item["price"]
             record.faction = item.get("faction", "")
             record.description = item["description"]
+            record.weapon_slot_count = item.get("weapon_slot_count", 1)
+            record.beam_generator_lv = item.get("beam_generator_lv", 0)
             record.specs = specs
             record.updated_at = datetime.now(UTC)
             session.add(record)
@@ -300,9 +308,13 @@ def save_master_mobile_suits(session: Session, data: list[dict]) -> None:
             record = MasterMobileSuit(
                 id=item_id,
                 name=item["name"],
+                name_ja=item.get("name_ja", ""),
+                model_number=item.get("model_number", ""),
                 price=item["price"],
                 faction=item.get("faction", ""),
                 description=item["description"],
+                weapon_slot_count=item.get("weapon_slot_count", 1),
+                beam_generator_lv=item.get("beam_generator_lv", 0),
                 specs=specs,
             )
             session.add(record)
