@@ -318,6 +318,151 @@ def test_equip_weapon_invalid_slot_index(client, session):
         app.dependency_overrides.pop(get_current_user, None)
 
 
+def test_equip_weapon_exceeds_beam_generator_lv_fails(client, session):
+    """機体の beam_generator_lv 未満を要求するBEAM武器は装備できないことをテスト."""
+    from app.models.models import MasterMobileSuit
+
+    test_user_id = "test_user_equip_beam_lv_001"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        inventory={},
+    )
+    session.add(pilot)
+
+    # beam_generator_lv=0 のマスター機体を登録し、プレイヤー機体を name で紐づける
+    master = MasterMobileSuit(
+        id="test_low_gen_gm",
+        name="Test Low Generator GM",
+        price=1000,
+        faction="",
+        description="",
+        beam_generator_lv=0,
+        specs={"weapons": []},
+    )
+    session.add(master)
+
+    mobile_suit = MobileSuit(
+        user_id=test_user_id,
+        name="Test Low Generator GM",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],
+        side="PLAYER",
+    )
+    session.add(mobile_suit)
+
+    # required_beam_generator_lv=1 の BEAM 武器インスタンスを作成
+    player_weapon = PlayerWeapon(
+        user_id=test_user_id,
+        master_weapon_id="test_high_lv_beam",
+        base_snapshot={
+            "id": "test_high_lv_beam",
+            "name": "Test High Lv Beam Rifle",
+            "power": 100,
+            "range": 500,
+            "accuracy": 80,
+            "type": "BEAM",
+            "required_beam_generator_lv": 1,
+        },
+        custom_stats={},
+    )
+    session.add(player_weapon)
+    session.commit()
+    session.refresh(mobile_suit)
+    session.refresh(player_weapon)
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        response = client.put(
+            f"/api/mobile_suits/{mobile_suit.id}/equip",
+            json={"player_weapon_id": str(player_weapon.id), "slot_index": 0},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "beam_generator_lv" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_equip_weapon_within_beam_generator_lv_succeeds(client, session):
+    """機体の beam_generator_lv 以下のBEAM武器は装備できることをテスト."""
+    from app.models.models import MasterMobileSuit
+
+    test_user_id = "test_user_equip_beam_lv_002"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        inventory={},
+    )
+    session.add(pilot)
+
+    master = MasterMobileSuit(
+        id="test_high_gen_gm",
+        name="Test High Generator GM",
+        price=1000,
+        faction="",
+        description="",
+        beam_generator_lv=1,
+        specs={"weapons": []},
+    )
+    session.add(master)
+
+    mobile_suit = MobileSuit(
+        user_id=test_user_id,
+        name="Test High Generator GM",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],
+        side="PLAYER",
+    )
+    session.add(mobile_suit)
+
+    player_weapon = PlayerWeapon(
+        user_id=test_user_id,
+        master_weapon_id="test_high_lv_beam",
+        base_snapshot={
+            "id": "test_high_lv_beam",
+            "name": "Test High Lv Beam Rifle",
+            "power": 100,
+            "range": 500,
+            "accuracy": 80,
+            "type": "BEAM",
+            "required_beam_generator_lv": 1,
+        },
+        custom_stats={},
+    )
+    session.add(player_weapon)
+    session.commit()
+    session.refresh(mobile_suit)
+    session.refresh(player_weapon)
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        response = client.put(
+            f"/api/mobile_suits/{mobile_suit.id}/equip",
+            json={"player_weapon_id": str(player_weapon.id), "slot_index": 0},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["weapons"][0]["id"] == "test_high_lv_beam"
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
 def test_equip_weapon_sub_slot(client, session):
     """サブ武器スロット (slot_index=1) への装備が成功することをテスト."""
     # パイロットを作成

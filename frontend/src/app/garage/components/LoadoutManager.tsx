@@ -79,12 +79,6 @@ export default function LoadoutManager({
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-400">最適:</span>
-                      <span className="ml-1 font-bold text-green-400">
-                        {equippedWeapon.optimal_range || 300}m
-                      </span>
-                    </div>
-                    <div>
                       <span className="text-gray-400">弾数:</span>
                       <span className="ml-1 font-bold text-orange-400">
                         {equippedWeapon.max_ammo != null

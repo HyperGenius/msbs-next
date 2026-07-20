@@ -287,10 +287,15 @@ class MobileSuitResponse(SQLModel):
 
     # マスター機体由来の武器スロット数 (Issue #392)
     weapon_slot_count: int = 1
+    # マスター機体由来のビームジェネレータLv (Issue #392)
+    beam_generator_lv: int = 0
 
     @classmethod
     def from_mobile_suit(
-        cls, ms: "MobileSuit", weapon_slot_count: int | None = None
+        cls,
+        ms: "MobileSuit",
+        weapon_slot_count: int | None = None,
+        beam_generator_lv: int | None = None,
     ) -> "MobileSuitResponse":
         """MobileSuitインスタンスからMobileSuitResponseを生成する.
 
@@ -299,6 +304,8 @@ class MobileSuitResponse(SQLModel):
             weapon_slot_count: マスター機体から引いた武器スロット数。
                 呼び出し側で解決できない場合は None を渡す
                 （既存の装備数から後方互換的にフォールバックする）。
+            beam_generator_lv: マスター機体から引いたビームジェネレータLv。
+                呼び出し側で解決できない場合は None を渡す（0 にフォールバックする）。
         """
         from app.core.rank_utils import get_rank
 
@@ -306,6 +313,9 @@ class MobileSuitResponse(SQLModel):
             weapon_slot_count
             if weapon_slot_count is not None
             else max(len(ms.weapons), 1)
+        )
+        resolved_beam_generator_lv = (
+            beam_generator_lv if beam_generator_lv is not None else 0
         )
 
         weapons_response = []
@@ -358,6 +368,7 @@ class MobileSuitResponse(SQLModel):
             boost_max_duration=ms.boost_max_duration,
             boost_cooldown=ms.boost_cooldown,
             weapon_slot_count=resolved_weapon_slot_count,
+            beam_generator_lv=resolved_beam_generator_lv,
         )
 
 

@@ -393,8 +393,9 @@ admin-tool/src/
   `from_mobile_suit()` は第2引数 `weapon_slot_count: int | None` を受け取り、値が未指定の場合は
   `max(len(ms.weapons), 1)` にフォールバックする（後方互換）。
 - プレイヤー所持機体（`MobileSuit` テーブル）はマスター機体（`MasterMobileSuit`）と `name` で
-  紐づいているため、`MobileSuitService.get_weapon_slot_count_map()` で名前をキーに
-  `weapon_slot_count` を引き、`GET /api/mobile_suits` などのレスポンス生成時に渡す。
+  紐づいているため、`MobileSuitService.get_master_mobile_suit_map()` で名前をキーに
+  マスターレコードを引き、`weapon_slot_count` / `beam_generator_lv` を
+  `GET /api/mobile_suits` などのレスポンス生成時に渡す。
 - `WeaponService.equip_weapon()` のスロット範囲検証も、戦闘シミュレーション用の
   固定値 `MAX_WEAPON_SLOTS`（=2、`app/engine/constants.py`）ではなく、対象機体の実際の
   `weapon_slot_count` を用いるように変更（マスターと紐づかない機体は `MAX_WEAPON_SLOTS` に
@@ -413,6 +414,32 @@ admin-tool/src/
 > バトルシミュレーション側（`useBattleSnapshot.ts` の武器選択ロジック）やショップ一覧・詳細、
 > `BattleOverlay.tsx` の弾数表示など、3枠目以降の武器を実戦闘に反映させる対応は別Issueとする
 > （本Issueのスコープはガレージの換装UIに限定）。
+
+## 換装時のビームジェネレータLv制約（Issue #392）
+
+管理画面の新規追加/更新（`_validate_weapon_constraints()`）では従来から
+「BEAM武器の `required_beam_generator_lv` が機体の `beam_generator_lv` を超える場合は 422」
+という制約があったが、プレイヤーがガレージで武器を換装するAPI（`PUT /api/mobile_suits/{id}/equip`）
+にはこの制約が入っていなかった。ビームジェネレータLv不足の機体に高Lv要求のBEAM武器を
+装備できてしまう不整合を防ぐため、換装時にも同様の検証を追加した。
+
+### Backend
+
+- `WeaponService.equip_weapon()` からスロット範囲検証・ビームジェネレータLv検証を
+  `WeaponService._validate_equip_constraints()` に切り出し、対象機体の `beam_generator_lv`
+  （`MobileSuitService.get_master_mobile_suit_map()` で name から解決）と
+  装備しようとしている `PlayerWeapon.base_snapshot` の `type` / `required_beam_generator_lv`
+  を比較し、不足時は `400` を返す。
+- マスターと紐づかない機体は `beam_generator_lv=0` にフォールバックする（後方互換）。
+
+### Frontend
+
+- `MobileSuitResponse` に `beam_generator_lv: int` を追加し、`types/mobileSuit.ts` の
+  `MobileSuit` にも `beam_generator_lv?: number` を追加。
+- `types/weapon.ts` の `Weapon` に `required_beam_generator_lv?: number` を追加。
+- `WeaponChangeModal.tsx` で、`weapon.type === "BEAM"` かつ
+  `required_beam_generator_lv > selectedMs.beam_generator_lv` の武器は選択不可
+  （在庫切れと同様にグレーアウトし、必要Lvを表示）にした。
 
 ---
 

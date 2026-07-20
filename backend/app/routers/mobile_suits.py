@@ -8,6 +8,8 @@ from sqlmodel import Session
 from app.core.auth import get_current_user
 from app.db import get_session
 from app.models.models import (
+    MasterMobileSuit,
+    MobileSuit,
     MobileSuitResponse,
     MobileSuitUpdate,
 )
@@ -24,6 +26,18 @@ class EquipWeaponRequest(BaseModel):
     slot_index: int = 0
 
 
+def _to_response(
+    ms: MobileSuit, master_map: dict[str, MasterMobileSuit]
+) -> MobileSuitResponse:
+    """マスター機体マップから weapon_slot_count / beam_generator_lv を解決してレスポンスに変換する."""
+    master = master_map.get(ms.name)
+    return MobileSuitResponse.from_mobile_suit(
+        ms,
+        weapon_slot_count=master.weapon_slot_count if master else None,
+        beam_generator_lv=master.beam_generator_lv if master else None,
+    )
+
+
 @router.get("", response_model=list[MobileSuitResponse])
 def get_mobile_suits(
     session: Session = Depends(get_session),
@@ -31,13 +45,10 @@ def get_mobile_suits(
 ) -> list[MobileSuitResponse]:
     """機体一覧取得."""
     suits = MobileSuitService.get_all_mobile_suits(session, user_id)
-    slot_count_map = MobileSuitService.get_weapon_slot_count_map(
+    master_map = MobileSuitService.get_master_mobile_suit_map(
         session, [ms.name for ms in suits]
     )
-    return [
-        MobileSuitResponse.from_mobile_suit(ms, slot_count_map.get(ms.name))
-        for ms in suits
-    ]
+    return [_to_response(ms, master_map) for ms in suits]
 
 
 @router.put("/{ms_id}", response_model=MobileSuitResponse)
@@ -51,12 +62,10 @@ async def update_mobile_suit(
     updated_ms = MobileSuitService.update_mobile_suit(session, ms_id, ms_data)
     if not updated_ms:
         raise HTTPException(status_code=404, detail="Mobile Suit not found")
-    slot_count_map = MobileSuitService.get_weapon_slot_count_map(
+    master_map = MobileSuitService.get_master_mobile_suit_map(
         session, [updated_ms.name]
     )
-    return MobileSuitResponse.from_mobile_suit(
-        updated_ms, slot_count_map.get(updated_ms.name)
-    )
+    return _to_response(updated_ms, master_map)
 
 
 @router.put("/{ms_id}/equip", response_model=MobileSuitResponse)
@@ -93,9 +102,7 @@ async def equip_weapon(
         equip_request.slot_index,
     )
 
-    slot_count_map = MobileSuitService.get_weapon_slot_count_map(
+    master_map = MobileSuitService.get_master_mobile_suit_map(
         session, [mobile_suit.name]
     )
-    return MobileSuitResponse.from_mobile_suit(
-        mobile_suit, slot_count_map.get(mobile_suit.name)
-    )
+    return _to_response(mobile_suit, master_map)

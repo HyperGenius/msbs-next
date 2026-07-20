@@ -85,6 +85,49 @@ class WeaponService:
         return player_weapon
 
     @staticmethod
+    def _validate_equip_constraints(
+        session: Session,
+        mobile_suit: MobileSuit,
+        player_weapon: PlayerWeapon,
+        slot_index: int,
+    ) -> None:
+        """機体固有のスロット数・ビームジェネレータLvの制約を検証する.
+
+        マスター機体（weapon_slot_count / beam_generator_lv）を name で引く。
+        マスターと紐づかない機体は従来通りの既定値にフォールバックする。
+
+        Raises:
+            HTTPException: スロット範囲外、またはビームジェネレータLv不足の場合
+        """
+        from app.services.mobile_suit_service import MobileSuitService
+
+        master = MobileSuitService.get_master_mobile_suit_map(
+            session, [mobile_suit.name]
+        ).get(mobile_suit.name)
+        weapon_slot_count = master.weapon_slot_count if master else MAX_WEAPON_SLOTS
+        beam_generator_lv = master.beam_generator_lv if master else 0
+
+        if slot_index >= weapon_slot_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"スロットインデックスが範囲外です (有効: 0〜{weapon_slot_count - 1})",
+            )
+
+        weapon_type = player_weapon.base_snapshot.get("type", "PHYSICAL")
+        required_beam_generator_lv = player_weapon.base_snapshot.get(
+            "required_beam_generator_lv", 0
+        )
+        if weapon_type == "BEAM" and required_beam_generator_lv > beam_generator_lv:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"この武器の装備には beam_generator_lv "
+                    f"{required_beam_generator_lv} が必要です"
+                    f"（機体の beam_generator_lv は {beam_generator_lv}）"
+                ),
+            )
+
+    @staticmethod
     def equip_weapon(
         session: Session,
         user_id: str,
@@ -155,18 +198,9 @@ class WeaponService:
                 status_code=403, detail="この機体を編集する権限がありません"
             )
 
-        # 機体固有の武器スロット数 (マスター機体の weapon_slot_count) で上限を検証する。
-        # マスターと紐づかない機体は従来通り MAX_WEAPON_SLOTS にフォールバックする。
-        from app.services.mobile_suit_service import MobileSuitService
-
-        weapon_slot_count = MobileSuitService.get_weapon_slot_count_map(
-            session, [mobile_suit.name]
-        ).get(mobile_suit.name, MAX_WEAPON_SLOTS)
-        if slot_index >= weapon_slot_count:
-            raise HTTPException(
-                status_code=400,
-                detail=f"スロットインデックスが範囲外です (有効: 0〜{weapon_slot_count - 1})",
-            )
+        WeaponService._validate_equip_constraints(
+            session, mobile_suit, player_weapon, slot_index
+        )
 
         # PlayerWeapon を更新
         player_weapon.equipped_ms_id = ms_id
