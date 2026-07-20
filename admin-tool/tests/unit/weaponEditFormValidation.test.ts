@@ -19,6 +19,7 @@ const validWeaponSpec = {
   en_cost: 0,
   cooldown_sec: 1.5,
   fire_arc_deg: 30.0,
+  required_beam_generator_lv: 2,
 };
 
 const validMasterWeapon = {
@@ -187,6 +188,31 @@ describe("masterWeaponSchema — weapon スペック", () => {
 
   it("weapon.fire_arc_deg が 360 は許可される（全方位）", () => {
     const result = masterWeaponSchema.safeParse(withWeapon({ fire_arc_deg: 360 }));
+    expect(result.success).toBe(true);
+  });
+
+  it("weapon.required_beam_generator_lv が 0 は許可される", () => {
+    const result = masterWeaponSchema.safeParse(withWeapon({ required_beam_generator_lv: 0 }));
+    expect(result.success).toBe(true);
+  });
+
+  it("weapon.required_beam_generator_lv が正整数は許可される", () => {
+    const result = masterWeaponSchema.safeParse(withWeapon({ required_beam_generator_lv: 3 }));
+    expect(result.success).toBe(true);
+  });
+
+  it("weapon.required_beam_generator_lv が負の値の場合はエラー", () => {
+    const result = masterWeaponSchema.safeParse(withWeapon({ required_beam_generator_lv: -1 }));
+    expect(result.success).toBe(false);
+    expect(
+      result.error?.issues.some((i) => i.path.includes("required_beam_generator_lv"))
+    ).toBe(true);
+  });
+
+  it("weapon.required_beam_generator_lv が未指定でも許可される（省略可）", () => {
+    const rest: Partial<typeof validWeaponSpec> = { ...validWeaponSpec };
+    delete rest.required_beam_generator_lv;
+    const result = masterWeaponSchema.safeParse({ ...validMasterWeapon, weapon: rest });
     expect(result.success).toBe(true);
   });
 });

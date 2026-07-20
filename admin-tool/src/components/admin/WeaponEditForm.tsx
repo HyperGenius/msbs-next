@@ -32,6 +32,7 @@ export const masterWeaponSchema = z.object({
     en_cost: z.number({ message: "Must be a number" }).int().nonnegative().optional(),
     cooldown_sec: z.number({ message: "Must be a number" }).nonnegative().optional(),
     fire_arc_deg: z.number({ message: "Must be a number" }).nonnegative().optional(),
+    required_beam_generator_lv: z.number({ message: "Must be a number" }).int().nonnegative().optional(),
   }),
 });
 
@@ -69,6 +70,7 @@ const defaultValues: WeaponFormValues = {
     en_cost: 0,
     cooldown_sec: 1.0,
     fire_arc_deg: 30.0,
+    required_beam_generator_lv: 0,
   },
 };
 
@@ -91,6 +93,7 @@ function toFormValues(w: MasterWeapon): WeaponFormValues {
       en_cost: w.weapon.en_cost ?? 0,
       cooldown_sec: w.weapon.cooldown_sec ?? 1.0,
       fire_arc_deg: w.weapon.fire_arc_deg ?? 30.0,
+      required_beam_generator_lv: w.weapon.required_beam_generator_lv ?? 0,
     },
   };
 }
@@ -131,6 +134,8 @@ export default function WeaponEditForm({
     handleSubmit,
     control,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<WeaponFormValues>({
     resolver: zodResolver(masterWeaponSchema),
@@ -140,6 +145,15 @@ export default function WeaponEditForm({
   useEffect(() => {
     reset(initialData ? toFormValues(initialData) : defaultValues);
   }, [initialData, reset]);
+
+  const weaponType = watch("weapon.type");
+  const isPhysical = weaponType === "PHYSICAL";
+
+  useEffect(() => {
+    if (isPhysical) {
+      setValue("weapon.required_beam_generator_lv", 0, { shouldValidate: true });
+    }
+  }, [isPhysical, setValue]);
 
   const sectionTitle =
     "text-xs font-bold text-[#ffb000] uppercase tracking-wider mb-2 border-b border-[#ffb000]/20 pb-1";
@@ -303,6 +317,19 @@ export default function WeaponEditForm({
               {...register("weapon.fire_arc_deg", { valueAsNumber: true })}
             />
             <FieldError msg={errors.weapon?.fire_arc_deg?.message} />
+          </div>
+          <div>
+            <Label>要求ビームジェネレータLv</Label>
+            <Input
+              type="number"
+              min={0}
+              disabled={isPhysical}
+              {...register("weapon.required_beam_generator_lv", { valueAsNumber: true })}
+            />
+            {isPhysical && (
+              <p className="mt-0.5 text-xs text-[#00ff41]/40">PHYSICAL属性では無効です</p>
+            )}
+            <FieldError msg={errors.weapon?.required_beam_generator_lv?.message} />
           </div>
         </div>
       </div>

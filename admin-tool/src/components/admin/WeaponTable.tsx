@@ -105,6 +105,7 @@ export default function WeaponTable({
               <th className={thClass} onClick={() => handleSort("accuracy")}>
                 命中 <SortIcon k="accuracy" />
               </th>
+              <th className={`${thClass} cursor-default`}>要求Lv</th>
               <th className={`${thClass} cursor-default`}>操作</th>
             </tr>
           </thead>
@@ -147,6 +148,15 @@ export default function WeaponTable({
                   <td className={tdClass}>{w.weapon.power}</td>
                   <td className={tdClass}>{w.weapon.range}</td>
                   <td className={tdClass}>{w.weapon.accuracy}%</td>
+                  <td className={tdClass}>
+                    {w.weapon.type === "BEAM" ? (
+                      <span className="text-blue-300 text-xs">
+                        Lv{w.weapon.required_beam_generator_lv ?? 0}
+                      </span>
+                    ) : (
+                      <span className="text-[#00ff41]/30 text-xs">—</span>
+                    )}
+                  </td>
                   <td className={tdClass} onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => onDelete(w)}
@@ -160,7 +170,7 @@ export default function WeaponTable({
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-[#00ff41]/40 py-8 text-sm">
+                <td colSpan={9} className="text-center text-[#00ff41]/40 py-8 text-sm">
                   武器データが見つかりません
                 </td>
               </tr>

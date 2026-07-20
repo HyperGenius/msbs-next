@@ -151,8 +151,8 @@ cd admin-tool && npm run dev   # http://localhost:3100
 
 | 機能 | 説明 |
 |------|------|
-| **武器一覧テーブル** | 名前・価格・武器種別（BEAM/PHYSICAL）・近接フラグ・威力・射程・命中率を表示。ソート・フィルタ対応 |
-| **詳細編集フォーム** | 全パラメータ（`power`, `range`, `accuracy`, `type`, `weapon_type`, `optimal_range`, `decay_rate`, `is_melee`, `max_ammo`, `en_cost`, `cooldown_sec`, `fire_arc_deg`）を編集 |
+| **武器一覧テーブル** | 名前・価格・武器種別（BEAM/PHYSICAL）・近接フラグ・威力・射程・命中率・要求ビームジェネレータLvを表示。ソート・フィルタ対応 |
+| **詳細編集フォーム** | 全パラメータ（`power`, `range`, `accuracy`, `type`, `weapon_type`, `optimal_range`, `decay_rate`, `is_melee`, `max_ammo`, `en_cost`, `cooldown_sec`, `fire_arc_deg`, `required_beam_generator_lv`）を編集。`required_beam_generator_lv` は `type` が `BEAM` の武器のみ意味を持つため、`PHYSICAL` 選択時は入力欄を無効化し値を0にリセットする（Issue #399） |
 | **新規追加フォーム** | 新規武器の追加。`id`/`name` は基本情報欄のみで入力し、`weapon`(スペック)側には持たせない（Issue #400） |
 | **Clone & Edit** | 選択中の武器をベースに新しい ID でコピーを作成 |
 | **バランス比較チャート** | 選択中の武器と全武器平均を **レーダーチャート（威力・射程・命中率・最適射程・減衰率の5軸）** で表示。全武器最大値で正規化し、減衰率は反転表示 |
@@ -222,5 +222,5 @@ cd admin-tool && npx vitest run tests/unit/weaponEditFormValidation.test.ts
 
 テスト項目:
 - エントリー ID・名前・価格のバリデーション
-- weapon スペック（power・range・accuracy・type・weapon_type・is_melee など）のバリデーション
+- weapon スペック（power・range・accuracy・type・weapon_type・is_melee・required_beam_generator_lv など）のバリデーション
 
