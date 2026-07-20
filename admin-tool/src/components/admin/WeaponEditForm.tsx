@@ -151,7 +151,7 @@ export default function WeaponEditForm({
 
   useEffect(() => {
     if (isPhysical) {
-      setValue("weapon.required_beam_generator_lv", 0);
+      setValue("weapon.required_beam_generator_lv", 0, { shouldValidate: true });
     }
   }, [isPhysical, setValue]);
 
