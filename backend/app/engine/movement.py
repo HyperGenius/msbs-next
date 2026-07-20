@@ -28,7 +28,7 @@ from app.engine.constants import (
     STRAFE_MIN_RANGE_RATIO,
     TERRAIN_ADAPTABILITY_MODIFIERS,
 )
-from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3
+from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
 
 
 class MovementMixin:
@@ -182,10 +182,45 @@ class MovementMixin:
             return np.zeros(3)
         return FLANKING_ATTRACTION_WEIGHT * vec / dist
 
+    def _get_reference_weapon(
+        self, unit: MobileSuit, target: MobileSuit | None
+    ) -> Weapon | None:
+        """移動AIが基準とする武器を決定する (Issue #393).
+
+        `_select_weapon_fuzzy` が実際に選択する武器を移動判断の基準とすることで、
+        複数武器編成時の先頭武器決め打ちを解消する。ターゲットがいない場合、
+        または推論結果が得られない場合は使用可能な武器のうち最大射程のものを
+        基準とし、使用可能な武器が一つもない場合のみ `get_active_weapon()`
+        （先頭武器固定）にフォールバックする。
+
+        Args:
+            unit: 移動するユニット
+            target: 攻撃対象ユニット（None の場合はファジィ推論をスキップ）
+
+        Returns:
+            基準武器。武器が一つも装備されていない場合は None。
+        """
+        if target is not None:
+            selected = self._select_weapon_fuzzy(unit, target)  # type: ignore[attr-defined]
+            if selected is not None:
+                return selected
+
+        usable_weapons = [
+            w
+            for w in unit.weapons
+            if self._is_weapon_usable(unit, w)  # type: ignore[attr-defined]
+        ]
+        if usable_weapons:
+            return max(usable_weapons, key=lambda w: w.range)
+
+        # 使用可能な武器が無い場合（全弾切れ等）は従来通り先頭武器にフォールバック
+        return unit.get_active_weapon()
+
     def _strafe_attraction(
         self,
         unit: MobileSuit,
         target: MobileSuit,
+        weapon: Weapon | None,
     ) -> np.ndarray:
         """攻撃中の軌道旋回（ストレイフ）引力ベクトルを計算する (Issue #366).
 
@@ -196,12 +231,12 @@ class MovementMixin:
         Args:
             unit: 移動するユニット
             target: 攻撃対象ユニット
+            weapon: 移動判断の基準武器 (Issue #393: `_get_reference_weapon` の結果)
 
         Returns:
             3D 接線方向引力ベクトル（未正規化）。未発動時はゼロベクトル。
         """
         # 格闘武器は体当たりのためストレイフ不要
-        weapon = unit.get_active_weapon()
         if weapon is None or getattr(weapon, "is_melee", False):
             return np.zeros(3)
 
@@ -296,8 +331,9 @@ class MovementMixin:
             total_force += self._hit_and_away_target_repulsion(pos_unit, target)
 
         # 3. 高脅威敵（自機射程外）への斥力
-        weapon = unit.get_active_weapon()
-        weapon_range = float(weapon.range) if weapon else 0.0
+        # 移動判断の基準武器は _select_weapon_fuzzy の選択結果に揃える (Issue #393)
+        reference_weapon = self._get_reference_weapon(unit, target)
+        weapon_range = float(reference_weapon.range) if reference_weapon else 0.0
         total_force += self._threat_enemy_repulsion(unit, pos_unit, weapon_range)
 
         # 4. 味方ユニットへの弱い斥力 (ALLY_REPULSION_RADIUS 以内)
@@ -323,7 +359,7 @@ class MovementMixin:
             if current_action in ("ATTACK", "MOVE"):
                 total_force += self._flanking_attraction(unit, target, dt)
             if current_action == "ATTACK":
-                total_force += self._strafe_attraction(unit, target)
+                total_force += self._strafe_attraction(unit, target, reference_weapon)
 
         # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
         total_force[1] = 0.0  # Y 成分を XZ 平面に固定

@@ -669,7 +669,7 @@ def test_strafe_attraction_returns_tangential_vector() -> None:
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
 
-    result = sim._strafe_attraction(player, enemy)
+    result = sim._strafe_attraction(player, enemy, player.get_active_weapon())
 
     # ゼロベクトルではないこと（ストレイフが発動）
     assert float(np.linalg.norm(result)) > 1e-6, "ストレイフ引力が生成されること"
@@ -713,7 +713,7 @@ def test_strafe_attraction_zero_for_melee_weapon() -> None:
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
 
-    result = sim._strafe_attraction(player, enemy)
+    result = sim._strafe_attraction(player, enemy, player.get_active_weapon())
     assert np.allclose(result, np.zeros(3)), "格闘武器ではストレイフ引力がゼロ"
 
 
@@ -726,7 +726,7 @@ def test_strafe_attraction_zero_outside_effective_range() -> None:
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
 
-    result = sim._strafe_attraction(player, enemy)
+    result = sim._strafe_attraction(player, enemy, player.get_active_weapon())
     assert np.allclose(result, np.zeros(3)), "射程外ではストレイフ引力がゼロ"
 
 
@@ -738,8 +738,9 @@ def test_strafe_attraction_consistent_direction() -> None:
     enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=0))
     sim = BattleSimulator(player, [enemy])
 
-    result1 = sim._strafe_attraction(player, enemy)
-    result2 = sim._strafe_attraction(player, enemy)
+    weapon = player.get_active_weapon()
+    result1 = sim._strafe_attraction(player, enemy, weapon)
+    result2 = sim._strafe_attraction(player, enemy, weapon)
 
     # 同じ呼び出しで同じ方向ベクトルが返ること
     assert np.allclose(result1, result2), "同一ユニットの旋回方向は一定"
