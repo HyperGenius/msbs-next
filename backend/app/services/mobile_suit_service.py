@@ -4,6 +4,7 @@ import re
 from sqlmodel import Session, select
 
 from app.models.models import (
+    MasterMobileSuit,
     MasterMobileSuitCreate,
     MasterMobileSuitUpdate,
     MobileSuit,
@@ -24,6 +25,21 @@ class MobileSuitService:
         )
         results = session.exec(statement).all()
         return list(results)
+
+    @staticmethod
+    def get_weapon_slot_count_map(session: Session, names: list[str]) -> dict[str, int]:
+        """機体名からマスター機体の weapon_slot_count を引くためのマップを返す.
+
+        プレイヤー所持機体 (MobileSuit) はマスター機体 (MasterMobileSuit) と
+        name で紐づいているため、名前をキーに検索する。
+        """
+        if not names:
+            return {}
+        statement = select(MasterMobileSuit).where(
+            MasterMobileSuit.name.in_(set(names))  # type: ignore[attr-defined]
+        )
+        records = session.exec(statement).all()
+        return {r.name: r.weapon_slot_count for r in records}
 
     @staticmethod
     def update_mobile_suit(

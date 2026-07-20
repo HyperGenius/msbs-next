@@ -99,7 +99,7 @@ class WeaponService:
             user_id: 操作ユーザーID
             player_weapon_id: 装備する PlayerWeapon の UUID
             ms_id: 装備先機体の UUID
-            slot_index: 装備スロット（0=メイン, 1=サブ）
+            slot_index: 装備スロット（機体の weapon_slot_count に応じて可変）
 
         Returns:
             MobileSuit: 更新された機体
@@ -107,7 +107,7 @@ class WeaponService:
         Raises:
             HTTPException: 権限エラー・未装備チェック・スロット検証などのエラー
         """
-        if slot_index < 0 or slot_index >= MAX_WEAPON_SLOTS:
+        if slot_index < 0:
             raise HTTPException(
                 status_code=400,
                 detail="スロットインデックスが範囲外です (有効: 0=メイン武器, 1=サブ武器)",
@@ -153,6 +153,19 @@ class WeaponService:
         if mobile_suit.user_id != user_id:
             raise HTTPException(
                 status_code=403, detail="この機体を編集する権限がありません"
+            )
+
+        # 機体固有の武器スロット数 (マスター機体の weapon_slot_count) で上限を検証する。
+        # マスターと紐づかない機体は従来通り MAX_WEAPON_SLOTS にフォールバックする。
+        from app.services.mobile_suit_service import MobileSuitService
+
+        weapon_slot_count = MobileSuitService.get_weapon_slot_count_map(
+            session, [mobile_suit.name]
+        ).get(mobile_suit.name, MAX_WEAPON_SLOTS)
+        if slot_index >= weapon_slot_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"スロットインデックスが範囲外です (有効: 0〜{weapon_slot_count - 1})",
             )
 
         # PlayerWeapon を更新

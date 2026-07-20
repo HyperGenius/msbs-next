@@ -285,10 +285,28 @@ class MobileSuitResponse(SQLModel):
     armor_rank: str = "C"
     mobility_rank: str = "C"
 
+    # マスター機体由来の武器スロット数 (Issue #392)
+    weapon_slot_count: int = 1
+
     @classmethod
-    def from_mobile_suit(cls, ms: "MobileSuit") -> "MobileSuitResponse":
-        """MobileSuitインスタンスからMobileSuitResponseを生成する."""
+    def from_mobile_suit(
+        cls, ms: "MobileSuit", weapon_slot_count: int | None = None
+    ) -> "MobileSuitResponse":
+        """MobileSuitインスタンスからMobileSuitResponseを生成する.
+
+        Args:
+            ms: 変換元の機体データ
+            weapon_slot_count: マスター機体から引いた武器スロット数。
+                呼び出し側で解決できない場合は None を渡す
+                （既存の装備数から後方互換的にフォールバックする）。
+        """
         from app.core.rank_utils import get_rank
+
+        resolved_weapon_slot_count = (
+            weapon_slot_count
+            if weapon_slot_count is not None
+            else max(len(ms.weapons), 1)
+        )
 
         weapons_response = []
         for w in ms.weapons:
@@ -339,6 +357,7 @@ class MobileSuitResponse(SQLModel):
             boost_en_cost=ms.boost_en_cost,
             boost_max_duration=ms.boost_max_duration,
             boost_cooldown=ms.boost_cooldown,
+            weapon_slot_count=resolved_weapon_slot_count,
         )
 
 

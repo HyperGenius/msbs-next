@@ -109,10 +109,7 @@ export default function WeaponChangeModal({
             武器変更
           </SciFiHeading>
           <p className="mb-1 text-xs text-green-600">
-            スロット:{" "}
-            {selectedWeaponSlot === 0
-              ? "【MAIN】メイン武器"
-              : "【SUB】サブ武器"}
+            スロット: 【スロット{selectedWeaponSlot + 1}】
           </p>
           <p className="mb-4 text-sm text-green-400">
             武器を選択してプレビューを確認後、装備するボタンを押してください

@@ -38,6 +38,8 @@ export interface MobileSuit {
     armor_rank?: string;
     /** 機動性ランク (S〜E) - APIから付与される */
     mobility_rank?: string;
+    /** 武器スロット数 (マスター機体由来。未取得時は既存の2枠機体として扱う) */
+    weapon_slot_count?: number;
 }
 
 /** ガレージ機能で機体を更新する際のリクエスト型（部分更新可） */
