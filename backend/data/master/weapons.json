@@ -5,8 +5,6 @@
     "price": 200,
     "description": "ザク用マシンガン。連射性能に優れた実弾兵器。",
     "weapon": {
-      "id": "zaku_mg",
-      "name": "Zaku Machine Gun",
       "power": 100,
       "range": 400,
       "accuracy": 60,
@@ -22,8 +20,6 @@
     "price": 400,
     "description": "高火力バズーカ。装甲貫通力に優れる。",
     "weapon": {
-      "id": "giant_bazooka",
-      "name": "Giant Bazooka",
       "power": 180,
       "range": 450,
       "accuracy": 55,
@@ -39,8 +35,6 @@
     "price": 350,
     "description": "ヒートロッド。近距離戦闘に特化した武器。",
     "weapon": {
-      "id": "heat_rod",
-      "name": "Heat Rod",
       "power": 140,
       "range": 300,
       "accuracy": 70,
@@ -56,8 +50,6 @@
     "price": 800,
     "description": "ガンダム用ビームライフル。高威力・高精度のビーム兵器。",
     "weapon": {
-      "id": "beam_rifle",
-      "name": "Beam Rifle",
       "power": 300,
       "range": 600,
       "accuracy": 80,
@@ -73,8 +65,6 @@
     "price": 700,
     "description": "ゲルググ用ビームライフル。バランスの取れたビーム兵器。",
     "weapon": {
-      "id": "beam_rifle_gelgoog",
-      "name": "Beam Rifle",
       "power": 280,
       "range": 580,
       "accuracy": 75,
@@ -90,8 +80,6 @@
     "price": 600,
     "description": "超高火力バズーカ。単発威力に優れる重武装。",
     "weapon": {
-      "id": "hyper_bazooka",
-      "name": "Hyper Bazooka",
       "power": 250,
       "range": 500,
       "accuracy": 50,
@@ -109,8 +97,6 @@
     "price": 450,
     "description": "ビームサーベル。近接戦闘用の高出力ビーム兵器。",
     "weapon": {
-      "id": "beam_saber",
-      "name": "Beam Saber",
       "power": 200,
       "range": 150,
       "accuracy": 85,

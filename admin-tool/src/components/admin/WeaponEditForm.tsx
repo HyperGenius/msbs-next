@@ -20,11 +20,6 @@ export const masterWeaponSchema = z.object({
   price: z.number({ message: "Must be a number" }).int().nonnegative("Must be ≥ 0"),
   description: z.string(),
   weapon: z.object({
-    id: z
-      .string()
-      .min(1, "Weapon ID is required")
-      .regex(/^[a-z0-9_]+$/, "Weapon ID must be snake_case alphanumeric"),
-    name: z.string().min(1, "Weapon name is required"),
     power: z.number({ message: "Must be a number" }).int().positive("Must be > 0"),
     range: z.number({ message: "Must be a number" }).positive("Must be > 0"),
     accuracy: z.number({ message: "Must be a number" }).min(0).max(100, "Must be 0-100"),
@@ -62,8 +57,6 @@ const defaultValues: WeaponFormValues = {
   price: 300,
   description: "",
   weapon: {
-    id: "",
-    name: "",
     power: 150,
     range: 400,
     accuracy: 70,
@@ -86,8 +79,6 @@ function toFormValues(w: MasterWeapon): WeaponFormValues {
     price: w.price,
     description: w.description,
     weapon: {
-      id: w.weapon.id,
-      name: w.weapon.name,
       power: w.weapon.power,
       range: w.weapon.range,
       accuracy: w.weapon.accuracy,
@@ -98,8 +89,8 @@ function toFormValues(w: MasterWeapon): WeaponFormValues {
       is_melee: w.weapon.is_melee ?? false,
       max_ammo: w.weapon.max_ammo ?? null,
       en_cost: w.weapon.en_cost ?? 0,
-      cooldown_sec: (w.weapon as { cooldown_sec?: number }).cooldown_sec ?? 1.0,
-      fire_arc_deg: (w.weapon as { fire_arc_deg?: number }).fire_arc_deg ?? 30.0,
+      cooldown_sec: w.weapon.cooldown_sec ?? 1.0,
+      fire_arc_deg: w.weapon.fire_arc_deg ?? 30.0,
     },
   };
 }
@@ -140,8 +131,6 @@ export default function WeaponEditForm({
     handleSubmit,
     control,
     reset,
-    watch,
-    setValue,
     formState: { errors },
   } = useForm<WeaponFormValues>({
     resolver: zodResolver(masterWeaponSchema),
@@ -151,14 +140,6 @@ export default function WeaponEditForm({
   useEffect(() => {
     reset(initialData ? toFormValues(initialData) : defaultValues);
   }, [initialData, reset]);
-
-  // エントリー ID と武器 ID を同期する（新規作成時のみ）
-  const watchId = watch("id");
-  useEffect(() => {
-    if (!lockId) {
-      setValue("weapon.id", watchId);
-    }
-  }, [watchId, lockId, setValue]);
 
   const sectionTitle =
     "text-xs font-bold text-[#ffb000] uppercase tracking-wider mb-2 border-b border-[#ffb000]/20 pb-1";
@@ -206,16 +187,6 @@ export default function WeaponEditForm({
       <div>
         <p className={sectionTitle}>武器スペック</p>
         <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label>武器 ID</Label>
-            <Input {...register("weapon.id")} disabled placeholder="beam_rifle" />
-            <FieldError msg={errors.weapon?.id?.message} />
-          </div>
-          <div className="col-span-2">
-            <Label>武器名</Label>
-            <Input {...register("weapon.name")} placeholder="Beam Rifle" />
-            <FieldError msg={errors.weapon?.name?.message} />
-          </div>
           <div>
             <Label>威力</Label>
             <Input type="number" {...register("weapon.power", { valueAsNumber: true })} />

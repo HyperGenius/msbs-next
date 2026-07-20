@@ -7,8 +7,6 @@ import { masterWeaponSchema } from "@/components/admin/WeaponEditForm";
 // ============================================================
 
 const validWeaponSpec = {
-  id: "beam_rifle",
-  name: "Beam Rifle",
   power: 300,
   range: 600,
   accuracy: 80,
@@ -90,21 +88,16 @@ describe("masterWeaponSchema — weapon スペック", () => {
     return { ...validMasterWeapon, weapon: { ...validWeaponSpec, ...patch } };
   }
 
-  it("weapon.id が空の場合はエラー", () => {
-    const result = masterWeaponSchema.safeParse(withWeapon({ id: "" }));
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.some((i) => i.path.includes("id"))).toBe(true);
-  });
-
-  it("weapon.id がスネークケース以外の場合はエラー", () => {
-    const result = masterWeaponSchema.safeParse(withWeapon({ id: "Beam-Rifle" }));
-    expect(result.success).toBe(false);
-  });
-
-  it("weapon.name が空の場合はエラー", () => {
-    const result = masterWeaponSchema.safeParse(withWeapon({ name: "" }));
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.some((i) => i.path.includes("name"))).toBe(true);
+  it("weapon に id/name を含めても出力からは除去される（Issue #400: id/nameはテーブルカラムが正）", () => {
+    const result = masterWeaponSchema.safeParse({
+      ...validMasterWeapon,
+      weapon: { ...validWeaponSpec, id: "other_id", name: "Other Name" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.weapon).not.toHaveProperty("id");
+      expect(result.data.weapon).not.toHaveProperty("name");
+    }
   });
 
   it("weapon.power が 0 以下の場合はエラー", () => {

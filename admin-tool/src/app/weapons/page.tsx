@@ -92,7 +92,6 @@ export default function AdminWeaponsPage() {
     await createWeapon({
       ...cloneSource,
       id: newId,
-      weapon: { ...cloneSource.weapon, id: newId },
     });
     showToast(`${cloneSource.name} を ID "${newId}" でクローンしました`, "success");
     setCloneSource(null);

@@ -202,7 +202,13 @@ def _load_weapons_from_db() -> list[dict]:
 
     listings = []
     for record in records:
-        weapon = Weapon(**record.weapon)
+        # weapon(JSON)列は id/name を持たない前提（テーブルカラムが正。Issue #400）で
+        # record.id/record.name から合成する。旧データが id/name を残している場合に
+        # 二重指定エラーにならないよう、念のため取り除いてから展開する。
+        weapon_spec = {
+            k: v for k, v in record.weapon.items() if k not in ("id", "name")
+        }
+        weapon = Weapon(id=record.id, name=record.name, **weapon_spec)
         listings.append(
             {
                 "id": record.id,
@@ -376,6 +382,8 @@ def save_master_weapons(session: Session, data: list[dict]) -> None:
         weapon_data = item.get("weapon", {})
         if hasattr(weapon_data, "model_dump"):
             weapon_data = weapon_data.model_dump()
+        # id/name は master_weapons テーブルのカラムを正とするため除去する（Issue #400）
+        weapon_data = {k: v for k, v in weapon_data.items() if k not in ("id", "name")}
 
         if item_id in existing:
             record = existing[item_id]
