@@ -417,9 +417,9 @@ admin-tool/src/
 
 ## 換装時のビームジェネレータLv制約（Issue #392）
 
-管理画面の新規追加/更新（`_validate_weapon_constraints()`）では従来から
-「BEAM武器の `required_beam_generator_lv` が機体の `beam_generator_lv` を超える場合は 422」
-という制約があったが、プレイヤーがガレージで武器を換装するAPI（`PUT /api/mobile_suits/{id}/equip`）
+管理画面の新規追加/更新（`_validate_weapon_constraints()`）では従来から、BEAM武器の
+`required_beam_generator_lv` が機体の `beam_generator_lv` を超える場合に `422` を返す
+制約があったが、プレイヤーがガレージで武器を換装するAPI（`PUT /api/mobile_suits/{id}/equip`）
 にはこの制約が入っていなかった。ビームジェネレータLv不足の機体に高Lv要求のBEAM武器を
 装備できてしまう不整合を防ぐため、換装時にも同様の検証を追加した。
 
@@ -431,6 +431,9 @@ admin-tool/src/
   装備しようとしている `PlayerWeapon.base_snapshot` の `type` / `required_beam_generator_lv`
   を比較し、不足時は `400` を返す。
 - マスターと紐づかない機体は `beam_generator_lv=0` にフォールバックする（後方互換）。
+- `MobileSuit.weapons` はスロット番号＝配列インデックスで管理しているため、手前のスロット
+  （`0〜slot_index-1`）が未装備のまま先のスロットへ装備しようとした場合も `400` を返す
+  （可変スロット対応により発生し得るようになった、スロット番号と配列インデックスのズレを防止）。
 
 ### Frontend
 

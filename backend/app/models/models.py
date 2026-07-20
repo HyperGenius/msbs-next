@@ -303,16 +303,17 @@ class MobileSuitResponse(SQLModel):
             ms: 変換元の機体データ
             weapon_slot_count: マスター機体から引いた武器スロット数。
                 呼び出し側で解決できない場合は None を渡す
-                （既存の装備数から後方互換的にフォールバックする）。
+                （既存の装備数と MAX_WEAPON_SLOTS の大きい方に後方互換的にフォールバックする）。
             beam_generator_lv: マスター機体から引いたビームジェネレータLv。
                 呼び出し側で解決できない場合は None を渡す（0 にフォールバックする）。
         """
         from app.core.rank_utils import get_rank
+        from app.engine.constants import MAX_WEAPON_SLOTS
 
         resolved_weapon_slot_count = (
             weapon_slot_count
             if weapon_slot_count is not None
-            else max(len(ms.weapons), 1)
+            else max(len(ms.weapons), MAX_WEAPON_SLOTS)
         )
         resolved_beam_generator_lv = (
             beam_generator_lv if beam_generator_lv is not None else 0

@@ -319,7 +319,7 @@ def test_equip_weapon_invalid_slot_index(client, session):
 
 
 def test_equip_weapon_exceeds_beam_generator_lv_fails(client, session):
-    """機体の beam_generator_lv 未満を要求するBEAM武器は装備できないことをテスト."""
+    """機体の beam_generator_lv を超える required_beam_generator_lv のBEAM武器は装備できないことをテスト."""
     from app.models.models import MasterMobileSuit
 
     test_user_id = "test_user_equip_beam_lv_001"
@@ -459,6 +459,79 @@ def test_equip_weapon_within_beam_generator_lv_succeeds(client, session):
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["weapons"][0]["id"] == "test_high_lv_beam"
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_equip_weapon_skipping_earlier_slot_fails(client, session):
+    """未装備の手前スロットを飛ばして先のスロットへ装備しようとすると400になることをテスト.
+
+    MobileSuit.weapons はスロット番号=配列インデックスで管理しているため、
+    スロット0が空のままスロット2へ装備すると武器が誤って index 0 に入ってしまう。
+    これを防ぐため、手前のスロットが未装備の場合は400を返す。
+    """
+    from app.models.models import MasterMobileSuit
+
+    test_user_id = "test_user_equip_skip_slot_001"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        inventory={"zaku_mg": 1},
+    )
+    session.add(pilot)
+
+    # 3枠機体を登録
+    master = MasterMobileSuit(
+        id="test_three_slot_gm",
+        name="Test Three Slot GM",
+        price=1000,
+        faction="",
+        description="",
+        weapon_slot_count=3,
+        specs={"weapons": []},
+    )
+    session.add(master)
+
+    mobile_suit = MobileSuit(
+        user_id=test_user_id,
+        name="Test Three Slot GM",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],  # どのスロットも未装備
+        side="PLAYER",
+    )
+    session.add(mobile_suit)
+
+    from app.core.gamedata import get_weapon_listing_by_id
+
+    weapon_data = get_weapon_listing_by_id("zaku_mg")
+    player_weapon = PlayerWeapon(
+        user_id=test_user_id,
+        master_weapon_id="zaku_mg",
+        base_snapshot=weapon_data["weapon"].model_dump(),
+        custom_stats={},
+    )
+    session.add(player_weapon)
+    session.commit()
+    session.refresh(mobile_suit)
+    session.refresh(player_weapon)
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        # スロット0, 1 が未装備のままスロット2へ装備しようとする
+        response = client.put(
+            f"/api/mobile_suits/{mobile_suit.id}/equip",
+            json={"player_weapon_id": str(player_weapon.id), "slot_index": 2},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "先に" in response.json()["detail"]
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 

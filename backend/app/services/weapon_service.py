@@ -97,7 +97,8 @@ class WeaponService:
         マスターと紐づかない機体は従来通りの既定値にフォールバックする。
 
         Raises:
-            HTTPException: スロット範囲外、またはビームジェネレータLv不足の場合
+            HTTPException: スロット範囲外、装備順序不正、
+                またはビームジェネレータLv不足の場合
         """
         from app.services.mobile_suit_service import MobileSuitService
 
@@ -111,6 +112,18 @@ class WeaponService:
             raise HTTPException(
                 status_code=400,
                 detail=f"スロットインデックスが範囲外です (有効: 0〜{weapon_slot_count - 1})",
+            )
+
+        # MobileSuit.weapons はスロット番号 = 配列インデックスで管理しているため、
+        # 手前のスロットを飛ばした装備を許すと weapons[slot_index] の対応がずれる。
+        current_weapon_count = len(mobile_suit.weapons or [])
+        if slot_index > current_weapon_count:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"スロット{slot_index}を装備するには先にスロット"
+                    f"0〜{slot_index - 1}を装備してください"
+                ),
             )
 
         weapon_type = player_weapon.base_snapshot.get("type", "PHYSICAL")
@@ -153,7 +166,7 @@ class WeaponService:
         if slot_index < 0:
             raise HTTPException(
                 status_code=400,
-                detail="スロットインデックスが範囲外です (有効: 0=メイン武器, 1=サブ武器)",
+                detail="スロットインデックスが範囲外です (有効: 0以上の整数)",
             )
 
         player_weapon = session.get(PlayerWeapon, player_weapon_id)
