@@ -29,7 +29,16 @@ interface StatInfo {
   cap: number;
   baseCost: number;
   costDivisor: number;
-  rankStatName?: "hp" | "armor" | "mobility";
+  rankStatName?:
+    | "hp"
+    | "armor"
+    | "mobility"
+    | "melee_aptitude"
+    | "shooting_aptitude"
+    | "accuracy_bonus"
+    | "evasion_bonus"
+    | "acceleration_bonus"
+    | "turning_bonus";
 }
 
 const STAT_TYPES: StatInfo[] = [
@@ -75,6 +84,7 @@ const STAT_TYPES: StatInfo[] = [
     cap: STAT_CAPS.melee_aptitude,
     baseCost: 200,
     costDivisor: 2,
+    rankStatName: "melee_aptitude",
   },
   {
     label: STATUS_LABELS.shooting_aptitude,
@@ -85,6 +95,7 @@ const STAT_TYPES: StatInfo[] = [
     cap: STAT_CAPS.shooting_aptitude,
     baseCost: 200,
     costDivisor: 2,
+    rankStatName: "shooting_aptitude",
   },
   {
     label: STATUS_LABELS.accuracy_bonus,
@@ -95,6 +106,7 @@ const STAT_TYPES: StatInfo[] = [
     cap: STAT_CAPS.accuracy_bonus,
     baseCost: 120,
     costDivisor: 10,
+    rankStatName: "accuracy_bonus",
   },
   {
     label: STATUS_LABELS.evasion_bonus,
@@ -105,6 +117,7 @@ const STAT_TYPES: StatInfo[] = [
     cap: STAT_CAPS.evasion_bonus,
     baseCost: 120,
     costDivisor: 10,
+    rankStatName: "evasion_bonus",
   },
   {
     label: STATUS_LABELS.acceleration_bonus,
@@ -115,6 +128,7 @@ const STAT_TYPES: StatInfo[] = [
     cap: STAT_CAPS.acceleration_bonus,
     baseCost: 130,
     costDivisor: 2,
+    rankStatName: "acceleration_bonus",
   },
   {
     label: STATUS_LABELS.turning_bonus,
@@ -125,6 +139,7 @@ const STAT_TYPES: StatInfo[] = [
     cap: STAT_CAPS.turning_bonus,
     baseCost: 130,
     costDivisor: 2,
+    rankStatName: "turning_bonus",
   },
 ];
 

@@ -6,8 +6,8 @@
  * 片方を変更した場合はもう片方も必ず更新する。
  */
 export const STAT_CAPS = {
-  hp: 500,
-  armor: 50,
+  hp: 2000,
+  armor: 120,
   mobility: 3.0,
   melee_aptitude: 2.0,
   shooting_aptitude: 2.0,
