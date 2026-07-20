@@ -7,6 +7,7 @@ import { SciFiBlockIndicator } from "@/components/ui";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
 import { getRankColor, getRank } from "@/utils/rankUtils";
 import { STATUS_LABELS } from "@/utils/displayUtils";
+import { STAT_CAPS } from "@/utils/statCaps";
 
 type StatType =
   | "hp"
@@ -38,7 +39,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.max_hp,
     format: (val) => val.toFixed(0),
     increment: 10,
-    cap: 500,
+    cap: STAT_CAPS.hp,
     baseCost: 50,
     costDivisor: 200,
     rankStatName: "hp",
@@ -49,7 +50,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.armor,
     format: (val) => val.toFixed(0),
     increment: 1,
-    cap: 50,
+    cap: STAT_CAPS.armor,
     baseCost: 100,
     costDivisor: 10,
     rankStatName: "armor",
@@ -60,7 +61,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.mobility,
     format: (val) => val.toFixed(2),
     increment: 0.05,
-    cap: 3.0,
+    cap: STAT_CAPS.mobility,
     baseCost: 150,
     costDivisor: 2,
     rankStatName: "mobility",
@@ -71,7 +72,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.melee_aptitude ?? 1.0,
     format: (val) => `×${val.toFixed(2)}`,
     increment: 0.05,
-    cap: 2.0,
+    cap: STAT_CAPS.melee_aptitude,
     baseCost: 200,
     costDivisor: 2,
   },
@@ -81,7 +82,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.shooting_aptitude ?? 1.0,
     format: (val) => `×${val.toFixed(2)}`,
     increment: 0.05,
-    cap: 2.0,
+    cap: STAT_CAPS.shooting_aptitude,
     baseCost: 200,
     costDivisor: 2,
   },
@@ -91,7 +92,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.accuracy_bonus ?? 0.0,
     format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}%`,
     increment: 0.5,
-    cap: 10.0,
+    cap: STAT_CAPS.accuracy_bonus,
     baseCost: 120,
     costDivisor: 10,
   },
@@ -101,7 +102,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.evasion_bonus ?? 0.0,
     format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(1)}%`,
     increment: 0.5,
-    cap: 10.0,
+    cap: STAT_CAPS.evasion_bonus,
     baseCost: 120,
     costDivisor: 10,
   },
@@ -111,7 +112,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.acceleration_bonus ?? 0.0,
     format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(2)}`,
     increment: 0.05,
-    cap: 2.0,
+    cap: STAT_CAPS.acceleration_bonus,
     baseCost: 130,
     costDivisor: 2,
   },
@@ -121,7 +122,7 @@ const STAT_TYPES: StatInfo[] = [
     getValue: (ms) => ms.turning_bonus ?? 0.0,
     format: (val) => `${val >= 0 ? "+" : ""}${val.toFixed(2)}`,
     increment: 0.05,
-    cap: 2.0,
+    cap: STAT_CAPS.turning_bonus,
     baseCost: 130,
     costDivisor: 2,
   },
