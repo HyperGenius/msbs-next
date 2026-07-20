@@ -580,7 +580,7 @@ class CombatMixin:
         attack_sector: str = "FRONT_SIDE",
     ) -> None:
         """命中時の処理."""
-        base_damage, log_msg = self._calculate_hit_base_damage(
+        base_damage, _log_msg, is_crit = self._calculate_hit_base_damage(
             actor, target, weapon, log_base, attack_sector=attack_sector
         )
         base_damage, resistance_msg = self._apply_hit_damage_modifiers(
@@ -633,7 +633,6 @@ class CombatMixin:
         hit_chatter = self._generate_chatter(target, "hit")  # type: ignore[attr-defined]
 
         # 命中状況テキスト
-        is_crit = "クリティカルヒット" in log_msg
         if is_crit:
             hit_text = " -> ★★ クリティカルヒット！！"
         elif is_optimal_distance:
@@ -673,6 +672,8 @@ class CombatMixin:
                 message=f"{log_base}{hit_text}{damage_message}",
                 position_snapshot=snapshot,
                 weapon_name=weapon.name if weapon else None,
+                weapon_id=weapon.id if weapon else None,
+                is_crit=is_crit,
                 chatter=attack_chatter or hit_chatter,
                 skill_activated=True if skill_activated else None,
                 heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
@@ -775,8 +776,8 @@ class CombatMixin:
         weapon: Weapon,
         log_base: str,
         attack_sector: str = "FRONT_SIDE",
-    ) -> tuple[int, str]:
-        """命中時の基礎ダメージとログメッセージを算出する."""
+    ) -> tuple[int, str, bool]:
+        """命中時の基礎ダメージとログメッセージ、クリティカル判定を算出する."""
         base_crit_rate = 0.05
 
         if actor.side == "PLAYER":
@@ -817,9 +818,9 @@ class CombatMixin:
             base_damage = max(
                 1, int(base_damage * SECTOR_DAMAGE_MODIFIERS[attack_sector])
             )
-            return base_damage, f"{log_base} -> 命中！"
+            return base_damage, f"{log_base} -> 命中！", False
         # クリティカルヒット: 防御軽減率・セクタ補正を無視（現行仕様維持）
-        return int(weapon.power * 1.2), f"{log_base} -> クリティカルヒット！！"
+        return int(weapon.power * 1.2), f"{log_base} -> クリティカルヒット！！", True
 
     def _apply_hit_damage_modifiers(
         self,

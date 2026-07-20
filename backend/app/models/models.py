@@ -661,6 +661,8 @@ class BattleLog(SQLModel):
     attack_sector: str | None = (
         None  # "FRONT" / "FRONT_SIDE" / "REAR_SIDE" / "REAR" (Phase E-3)
     )
+    weapon_id: str | None = None  # 使用した武器のID（フロントエンドの武器特定用）
+    is_crit: bool = False  # クリティカルヒット判定（構造化フラグ）
 
 
 class BattleLogRecord(SQLModel, table=True):

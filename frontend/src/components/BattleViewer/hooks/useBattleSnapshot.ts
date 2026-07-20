@@ -87,10 +87,12 @@ export function getBattleSnapshot(
             hp -= log.damage;
         }
         
-        // リソース消費の推測（簡易版）
-        // 注意: ログデータに武器情報が含まれていないため、最初の武器を使用したと仮定しています
+        // リソース消費: log.weapon_id から実際に使用した武器を特定する
+        // weapon_id が無い古いログについては後方互換のため先頭武器を使用したと仮定する
         if (log.action_type === "ATTACK" && log.actor_id === targetId) {
-            const weapon = initialMs.weapons[0]; // 簡略化: 最初の武器を使用と仮定
+            const weapon = log.weapon_id
+                ? initialMs.weapons.find(w => w.id === log.weapon_id) ?? initialMs.weapons[0]
+                : initialMs.weapons[0];
             if (weapon) {
                 if (weapon.en_cost) {
                     en = Math.max(0, en - weapon.en_cost);

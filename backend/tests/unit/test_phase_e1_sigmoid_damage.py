@@ -308,7 +308,7 @@ class TestCalculateHitBaseDamageNewFormula:
 
         # 非クリティカルを強制
         with patch("app.engine.combat.random.random", return_value=1.0):
-            base_damage, msg = sim._calculate_hit_base_damage(
+            base_damage, msg, _ = sim._calculate_hit_base_damage(
                 player, enemy, weapon, log_base
             )
 
@@ -327,7 +327,9 @@ class TestCalculateHitBaseDamageNewFormula:
         weapon = _make_weapon(power=200)
 
         with patch("app.engine.combat.random.random", return_value=1.0):
-            base_damage, _ = sim._calculate_hit_base_damage(player, enemy, weapon, "")
+            base_damage, _, _ = sim._calculate_hit_base_damage(
+                player, enemy, weapon, ""
+            )
 
         # defense_reduction の上限は MAX_DEFENSE_REDUCTION = 0.50
         # よって damage >= weapon.power * (1 - 0.50) = 100 (attack_bonus により実際はさらに高い)
@@ -340,7 +342,9 @@ class TestCalculateHitBaseDamageNewFormula:
         weapon = _make_weapon(power=50)
 
         with patch("app.engine.combat.random.random", return_value=1.0):
-            base_damage, _ = sim._calculate_hit_base_damage(player, enemy, weapon, "")
+            base_damage, _, _ = sim._calculate_hit_base_damage(
+                player, enemy, weapon, ""
+            )
 
         # 新式は必ず > 1
         assert base_damage > 1
@@ -352,7 +356,9 @@ class TestCalculateHitBaseDamageNewFormula:
 
         # クリティカルを強制
         with patch("app.engine.combat.random.random", return_value=0.0):
-            base_damage, msg = sim._calculate_hit_base_damage(player, enemy, weapon, "")
+            base_damage, msg, _ = sim._calculate_hit_base_damage(
+                player, enemy, weapon, ""
+            )
 
         assert "クリティカル" in msg
         assert base_damage == int(100 * 1.2)
@@ -382,7 +388,9 @@ class TestCalculateHitBaseDamageNewFormula:
         # 非クリティカルでメレー武器を使用
         melee_w = _make_weapon(power=100, weapon_type="MELEE")
         with patch("app.engine.combat.random.random", return_value=1.0):
-            base_damage, _ = sim._calculate_hit_base_damage(player, enemy, melee_w, "")
+            base_damage, _, _ = sim._calculate_hit_base_damage(
+                player, enemy, melee_w, ""
+            )
 
         melee_bonus = resources["cached_melee_attack_bonus"]
         target_def = sim.unit_resources[str(enemy.id)]["cached_defense_reduction"]
@@ -395,7 +403,9 @@ class TestCalculateHitBaseDamageNewFormula:
         weapon = _make_weapon(power=1)
 
         with patch("app.engine.combat.random.random", return_value=1.0):
-            base_damage, _ = sim._calculate_hit_base_damage(player, enemy, weapon, "")
+            base_damage, _, _ = sim._calculate_hit_base_damage(
+                player, enemy, weapon, ""
+            )
 
         assert base_damage >= 1
 
@@ -411,8 +421,12 @@ class TestCalculateHitBaseDamageNewFormula:
         )
 
         with patch("app.engine.combat.random.random", return_value=1.0):
-            dmg_low, _ = sim_low._calculate_hit_base_damage(player, enemy, weapon, "")
-            dmg_high, _ = sim_high._calculate_hit_base_damage(player, enemy, weapon, "")
+            dmg_low, _, _ = sim_low._calculate_hit_base_damage(
+                player, enemy, weapon, ""
+            )
+            dmg_high, _, _ = sim_high._calculate_hit_base_damage(
+                player, enemy, weapon, ""
+            )
 
         assert dmg_high > dmg_low
 
