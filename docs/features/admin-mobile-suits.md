@@ -340,6 +340,14 @@ admin-tool/src/
 - 武装リストの動的追加・削除
 - 武器数が武器スロット数を超える場合、およびBEAM武器の要求ビームジェネレータLvが機体のビームジェネレータLvを超える場合はクライアント側 (`zod.superRefine`) でもエラー表示（Issue #383）
 
+> [!NOTE]
+> `MobileSuitEditForm` は React Compiler（`next.config.ts` の `reactCompiler: true`）対象外の
+> `"use no memo"` ディレクティブ付きで実装している。React Compiler の自動メモ化が、
+> `react-hook-form` の `register()` でバインドした非制御 `<input>` に対する `reset()` のDOM反映を
+> 阻害し、機体選択切り替え時に「勢力」以外のフィールドが前の機体の値のまま更新されない不具合が
+> あったため（Issue #388）。同様に非制御inputを`register()`でバインドするフォームを新規実装する
+> 場合は同じ問題が起きうる点に注意すること。
+
 #### バランス比較チャート (`MobileSuitRadarChart`)
 
 - `recharts` の `RadarChart` を使用
