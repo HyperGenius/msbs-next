@@ -266,9 +266,9 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
       {/* 所持金（現在 ➔ 変更後） */}
       {pilot && (
         <div className="p-3 bg-[#0a0a0a] rounded border border-[#ffb000]/30 text-sm">
-          <span className="text-[#ffb000]">💰 所持金: </span>
+          <span className="text-[#ffb000]">Credits: </span>
           <span className="text-[#ffb000] font-bold">
-            {pilot.credits.toLocaleString()} Credits
+            {pilot.credits.toLocaleString()}
           </span>
           {hasPendingUpgrades && (
             <>
@@ -278,7 +278,7 @@ export default function StatusTab({ mobileSuit, pilot, onUpgraded }: StatusTabPr
                   canAffordAll ? "text-[#00f0ff]" : "text-red-400"
                 }`}
               >
-                {(pilot.credits - totalPendingCost).toLocaleString()} Credits
+                {(pilot.credits - totalPendingCost).toLocaleString()}
               </span>
             </>
           )}
