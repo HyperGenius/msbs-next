@@ -27,11 +27,14 @@ class Vector3(SQLModel):
         return cls(x=float(arr[0]), y=float(arr[1]), z=float(arr[2]))
 
 
-class Weapon(SQLModel):
-    """武装データ."""
+class WeaponSpecBase(SQLModel):
+    """武装データのうち id/name を除いたスペック部分.
 
-    id: str
-    name: str
+    マスター武器（MasterWeapon）の weapon(JSON)列はこのクラスの形で保存する。
+    id/name は master_weapons テーブルのカラムを正とし、JSON側には持たせない
+    （二重管理によるデータ不整合を防ぐため。Issue #400）。
+    """
+
     power: int = Field(description="威力")
     range: float = Field(description="射程距離")
     accuracy: float = Field(description="基本命中率(%)")
@@ -62,6 +65,17 @@ class Weapon(SQLModel):
         default=30.0,
         description="射撃可能弧（胴体正面からの片側角度、度）。格闘武器は 360 を設定",
     )
+
+
+class MasterWeaponSpec(WeaponSpecBase):
+    """マスター武器の weapon(JSON)列に保存するスペック（id/nameを含まない）."""
+
+
+class Weapon(WeaponSpecBase):
+    """武装データ（機体の武器スロット・武器インスタンス等、id/nameが必要な文脈で使用）."""
+
+    id: str
+    name: str
 
 
 class WeaponResponse(Weapon):
@@ -448,7 +462,7 @@ class MasterWeaponEntry(SQLModel):
     name: str
     price: int
     description: str
-    weapon: Weapon
+    weapon: MasterWeaponSpec
 
 
 class MasterWeaponCreate(SQLModel):
@@ -458,7 +472,7 @@ class MasterWeaponCreate(SQLModel):
     name: str
     price: int
     description: str
-    weapon: Weapon
+    weapon: MasterWeaponSpec
 
 
 class MasterWeaponUpdate(SQLModel):
@@ -467,7 +481,7 @@ class MasterWeaponUpdate(SQLModel):
     name: str | None = None
     price: int | None = None
     description: str | None = None
-    weapon: Weapon | None = None
+    weapon: MasterWeaponSpec | None = None
 
 
 # --- Combat Simulation Models (管理画面用 1対1 攻撃シミュレーション, Issue #381) ---

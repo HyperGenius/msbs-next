@@ -1,4 +1,4 @@
-import { Weapon } from "./weapon";
+import { Weapon, WeaponSpec } from "./weapon";
 
 /** 管理者用マスター機体のスペック定義 */
 export interface MasterMobileSuitSpec {
@@ -51,13 +51,14 @@ export interface MasterMobileSuitUpdate {
     specs?: MasterMobileSuitSpec;
 }
 
-/** 管理者用マスター武器エントリー（武器ショップの元データ） */
+/** 管理者用マスター武器エントリー（武器ショップの元データ）。
+ *  id/name はテーブルカラムが正のため、weapon(JSON) 側は WeaponSpec (id/nameなし) を使う */
 export interface MasterWeapon {
     id: string;
     name: string;
     price: number;
     description: string;
-    weapon: Weapon;
+    weapon: WeaponSpec;
 }
 
 /** マスター武器の新規追加リクエスト（MasterWeaponと同形） */
@@ -68,7 +69,7 @@ export interface MasterWeaponUpdate {
     name?: string;
     price?: number;
     description?: string;
-    weapon?: Weapon;
+    weapon?: WeaponSpec;
 }
 
 /** 攻撃セクタ（正面・側面・背面） */

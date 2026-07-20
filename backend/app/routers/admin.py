@@ -18,6 +18,7 @@ from app.models.models import (
     MasterMobileSuitUpdate,
     MasterWeaponCreate,
     MasterWeaponEntry,
+    MasterWeaponSpec,
     MasterWeaponUpdate,
     Weapon,
 )
@@ -166,7 +167,9 @@ def delete_master_mobile_suit(
 def _raw_weapon_to_entry(raw: dict) -> MasterWeaponEntry:
     """生JSON辞書を MasterWeaponEntry モデルに変換する."""
     weapon_raw = raw["weapon"]
-    weapon = Weapon(**weapon_raw) if isinstance(weapon_raw, dict) else weapon_raw
+    weapon = (
+        MasterWeaponSpec(**weapon_raw) if isinstance(weapon_raw, dict) else weapon_raw
+    )
     return MasterWeaponEntry(
         id=raw["id"],
         name=raw["name"],

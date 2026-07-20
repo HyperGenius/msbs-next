@@ -21,8 +21,6 @@ SAMPLE_WEAPON = {
     "price": 600,
     "description": "テスト用ビームカノン。",
     "weapon": {
-        "id": "test_beam_cannon",
-        "name": "Test Beam Cannon",
         "power": 250,
         "range": 550,
         "accuracy": 70,
@@ -107,6 +105,9 @@ def test_list_master_weapons(client_admin):
     assert "power" in first["weapon"]
     assert "range" in first["weapon"]
     assert "accuracy" in first["weapon"]
+    # weapon(JSON)側に id/name は含まれない（テーブルカラムが正。Issue #400）
+    assert "id" not in first["weapon"]
+    assert "name" not in first["weapon"]
 
 
 # ===================== POST 新規追加 =====================
@@ -122,6 +123,8 @@ def test_create_master_weapon(client_admin):
     assert data["id"] == "test_beam_cannon"
     assert data["name"] == "Test Beam Cannon"
     assert data["weapon"]["power"] == 250
+    assert "id" not in data["weapon"]
+    assert "name" not in data["weapon"]
 
     # GET で確認
     list_response = client_admin.get("/api/admin/weapons", headers=HEADERS)

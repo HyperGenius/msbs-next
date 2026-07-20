@@ -3,7 +3,7 @@
 from fastapi import status
 
 from app.core.auth import get_current_user
-from app.models.models import MobileSuit, Pilot, PlayerWeapon
+from app.models.models import MasterWeapon, MobileSuit, Pilot, PlayerWeapon
 from main import app
 
 
@@ -31,6 +31,38 @@ def test_get_weapon_listings(client):
     assert "range" in weapon
     assert "accuracy" in weapon
     assert "type" in weapon
+
+
+def test_get_weapon_listings_tolerates_legacy_weapon_json_with_id_name(client, session):
+    """レガシー行(weapon列にid/nameを含む)でも一覧取得がエラーにならないことをテスト.
+
+    Issue #400 以前に作られたデータを想定。テーブルカラムのid/nameを優先して合成する。
+    """
+    legacy_record = MasterWeapon(
+        id="legacy_weapon",
+        name="Legacy Weapon",
+        price=100,
+        description="Issue #400 以前の形式（weapon列にid/nameを含む）",
+        weapon={
+            "id": "legacy_weapon",
+            "name": "Legacy Weapon",
+            "power": 50,
+            "range": 100,
+            "accuracy": 50,
+            "type": "PHYSICAL",
+        },
+    )
+    session.add(legacy_record)
+    session.commit()
+
+    response = client.get("/api/shop/weapons")
+    assert response.status_code == status.HTTP_200_OK
+
+    listings = response.json()
+    legacy_item = next((w for w in listings if w["id"] == "legacy_weapon"), None)
+    assert legacy_item is not None
+    assert legacy_item["weapon"]["id"] == "legacy_weapon"
+    assert legacy_item["weapon"]["name"] == "Legacy Weapon"
 
 
 def test_purchase_weapon_success(client, session):

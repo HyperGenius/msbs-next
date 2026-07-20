@@ -24,8 +24,6 @@
     "price": 800,
     "description": "ガンダム用ビームライフル。高威力・高精度のビーム兵器。",
     "weapon": {
-      "id": "beam_rifle",
-      "name": "Beam Rifle",
       "power": 300,
       "range": 600,
       "accuracy": 80,
@@ -48,6 +46,7 @@
 新規マスター武器を追加する。
 
 **リクエスト:** `MasterWeaponCreate` オブジェクト（`id`, `name`, `price`, `description`, `weapon` を含む）
+- `weapon`(`MasterWeaponSpec`) は `id`/`name` を含まない。武器の `id`/`name` は `master_weapons` テーブルのカラム（トップレベルの `id`/`name`）を正とする（Issue #400）
 
 **バリデーション:**
 - `id` はスネークケース英数字のみ許可（`^[a-z0-9_]+$`）
@@ -100,7 +99,7 @@ CREATE TABLE master_weapons (
     name        TEXT NOT NULL,
     price       INTEGER NOT NULL,
     description TEXT NOT NULL,
-    weapon      JSONB NOT NULL,         -- Weapon モデルの全フィールド
+    weapon      JSONB NOT NULL,         -- MasterWeaponSpec の全フィールド (id/nameは含まない。テーブルのid/nameが正)
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -154,7 +153,7 @@ cd admin-tool && npm run dev   # http://localhost:3100
 |------|------|
 | **武器一覧テーブル** | 名前・価格・武器種別（BEAM/PHYSICAL）・近接フラグ・威力・射程・命中率を表示。ソート・フィルタ対応 |
 | **詳細編集フォーム** | 全パラメータ（`power`, `range`, `accuracy`, `type`, `weapon_type`, `optimal_range`, `decay_rate`, `is_melee`, `max_ammo`, `en_cost`, `cooldown_sec`, `fire_arc_deg`）を編集 |
-| **新規追加フォーム** | 新規武器の追加。ID は自動で weapon.id にも同期 |
+| **新規追加フォーム** | 新規武器の追加。`id`/`name` は基本情報欄のみで入力し、`weapon`(スペック)側には持たせない（Issue #400） |
 | **Clone & Edit** | 選択中の武器をベースに新しい ID でコピーを作成 |
 | **バランス比較チャート** | 選択中の武器と全武器平均を **レーダーチャート（威力・射程・命中率・最適射程・減衰率の5軸）** で表示。全武器最大値で正規化し、減衰率は反転表示 |
 | **トースト通知** | 保存成功・失敗をトーストで通知 |
