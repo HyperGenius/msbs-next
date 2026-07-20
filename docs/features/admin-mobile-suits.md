@@ -10,6 +10,12 @@
 > 言語切替UI・国際化（i18n）フレームワークは未導入のため、現状は管理画面での編集・保存までがスコープ。
 > 言語選択に応じた表示切替は別途対応が必要。
 
+> [!NOTE]
+> Issue #392 で `weapon_slot_count` をプレイヤー向け `GET /api/mobile_suits` レスポンスにも
+> 含めるようになり、ガレージの換装UI（`LoadoutManager.tsx` / `WeaponChangeModal.tsx`）が
+> 機体ごとの武器スロット数に応じて可変枠数で表示・換装できるようになった。詳細は
+> 「ゲーム側フロントエンドでの `weapon_slot_count` 利用（Issue #392）」を参照。
+
 ---
 
 ## Backend API
@@ -372,6 +378,71 @@ admin-tool/src/
 
 `useAdminMobileSuits` フックで SWR の `mutate` を使用し、API 呼び出し前にキャッシュを先行更新。
 エラー時は自動ロールバック（`rollbackOnError: true`）。
+
+---
+
+## ゲーム側フロントエンドでの `weapon_slot_count` 利用（Issue #392）
+
+管理画面で登録した `weapon_slot_count`（1以上）を、プレイヤー向けのガレージ換装UIでも
+反映できるようにした。武器スロットは「MAIN/SUB」の2枠固定ではなく、機体ごとの
+`weapon_slot_count` に応じた可変枠数として扱う。
+
+### Backend
+
+- `MobileSuitResponse`（`backend/app/models/models.py`）に `weapon_slot_count: int` を追加。
+  `from_mobile_suit()` は第2引数 `weapon_slot_count: int | None` を受け取り、値が未指定の場合は
+  `max(len(ms.weapons), 1)` にフォールバックする（後方互換）。
+- プレイヤー所持機体（`MobileSuit` テーブル）はマスター機体（`MasterMobileSuit`）と `name` で
+  紐づいているため、`MobileSuitService.get_master_mobile_suit_map()` で名前をキーに
+  マスターレコードを引き、`weapon_slot_count` / `beam_generator_lv` を
+  `GET /api/mobile_suits` などのレスポンス生成時に渡す。
+- `WeaponService.equip_weapon()` のスロット範囲検証も、戦闘シミュレーション用の
+  固定値 `MAX_WEAPON_SLOTS`（=2、`app/engine/constants.py`）ではなく、対象機体の実際の
+  `weapon_slot_count` を用いるように変更（マスターと紐づかない機体は `MAX_WEAPON_SLOTS` に
+  フォールバック）。これにより3枠以上の機体でも3枠目以降への装備が可能になる。
+
+### Frontend
+
+- `frontend/src/types/mobileSuit.ts` の `MobileSuit` に `weapon_slot_count?: number` を追加。
+- `frontend/src/app/garage/constants.ts` の固定配列 `WEAPON_SLOTS` を廃止し、
+  `getWeaponSlots(weaponSlotCount?: number)` 関数に変更。未設定・不正値の場合は
+  `DEFAULT_WEAPON_SLOT_COUNT`（=2）にフォールバックする。
+- `LoadoutManager.tsx` / `WeaponChangeModal.tsx` の `MAIN/SUB` 決め打ち表記を廃止し、
+  「スロット1」「スロット2」…のように可変枠数に対応した表記に変更。
+
+> [!NOTE]
+> バトルシミュレーション側（`useBattleSnapshot.ts` の武器選択ロジック）やショップ一覧・詳細、
+> `BattleOverlay.tsx` の弾数表示など、3枠目以降の武器を実戦闘に反映させる対応は別Issueとする
+> （本Issueのスコープはガレージの換装UIに限定）。
+
+## 換装時のビームジェネレータLv制約（Issue #392）
+
+管理画面の新規追加/更新（`_validate_weapon_constraints()`）では従来から、BEAM武器の
+`required_beam_generator_lv` が機体の `beam_generator_lv` を超える場合に `422` を返す
+制約があったが、プレイヤーがガレージで武器を換装するAPI（`PUT /api/mobile_suits/{id}/equip`）
+にはこの制約が入っていなかった。ビームジェネレータLv不足の機体に高Lv要求のBEAM武器を
+装備できてしまう不整合を防ぐため、換装時にも同様の検証を追加した。
+
+### Backend
+
+- `WeaponService.equip_weapon()` からスロット範囲検証・ビームジェネレータLv検証を
+  `WeaponService._validate_equip_constraints()` に切り出し、対象機体の `beam_generator_lv`
+  （`MobileSuitService.get_master_mobile_suit_map()` で name から解決）と
+  装備しようとしている `PlayerWeapon.base_snapshot` の `type` / `required_beam_generator_lv`
+  を比較し、不足時は `400` を返す。
+- マスターと紐づかない機体は `beam_generator_lv=0` にフォールバックする（後方互換）。
+- `MobileSuit.weapons` はスロット番号＝配列インデックスで管理しているため、手前のスロット
+  （`0〜slot_index-1`）が未装備のまま先のスロットへ装備しようとした場合も `400` を返す
+  （可変スロット対応により発生し得るようになった、スロット番号と配列インデックスのズレを防止）。
+
+### Frontend
+
+- `MobileSuitResponse` に `beam_generator_lv: int` を追加し、`types/mobileSuit.ts` の
+  `MobileSuit` にも `beam_generator_lv?: number` を追加。
+- `types/weapon.ts` の `Weapon` に `required_beam_generator_lv?: number` を追加。
+- `WeaponChangeModal.tsx` で、`weapon.type === "BEAM"` かつ
+  `required_beam_generator_lv > selectedMs.beam_generator_lv` の武器は選択不可
+  （在庫切れと同様にグレーアウトし、必要Lvを表示）にした。
 
 ---
 

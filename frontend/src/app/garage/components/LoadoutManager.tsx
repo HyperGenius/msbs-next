@@ -2,7 +2,7 @@
 "use client";
 
 import { MobileSuit } from "@/types/battle";
-import { WEAPON_SLOTS } from "../constants";
+import { getWeaponSlots } from "../constants";
 import { SciFiButton } from "@/components/ui";
 import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
 
@@ -15,20 +15,21 @@ export default function LoadoutManager({
   selectedMs,
   onOpenWeaponModal,
 }: LoadoutManagerProps) {
+  const weaponSlots = getWeaponSlots(selectedMs.weapon_slot_count);
   return (
     <div className="p-3 bg-gray-900 rounded border border-green-800">
       <h4 className="text-sm font-bold mb-3 text-green-500">
         装備換装 (Loadout)
       </h4>
       <div className="space-y-3">
-        {WEAPON_SLOTS.map((slot) => {
+        {weaponSlots.map((slot) => {
           const equippedWeapon = selectedMs.weapons?.[slot.index];
           return (
             <div key={slot.index} className="p-2 bg-gray-800 rounded">
               <div className="flex justify-between items-center mb-2">
                 <div>
                   <span className="text-xs font-bold text-green-400 uppercase">
-                    [{slot.index === 0 ? "MAIN" : "SUB"}]
+                    [{slot.label}]
                   </span>
                   <span className="ml-2 text-xs text-gray-400">
                     {slot.labelJa}
@@ -75,12 +76,6 @@ export default function LoadoutManager({
                       <span className="text-gray-400">命中:</span>
                       <span className={`ml-1 font-bold ${getRankColor(equippedWeapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", equippedWeapon.accuracy))}`}>
                         {equippedWeapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", equippedWeapon.accuracy)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-400">最適:</span>
-                      <span className="ml-1 font-bold text-green-400">
-                        {equippedWeapon.optimal_range || 300}m
                       </span>
                     </div>
                     <div>

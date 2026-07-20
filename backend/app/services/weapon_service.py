@@ -85,6 +85,62 @@ class WeaponService:
         return player_weapon
 
     @staticmethod
+    def _validate_equip_constraints(
+        session: Session,
+        mobile_suit: MobileSuit,
+        player_weapon: PlayerWeapon,
+        slot_index: int,
+    ) -> None:
+        """機体固有のスロット数・ビームジェネレータLvの制約を検証する.
+
+        マスター機体（weapon_slot_count / beam_generator_lv）を name で引く。
+        マスターと紐づかない機体は従来通りの既定値にフォールバックする。
+
+        Raises:
+            HTTPException: スロット範囲外、装備順序不正、
+                またはビームジェネレータLv不足の場合
+        """
+        from app.services.mobile_suit_service import MobileSuitService
+
+        master = MobileSuitService.get_master_mobile_suit_map(
+            session, [mobile_suit.name]
+        ).get(mobile_suit.name)
+        weapon_slot_count = master.weapon_slot_count if master else MAX_WEAPON_SLOTS
+        beam_generator_lv = master.beam_generator_lv if master else 0
+
+        if slot_index >= weapon_slot_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"スロットインデックスが範囲外です (有効: 0〜{weapon_slot_count - 1})",
+            )
+
+        # MobileSuit.weapons はスロット番号 = 配列インデックスで管理しているため、
+        # 手前のスロットを飛ばした装備を許すと weapons[slot_index] の対応がずれる。
+        current_weapon_count = len(mobile_suit.weapons or [])
+        if slot_index > current_weapon_count:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"スロット{slot_index}を装備するには先にスロット"
+                    f"0〜{slot_index - 1}を装備してください"
+                ),
+            )
+
+        weapon_type = player_weapon.base_snapshot.get("type", "PHYSICAL")
+        required_beam_generator_lv = player_weapon.base_snapshot.get(
+            "required_beam_generator_lv", 0
+        )
+        if weapon_type == "BEAM" and required_beam_generator_lv > beam_generator_lv:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"この武器の装備には beam_generator_lv "
+                    f"{required_beam_generator_lv} が必要です"
+                    f"（機体の beam_generator_lv は {beam_generator_lv}）"
+                ),
+            )
+
+    @staticmethod
     def equip_weapon(
         session: Session,
         user_id: str,
@@ -99,7 +155,7 @@ class WeaponService:
             user_id: 操作ユーザーID
             player_weapon_id: 装備する PlayerWeapon の UUID
             ms_id: 装備先機体の UUID
-            slot_index: 装備スロット（0=メイン, 1=サブ）
+            slot_index: 装備スロット（機体の weapon_slot_count に応じて可変）
 
         Returns:
             MobileSuit: 更新された機体
@@ -107,10 +163,10 @@ class WeaponService:
         Raises:
             HTTPException: 権限エラー・未装備チェック・スロット検証などのエラー
         """
-        if slot_index < 0 or slot_index >= MAX_WEAPON_SLOTS:
+        if slot_index < 0:
             raise HTTPException(
                 status_code=400,
-                detail="スロットインデックスが範囲外です (有効: 0=メイン武器, 1=サブ武器)",
+                detail="スロットインデックスが範囲外です (有効: 0以上の整数)",
             )
 
         player_weapon = session.get(PlayerWeapon, player_weapon_id)
@@ -154,6 +210,10 @@ class WeaponService:
             raise HTTPException(
                 status_code=403, detail="この機体を編集する権限がありません"
             )
+
+        WeaponService._validate_equip_constraints(
+            session, mobile_suit, player_weapon, slot_index
+        )
 
         # PlayerWeapon を更新
         player_weapon.equipped_ms_id = ms_id

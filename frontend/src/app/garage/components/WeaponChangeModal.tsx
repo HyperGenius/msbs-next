@@ -109,10 +109,7 @@ export default function WeaponChangeModal({
             武器変更
           </SciFiHeading>
           <p className="mb-1 text-xs text-green-600">
-            スロット:{" "}
-            {selectedWeaponSlot === 0
-              ? "【MAIN】メイン武器"
-              : "【SUB】サブ武器"}
+            スロット: 【スロット{selectedWeaponSlot + 1}】
           </p>
           <p className="mb-4 text-sm text-green-400">
             武器を選択してプレビューを確認後、装備するボタンを押してください
@@ -171,7 +168,11 @@ export default function WeaponChangeModal({
               const weapon = weaponListing.weapon;
               const totalCount = pilot?.inventory?.[weaponListing.id] || 0;
               const availableCount = calcAvailableCount(weaponListing.id);
-              const isDisabled = availableCount <= 0;
+              const isBeamLvInsufficient =
+                weapon.type === "BEAM" &&
+                (weapon.required_beam_generator_lv ?? 0) >
+                  (selectedMs.beam_generator_lv ?? 0);
+              const isDisabled = availableCount <= 0 || isBeamLvInsufficient;
               const isSelected =
                 previewWeaponId != null &&
                 (playerWeapons?.some(
@@ -209,6 +210,12 @@ export default function WeaponChangeModal({
                           <p className="text-xs text-green-600">
                             利用可能: {availableCount} / 所持: {totalCount}
                           </p>
+                          {isBeamLvInsufficient && (
+                            <p className="text-xs text-red-400">
+                              要ビームジェネレータLv{weapon.required_beam_generator_lv}
+                              （自機Lv{selectedMs.beam_generator_lv ?? 0}）
+                            </p>
+                          )}
                         </div>
                         <span
                           className={`px-2 py-1 text-xs font-bold rounded ${
