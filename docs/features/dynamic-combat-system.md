@@ -345,6 +345,31 @@ for obs in obstacles:
 
 ---
 
+### 6.6 移動 AI の基準武器（複数武器編成対応・Issue #393）
+
+> **実装状況:** ✅ 実装済み (`backend/app/engine/movement.py`)
+
+`weapon_slot_count`（[admin-mobile-suits.md](./admin-mobile-suits.md)）により
+機体が3丁以上の武器を持てるようになったが、移動 AI が参照する「基準武器」が
+`unit.get_active_weapon()`（= 常に `weapons[0]`）に固定されていたため、
+実際の攻撃で選ばれる武器（`_select_weapon_fuzzy()` の選択結果）と
+移動判断の基準がズレる場合があった。
+
+`_calculate_potential_field()` は `MovementMixin._get_reference_weapon()` を用いて
+基準武器を以下の優先順位で決定する。
+
+1. ターゲットが存在する場合: `_select_weapon_fuzzy()` の選択結果（実際に使用される武器）。
+   `_select_weapon_fuzzy()` は使用可能な武器が1丁以上あれば必ず `Weapon` を返す実装であり、
+   `None` を返すのは使用可能な武器が一つも無い場合のみ
+2. ターゲットが存在しない場合: 使用可能な武器（クールダウン・EN・弾薬チェック済み）のうち最大射程のもの
+3. 使用可能な武器が一つもない場合（全弾切れ等）: `get_active_weapon()`（`active_weapon_index`
+   に依存し、デフォルト値 `0` のため実質先頭武器固定）にフォールバック
+
+この基準武器は高脅威敵への斥力計算（Section 3 の武器射程判定）とストレイフ引力
+（`_strafe_attraction()`）の両方で共有され、1ステップあたり同一の武器を参照する。
+
+---
+
 ## 7. LOS（視線遮断）
 
 ### 7.1 概要
@@ -693,6 +718,7 @@ RANGED_MID_ACCURACY_PENALTY: float = 0.7  # d <= CLOSE_RANGE
 | コンボの BattleViewer 表現 | `combo_message` フィールドに `"2Combo 300ダメージ!!"`形式で格納、フロントエンドでコンボエフェクトを表示（Section 5.3.1） |
 | 格闘武器の射程定義 | BOOST_DASH 終了距離を `MELEE_RANGE × 2 = 100m` とし、格闘命中後は対象から `POST_MELEE_DISTANCE = 10m` に再配置。両定数は外部パラメータ化（Section 3.6, 8.1, 10） |
 | 障害物の高さと 3D LOS | Y 軸を含む 3D Ray-Sphere 交差判定を採用。`Obstacle.position` は球体中心（3D座標）として扱う（Section 7.2） |
+| 移動 AI の基準武器（複数武器編成） | `unit.get_active_weapon()`（先頭武器固定）ではなく `_select_weapon_fuzzy()` の選択結果、または使用可能な武器のうち最大射程のものを基準とする（Section 6.6、Issue #393） |
 
 ---
 

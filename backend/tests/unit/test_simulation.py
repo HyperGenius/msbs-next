@@ -1685,6 +1685,210 @@ def test_action_phase_uses_fuzzy_weapon_selection() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Issue #393: 武器3丁以上編成でのテストカバレッジ
+# ---------------------------------------------------------------------------
+
+
+def _make_three_weapon_unit(
+    position: Vector3 | None = None,
+    side: str = "PLAYER",
+    max_en: int = 1000,
+) -> tuple[MobileSuit, Weapon, Weapon, Weapon]:
+    """先頭武器(格闘)が使用不可、残り2丁が射程の異なる武器の3丁編成機体を生成する.
+
+    weapons[0] (先頭) はクールダウン中の格闘武器 = 使用不可
+    weapons[1] は弾切れの中射程ビーム武器 = 使用不可
+    weapons[2] は使用可能な長射程マシンガン = 使用可能（唯一の候補）
+    """
+    melee = Weapon(
+        id="melee_saber",
+        name="Beam Saber",
+        type="BEAM",
+        power=80,
+        range=50.0,
+        accuracy=90,
+        is_melee=True,
+        weapon_type="MELEE",
+        cool_down_turn=1,
+        cooldown_sec=5.0,
+    )
+    beam_rifle = Weapon(
+        id="beam_rifle",
+        name="Beam Rifle",
+        type="BEAM",
+        power=30,
+        range=400.0,
+        accuracy=85,
+        en_cost=50,
+        max_ammo=6,
+    )
+    long_range_mg = Weapon(
+        id="long_range_mg",
+        name="Long Range MG",
+        type="PHYSICAL",
+        power=15,
+        range=700.0,
+        accuracy=75,
+        max_ammo=30,
+    )
+    unit = create_ms_with_weapons(
+        [melee, beam_rifle, long_range_mg],
+        position=position,
+        max_en=max_en,
+        side=side,
+    )
+    return unit, melee, beam_rifle, long_range_mg
+
+
+def test_select_weapon_fuzzy_with_three_weapons_skips_unusable_head_weapon() -> None:
+    """3丁編成で先頭武器が使用不可でも、他スロットの使用可能な武器から選択されること."""
+    player, melee, beam_rifle, long_range_mg = _make_three_weapon_unit()
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    # 先頭武器(格闘)をクールダウン中に設定
+    sim.unit_resources[str(player.id)]["weapon_states"][melee.id] = {
+        "current_ammo": None,
+        "cooldown_remaining_sec": 3.0,
+    }
+    # ビームライフルは弾切れ
+    sim.unit_resources[str(player.id)]["weapon_states"][beam_rifle.id] = {
+        "current_ammo": 0,
+        "cooldown_remaining_sec": 0.0,
+    }
+    sim._detection_phase()
+
+    result = sim._select_weapon_fuzzy(player, enemy)
+
+    assert result is not None
+    assert result.id == long_range_mg.id
+
+
+def test_get_reference_weapon_matches_fuzzy_selection_with_three_weapons() -> None:
+    """移動AIの基準武器が先頭武器決め打ちにならないこと.
+
+    _get_reference_weapon() が _select_weapon_fuzzy() の選択結果と
+    一致することを検証する (Issue #393)。
+    """
+    player, melee, beam_rifle, long_range_mg = _make_three_weapon_unit()
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    # 先頭武器(格闘)をクールダウン中に設定し、意図的に get_active_weapon() と乖離させる
+    sim.unit_resources[str(player.id)]["weapon_states"][melee.id] = {
+        "current_ammo": None,
+        "cooldown_remaining_sec": 3.0,
+    }
+    sim._detection_phase()
+
+    fuzzy_selected = sim._select_weapon_fuzzy(player, enemy)
+    reference = sim._get_reference_weapon(player, enemy)
+
+    assert player.get_active_weapon().id == melee.id  # 先頭武器は使用不可のまま
+    assert reference is not None
+    assert reference.id == fuzzy_selected.id
+    assert reference.id != melee.id
+
+
+def test_get_reference_weapon_falls_back_to_max_range_when_no_target() -> None:
+    """ターゲット未選択時は使用可能な武器のうち最大射程のものを基準とすること."""
+    player, melee, beam_rifle, long_range_mg = _make_three_weapon_unit()
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+
+    reference = sim._get_reference_weapon(player, None)
+
+    assert reference is not None
+    assert reference.id == long_range_mg.id  # 3丁中もっとも射程が長い
+
+
+def test_get_reference_weapon_falls_back_to_active_weapon_when_all_unusable() -> None:
+    """使用可能な武器が一つもない場合は get_active_weapon() にフォールバックすること."""
+    player, melee, beam_rifle, long_range_mg = _make_three_weapon_unit()
+    enemy = create_ms_with_weapons(
+        [Weapon(id="mg", name="MG", power=10, range=300, accuracy=70)],
+        position=Vector3(x=200, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    resources = sim.unit_resources[str(player.id)]
+    # 全武器を使用不可に設定（弾切れ・クールダウン中）
+    resources["weapon_states"][melee.id] = {
+        "current_ammo": None,
+        "cooldown_remaining_sec": 3.0,
+    }
+    resources["weapon_states"][beam_rifle.id] = {
+        "current_ammo": 0,
+        "cooldown_remaining_sec": 0.0,
+    }
+    resources["weapon_states"][long_range_mg.id] = {
+        "current_ammo": 0,
+        "cooldown_remaining_sec": 0.0,
+    }
+
+    reference = sim._get_reference_weapon(player, enemy)
+
+    assert reference is not None
+    assert reference.id == player.get_active_weapon().id  # 先頭武器フォールバック
+
+
+def test_three_weapon_battle_simulation_runs_with_mixed_weapon_states() -> None:
+    """武器3丁以上・弾切れ/クールダウン混在の機体で戦闘シミュレーションが完走すること.
+
+    Issue #393 の完了条件を検証する。
+    """
+    player, melee, beam_rifle, long_range_mg = _make_three_weapon_unit(
+        position=Vector3(x=0, y=0, z=0)
+    )
+    # ビームライフルを弾切れ状態からスタートさせ、混在状況を再現
+    enemy = create_ms_with_weapons(
+        [
+            Weapon(
+                id="e_beam",
+                name="Enemy Beam",
+                type="BEAM",
+                power=20,
+                range=400,
+                accuracy=80,
+            ),
+            Weapon(
+                id="e_mg",
+                name="Enemy MG",
+                power=10,
+                range=300,
+                accuracy=70,
+                max_ammo=20,
+            ),
+        ],
+        position=Vector3(x=300, y=0, z=0),
+        side="ENEMY",
+    )
+    sim = BattleSimulator(player, [enemy])
+    sim.unit_resources[str(player.id)]["weapon_states"][beam_rifle.id] = {
+        "current_ammo": 0,
+        "cooldown_remaining_sec": 0.0,
+    }
+
+    for _ in range(20):
+        if player.current_hp <= 0 or enemy.current_hp <= 0:
+            break
+        sim.step(dt=0.5)
+
+    # エラーなく完走し、移動・攻撃ログのいずれかが生成されていること
+    assert len(sim.logs) > 0
+
+
+# ---------------------------------------------------------------------------
 # 戦略モード切り替えテスト (Phase 2-3)
 # ---------------------------------------------------------------------------
 
