@@ -1,5 +1,6 @@
 /* frontend/src/utils/rankUtils.ts */
 import { MobileSuit } from "@/types/battle";
+import { STAT_CAPS } from "@/utils/statCaps";
 
 /**
  * ランク文字列（S〜E）に対応するTailwind CSSカラークラスを返す.
@@ -40,28 +41,70 @@ type RankThreshold = { rank: string; min: number };
  */
 const THRESHOLDS: Record<string, RankThreshold[]> = {
   hp: [
-    { rank: "S", min: 2000 },
-    { rank: "A", min: 1500 },
-    { rank: "B", min: 1000 },
-    { rank: "C", min: 700 },
-    { rank: "D", min: 400 },
-    { rank: "E", min: 0 },
+    { rank: "S", min: STAT_CAPS.hp * 0.9 },
+    { rank: "A", min: STAT_CAPS.hp * 0.8 },
+    { rank: "B", min: STAT_CAPS.hp * 0.7 },
+    { rank: "C", min: STAT_CAPS.hp * 0.5 },
+    { rank: "D", min: STAT_CAPS.hp * 0.25 },
+    { rank: "E", min: STAT_CAPS.hp * 0.2 },
   ],
   armor: [
-    { rank: "S", min: 100 },
-    { rank: "A", min: 80 },
-    { rank: "B", min: 60 },
-    { rank: "C", min: 40 },
-    { rank: "D", min: 20 },
-    { rank: "E", min: 0 },
+    { rank: "S", min: STAT_CAPS.armor * 0.9 },
+    { rank: "A", min: STAT_CAPS.armor * 0.8 },
+    { rank: "B", min: STAT_CAPS.armor * 0.7 },
+    { rank: "C", min: STAT_CAPS.armor * 0.5 },
+    { rank: "D", min: STAT_CAPS.armor * 0.25 },
+    { rank: "E", min: STAT_CAPS.armor * 0.2 },
   ],
   mobility: [
-    { rank: "S", min: 2.0 },
-    { rank: "A", min: 1.5 },
-    { rank: "B", min: 1.2 },
-    { rank: "C", min: 0.9 },
-    { rank: "D", min: 0.6 },
-    { rank: "E", min: 0.0 },
+    { rank: "S", min: STAT_CAPS.mobility * 0.9 },
+    { rank: "A", min: STAT_CAPS.mobility * 0.8 },
+    { rank: "B", min: STAT_CAPS.mobility * 0.7 },
+    { rank: "C", min: STAT_CAPS.mobility * 0.5 },
+    { rank: "D", min: STAT_CAPS.mobility * 0.25 },
+    { rank: "E", min: STAT_CAPS.mobility * 0.2 },
+  ],
+  melee_aptitude: [
+    { rank: "S", min: STAT_CAPS.melee_aptitude * 0.9 },
+    { rank: "A", min: STAT_CAPS.melee_aptitude * 0.7 },
+    { rank: "B", min: STAT_CAPS.melee_aptitude * 0.5 },
+    { rank: "C", min: STAT_CAPS.melee_aptitude * 0.25 },
+    { rank: "D", min: STAT_CAPS.melee_aptitude * 0.2 },
+  ],
+  shooting_aptitude: [
+    { rank: "S", min: STAT_CAPS.shooting_aptitude * 0.9 },
+    { rank: "A", min: STAT_CAPS.shooting_aptitude * 0.7 },
+    { rank: "B", min: STAT_CAPS.shooting_aptitude * 0.5 },
+    { rank: "C", min: STAT_CAPS.shooting_aptitude * 0.25 },
+    { rank: "D", min: STAT_CAPS.shooting_aptitude * 0.2 },
+  ],
+  accuracy_bonus: [
+    { rank: "S", min: STAT_CAPS.accuracy_bonus * 0.9 },
+    { rank: "A", min: STAT_CAPS.accuracy_bonus * 0.7 },
+    { rank: "B", min: STAT_CAPS.accuracy_bonus * 0.5 },
+    { rank: "C", min: STAT_CAPS.accuracy_bonus * 0.25 },
+    { rank: "D", min: STAT_CAPS.accuracy_bonus * 0.2 },
+  ],
+  evasion_bonus: [
+    { rank: "S", min: STAT_CAPS.evasion_bonus * 0.9 },
+    { rank: "A", min: STAT_CAPS.evasion_bonus * 0.7 },
+    { rank: "B", min: STAT_CAPS.evasion_bonus * 0.5 },
+    { rank: "C", min: STAT_CAPS.evasion_bonus * 0.25 },
+    { rank: "D", min: STAT_CAPS.evasion_bonus * 0.2 },
+  ],
+  acceleration_bonus: [
+    { rank: "S", min: STAT_CAPS.acceleration_bonus * 0.9 },
+    { rank: "A", min: STAT_CAPS.acceleration_bonus * 0.7 },
+    { rank: "B", min: STAT_CAPS.acceleration_bonus * 0.5 },
+    { rank: "C", min: STAT_CAPS.acceleration_bonus * 0.25 },
+    { rank: "D", min: STAT_CAPS.acceleration_bonus * 0.2 },
+  ],
+  turning_bonus: [
+    { rank: "S", min: STAT_CAPS.turning_bonus * 0.9 },
+    { rank: "A", min: STAT_CAPS.turning_bonus * 0.7 },
+    { rank: "B", min: STAT_CAPS.turning_bonus * 0.5 },
+    { rank: "C", min: STAT_CAPS.turning_bonus * 0.25 },
+    { rank: "D", min: STAT_CAPS.turning_bonus * 0.2 },
   ],
   weapon_power: [
     { rank: "S", min: 300 },
@@ -102,7 +145,19 @@ function lookupRank(statName: string, value: number): string {
  * ステータス値をランク文字列（S〜E）に変換する.
  * バックエンドと同じ閾値テーブルを使用。
  */
-export function getRank(statName: "hp" | "armor" | "mobility", value: number): string {
+export function getRank(
+  statName:
+    | "hp"
+    | "armor"
+    | "mobility"
+    | "melee_aptitude"
+    | "shooting_aptitude"
+    | "accuracy_bonus"
+    | "evasion_bonus"
+    | "acceleration_bonus"
+    | "turning_bonus",
+  value: number
+): string {
   return lookupRank(statName, value);
 }
 
