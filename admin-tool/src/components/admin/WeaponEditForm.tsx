@@ -89,8 +89,8 @@ function toFormValues(w: MasterWeapon): WeaponFormValues {
       is_melee: w.weapon.is_melee ?? false,
       max_ammo: w.weapon.max_ammo ?? null,
       en_cost: w.weapon.en_cost ?? 0,
-      cooldown_sec: (w.weapon as { cooldown_sec?: number }).cooldown_sec ?? 1.0,
-      fire_arc_deg: (w.weapon as { fire_arc_deg?: number }).fire_arc_deg ?? 30.0,
+      cooldown_sec: w.weapon.cooldown_sec ?? 1.0,
+      fire_arc_deg: w.weapon.fire_arc_deg ?? 30.0,
     },
   };
 }

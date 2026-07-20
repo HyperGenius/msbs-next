@@ -55,6 +55,12 @@ def test_get_weapon_listings_tolerates_legacy_weapon_json_with_id_name(client, s
     session.add(legacy_record)
     session.commit()
 
+    # 直前のテストでキャッシュされた武器ショップ一覧が残っていても
+    # 今追加したレコードが確実に反映されるようにキャッシュを明示的にクリアする
+    import app.core.gamedata as gd
+
+    gd._weapon_shop_listings_cache = None
+
     response = client.get("/api/shop/weapons")
     assert response.status_code == status.HTTP_200_OK
 

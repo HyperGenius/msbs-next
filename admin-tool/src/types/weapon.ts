@@ -10,6 +10,8 @@ export interface WeaponSpec {
     max_ammo?: number | null;
     en_cost?: number;
     cool_down_turn?: number;
+    cooldown_sec?: number;
+    fire_arc_deg?: number;
     is_melee?: boolean;
     /** 装備に必要なビームジェネレータLv (BEAM属性武器のみ有効) */
     required_beam_generator_lv?: number;
