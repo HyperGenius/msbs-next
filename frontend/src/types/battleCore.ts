@@ -12,6 +12,10 @@ export interface BattleLog {
     position_snapshot: Vector3;
     chatter?: string;
     weapon_name?: string;
+    /** 使用した武器のID（フロントエンドでの武器特定用） */
+    weapon_id?: string;
+    /** クリティカルヒット判定 */
+    is_crit?: boolean;
     target_max_hp?: number;
     /** スキルが命中/回避の判定を変えた場合 true */
     skill_activated?: boolean;

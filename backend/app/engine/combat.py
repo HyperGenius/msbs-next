@@ -673,6 +673,8 @@ class CombatMixin:
                 message=f"{log_base}{hit_text}{damage_message}",
                 position_snapshot=snapshot,
                 weapon_name=weapon.name if weapon else None,
+                weapon_id=weapon.id if weapon else None,
+                is_crit=is_crit,
                 chatter=attack_chatter or hit_chatter,
                 skill_activated=True if skill_activated else None,
                 heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]

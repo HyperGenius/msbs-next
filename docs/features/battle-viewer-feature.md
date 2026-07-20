@@ -243,6 +243,16 @@ interface UnitSnapshot {
 }
 ```
 
+### 実際に使用した武器の特定（EN/弾薬消費計算）
+
+`getBattleSnapshot`（`useBattleSnapshot.ts`）は ATTACK ログの EN/弾薬消費を計算する際、
+`BattleLog.weapon_id` から `initialMs.weapons` 内の該当武器を検索して使用する。
+
+- `log.weapon_id` が存在する場合: 一致する武器を `initialMs.weapons` から検索
+- `log.weapon_id` が存在しない場合（旧バトルログとの後方互換）、または一致する武器が見つからない場合: 先頭武器（`initialMs.weapons[0]`）にフォールバック
+
+`BattleLog` には `is_crit`（クリティカルヒット判定）も含まれる（バックエンドの `combat.py` で判定済みのbool値をそのまま保持）。
+
 ---
 
 ## 関連ファイル一覧
