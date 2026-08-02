@@ -328,7 +328,7 @@ function WeaponInventoryRow({
   const slots = getWeaponSlots(selectedMs?.weapon_slot_count);
 
   return (
-    <SciFiCard variant="primary" className="p-3 sm:p-4">
+    <SciFiCard variant="primary" className="p-3">
       <div className="flex justify-between items-start gap-3">
         <div className="font-bold text-base sm:text-lg">{spec.name}</div>
         <span
@@ -360,17 +360,17 @@ function WeaponInventoryRow({
         </span>
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2">
         {isEquipped ? (
           equippedMs ? (
-            <SciFiButton
-              variant="accent"
-              size="sm"
+            <button
+              type="button"
               onClick={() => onNavigateToEquippedMs(equippedMs.id)}
+              className="w-full border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black active:bg-[#00ff41] active:text-black transition-colors font-bold font-mono text-sm px-4 py-2.5"
             >
               → {equippedMs.name}へ移動（スロット
               {(playerWeapon.equipped_slot ?? 0) + 1}）
-            </SciFiButton>
+            </button>
           ) : (
             <span className="text-xs sm:text-sm font-bold text-[#ffb000]">
               装備先: 不明な機体
@@ -382,7 +382,7 @@ function WeaponInventoryRow({
       </div>
 
       {!isEquipped && (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <SciFiSelect
             value={selectedMsId}
             onChange={(e) => {

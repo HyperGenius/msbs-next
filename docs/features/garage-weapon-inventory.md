@@ -40,7 +40,7 @@ Garageページ（`frontend/src/app/garage/page.tsx`）にタブ切り替えを�
 
 ### 一覧からの操作
 
-- **装備中の武器の行**: 行自体はクリック不可（将来の武器改造モーダルの導線として予約するため）。装備先MS名・スロット番号を含む一体化ボタン「→ {MS名}へ移動（スロットN）」（`SciFiButton` variant="accent"）を設置し、押すと装備先MSの `CustomizationModal` を開く（`useGarageEditor.handleNavigateToEquippedMs`）。カードの主目的アクションであるため、下線リンクではなく塗りつぶしボタンとして視覚的な重みを持たせている。武器変更モーダルへは自動遷移させず、ユーザーが次のアクション（LOADOUTタブ操作など）を自分で選べるようにする
+- **装備中の武器の行**: 行自体はクリック不可（将来の武器改造モーダルの導線として予約するため）。装備先MS名・スロット番号を含む一体化ボタン「→ {MS名}へ移動（スロットN）」を、カード幅いっぱいの独自ボタン（`SciFiButton` は使わず素の `<button>`）として設置し、押すと装備先MSの `CustomizationModal` を開く（`useGarageEditor.handleNavigateToEquippedMs`）。カードの主目的アクションであるため、下線リンクではなくボタンとして視覚的な重みを持たせている。配色は新色を追加せず既存パレットの範囲内（`#00ff41`）に収め、通常時は1pxボーダー+透明背景、hover/active時のみ緑背景+黒文字に反転する構成にして、常時は主張しすぎない見た目にしている。武器変更モーダルへは自動遷移させず、ユーザーが次のアクション（LOADOUTタブ操作など）を自分で選べるようにする
 - **未装備の武器の行** → 装備先MS・スロットをインラインの `SciFiSelect` で選択し、「装備する」ボタンで直接装備できる（`useGarageEditor.handleEquipFromInventory` が `PUT /api/mobile_suits/{ms_id}/equip` を呼び出す既存の `equipWeapon` サービス関数を利用）
 
 > [!NOTE]
