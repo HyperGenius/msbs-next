@@ -13,6 +13,7 @@ export function getRankColor(rank: string): string {
     case "B": return "text-yellow-400";
     case "C": return "text-orange-400";
     case "D": return "text-red-400";
+    case "E": return "text-red-600";
     default:  return "text-gray-400";
   }
 }

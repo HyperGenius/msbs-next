@@ -5,12 +5,32 @@ import { useMemo, useState } from "react";
 import { PlayerWeapon, Weapon } from "@/types/battle";
 import { EnrichedMobileSuit } from "@/utils/rankUtils";
 import { SciFiButton, SciFiCard, SciFiHeading, SciFiPanel, SciFiSelect } from "@/components/ui";
-import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
+import { getWeaponRank } from "@/utils/rankUtils";
 import { getWeaponSlots } from "../constants";
 
 type TypeFilter = "ALL" | "BEAM" | "PHYSICAL";
 type EquipFilter = "ALL" | "UNEQUIPPED_ONLY";
 type SortOrder = "ACQUIRED_DESC" | "ACQUIRED_ASC" | "EQUIPPED_FIRST";
+
+const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
+  { value: "ACQUIRED_DESC", label: "取得日時: 新しい順" },
+  { value: "ACQUIRED_ASC", label: "取得日時: 古い順" },
+  { value: "EQUIPPED_FIRST", label: "装備中が上" },
+];
+
+/** ランク文字（S〜E）を背景付きバッジのスタイルに変換する（テキスト色だけだと視認性が低いため） */
+const RANK_BADGE_CLASSES: Record<string, string> = {
+  S: "bg-green-400/15 text-green-300 border-green-400/50",
+  A: "bg-blue-400/15 text-blue-300 border-blue-400/50",
+  B: "bg-yellow-400/15 text-yellow-300 border-yellow-400/50",
+  C: "bg-orange-400/15 text-orange-300 border-orange-400/50",
+  D: "bg-red-400/15 text-red-300 border-red-400/50",
+  E: "bg-red-900/40 text-red-500 border-red-800/60",
+};
+
+function rankBadgeClass(rank: string): string {
+  return RANK_BADGE_CLASSES[rank] ?? "bg-gray-400/15 text-gray-300 border-gray-400/50";
+}
 
 /** 未装備のみ表示トグル用のフィルタアイコン（漏斗） */
 function FilterIcon({ className }: { className?: string }) {
@@ -65,6 +85,26 @@ function SortIcon({ className }: { className?: string }) {
   );
 }
 
+/** 空状態表示用のアイコン（武器箱） */
+function EmptyBoxIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 8l9-5 9 5-9 5-9-5Z" />
+      <path d="M3 8v8l9 5 9-5V8" />
+      <path d="M12 13v8" />
+    </svg>
+  );
+}
+
 interface WeaponInventoryListProps {
   playerWeapons: PlayerWeapon[] | undefined;
   mobileSuits: EnrichedMobileSuit[] | undefined;
@@ -88,6 +128,9 @@ export default function WeaponInventoryList({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
   const [equipFilter, setEquipFilter] = useState<EquipFilter>("ALL");
   const [sortOrder, setSortOrder] = useState<SortOrder>("ACQUIRED_DESC");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+
+  const isFiltered = typeFilter !== "ALL" || equipFilter !== "ALL";
 
   const rows = useMemo(() => {
     if (!playerWeapons) return [];
@@ -115,15 +158,29 @@ export default function WeaponInventoryList({
     });
   }, [playerWeapons, typeFilter, equipFilter, sortOrder]);
 
+  const resetFilters = () => {
+    setTypeFilter("ALL");
+    setEquipFilter("ALL");
+  };
+
   return (
     <SciFiPanel variant="primary">
       <div className="p-4 sm:p-6">
-        <SciFiHeading level={3} className="mb-4 text-lg sm:text-xl">
-          所持武器一覧
-        </SciFiHeading>
+        <div className="flex items-baseline justify-between mb-3">
+          <SciFiHeading level={3} className="text-lg sm:text-xl">
+            所持武器一覧
+          </SciFiHeading>
+          {playerWeapons && (
+            <span className="text-xs text-[#00ff41]/50">
+              {rows.length}
+              {isFiltered ? ` / ${playerWeapons.length}` : ""}件
+            </span>
+          )}
+        </div>
 
-        {/* フィルタ・並び替え（1行に収める。狭幅では横スクロール） */}
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto">
+        {/* フィルタ: 使用頻度の高い2つ（未装備のみ／属性）だけを常時表示し、
+            並び替えはアイコンボタンからポップアップメニューで選ばせる（1行に3種のUIを混在させない） */}
+        <div className="flex items-center gap-2 mb-4">
           <button
             type="button"
             title="未装備のみ表示"
@@ -133,49 +190,92 @@ export default function WeaponInventoryList({
                 prev === "UNEQUIPPED_ONLY" ? "ALL" : "UNEQUIPPED_ONLY"
               )
             }
-            className={`shrink-0 flex items-center gap-1 px-2 py-1.5 text-xs font-bold border-2 transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-2 transition-colors whitespace-nowrap ${
               equipFilter === "UNEQUIPPED_ONLY"
                 ? "bg-[#00ff41] text-black border-[#00ff41]"
                 : "bg-transparent text-[#00ff41] border-[#00ff41]/40 hover:border-[#00ff41]"
             }`}
           >
-            <FilterIcon className="w-3.5 h-3.5" />
+            <FilterIcon className="w-4 h-4" />
             未装備のみ
           </button>
 
-          <div className="shrink-0 flex items-center gap-1">
-            <TypeIcon className="w-3.5 h-3.5 text-[#00ff41]/60" />
+          <div className="flex items-center gap-1.5">
+            <TypeIcon className="w-4 h-4 text-[#00ff41]/60 shrink-0" />
             <SciFiSelect
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-              className="!w-auto !px-2 !py-1.5 !text-xs"
+              className="!w-auto !px-2 !py-2 !text-xs"
               options={[
-                { value: "ALL", label: "すべて" },
+                { value: "ALL", label: "属性: すべて" },
                 { value: "BEAM", label: "BEAM" },
                 { value: "PHYSICAL", label: "PHYSICAL" },
               ]}
             />
           </div>
 
-          <div className="shrink-0 flex items-center gap-1">
-            <SortIcon className="w-3.5 h-3.5 text-[#00ff41]/60" />
-            <SciFiSelect
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-              className="!w-auto !px-2 !py-1.5 !text-xs"
-              options={[
-                { value: "ACQUIRED_DESC", label: "新しい順" },
-                { value: "ACQUIRED_ASC", label: "古い順" },
-                { value: "EQUIPPED_FIRST", label: "装備中が上" },
-              ]}
-            />
+          {/* 並び替え: 使用頻度が低いため、アイコンボタン+ポップアップメニューに格納 */}
+          <div className="relative ml-auto">
+            <button
+              type="button"
+              title="並び替え"
+              aria-haspopup="listbox"
+              aria-expanded={sortMenuOpen}
+              onClick={() => setSortMenuOpen((prev) => !prev)}
+              className={`flex items-center justify-center w-9 h-9 border-2 transition-colors ${
+                sortMenuOpen
+                  ? "bg-[#00ff41]/20 border-[#00ff41] text-[#00ff41]"
+                  : "bg-transparent border-[#00ff41]/40 text-[#00ff41]/70 hover:border-[#00ff41] hover:text-[#00ff41]"
+              }`}
+            >
+              <SortIcon className="w-4 h-4" />
+            </button>
+
+            {sortMenuOpen && (
+              <>
+                {/* 外側クリックで閉じるための透明な背景 */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setSortMenuOpen(false)}
+                />
+                <div className="absolute right-0 z-50 mt-1 w-44 border-2 border-[#00ff41]/50 bg-[#0a0a0a] shadow-lg">
+                  {SORT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setSortOrder(opt.value);
+                        setSortMenuOpen(false);
+                      }}
+                      className={`block w-full text-left px-3 py-2 text-xs whitespace-nowrap ${
+                        sortOrder === opt.value
+                          ? "bg-[#00ff41]/20 text-[#00ff41] font-bold"
+                          : "text-[#00ff41]/70 hover:bg-[#00ff41]/10"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
         {rows.length === 0 ? (
-          <p className="text-[#00ff41]/50 text-sm">
-            条件に一致する所持武器がありません。
-          </p>
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <EmptyBoxIcon className="w-10 h-10 text-[#00ff41]/30" />
+            <p className="text-[#00ff41]/50 text-sm">
+              {isFiltered
+                ? "条件に一致する所持武器がありません。"
+                : "所持している武器がありません。ショップで武器を購入してください。"}
+            </p>
+            {isFiltered && (
+              <SciFiButton variant="primary" size="sm" onClick={resetFilters}>
+                フィルタをリセット
+              </SciFiButton>
+            )}
+          </div>
         ) : (
           <ul className="space-y-2">
             {rows.map((pw) => (
@@ -242,38 +342,42 @@ function WeaponInventoryRow({
         </span>
       </div>
 
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <div className="text-xs sm:text-sm text-[#00ff41]/70 flex gap-3">
-          <span className={`font-bold ${getRankColor(powerRank)}`}>
-            威力: {powerRank}
-          </span>
-          <span className={`font-bold ${getRankColor(rangeRank)}`}>
-            射程: {rangeRank}
-          </span>
-          <span className={`font-bold ${getRankColor(accuracyRank)}`}>
-            命中: {accuracyRank}
-          </span>
-        </div>
+      <div className="mt-2 flex gap-2">
+        <span
+          className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(powerRank)}`}
+        >
+          威力{powerRank}
+        </span>
+        <span
+          className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(rangeRank)}`}
+        >
+          射程{rangeRank}
+        </span>
+        <span
+          className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(accuracyRank)}`}
+        >
+          命中{accuracyRank}
+        </span>
+      </div>
 
+      <div className="mt-3">
         {isEquipped ? (
           equippedMs ? (
-            <button
-              type="button"
+            <SciFiButton
+              variant="accent"
+              size="sm"
               onClick={() => onNavigateToEquippedMs(equippedMs.id)}
-              className="shrink-0 whitespace-nowrap text-xs sm:text-sm font-bold text-[#00f0ff] underline underline-offset-2 hover:text-[#00ff41] transition-colors"
             >
               → {equippedMs.name}へ移動（スロット
               {(playerWeapon.equipped_slot ?? 0) + 1}）
-            </button>
+            </SciFiButton>
           ) : (
-            <span className="shrink-0 whitespace-nowrap text-xs sm:text-sm font-bold text-[#ffb000]">
+            <span className="text-xs sm:text-sm font-bold text-[#ffb000]">
               装備先: 不明な機体
             </span>
           )
         ) : (
-          <span className="shrink-0 whitespace-nowrap text-xs sm:text-sm text-[#00ff41]/50">
-            未装備
-          </span>
+          <span className="text-xs sm:text-sm text-[#00ff41]/50">未装備</span>
         )}
       </div>
 
