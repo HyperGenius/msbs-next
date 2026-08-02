@@ -24,20 +24,22 @@ class WeaponService:
     """武器インスタンスを操作するサービス."""
 
     @staticmethod
-    def apply_effective_spec(base_snapshot: dict, custom_stats: dict) -> Weapon:
+    def apply_effective_spec(base_snapshot: dict, custom_stats: dict | None) -> Weapon:
         """base_snapshot に custom_stats の強化・改造差分をマージした実効スペックを計算する.
 
         custom_stats にキーが欠損している場合は WeaponCustomStats のデフォルト
         （0 / 未変更）として扱うため、既存の空 `{}` の行も安全にマージできる。
+        `player_weapons.custom_stats` カラムは nullable のため、DB上で `None` の
+        行が存在しうる（`None` も空 `{}` と同等に扱う）。
 
         Args:
             base_snapshot: 購入時の Weapon スペックスナップショット
-            custom_stats: 強化・改造による差分（PlayerWeapon.custom_stats）
+            custom_stats: 強化・改造による差分（PlayerWeapon.custom_stats）。None可
 
         Returns:
             Weapon: base_snapshot + custom_stats をマージした実効スペック
         """
-        diff = WeaponCustomStats(**custom_stats)
+        diff = WeaponCustomStats(**(custom_stats or {}))
         merged = dict(base_snapshot)
         merged["power"] = merged.get("power", 0) + diff.power_bonus
         merged["accuracy"] = merged.get("accuracy", 0.0) + diff.accuracy_bonus

@@ -35,3 +35,11 @@ def test_apply_effective_spec_ignores_missing_keys_as_zero() -> None:
 
     assert weapon.power == 70
     assert weapon.accuracy == 80.0
+
+
+def test_apply_effective_spec_with_none_custom_stats_returns_base_values() -> None:
+    """custom_stats が None（DB上のnullable列由来）の場合も空 {} と同様に扱われる."""
+    weapon = WeaponService.apply_effective_spec(BASE_SNAPSHOT, None)
+
+    assert weapon.power == 50
+    assert weapon.accuracy == 80.0
