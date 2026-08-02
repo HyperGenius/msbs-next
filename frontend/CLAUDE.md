@@ -256,6 +256,25 @@ luk: number;
 
 ---
 
+## SciFi UIコンポーネント（`src/components/ui/`）の注意点
+
+- `SciFiSelect` は `<option>` を子要素に渡す方式ではなく、**`options: { value, label }[]` prop必須**（`SciFiSelect.tsx`）。`<SciFiSelect><option>...</option></SciFiSelect>` のような書き方はできない
+- `SciFiSelect` は既定で `w-full`（幅いっぱい）。フィルタバーなどで幅を詰めたい場合、`className` に通常の `w-auto` を渡しても効かないことがある（`w-full` が base クラス文字列に先に埋め込まれており、Tailwindの生成順序次第でどちらが勝つか不定なため）。確実に上書きするには `!w-auto`（important修飾子）を使う。同様に `!px-2 !py-2 !text-xs` のようにpadding/font-sizeも上書き可能
+- `SciFiButton` は `primary`/`secondary`/`accent`/`danger` の**塗りつぶしvariantのみ**で、アウトライン（枠線のみ）variantは存在しない。ボーダーのみ→hover/active時に反転する強調ボタンが欲しい場合は `SciFiButton` を使わず素の `<button>` に自前でクラスを書く（例: `border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black`）
+- `SciFiCard` の `onClick` は `() => void`（イベント引数を受け取らない）。`(e) => e.stopPropagation()` のような使い方はできない
+
+## アイコンの扱い
+
+プロジェクトにアイコンライブラリ（lucide-react, react-icons, heroicons等）は**導入されていない**。UIにアイコンが必要な場合は依存追加を避け、`stroke="currentColor"` ベースの最小限のインラインSVGをコンポーネントファイル内にローカル関数として定義する（例: `WeaponInventoryList.tsx` の `FilterIcon` / `TypeIcon` / `SortIcon` / `EmptyBoxIcon`）。テキスト絵文字（`✕`など）で足りる場合はそちらでも可。
+
+## SWRフックはコンポーネント側で直接呼んでよい（プロップドリリング不要）
+
+親コンポーネントが既に同じデータソースを別条件で fetch している場合でも、子コンポーネントが異なるクエリパラメータで取得したい時は、子側で直接 SWR フック（`usePlayerWeapons(unequippedOnly)` など）を呼び出してよい。SWR は同一URLをグローバルキャッシュキーとして重複排除するため、条件が親と同じ（例: フィルタOFF時）であれば追加のネットワークリクエストは発生せず、条件が異なる（例: `?unequipped=true` を付けたい時）場合だけ新しいキーとして取得される。`playerWeapons` を毎回 prop で渡す設計より、こちらの方が「必要な時だけ絞り込みクエリを叩く」実装をシンプルに保てる（`WeaponInventoryList.tsx` 参照）。
+
+## 武器の装備状態の正（Garage関連UI）
+
+`MobileSuit.weapons`（JSON列、バトルエンジン用スナップショット）と `PlayerWeapon.equipped_ms_id`/`equipped_slot`（正規化された装備状態）の**2つの情報源が並存**している。Garage画面などで「どの武器がどのMSに装備されているか」を表示する場合は、必ず `PlayerWeapon` 側のフィールドを正として使うこと。`MobileSuit.weapons` は装備操作のたびに追随更新されるが、あくまでバトルエンジンが直接参照するためのスナップショットであり、UI表示のソースにしない。
+
 ## よくあるハマりポイント
 
 | 状況 | 対処 |
@@ -266,3 +285,6 @@ luk: number;
 | SSR で `getAuthToken` が null を返す | 正常動作。`window.Clerk` はクライアントサイドのみ存在する |
 | `types/battle.ts` の名前衝突 | バトル実装型は `battleCore.ts` に置く。`battle.ts` はバレル専用 |
 | モーダルが BottomNav の裏に隠れる | `BottomNav` は `z-50 h-16 fixed bottom-0 md:hidden`。モーダルは `z-[60]` 以上にすること。また `items-center p-4` で上下均等マージンを確保すること |
+| `SciFiSelect` の幅・paddingが `className` で変わらない | base クラスに `w-full`/`px-4 py-2` が先に入っているため、`!w-auto` のように important修飾子を付けて上書きする |
+| `getRankColor`（`utils/rankUtils.ts`）でランクEが灰色になる | 元々 `S`〜`D` のみ定義され `E` は `default` にフォールバックしていた。`E` 用のケースを追加済みだが、ランク関連の新規UIを書く際は S〜E 全ケースが期待通り色分けされるか確認する |
+| 未ログイン状態で `/garage` 等の保護ルートにアクセスすると 404 になる | Clerkのルート保護（`protect-rewrite`）による意図した挙動。プレビュー確認時はログインが必要で、このリポジトリにはClerkテストトークンを使ったE2E（Playwright等）の仕組みが無いため、認証必須ページのUI動作は `tsc`/`vitest`/`next build` のみで確認し、実ログインでの見た目確認は別途手動で行う旨を明記する |

@@ -81,6 +81,19 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 
 ---
 
+## 武器データモデル（`player_weapons` / `MobileSuit.weapons`）
+
+武器の所持・装備は `PlayerWeapon`（`player_weapons` テーブル、`models.py`）でインスタンス管理されている:
+
+- `id`（UUID）/ `user_id` / `master_weapon_id`（`master_weapons` への論理FK）
+- `base_snapshot`: 購入時点の `Weapon` スペックのスナップショット（JSON）
+- `custom_stats`: **強化・改造による差分を持たせるための予約フィールド。現状は常に空 `{}` で、読み書きするロジックは未実装**（将来の武器改造機能で `base_snapshot + custom_stats` をマージして実効スペックを計算する設計を想定）
+- `equipped_ms_id` / `equipped_slot`: 装備状態の正。`UniqueConstraint(equipped_ms_id, equipped_slot)` で1スロット1武器を担保
+
+一方で `MobileSuit.weapons`（JSON列）は**バトルエンジンが直接参照するためのスナップショットのリスト**であり、装備操作のたびに `PlayerWeapon` の内容から書き込まれる（dual-write）。装備状態を問い合わせる/表示する処理は必ず `PlayerWeapon.equipped_ms_id`/`equipped_slot` を正として使うこと。
+
+**既知の設計上の矛盾**: `EngineeringService`（`app/services/engineering_service.py`）の `weapon_power` 強化項目は、`PlayerWeapon` インスタンス単位ではなく `MobileSuit.weapons` の**全スロットに一律加算**する実装になっている（`_apply_weapon_power_upgrade`）。そのため武器を外す・付け替えると強化投資が失われ、`PlayerWeapon.custom_stats` を正とする将来の武器インスタンス単位の改造機能とは非互換。武器改造機能を実装する際は、この既存の `weapon_power` 強化との関係（統合するか、別軸の強化として維持するか）を先に決める必要がある。
+
 ## コーディング規約
 `Agent.md` の `4. コーディング規約`を参照してください。
 
