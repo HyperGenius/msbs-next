@@ -16,11 +16,34 @@ from app.models.models import (
     Pilot,
     PlayerWeapon,
     Weapon,
+    WeaponCustomStats,
 )
 
 
 class WeaponService:
     """武器インスタンスを操作するサービス."""
+
+    @staticmethod
+    def apply_effective_spec(base_snapshot: dict, custom_stats: dict | None) -> Weapon:
+        """base_snapshot に custom_stats の強化・改造差分をマージした実効スペックを計算する.
+
+        custom_stats にキーが欠損している場合は WeaponCustomStats のデフォルト
+        （0 / 未変更）として扱うため、既存の空 `{}` の行も安全にマージできる。
+        `player_weapons.custom_stats` カラムは nullable のため、DB上で `None` の
+        行が存在しうる（`None` も空 `{}` と同等に扱う）。
+
+        Args:
+            base_snapshot: 購入時の Weapon スペックスナップショット
+            custom_stats: 強化・改造による差分（PlayerWeapon.custom_stats）。None可
+
+        Returns:
+            Weapon: base_snapshot + custom_stats をマージした実効スペック
+        """
+        diff = WeaponCustomStats(**(custom_stats or {}))
+        merged = dict(base_snapshot)
+        merged["power"] = merged.get("power", 0) + diff.power_bonus
+        merged["accuracy"] = merged.get("accuracy", 0.0) + diff.accuracy_bonus
+        return Weapon(**merged)
 
     @staticmethod
     def purchase_weapon(session: Session, user_id: str, weapon_id: str) -> PlayerWeapon:
@@ -221,7 +244,10 @@ class WeaponService:
         session.add(player_weapon)
 
         # 後方互換性のため MobileSuit.weapons も更新する
-        weapon_obj = Weapon(**player_weapon.base_snapshot)
+        # （base_snapshot + custom_stats をマージした実効スペックを書き込む）
+        weapon_obj = WeaponService.apply_effective_spec(
+            player_weapon.base_snapshot, player_weapon.custom_stats
+        )
         new_weapons = list(mobile_suit.weapons or [])
         if slot_index >= len(new_weapons):
             new_weapons.append(weapon_obj)

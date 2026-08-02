@@ -97,12 +97,23 @@ export interface EquipWeaponRequest {
     slot_index?: number;
 }
 
+/**
+ * 武器インスタンスの強化・改造差分（Issue #404）。
+ * キー欠損時はバックエンド側で0/未変更として扱われる（既存の空 `{}` も安全）。
+ * `weapon_power`（機体強化、`EngineeringService` 管理）とは別軸の武器個別改造。
+ */
+export interface WeaponCustomStats {
+    power_bonus?: number;
+    accuracy_bonus?: number;
+    upgrade_level?: number;
+}
+
 /** プレイヤーが所有する武器インスタンス（マスターとは別に個別強化データを持つ） */
 export interface PlayerWeapon {
     id: string;
     master_weapon_id: string;
     base_snapshot: Record<string, unknown>;
-    custom_stats: Record<string, unknown>;
+    custom_stats: WeaponCustomStats;
     equipped_ms_id: string | null;
     equipped_slot: number | null;
     acquired_at: string;

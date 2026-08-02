@@ -19,7 +19,15 @@ class _FloatStatConfig(NamedTuple):
 
 
 class EngineeringService:
-    """Service for upgrading mobile suit stats using Credits."""
+    """Service for upgrading mobile suit stats using Credits.
+
+    NOTE (Issue #404): ``weapon_power`` はここでは「機体側のパイロット/システム補正」
+    として扱う。装備中の全武器の ``MobileSuit.weapons[*].power`` に一律加算する現行
+    実装のままとし、武器インスタンス単位の改造（``PlayerWeapon.custom_stats``、
+    ``WeaponService.apply_effective_spec``）とは意図的に別軸として維持する（方針(b)）。
+    武器を外す・付け替えると本強化の投資は失われる既知の制約があるため、UIでは
+    「機体強化」と「武器改造」を別物として提示すること。
+    """
 
     # Upgrade cost multipliers
     BASE_HP_COST = 50
