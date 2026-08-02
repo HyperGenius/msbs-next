@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SciFiButton, SciFiHeading, SciFiPanel } from "@/components/ui";
 import { useGarageEditor } from "./hooks/useGarageEditor";
 import MobileSuitList from "./components/MobileSuitList";
+import WeaponInventoryList from "./components/WeaponInventoryList";
 import CustomizationModal from "./components/CustomizationModal";
 import WeaponChangeModal from "./components/WeaponChangeModal";
 
@@ -24,8 +25,10 @@ export default function GaragePage() {
     selectedWeaponSlot,
     previewWeaponId,
     formData,
+    activeTab,
     setFormData,
     setPreviewWeaponId,
+    setActiveTab,
     handleSelectMs,
     handleCloseCustomizationModal,
     handleUpgraded,
@@ -33,6 +36,8 @@ export default function GaragePage() {
     handleOpenWeaponModal,
     handleCloseWeaponModal,
     handleEquipWeapon,
+    handleNavigateToEquippedWeapon,
+    handleEquipFromInventory,
   } = useGarageEditor();
 
   if (isError) {
@@ -59,6 +64,30 @@ export default function GaragePage() {
               <SciFiHeading level={2} className="text-xl sm:text-2xl">GARAGE</SciFiHeading>
             </div>
           </div>
+
+          {/* タブ切り替え: 機体一覧 / 所持武器一覧 */}
+          <div className="flex gap-1 mt-4">
+            <button
+              onClick={() => setActiveTab("MOBILE_SUITS")}
+              className={`px-4 py-2 text-xs sm:text-sm font-bold font-mono tracking-wider transition-all whitespace-nowrap ${
+                activeTab === "MOBILE_SUITS"
+                  ? "bg-[#00ff41]/20 text-[#00ff41] border-b-2 border-[#00ff41]"
+                  : "text-[#00ff41]/40 hover:text-[#00ff41]/70 hover:bg-[#00ff41]/5"
+              }`}
+            >
+              機体一覧
+            </button>
+            <button
+              onClick={() => setActiveTab("WEAPONS")}
+              className={`px-4 py-2 text-xs sm:text-sm font-bold font-mono tracking-wider transition-all whitespace-nowrap ${
+                activeTab === "WEAPONS"
+                  ? "bg-[#00ff41]/20 text-[#00ff41] border-b-2 border-[#00ff41]"
+                  : "text-[#00ff41]/40 hover:text-[#00ff41]/70 hover:bg-[#00ff41]/5"
+              }`}
+            >
+              所持武器一覧
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -71,12 +100,21 @@ export default function GaragePage() {
           </div>
         ) : (
           <div className="max-w-3xl mx-auto">
-            {/* 機体リスト（全幅表示） */}
-            <MobileSuitList
-              mobileSuits={mobileSuits}
-              selectedMs={selectedMs}
-              onSelect={handleSelectMs}
-            />
+            {activeTab === "MOBILE_SUITS" ? (
+              <MobileSuitList
+                mobileSuits={mobileSuits}
+                selectedMs={selectedMs}
+                onSelect={handleSelectMs}
+              />
+            ) : (
+              <WeaponInventoryList
+                playerWeapons={playerWeapons}
+                mobileSuits={mobileSuits}
+                isBusy={isSaving}
+                onNavigateToEquippedWeapon={handleNavigateToEquippedWeapon}
+                onEquip={handleEquipFromInventory}
+              />
+            )}
           </div>
         )}
 

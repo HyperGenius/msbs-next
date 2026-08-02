@@ -29,6 +29,9 @@ export function useGarageEditor() {
   const [showWeaponModal, setShowWeaponModal] = useState(false);
   const [selectedWeaponSlot, setSelectedWeaponSlot] = useState(0);
   const [previewWeaponId, setPreviewWeaponId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"MOBILE_SUITS" | "WEAPONS">(
+    "MOBILE_SUITS"
+  );
 
   const [formData, setFormData] = useState({
     name: "",
@@ -136,6 +139,38 @@ export function useGarageEditor() {
     }
   };
 
+  // 所持武器一覧の「装備先を確認」操作: 対象機体のカスタマイズ／武器変更モーダルを開く
+  const handleNavigateToEquippedWeapon = (msId: string, slotIndex: number) => {
+    const ms = mobileSuits?.find((m) => m.id === msId);
+    if (!ms) return;
+    handleSelectMs(ms);
+    handleOpenWeaponModal(slotIndex);
+  };
+
+  // 所持武器一覧から直接、指定機体・スロットへ武器を装備する
+  const handleEquipFromInventory = async (
+    playerWeaponId: string,
+    msId: string,
+    slotIndex: number
+  ) => {
+    setIsSaving(true);
+    try {
+      await equipWeapon(msId, {
+        player_weapon_id: playerWeaponId,
+        slot_index: slotIndex,
+      });
+      mutate();
+      mutatePlayerWeapons();
+    } catch (error) {
+      console.error("Equip error:", error);
+      alert(
+        error instanceof Error ? error.message : "武器の装備に失敗しました"
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return {
     // data
     mobileSuits,
@@ -152,9 +187,11 @@ export function useGarageEditor() {
     selectedWeaponSlot,
     previewWeaponId,
     formData,
+    activeTab,
     // setters
     setFormData,
     setPreviewWeaponId,
+    setActiveTab,
     // handlers
     handleSelectMs,
     handleCloseCustomizationModal,
@@ -163,5 +200,7 @@ export function useGarageEditor() {
     handleOpenWeaponModal,
     handleCloseWeaponModal,
     handleEquipWeapon,
+    handleNavigateToEquippedWeapon,
+    handleEquipFromInventory,
   };
 }
