@@ -187,29 +187,22 @@ function WeaponInventoryRow({
         </span>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+      <div className="mt-2 text-xs sm:text-sm">
         {isEquipped ? (
-          <>
-            <span className="text-[#00f0ff]">
-              装備先:{" "}
-              {equippedMs ? (
-                <span className="font-bold">
-                  {equippedMs.name}（スロット{(playerWeapon.equipped_slot ?? 0) + 1}）
-                </span>
-              ) : (
-                <span className="font-bold text-[#ffb000]">不明な機体</span>
-              )}
+          equippedMs ? (
+            <SciFiButton
+              variant="primary"
+              size="sm"
+              onClick={() => onNavigateToEquippedMs(equippedMs.id)}
+            >
+              → {equippedMs.name} へ移動（スロット
+              {(playerWeapon.equipped_slot ?? 0) + 1}）
+            </SciFiButton>
+          ) : (
+            <span className="font-bold text-[#ffb000]">
+              装備先: 不明な機体
             </span>
-            {equippedMs && (
-              <SciFiButton
-                variant="primary"
-                size="sm"
-                onClick={() => onNavigateToEquippedMs(equippedMs.id)}
-              >
-                装備しているMSへ移動
-              </SciFiButton>
-            )}
-          </>
+          )
         ) : (
           <span className="text-[#00ff41]/50">未装備</span>
         )}

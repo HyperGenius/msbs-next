@@ -37,7 +37,7 @@ Garageページ（`frontend/src/app/garage/page.tsx`）にタブ切り替えを�
 
 ### 一覧からの操作
 
-- **装備中の武器の行**: 行自体はクリック不可（将来の武器改造モーダルの導線として予約するため）。「装備しているMSへ移動」ボタンを別途設置し、押すと装備先MSの `CustomizationModal` を開く（`useGarageEditor.handleNavigateToEquippedMs`）。武器変更モーダルへは自動遷移させず、ユーザーが次のアクション（LOADOUTタブ操作など）を自分で選べるようにする
+- **装備中の武器の行**: 行自体はクリック不可（将来の武器改造モーダルの導線として予約するため）。装備先MS名・スロット番号を含む一体化ボタン「→ {MS名} へ移動（スロットN）」を設置し、押すと装備先MSの `CustomizationModal` を開く（`useGarageEditor.handleNavigateToEquippedMs`）。汎用ラベル＋別ボタンの構成ではなく、遷移先そのものをボタン化することで直感的なクリック対象にしている。武器変更モーダルへは自動遷移させず、ユーザーが次のアクション（LOADOUTタブ操作など）を自分で選べるようにする
 - **未装備の武器の行** → 装備先MS・スロットをインラインの `SciFiSelect` で選択し、「装備する」ボタンで直接装備できる（`useGarageEditor.handleEquipFromInventory` が `PUT /api/mobile_suits/{ms_id}/equip` を呼び出す既存の `equipWeapon` サービス関数を利用）
 
 > [!NOTE]
