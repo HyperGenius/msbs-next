@@ -1040,3 +1040,61 @@ def test_unequip_weapon_via_service(client, session):
 
     assert result.equipped_ms_id is None
     assert result.equipped_slot is None
+
+
+def test_equip_weapon_reflects_custom_stats_bonus_in_mobile_suit_weapons(
+    client, session
+):
+    """装備時、custom_stats の改造差分がマージされた実効値が MobileSuit.weapons に書き込まれることをテスト."""
+    test_user_id = "test_user_equip_custom_stats"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+    )
+    session.add(pilot)
+
+    mobile_suit = MobileSuit(
+        user_id=test_user_id,
+        name="Test Zaku",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],
+        side="PLAYER",
+    )
+    session.add(mobile_suit)
+
+    from app.core.gamedata import get_weapon_listing_by_id
+
+    weapon_data = get_weapon_listing_by_id("zaku_mg")
+    base_power = weapon_data["weapon"].model_dump()["power"]
+
+    player_weapon = PlayerWeapon(
+        user_id=test_user_id,
+        master_weapon_id="zaku_mg",
+        base_snapshot=weapon_data["weapon"].model_dump(),
+        custom_stats={"power_bonus": 15, "accuracy_bonus": 3.0},
+    )
+    session.add(player_weapon)
+    session.commit()
+    session.refresh(mobile_suit)
+    session.refresh(player_weapon)
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        response = client.put(
+            f"/api/mobile_suits/{mobile_suit.id}/equip",
+            json={"player_weapon_id": str(player_weapon.id), "slot_index": 0},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+        assert data["weapons"][0]["power"] == base_power + 15
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)

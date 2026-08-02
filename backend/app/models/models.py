@@ -1008,6 +1008,22 @@ class TeamMember(SQLModel, table=True):
     )
 
 
+class WeaponCustomStats(SQLModel):
+    """武器インスタンスの強化・改造差分スキーマ (Issue #404).
+
+    `PlayerWeapon.custom_stats` (自由形式JSON) に実際に書き込まれる想定のキーを
+    型として明示する。キー欠損時はデフォルト0/未変更として扱う（後方互換）。
+    `weapon_power`（機体側のパイロット/システム補正、`EngineeringService` 管理）とは
+    別軸の、武器インスタンス単位の改造差分。
+    """
+
+    power_bonus: int = Field(default=0, description="威力への加算値")
+    accuracy_bonus: float = Field(default=0.0, description="命中率への加算値(%)")
+    upgrade_level: int = Field(
+        default=0, description="改造レベル（将来の改造ツリー・表示用）"
+    )
+
+
 class PlayerWeapon(SQLModel, table=True):
     """プレイヤー武器インスタンステーブル."""
 
@@ -1029,7 +1045,12 @@ class PlayerWeapon(SQLModel, table=True):
     custom_stats: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON),
-        description="強化・改造による差分（初期値: {}）",
+        description=(
+            "強化・改造による差分（初期値: {}）。"
+            "スキーマは WeaponCustomStats を参照（power_bonus / accuracy_bonus / "
+            "upgrade_level）。実効スペックは WeaponService.apply_effective_spec で "
+            "base_snapshot とマージして計算する"
+        ),
     )
     equipped_ms_id: uuid.UUID | None = Field(
         default=None,
