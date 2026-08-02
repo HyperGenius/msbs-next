@@ -162,20 +162,7 @@ function WeaponInventoryRow({
   return (
     <SciFiCard variant="primary" className="p-3 sm:p-4">
       <div className="flex justify-between items-start gap-3">
-        <div>
-          <div className="font-bold text-base sm:text-lg">{spec.name}</div>
-          <div className="text-xs sm:text-sm text-[#00ff41]/70 mt-1 flex gap-3">
-            <span className={`font-bold ${getRankColor(powerRank)}`}>
-              威力: {powerRank}
-            </span>
-            <span className={`font-bold ${getRankColor(rangeRank)}`}>
-              射程: {rangeRank}
-            </span>
-            <span className={`font-bold ${getRankColor(accuracyRank)}`}>
-              命中: {accuracyRank}
-            </span>
-          </div>
-        </div>
+        <div className="font-bold text-base sm:text-lg">{spec.name}</div>
         <span
           className={`shrink-0 px-2 py-1 text-xs font-bold rounded ${
             spec.type === "BEAM"
@@ -187,24 +174,38 @@ function WeaponInventoryRow({
         </span>
       </div>
 
-      <div className="mt-2 text-xs sm:text-sm">
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="text-xs sm:text-sm text-[#00ff41]/70 flex gap-3">
+          <span className={`font-bold ${getRankColor(powerRank)}`}>
+            威力: {powerRank}
+          </span>
+          <span className={`font-bold ${getRankColor(rangeRank)}`}>
+            射程: {rangeRank}
+          </span>
+          <span className={`font-bold ${getRankColor(accuracyRank)}`}>
+            命中: {accuracyRank}
+          </span>
+        </div>
+
         {isEquipped ? (
           equippedMs ? (
-            <SciFiButton
-              variant="primary"
-              size="sm"
+            <button
+              type="button"
               onClick={() => onNavigateToEquippedMs(equippedMs.id)}
+              className="shrink-0 whitespace-nowrap text-xs sm:text-sm font-bold text-[#00f0ff] underline underline-offset-2 hover:text-[#00ff41] transition-colors"
             >
-              → {equippedMs.name} へ移動（スロット
+              → {equippedMs.name}へ移動（スロット
               {(playerWeapon.equipped_slot ?? 0) + 1}）
-            </SciFiButton>
+            </button>
           ) : (
-            <span className="font-bold text-[#ffb000]">
+            <span className="shrink-0 whitespace-nowrap text-xs sm:text-sm font-bold text-[#ffb000]">
               装備先: 不明な機体
             </span>
           )
         ) : (
-          <span className="text-[#00ff41]/50">未装備</span>
+          <span className="shrink-0 whitespace-nowrap text-xs sm:text-sm text-[#00ff41]/50">
+            未装備
+          </span>
         )}
       </div>
 
