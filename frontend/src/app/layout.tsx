@@ -32,7 +32,7 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#050505] text-[#00ff41] flex flex-col h-[100dvh] overflow-hidden md:h-auto md:min-h-screen md:overflow-visible`}
         >
           <Header />
-          <main className="flex-1 overflow-y-auto md:overflow-visible">
+          <main className="flex-1 overflow-y-auto pb-16 md:pb-0 md:overflow-visible">
             {children}
           </main>
           <BottomNav />
