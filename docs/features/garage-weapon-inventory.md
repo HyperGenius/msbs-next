@@ -35,7 +35,7 @@ Garageページ（`frontend/src/app/garage/page.tsx`）にタブ切り替えを�
 - アイコン + ポップアップメニュー（低頻度）: 並び替え（新しい順 / 古い順 / 装備中が上）は上下矢印アイコンのみのボタンにまとめ、タップ時にメニューを開く方式にして常時表示領域を圧迫しないようにした
 - 見出し横に `件数 / 全件数` を表示し、フィルタ適用中であることが分かるようにしている。フィルタで0件になった場合は「フィルタをリセット」ボタンを表示する
 
-いずれもクライアント側でのフィルタリング（`GET /api/player-weapons` の全件取得結果に対して行う）。
+属性フィルタ・並び替えはクライアント側でのフィルタリング/ソートだが、「未装備のみ表示」だけは `WeaponInventoryList` 内で `usePlayerWeapons(true)` を呼び直し、`GET /api/player-weapons?unequipped=true` のサーバー側フィルタを使う（`usePlayerWeapons(false)` と同一URLはSWRのグローバルキャッシュで重複排除されるため、OFF時は他画面の全件フェッチと共有される）。所持数が多いユーザーで、装備済み分を毎回無駄に取得しないための対応。
 アイコン（`FilterIcon` / `TypeIcon` / `SortIcon` / `EmptyBoxIcon`、`WeaponInventoryList.tsx` 内にインラインSVGで定義）でラベルを短縮している。プロジェクトにアイコンライブラリの導入がないため、依存追加を避けて `currentColor` ベースの最小限のSVGを直接実装した。
 
 ### 一覧からの操作
@@ -57,8 +57,8 @@ Garageページ（`frontend/src/app/garage/page.tsx`）にタブ切り替えを�
 
 - `frontend/src/app/garage/page.tsx` — タブ切り替えUIの追加
 - `frontend/src/app/garage/hooks/useGarageEditor.ts` — `activeTab` 状態、`handleNavigateToEquippedMs` / `handleEquipFromInventory` ハンドラを追加
-- `frontend/src/app/garage/components/WeaponInventoryList.tsx` — 所持武器一覧コンポーネント（新規）
-- `frontend/src/hooks/usePlayerWeapons.ts` — 所持武器取得フック（既存、変更なし）
+- `frontend/src/app/garage/components/WeaponInventoryList.tsx` — 所持武器一覧コンポーネント（新規）。自身で `usePlayerWeapons()` を呼び出し、装備先MSの参照は `mobileSuits` から作った `Map<id, MobileSuit>`（`msById`）でO(1)解決する
+- `frontend/src/hooks/usePlayerWeapons.ts` — 所持武器取得フック（既存、変更なし。`unequippedOnly` 引数で `?unequipped=true` を切り替え可能）
 - `frontend/src/app/garage/constants.ts` — `getWeaponSlots()`（既存、スロット選択に再利用）
 - `backend/app/routers/player_weapons.py` / `backend/app/services/weapon_service.py` — `GET /api/player-weapons`（既存、変更なし）
 

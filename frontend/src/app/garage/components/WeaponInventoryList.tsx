@@ -7,6 +7,7 @@ import { EnrichedMobileSuit } from "@/utils/rankUtils";
 import { SciFiButton, SciFiCard, SciFiHeading, SciFiPanel, SciFiSelect } from "@/components/ui";
 import { getWeaponRank } from "@/utils/rankUtils";
 import { getWeaponSlots } from "../constants";
+import { usePlayerWeapons } from "@/hooks/usePlayerWeapons";
 
 type TypeFilter = "ALL" | "BEAM" | "PHYSICAL";
 type EquipFilter = "ALL" | "UNEQUIPPED_ONLY";
@@ -106,11 +107,10 @@ function EmptyBoxIcon({ className }: { className?: string }) {
 }
 
 interface WeaponInventoryListProps {
-  playerWeapons: PlayerWeapon[] | undefined;
   mobileSuits: EnrichedMobileSuit[] | undefined;
   isBusy: boolean;
   onNavigateToEquippedMs: (msId: string) => void;
-  onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => void;
+  onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => Promise<void>;
 }
 
 /** base_snapshot / custom_stats を Weapon スペックとして安全に解決する（改造差分は現状常に空） */
@@ -119,7 +119,6 @@ function resolveSpec(pw: PlayerWeapon): Weapon {
 }
 
 export default function WeaponInventoryList({
-  playerWeapons,
   mobileSuits,
   isBusy,
   onNavigateToEquippedMs,
@@ -129,6 +128,19 @@ export default function WeaponInventoryList({
   const [equipFilter, setEquipFilter] = useState<EquipFilter>("ALL");
   const [sortOrder, setSortOrder] = useState<SortOrder>("ACQUIRED_DESC");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+
+  // 「未装備のみ表示」がONの場合は GET /api/player-weapons?unequipped=true を使い、
+  // 装備済みも含めた全件取得を避ける（同一URLのSWRキーはアプリ内で共有されるため、
+  // OFF時の全件フェッチは他画面のキャッシュと重複排除される）
+  const { playerWeapons, mutate: mutatePlayerWeapons } = usePlayerWeapons(
+    equipFilter === "UNEQUIPPED_ONLY"
+  );
+
+  const msById = useMemo(() => {
+    const map = new Map<string, EnrichedMobileSuit>();
+    mobileSuits?.forEach((ms) => map.set(ms.id, ms));
+    return map;
+  }, [mobileSuits]);
 
   const isFiltered = typeFilter !== "ALL" || equipFilter !== "ALL";
 
@@ -140,6 +152,8 @@ export default function WeaponInventoryList({
       if (typeFilter !== "ALL" && (spec.type || "PHYSICAL") !== typeFilter) {
         return false;
       }
+      // equipFilter は基本的にサーバー側（unequipped=true）で反映済みだが、
+      // 直後の再検証タイミングのずれに備えてクライアント側でも保険としてフィルタする
       if (equipFilter === "UNEQUIPPED_ONLY" && pw.equipped_ms_id !== null) {
         return false;
       }
@@ -163,6 +177,16 @@ export default function WeaponInventoryList({
     setEquipFilter("ALL");
   };
 
+  // 一覧から装備した際、このコンポーネントが保持するSWRキャッシュ（未装備のみ/全件）を再検証する
+  const handleEquip = async (
+    playerWeaponId: string,
+    msId: string,
+    slotIndex: number
+  ) => {
+    await onEquip(playerWeaponId, msId, slotIndex);
+    mutatePlayerWeapons();
+  };
+
   return (
     <SciFiPanel variant="primary">
       <div className="p-4 sm:p-6">
@@ -173,7 +197,12 @@ export default function WeaponInventoryList({
           {playerWeapons && (
             <span className="text-xs text-[#00ff41]/50">
               {rows.length}
-              {isFiltered ? ` / ${playerWeapons.length}` : ""}件
+              {/* 未装備のみ表示ON時は playerWeapons 自体がサーバー側で絞り込み済みのため、
+                  母数として使えるのは属性フィルタのみが効いている場合に限る */}
+              {typeFilter !== "ALL" && equipFilter === "ALL"
+                ? ` / ${playerWeapons.length}`
+                : ""}
+              件
             </span>
           )}
         </div>
@@ -219,7 +248,7 @@ export default function WeaponInventoryList({
             <button
               type="button"
               title="並び替え"
-              aria-haspopup="listbox"
+              aria-haspopup="menu"
               aria-expanded={sortMenuOpen}
               onClick={() => setSortMenuOpen((prev) => !prev)}
               className={`flex items-center justify-center w-9 h-9 border-2 transition-colors ${
@@ -238,11 +267,16 @@ export default function WeaponInventoryList({
                   className="fixed inset-0 z-40"
                   onClick={() => setSortMenuOpen(false)}
                 />
-                <div className="absolute right-0 z-50 mt-1 w-44 border-2 border-[#00ff41]/50 bg-[#0a0a0a] shadow-lg">
+                <div
+                  role="menu"
+                  aria-label="並び替え"
+                  className="absolute right-0 z-50 mt-1 w-44 border-2 border-[#00ff41]/50 bg-[#0a0a0a] shadow-lg"
+                >
                   {SORT_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
                       type="button"
+                      role="menuitem"
                       onClick={() => {
                         setSortOrder(opt.value);
                         setSortMenuOpen(false);
@@ -283,9 +317,10 @@ export default function WeaponInventoryList({
                 key={pw.id}
                 playerWeapon={pw}
                 mobileSuits={mobileSuits}
+                msById={msById}
                 isBusy={isBusy}
                 onNavigateToEquippedMs={onNavigateToEquippedMs}
-                onEquip={onEquip}
+                onEquip={handleEquip}
               />
             ))}
           </ul>
@@ -298,6 +333,7 @@ export default function WeaponInventoryList({
 interface WeaponInventoryRowProps {
   playerWeapon: PlayerWeapon;
   mobileSuits: EnrichedMobileSuit[] | undefined;
+  msById: Map<string, EnrichedMobileSuit>;
   isBusy: boolean;
   onNavigateToEquippedMs: (msId: string) => void;
   onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => void;
@@ -306,14 +342,15 @@ interface WeaponInventoryRowProps {
 function WeaponInventoryRow({
   playerWeapon,
   mobileSuits,
+  msById,
   isBusy,
   onNavigateToEquippedMs,
   onEquip,
 }: WeaponInventoryRowProps) {
   const spec = resolveSpec(playerWeapon);
   const isEquipped = playerWeapon.equipped_ms_id !== null;
-  const equippedMs = isEquipped
-    ? mobileSuits?.find((ms) => ms.id === playerWeapon.equipped_ms_id)
+  const equippedMs = playerWeapon.equipped_ms_id
+    ? msById.get(playerWeapon.equipped_ms_id)
     : undefined;
 
   const [selectedMsId, setSelectedMsId] = useState<string>("");
@@ -324,7 +361,7 @@ function WeaponInventoryRow({
   const accuracyRank =
     spec.accuracy_rank ?? getWeaponRank("weapon_accuracy", spec.accuracy);
 
-  const selectedMs = mobileSuits?.find((ms) => ms.id === selectedMsId);
+  const selectedMs = msById.get(selectedMsId);
   const slots = getWeaponSlots(selectedMs?.weapon_slot_count);
 
   return (

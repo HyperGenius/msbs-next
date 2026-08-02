@@ -68,6 +68,8 @@ export default function GaragePage() {
           {/* タブ切り替え: 機体一覧 / 所持武器一覧 */}
           <div className="flex gap-1 mt-4">
             <button
+              type="button"
+              aria-pressed={activeTab === "MOBILE_SUITS"}
               onClick={() => setActiveTab("MOBILE_SUITS")}
               className={`px-4 py-2 text-xs sm:text-sm font-bold font-mono tracking-wider transition-all whitespace-nowrap ${
                 activeTab === "MOBILE_SUITS"
@@ -78,6 +80,8 @@ export default function GaragePage() {
               機体一覧
             </button>
             <button
+              type="button"
+              aria-pressed={activeTab === "WEAPONS"}
               onClick={() => setActiveTab("WEAPONS")}
               className={`px-4 py-2 text-xs sm:text-sm font-bold font-mono tracking-wider transition-all whitespace-nowrap ${
                 activeTab === "WEAPONS"
@@ -108,7 +112,6 @@ export default function GaragePage() {
               />
             ) : (
               <WeaponInventoryList
-                playerWeapons={playerWeapons}
                 mobileSuits={mobileSuits}
                 isBusy={isSaving}
                 onNavigateToEquippedMs={handleNavigateToEquippedMs}
