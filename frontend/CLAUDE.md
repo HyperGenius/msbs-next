@@ -265,7 +265,10 @@ luk: number;
 
 ## アイコンの扱い
 
-プロジェクトにアイコンライブラリ（lucide-react, react-icons, heroicons等）は**導入されていない**。UIにアイコンが必要な場合は依存追加を避け、`stroke="currentColor"` ベースの最小限のインラインSVGをコンポーネントファイル内にローカル関数として定義する（例: `WeaponInventoryList.tsx` の `FilterIcon` / `TypeIcon` / `SortIcon` / `EmptyBoxIcon`）。テキスト絵文字（`✕`など）で足りる場合はそちらでも可。
+プロジェクトにアイコンライブラリ（lucide-react, react-icons, heroicons等）は**導入されていない**。UIにアイコンが必要な場合は依存追加を避け、`stroke="currentColor"` ベースの最小限のインラインSVGをコンポーネント内にローカル関数として定義する。テキスト絵文字（`✕`など）で足りる場合はそちらでも可。
+
+- 単一コンポーネント内でしか使わない一時的なアイコン: そのファイル内にローカル関数として定義する（例: `WeaponInventoryList.tsx` の `FilterIcon` / `TypeIcon` / `SortIcon` / `EmptyBoxIcon`）
+- 複数コンポーネントで共有するアイコン: `frontend/src/components/icons/TablerIcons.tsx` に集約する。Header/BottomNav等のグローバルUIは[Tabler Icons](https://tabler.io/icons)（outline, MIT License）のSVGパスをここに複製して使う。**新しいグローバルアイコンが必要になった場合も、このファイルに追記し、他のアイコンセットと混在させないこと**（`BottomNav.tsx`, `Avatar.tsx` が利用例）
 
 ## SWRフックはコンポーネント側で直接呼んでよい（プロップドリリング不要）
 
