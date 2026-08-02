@@ -4,7 +4,7 @@
 **作成日**: 2026-08-02
 **最終更新**: 2026-08-02
 **ステータス**: 実装済み（Issue #409）
-**対象ファイル**: `frontend/src/app/layout.tsx`, 各`src/app/**/page.tsx`（`min-h-screen`を使用する全ページ）
+**対象ファイル**: `frontend/src/app/layout.tsx`, 各`frontend/src/app/**/page.tsx`（`min-h-screen`を使用する全ページ）
 
 ---
 
@@ -48,16 +48,16 @@ v1.1.0でレイアウト側の実装は正しくなったが、Garageページ�
 
 対応として、以下の10ファイルのページルート要素を修正した。
 
-- `src/app/page.tsx`
-- `src/app/sign-up/[[...sign-up]]/page.tsx`
-- `src/app/sign-in/[[...sign-in]]/page.tsx`
-- `src/app/shop/page.tsx`
-- `src/app/rankings/page.tsx`
-- `src/app/team/page.tsx`
-- `src/app/history/page.tsx`
-- `src/app/pilot/page.tsx`
-- `src/app/garage/page.tsx`
-- `src/app/onboarding/page.tsx`
+- `frontend/src/app/page.tsx`
+- `frontend/src/app/sign-up/[[...sign-up]]/page.tsx`
+- `frontend/src/app/sign-in/[[...sign-in]]/page.tsx`
+- `frontend/src/app/shop/page.tsx`
+- `frontend/src/app/rankings/page.tsx`
+- `frontend/src/app/team/page.tsx`
+- `frontend/src/app/history/page.tsx`
+- `frontend/src/app/pilot/page.tsx`
+- `frontend/src/app/garage/page.tsx`
+- `frontend/src/app/onboarding/page.tsx`
 
 変更内容:
 - `min-h-screen` → `min-h-full`（親要素である`layout.tsx`の`<main>`の実高さを最小値とし、ビューポート全体を強制しないようにする）
