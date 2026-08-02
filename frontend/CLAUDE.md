@@ -278,6 +278,30 @@ luk: number;
 
 `MobileSuit.weapons`（JSON列、バトルエンジン用スナップショット）と `PlayerWeapon.equipped_ms_id`/`equipped_slot`（正規化された装備状態）の**2つの情報源が並存**している。Garage画面などで「どの武器がどのMSに装備されているか」を表示する場合は、必ず `PlayerWeapon` 側のフィールドを正として使うこと。`MobileSuit.weapons` は装備操作のたびに追随更新されるが、あくまでバトルエンジンが直接参照するためのスナップショットであり、UI表示のソースにしない。
 
+## ルートレイアウトとページルート要素の規約（Issue #409）
+
+`frontend/src/app/layout.tsx` の `RootLayout` は次の構造になっている。
+
+```tsx
+<body className="... flex flex-col h-[100dvh] overflow-hidden md:h-auto md:min-h-screen md:overflow-visible">
+  <Header />
+  <main className="flex-1 overflow-y-auto md:overflow-visible">
+    {children}
+  </main>
+  {/* BottomNavはfixed配置のためflowから外れる。mainの高さをその分だけ事前に縮めておくためのスペーサー */}
+  <div className="h-16 shrink-0 md:hidden" aria-hidden="true" />
+  <BottomNav />
+</body>
+```
+
+- モバイル幅では `body` が `h-[100dvh] overflow-hidden` で画面高さに固定され、`main` が `flex-1 overflow-y-auto` でスクロール領域になる。`BottomNav`（`fixed bottom-0 h-16 md:hidden`）はflowから外れるため、`main` と `BottomNav` の間に高さ `h-16` のスペーサーを兄弟として置くことで `main` の実高さ（`flex-1` の配分結果）をあらかじめBottomNav分だけ縮めてある。
+- **`main` 自体（`overflow-y-auto` が設定されたスクロールコンテナ）に `padding-bottom` を足してBottomNav分の余白を作ってはいけない。** `overflow-y-auto` 要素の `padding-bottom` は `box-sizing` に関わらず常に `scrollHeight` に加算されるため、`children` の実コンテンツが短くてもスクロールが発生してしまう回帰を招く（一度この実装で規約違反をやってしまった経緯があるため要注意）。BottomNav分のスペース確保は必ず上記のflexスペーサー方式で行う。
+- 各ページ（`src/app/**/page.tsx`）のルート要素は、この `<main>` に**ネストされる**ことを前提に書くこと。
+  - `min-h-screen`（`min-height: 100vh`）を指定しない。親の `<main>` の実高さ（＝ビューポート − Header − BottomNavスペーサー）を最小値にしたい場合は `min-h-full` を使う。`min-h-screen` を使うと、コンテンツが無い/短いページでも常にビューポート全体以上の高さが強制され、外側 `main` の `scrollHeight` が `clientHeight` を上回って不要な縦スクロールが発生する。
+  - ルート要素に `<main>` タグを使わない。`layout.tsx` 側で既に `<main>` があるため、ページ側でも使うと `<main>` が二重にネストされる（landmarkの重複）。`<div>` を使う。
+
+詳細な経緯は `docs/features/layout-bottomnav-spacing.md` を参照。
+
 ## よくあるハマりポイント
 
 | 状況 | 対処 |
@@ -288,6 +312,7 @@ luk: number;
 | SSR で `getAuthToken` が null を返す | 正常動作。`window.Clerk` はクライアントサイドのみ存在する |
 | `types/battle.ts` の名前衝突 | バトル実装型は `battleCore.ts` に置く。`battle.ts` はバレル専用 |
 | モーダルが BottomNav の裏に隠れる | `BottomNav` は `z-50 h-16 fixed bottom-0 md:hidden`。モーダルは `z-[60]` 以上にすること。また `items-center p-4` で上下均等マージンを確保すること |
+| モバイルでコンテンツ末尾が BottomNav の裏に隠れる／逆にコンテンツが無いのに縦スクロールできる | `frontend/CLAUDE.md`「ルートレイアウトとページルート要素の規約」参照。`main`（`overflow-y-auto`）自体に `padding-bottom` を足すと `scrollHeight` が常に加算されズレる。BottomNav分のスペースは `layout.tsx` 側のflexスペーサーで確保済みなので、ページ側は `min-h-screen` を使わない |
 | `SciFiSelect` の幅・paddingが `className` で変わらない | base クラスに `w-full`/`px-4 py-2` が先に入っているため、`!w-auto` のように important修飾子を付けて上書きする |
 | `getRankColor`（`utils/rankUtils.ts`）でランクEが灰色になる | 元々 `S`〜`D` のみ定義され `E` は `default` にフォールバックしていた。`E` 用のケースを追加済みだが、ランク関連の新規UIを書く際は S〜E 全ケースが期待通り色分けされるか確認する |
 | 未ログイン状態で `/garage` 等の保護ルートにアクセスすると 404 になる | Clerkのルート保護（`protect-rewrite`）による意図した挙動。プレビュー確認時はログインが必要で、このリポジトリにはClerkテストトークンを使ったE2E（Playwright等）の仕組みが無いため、認証必須ページのUI動作は `tsc`/`vitest`/`next build` のみで確認し、実ログインでの見た目確認は別途手動で行う旨を明記する |

@@ -42,7 +42,7 @@ export default function GaragePage() {
 
   if (isError) {
     return (
-      <div className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
+      <div className="min-h-full bg-[#050505] text-[#00ff41] p-8 font-mono">
         <div className="max-w-6xl mx-auto">
           <SciFiPanel variant="secondary">
             <div className="p-6">
@@ -56,7 +56,7 @@ export default function GaragePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
+    <div className="min-h-full bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-6xl mx-auto">
         <div className="mb-4 sm:mb-8 border-b-2 border-[#00ff41]/30 pb-4">
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
@@ -153,7 +153,7 @@ export default function GaragePage() {
           />
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

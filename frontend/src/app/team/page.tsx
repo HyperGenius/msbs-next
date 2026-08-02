@@ -161,7 +161,7 @@ export default function TeamPage() {
   const inviteHint = inviteBlockReason();
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
+    <div className="min-h-full bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-3xl mx-auto">
 
         <SciFiHeading level={1} className="mb-6 text-2xl">
@@ -468,6 +468,6 @@ export default function TeamPage() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

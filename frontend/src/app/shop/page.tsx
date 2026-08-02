@@ -99,7 +99,7 @@ export default function ShopPage() {
 
   if (isError || weaponsError) {
     return (
-      <div className="min-h-screen bg-[#050505] text-[#00ff41] font-mono">
+      <div className="min-h-full bg-[#050505] text-[#00ff41] font-mono">
         <div className="max-w-7xl mx-auto p-8">
           <SciFiPanel variant="secondary">
             <div className="p-6">
@@ -113,7 +113,7 @@ export default function ShopPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#00ff41] font-mono">
+    <div className="min-h-full bg-[#050505] text-[#00ff41] font-mono">
       {/* Sticky クレジットヘッダー */}
       <ShopCreditHeader
         credits={credits}
@@ -259,6 +259,6 @@ export default function ShopPage() {
           </SciFiPanel>
         </div>
       )}
-    </main>
+    </div>
   );
 }

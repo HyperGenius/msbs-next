@@ -46,7 +46,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-900 text-green-400 p-8 font-mono">
+    <div className="min-h-full bg-gray-900 text-green-400 p-8 font-mono">
       <div className="max-w-6xl mx-auto">
 
         <div className="mb-6 flex justify-between items-center">
@@ -82,6 +82,6 @@ export default function HistoryPage() {
           />
         )}
       </div>
-    </main>
+    </div>
   );
 }

@@ -13,7 +13,7 @@ export default function RankingsPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   return (
-    <main className="min-h-screen bg-gray-900 text-green-400 p-4 sm:p-8 font-mono">
+    <div className="min-h-full bg-gray-900 text-green-400 p-4 sm:p-8 font-mono">
       <div className="max-w-6xl mx-auto">
 
         <div className="mb-6 flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
@@ -166,6 +166,6 @@ export default function RankingsPage() {
           onClose={() => setSelectedUserId(null)}
         />
       )}
-    </main>
+    </div>
   );
 }

@@ -35,6 +35,8 @@ export default function RootLayout({
           <main className="flex-1 overflow-y-auto md:overflow-visible">
             {children}
           </main>
+          {/* BottomNavはfixed配置のためflowから外れる。mainの高さをその分だけ事前に縮めておくためのスペーサー */}
+          <div className="h-16 shrink-0 md:hidden" aria-hidden="true" />
           <BottomNav />
         </body>
       </html>
