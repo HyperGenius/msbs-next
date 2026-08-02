@@ -25,7 +25,7 @@ export default function Avatar({ sizePx = 40 }: AvatarProps) {
 
   return (
     <div
-      className="relative"
+      className="relative inline-flex items-center justify-center"
       style={{ width: sizePx, height: sizePx }}
       suppressHydrationWarning
     >
