@@ -4,17 +4,26 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useCallback, useEffect } from "react";
+import {
+  IconHome,
+  IconTool,
+  IconShoppingCart,
+  IconHistory,
+  IconUsers,
+  IconUser,
+  IconMenu2,
+} from "@/components/icons/TablerIcons";
 
 const mainNavItems = [
-  { href: "/", label: "Home", icon: "🏠" },
-  { href: "/garage", label: "Garage", icon: "🔧" },
-  { href: "/shop", label: "Shop", icon: "🛒" },
-  { href: "/history", label: "History", icon: "📜" },
+  { href: "/", label: "Home", Icon: IconHome },
+  { href: "/garage", label: "Garage", Icon: IconTool },
+  { href: "/shop", label: "Shop", Icon: IconShoppingCart },
+  { href: "/history", label: "History", Icon: IconHistory },
 ];
 
 const menuItems = [
-  { href: "/team", label: "Team", icon: "👥" },
-  { href: "/pilot", label: "Pilot", icon: "🧑‍✈️" },
+  { href: "/team", label: "Team", Icon: IconUsers },
+  { href: "/pilot", label: "Pilot", Icon: IconUser },
 ];
 
 /*
@@ -58,7 +67,7 @@ export default function BottomNav() {
             aria-labelledby="bottom-nav-menu-button"
             className="absolute bottom-full z-50 m-1 bg-[#0a0a0a] border-2 border-[#00ff41]/50 p-1 min-w-[180px] sf-scanline"
           >
-            {menuItems.map(({ href, label, icon }) => (
+            {menuItems.map(({ href, label, Icon }) => (
               <Link
                 key={href}
                 href={href}
@@ -66,7 +75,7 @@ export default function BottomNav() {
                 onClick={() => setIsMenuOpen(false)}
                 className="flex items-center gap-3 py-2.5 px-4 text-sm font-mono text-[#00ff41]/70 hover:text-[#00ff41] hover:bg-[#00ff41]/10 transition-colors no-min-size"
               >
-                <span className="text-base leading-none">{icon}</span>
+                <Icon className="w-4 h-4 shrink-0" />
                 <span>{label}</span>
               </Link>
             ))}
@@ -79,19 +88,19 @@ export default function BottomNav() {
           aria-label="Bottom navigation"
         >
           <div className="flex h-16">
-            {mainNavItems.map(({ href, label, icon }) => {
+            {mainNavItems.map(({ href, label, Icon }) => {
               const isActive = pathname === href;
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`flex flex-col items-center justify-center flex-1 gap-0.5 text-[10px] no-min-size transition-colors ${
+                  className={`flex flex-col items-center justify-center flex-1 gap-0.5 text-[10px] no-min-size border-b-2 transition-colors ${
                     isActive
-                      ? "text-[#00ff41] border-t-2 border-[#00ff41]"
-                      : "text-[#00ff41]/40 hover:text-[#00ff41]/70"
+                      ? "text-[#00ff41] border-[#00ff41]"
+                      : "text-[#00ff41]/40 border-transparent hover:text-[#00ff41]/70"
                   }`}
                 >
-                  <span className="text-lg leading-none">{icon}</span>
+                  <Icon className="w-5 h-5" />
                   <span>{label}</span>
                 </Link>
               );
@@ -101,15 +110,15 @@ export default function BottomNav() {
             <button
               id="bottom-nav-menu-button"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className={`flex flex-col items-center justify-center flex-1 gap-0.5 text-[10px] no-min-size transition-colors ${
+              className={`flex flex-col items-center justify-center flex-1 gap-0.5 text-[10px] no-min-size border-b-2 transition-colors ${
                 isMenuOpen
-                  ? "text-[#00ff41] border-t-2 border-[#00ff41]"
-                  : "text-[#00ff41]/40 hover:text-[#00ff41]/70"
+                  ? "text-[#00ff41] border-[#00ff41]"
+                  : "text-[#00ff41]/40 border-transparent hover:text-[#00ff41]/70"
               }`}
               aria-label="メニューを開く"
               aria-expanded={isMenuOpen}
             >
-              <span className="text-xl leading-none">≡</span>
+              <IconMenu2 className="w-5 h-5" />
               <span>Menu</span>
             </button>
           </div>

@@ -2,10 +2,11 @@
 "use client";
 
 import { useCallback } from "react";
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePilot, resetAccount } from "@/services/api";
 import { SciFiButton, SciFiHeading } from "@/components/ui";
+import Avatar from "@/components/Avatar";
 import { ONBOARDING_COMPLETED_KEY } from "@/constants";
 
 const navLinks = [
@@ -96,15 +97,7 @@ export default function Header() {
             </Link>
           </SignedOut>
           <SignedIn>
-            <div suppressHydrationWarning>
-              <UserButton
-                appearance={{
-                  elements: {
-                    avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
-                  }
-                }}
-              />
-            </div>
+            <Avatar />
           </SignedIn>
         </div>
 
@@ -116,15 +109,7 @@ export default function Header() {
             </Link>
           </SignedOut>
           <SignedIn>
-            <div suppressHydrationWarning>
-              <UserButton
-                appearance={{
-                  elements: {
-                    avatarBox: "w-10 h-10 border-2 border-[#00ff41]"
-                  }
-                }}
-              />
-            </div>
+            <Avatar />
           </SignedIn>
         </div>
       </div>
