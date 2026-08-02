@@ -16,7 +16,7 @@ interface WeaponInventoryListProps {
   playerWeapons: PlayerWeapon[] | undefined;
   mobileSuits: EnrichedMobileSuit[] | undefined;
   isBusy: boolean;
-  onNavigateToEquippedWeapon: (msId: string, slotIndex: number) => void;
+  onNavigateToEquippedMs: (msId: string) => void;
   onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => void;
 }
 
@@ -29,7 +29,7 @@ export default function WeaponInventoryList({
   playerWeapons,
   mobileSuits,
   isBusy,
-  onNavigateToEquippedWeapon,
+  onNavigateToEquippedMs,
   onEquip,
 }: WeaponInventoryListProps) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
@@ -116,7 +116,7 @@ export default function WeaponInventoryList({
                 playerWeapon={pw}
                 mobileSuits={mobileSuits}
                 isBusy={isBusy}
-                onNavigateToEquippedWeapon={onNavigateToEquippedWeapon}
+                onNavigateToEquippedMs={onNavigateToEquippedMs}
                 onEquip={onEquip}
               />
             ))}
@@ -131,7 +131,7 @@ interface WeaponInventoryRowProps {
   playerWeapon: PlayerWeapon;
   mobileSuits: EnrichedMobileSuit[] | undefined;
   isBusy: boolean;
-  onNavigateToEquippedWeapon: (msId: string, slotIndex: number) => void;
+  onNavigateToEquippedMs: (msId: string) => void;
   onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => void;
 }
 
@@ -139,7 +139,7 @@ function WeaponInventoryRow({
   playerWeapon,
   mobileSuits,
   isBusy,
-  onNavigateToEquippedWeapon,
+  onNavigateToEquippedMs,
   onEquip,
 }: WeaponInventoryRowProps) {
   const spec = resolveSpec(playerWeapon);
@@ -160,20 +160,7 @@ function WeaponInventoryRow({
   const slots = getWeaponSlots(selectedMs?.weapon_slot_count);
 
   return (
-    <SciFiCard
-      variant="primary"
-      interactive={isEquipped}
-      onClick={
-        isEquipped && playerWeapon.equipped_slot !== null
-          ? () =>
-              onNavigateToEquippedWeapon(
-                playerWeapon.equipped_ms_id as string,
-                playerWeapon.equipped_slot as number
-              )
-          : undefined
-      }
-      className="p-3 sm:p-4"
-    >
+    <SciFiCard variant="primary" className="p-3 sm:p-4">
       <div className="flex justify-between items-start gap-3">
         <div>
           <div className="font-bold text-base sm:text-lg">{spec.name}</div>
@@ -200,18 +187,29 @@ function WeaponInventoryRow({
         </span>
       </div>
 
-      <div className="mt-2 text-xs sm:text-sm">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
         {isEquipped ? (
-          <span className="text-[#00f0ff]">
-            装備先:{" "}
-            {equippedMs ? (
-              <span className="font-bold">
-                {equippedMs.name}（スロット{(playerWeapon.equipped_slot ?? 0) + 1}）
-              </span>
-            ) : (
-              <span className="font-bold text-[#ffb000]">不明な機体</span>
+          <>
+            <span className="text-[#00f0ff]">
+              装備先:{" "}
+              {equippedMs ? (
+                <span className="font-bold">
+                  {equippedMs.name}（スロット{(playerWeapon.equipped_slot ?? 0) + 1}）
+                </span>
+              ) : (
+                <span className="font-bold text-[#ffb000]">不明な機体</span>
+              )}
+            </span>
+            {equippedMs && (
+              <SciFiButton
+                variant="primary"
+                size="sm"
+                onClick={() => onNavigateToEquippedMs(equippedMs.id)}
+              >
+                装備しているMSへ移動
+              </SciFiButton>
             )}
-          </span>
+          </>
         ) : (
           <span className="text-[#00ff41]/50">未装備</span>
         )}

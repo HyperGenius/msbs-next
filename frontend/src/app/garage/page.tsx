@@ -36,7 +36,7 @@ export default function GaragePage() {
     handleOpenWeaponModal,
     handleCloseWeaponModal,
     handleEquipWeapon,
-    handleNavigateToEquippedWeapon,
+    handleNavigateToEquippedMs,
     handleEquipFromInventory,
   } = useGarageEditor();
 
@@ -111,7 +111,7 @@ export default function GaragePage() {
                 playerWeapons={playerWeapons}
                 mobileSuits={mobileSuits}
                 isBusy={isSaving}
-                onNavigateToEquippedWeapon={handleNavigateToEquippedWeapon}
+                onNavigateToEquippedMs={handleNavigateToEquippedMs}
                 onEquip={handleEquipFromInventory}
               />
             )}

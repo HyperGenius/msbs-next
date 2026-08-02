@@ -37,15 +37,18 @@ Garageページ（`frontend/src/app/garage/page.tsx`）にタブ切り替えを�
 
 ### 一覧からの操作
 
-- **装備中の武器の行をクリック** → 装備先MSの `CustomizationModal` と、当該スロットの `WeaponChangeModal` を開く（`useGarageEditor.handleNavigateToEquippedWeapon`）
+- **装備中の武器の行**: 行自体はクリック不可（将来の武器改造モーダルの導線として予約するため）。「装備しているMSへ移動」ボタンを別途設置し、押すと装備先MSの `CustomizationModal` を開く（`useGarageEditor.handleNavigateToEquippedMs`）。武器変更モーダルへは自動遷移させず、ユーザーが次のアクション（LOADOUTタブ操作など）を自分で選べるようにする
 - **未装備の武器の行** → 装備先MS・スロットをインラインの `SciFiSelect` で選択し、「装備する」ボタンで直接装備できる（`useGarageEditor.handleEquipFromInventory` が `PUT /api/mobile_suits/{ms_id}/equip` を呼び出す既存の `equipWeapon` サービス関数を利用）
+
+> [!NOTE]
+> 行自体のクリックは、今後実装予定の武器改造（強化）モーダルへの導線として空けてある（関連: 武器改造機能に向けたデータモデル整理・マイグレーション Issue）。
 
 ---
 
 ## 関連ファイル
 
 - `frontend/src/app/garage/page.tsx` — タブ切り替えUIの追加
-- `frontend/src/app/garage/hooks/useGarageEditor.ts` — `activeTab` 状態、`handleNavigateToEquippedWeapon` / `handleEquipFromInventory` ハンドラを追加
+- `frontend/src/app/garage/hooks/useGarageEditor.ts` — `activeTab` 状態、`handleNavigateToEquippedMs` / `handleEquipFromInventory` ハンドラを追加
 - `frontend/src/app/garage/components/WeaponInventoryList.tsx` — 所持武器一覧コンポーネント（新規）
 - `frontend/src/hooks/usePlayerWeapons.ts` — 所持武器取得フック（既存、変更なし）
 - `frontend/src/app/garage/constants.ts` — `getWeaponSlots()`（既存、スロット選択に再利用）

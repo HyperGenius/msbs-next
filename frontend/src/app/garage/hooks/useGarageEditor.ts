@@ -139,12 +139,12 @@ export function useGarageEditor() {
     }
   };
 
-  // 所持武器一覧の「装備先を確認」操作: 対象機体のカスタマイズ／武器変更モーダルを開く
-  const handleNavigateToEquippedWeapon = (msId: string, slotIndex: number) => {
+  // 所持武器一覧の「装備しているMSへ移動」操作: 対象機体のカスタマイズモーダルを開く
+  // （どのスロットを操作するかはユーザー自身に選ばせるため、武器変更モーダルまでは自動遷移しない）
+  const handleNavigateToEquippedMs = (msId: string) => {
     const ms = mobileSuits?.find((m) => m.id === msId);
     if (!ms) return;
     handleSelectMs(ms);
-    handleOpenWeaponModal(slotIndex);
   };
 
   // 所持武器一覧から直接、指定機体・スロットへ武器を装備する
@@ -200,7 +200,7 @@ export function useGarageEditor() {
     handleOpenWeaponModal,
     handleCloseWeaponModal,
     handleEquipWeapon,
-    handleNavigateToEquippedWeapon,
+    handleNavigateToEquippedMs,
     handleEquipFromInventory,
   };
 }
