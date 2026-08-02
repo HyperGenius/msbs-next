@@ -12,7 +12,10 @@ type AvatarProps = {
  * ヘッダー用アバター表示
  * - 装飾ではなくステータス表示の一部として扱い、グラデーションは使用しない
  * - Clerkのデフォルト生成アバター(未設定時にグラデーション背景で描画される)は
- *   avatarImageを非表示にした上で、緑1pxアウトライン円+緑モノクロアイコンに差し替える
+ *   userButtonAvatarImageを非表示にした上で、緑1pxアウトライン円+緑モノクロアイコンに差し替える
+ * - UserButtonのトリガー部分は avatarBox/avatarImage ではなく
+ *   userButtonAvatarBox/userButtonAvatarImage というappearanceキーで制御する
+ *   (avatarBox/avatarImageはUserProfile側のアバター編集UIに適用されるキーで、トリガーには効かない)
  * - ユーザーが独自の画像をアップロード済み(hasImage)の場合はその画像をそのまま表示する
  */
 export default function Avatar({ size = "w-10 h-10" }: AvatarProps) {
@@ -24,8 +27,8 @@ export default function Avatar({ size = "w-10 h-10" }: AvatarProps) {
       <UserButton
         appearance={{
           elements: {
-            avatarBox: `${size} border border-[#00ff41] bg-transparent`,
-            avatarImage: hasCustomImage ? "" : "opacity-0",
+            userButtonAvatarBox: `${size} border border-[#00ff41] bg-transparent`,
+            userButtonAvatarImage: hasCustomImage ? "" : "opacity-0",
           },
         }}
       />
