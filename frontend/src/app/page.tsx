@@ -132,7 +132,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
+    <div className="min-h-full bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-4xl mx-auto">
 
         {/* Battle Result Announcer (WIN / LOSE / DRAW) */}
@@ -254,6 +254,6 @@ export default function Home() {
           winner={winner}
         />
       </div>
-    </main>
+    </div>
   );
 }

@@ -109,7 +109,7 @@ export default function OnboardingPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] text-[#00ff41] flex items-center justify-center p-4 font-mono">
+    <div className="min-h-full bg-[#050505] text-[#00ff41] flex items-center justify-center p-4 font-mono">
       <div className="w-full max-w-2xl">
         <SciFiPanel variant="primary" chiseled>
           <div className="p-6 sm:p-8 space-y-8">
@@ -245,7 +245,7 @@ export default function OnboardingPage() {
           </div>
         </SciFiPanel>
       </div>
-    </main>
+    </div>
   );
 }
 

@@ -60,14 +60,14 @@ export default function SignUpPage() {
 
   if (!isLoaded) {
     return (
-      <main className="min-h-screen bg-[#050505] flex items-center justify-center font-mono">
+      <div className="min-h-full bg-[#050505] flex items-center justify-center font-mono">
         <p className="text-[#00ff41]/60 animate-pulse">LOADING SYSTEM...</p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] flex items-center justify-center px-4 py-12 font-mono">
+    <div className="min-h-full bg-[#050505] flex items-center justify-center px-4 py-12 font-mono">
       <div className="w-full max-w-2xl">
         <SciFiPanel
           variant={phase === 1 ? "accent" : themeVariant}
@@ -405,6 +405,6 @@ export default function SignUpPage() {
           </div>
         </SciFiPanel>
       </div>
-    </main>
+    </div>
   );
 }

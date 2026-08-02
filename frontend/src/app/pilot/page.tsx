@@ -23,7 +23,7 @@ export default function PilotPage() {
 
   if (pilotLoading || skillsLoading) {
     return (
-      <div className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
+      <div className="min-h-full bg-[#050505] text-[#00ff41] p-8 font-mono">
         <div className="max-w-4xl mx-auto">
           <p className="text-center text-xl animate-pulse">LOADING...</p>
         </div>
@@ -33,7 +33,7 @@ export default function PilotPage() {
 
   if (!pilot) {
     return (
-      <div className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
+      <div className="min-h-full bg-[#050505] text-[#00ff41] p-8 font-mono">
         <div className="max-w-4xl mx-auto">
           <p className="text-center text-xl text-red-400">Pilot not found</p>
         </div>
@@ -55,7 +55,7 @@ export default function PilotPage() {
   const unlockedSkillCount = Object.values(pilot.skills).filter((lv) => lv > 0).length;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-100 p-4 sm:p-6 md:p-8 font-mono">
+    <div className="min-h-full bg-[#050505] text-gray-100 p-4 sm:p-6 md:p-8 font-mono">
       <div className="max-w-4xl mx-auto space-y-6">
         <SciFiHeading level={1} className="text-center">
           PILOT MANAGEMENT

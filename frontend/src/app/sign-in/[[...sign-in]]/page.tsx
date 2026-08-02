@@ -3,7 +3,7 @@ import { SciFiPanel, SciFiHeading } from "@/components/ui";
 
 export default function SignInPage() {
   return (
-    <main className="min-h-screen bg-[#050505] flex items-center justify-center px-4 py-12 font-mono">
+    <div className="min-h-full bg-[#050505] flex items-center justify-center px-4 py-12 font-mono">
       <SciFiPanel variant="primary" className="max-w-md w-full p-8">
         <div className="mb-6 text-center">
           <SciFiHeading level={2} variant="accent" className="border-l-0 pl-0 text-center">
@@ -44,6 +44,6 @@ export default function SignInPage() {
           />
         </div>
       </SciFiPanel>
-    </main>
+    </div>
   );
 }
