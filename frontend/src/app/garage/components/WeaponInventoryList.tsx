@@ -12,6 +12,59 @@ type TypeFilter = "ALL" | "BEAM" | "PHYSICAL";
 type EquipFilter = "ALL" | "UNEQUIPPED_ONLY";
 type SortOrder = "ACQUIRED_DESC" | "ACQUIRED_ASC" | "EQUIPPED_FIRST";
 
+/** 未装備のみ表示トグル用のフィルタアイコン（漏斗） */
+function FilterIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M4 5h16M7 12h10M11 19h2" />
+    </svg>
+  );
+}
+
+/** 属性フィルタ用のアイコン（着弾点） */
+function TypeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/** 並び替え用のアイコン（上下矢印） */
+function SortIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M8 4v16M8 4 5 7M8 4l3 3M16 20V4M16 20l-3-3M16 20l3-3" />
+    </svg>
+  );
+}
+
 interface WeaponInventoryListProps {
   playerWeapons: PlayerWeapon[] | undefined;
   mobileSuits: EnrichedMobileSuit[] | undefined;
@@ -69,39 +122,54 @@ export default function WeaponInventoryList({
           所持武器一覧
         </SciFiHeading>
 
-        {/* フィルタ・並び替え */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <SciFiButton
-            variant={equipFilter === "UNEQUIPPED_ONLY" ? "accent" : "primary"}
-            size="sm"
+        {/* フィルタ・並び替え（1行に収める。狭幅では横スクロール） */}
+        <div className="flex items-center gap-2 mb-4 overflow-x-auto">
+          <button
+            type="button"
+            title="未装備のみ表示"
+            aria-pressed={equipFilter === "UNEQUIPPED_ONLY"}
             onClick={() =>
               setEquipFilter((prev) =>
                 prev === "UNEQUIPPED_ONLY" ? "ALL" : "UNEQUIPPED_ONLY"
               )
             }
+            className={`shrink-0 flex items-center gap-1 px-2 py-1.5 text-xs font-bold border-2 transition-colors whitespace-nowrap ${
+              equipFilter === "UNEQUIPPED_ONLY"
+                ? "bg-[#00ff41] text-black border-[#00ff41]"
+                : "bg-transparent text-[#00ff41] border-[#00ff41]/40 hover:border-[#00ff41]"
+            }`}
           >
-            未装備のみ表示
-          </SciFiButton>
+            <FilterIcon className="w-3.5 h-3.5" />
+            未装備のみ
+          </button>
 
-          <SciFiSelect
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-            options={[
-              { value: "ALL", label: "属性: すべて" },
-              { value: "BEAM", label: "属性: BEAM" },
-              { value: "PHYSICAL", label: "属性: PHYSICAL" },
-            ]}
-          />
+          <div className="shrink-0 flex items-center gap-1">
+            <TypeIcon className="w-3.5 h-3.5 text-[#00ff41]/60" />
+            <SciFiSelect
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+              className="!w-auto !px-2 !py-1.5 !text-xs"
+              options={[
+                { value: "ALL", label: "すべて" },
+                { value: "BEAM", label: "BEAM" },
+                { value: "PHYSICAL", label: "PHYSICAL" },
+              ]}
+            />
+          </div>
 
-          <SciFiSelect
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-            options={[
-              { value: "ACQUIRED_DESC", label: "取得日時: 新しい順" },
-              { value: "ACQUIRED_ASC", label: "取得日時: 古い順" },
-              { value: "EQUIPPED_FIRST", label: "装備中を上に表示" },
-            ]}
-          />
+          <div className="shrink-0 flex items-center gap-1">
+            <SortIcon className="w-3.5 h-3.5 text-[#00ff41]/60" />
+            <SciFiSelect
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+              className="!w-auto !px-2 !py-1.5 !text-xs"
+              options={[
+                { value: "ACQUIRED_DESC", label: "新しい順" },
+                { value: "ACQUIRED_ASC", label: "古い順" },
+                { value: "EQUIPPED_FIRST", label: "装備中が上" },
+              ]}
+            />
+          </div>
         </div>
 
         {rows.length === 0 ? (
