@@ -47,13 +47,14 @@ Garageページ（`frontend/src/app/garage/page.tsx`）にタブ切り替えを�
 
 ### 武器改造モーダル（`WeaponUpgradeModal.tsx`、Issue #413）
 
-`SciFiModal`（共通モーダルシェル、`z-[60]` で BottomNav の上に重なる）をベースに、`power_bonus` / `accuracy_bonus` それぞれのカードを表示する:
+MS強化タブ（`CustomizationModal` の `StatusTab.tsx`）とレイアウト・操作感を統一するため、`SciFiModal`（共通モーダルシェル、`z-[60]` で BottomNav の上に重なる）の中に `StatusTab.tsx` と同じ構成要素を配置している: 所持金（現在 ➔ 変更後）表示、ステータスごとの行（ランクバッジ + `SciFiBlockIndicator` + `[-]`/`[+]` ステッパー + 1ステップ分のコスト）、末尾の `HoldSciFiButton` 一括確定ボタン。
 
-- モーダルを開くと `GET /api/player-weapons/{pw_id}/upgrade-preview/{stat_type}` を2ステータス分並列で呼び出し、次の1ステップのコスト・改造後の値・上限到達フラグを取得する（クライアント側でコスト計算式を複製せず、常にバックエンドを正とする）
-- 改造ボタン（`HoldSciFiButton` の長押し確定、既存のMS強化・スキル開発UIと同じ誤タップ防止パターン）を押すと `POST /api/player-weapons/{pw_id}/upgrade`（`steps: 1`）を実行し、成功したら再度プレビューを取得し直して表示を更新する
-- 改造後の値からランク（`getWeaponRank("weapon_power" | "weapon_accuracy", value)`）を計算し、ランクアップする場合は現在ランクの代わりに改造後ランクを表示して「✨UP!」を添える
-- 上限到達時（`at_max_cap: true`）はボタンの代わりに「上限に達しています」の非活性表示にする
-- 改造成功時は `onUpgraded(response.player_weapon)` で呼び出し元（`WeaponInventoryList`）に更新後の `PlayerWeapon` を渡し、一覧側の `resolveSpec`（`base_snapshot + custom_stats` をマージして実効スペックを計算、Issue #413 で改造差分を反映するよう修正）がランクバッジに即座に反映する。同時に `usePlayerWeapons` のSWRキャッシュとパイロットのクレジット残高（`usePilot`）も再検証する（`useGarageEditor.handleWeaponUpgraded`）
+- `power_bonus`（威力） / `accuracy_bonus`（命中率）の2ステータスを、`StatusTab.tsx` の `STAT_TYPES` と同型の `WeaponStatInfo` 配列で定義する。コスト計算式（`baseCost * (1 + bonus / costDivisor)`）・上限（実効値が `base × capMultiplier` に達するまで）は `WeaponEngineeringService`（バックエンド）の定数値をクライアント側にも複製している（`StatusTab.tsx` が `EngineeringService` の式を複製しているのと同じパターン）
+- `[-]`/`[+]` ボタンで各ステータスのペンディングステップ数を増減し、`SciFiBlockIndicator` に現在値（緑）・今回追加予定（黄）・残り（黒）を表示する。ステップ数はクライアント側で `simulateSteps` によりコスト・改造後の実効値をシミュレーションし、リアルタイムにプレビューする
+- 末尾の `HoldSciFiButton`（長押し確定、誤タップ防止）を押すと、ペンディングステップが入っているステータスごとに `POST /api/player-weapons/{pw_id}/upgrade` を順次呼び出す（武器改造には bulk エンドポイントが無いため、同一 `player_weapon_id` への逐次呼び出しで対応。後続の呼び出しは先の更新を含んだ `PlayerWeapon` を返すため、最後のレスポンスが最終状態になる）
+- 改造後の実効値からランク（`getWeaponRank("weapon_power" | "weapon_accuracy", value)`）を計算し、ランクアップする場合は現在ランクの代わりに改造後ランクを表示して「✨RANK UP!」を添える
+- 改造成功時は最後のレスポンスの `player_weapon` を `onUpgraded` で呼び出し元（`WeaponInventoryList`）に渡し、一覧側の `resolveSpec`（`base_snapshot + custom_stats` をマージして実効スペックを計算、Issue #413 で改造差分を反映するよう修正）がランクバッジに即座に反映する。同時に `usePlayerWeapons` のSWRキャッシュとパイロットのクレジット残高（`usePilot`）も再検証する（`useGarageEditor.handleWeaponUpgraded`）
+- `GET /api/player-weapons/{pw_id}/upgrade-preview/{stat_type}`（バックエンド実装済み）はこのUIからは呼び出していない。`StatusTab.tsx` が機体強化側の `GET /api/engineering/preview/...` を使わずクライアント計算のみで完結させているのと同じ判断で、コスト計算をクライアント側で完結させてAPI往復を減らしている
 
 ### 空状態・少数件時のレイアウト
 
