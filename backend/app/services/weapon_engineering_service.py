@@ -217,6 +217,10 @@ class WeaponEngineeringService:
     def get_upgrade_preview(self, player_weapon_id: str, stat_type: str) -> dict:
         """Get a preview of what the next upgrade step would do.
 
+        current_value/new_value are the effective stat values (base + bonus),
+        matching EngineeringService.get_upgrade_preview's convention of
+        returning the actual stat rather than the raw bonus delta.
+
         Args:
             player_weapon_id: ID of the PlayerWeapon
             stat_type: "power_bonus" or "accuracy_bonus"
@@ -241,8 +245,8 @@ class WeaponEngineeringService:
         new_bonus = min(current_bonus + cfg.increment, cap - base_value)
 
         return {
-            "current_value": current_bonus,
-            "new_value": new_bonus,
+            "current_value": base_value + current_bonus,
+            "new_value": base_value + new_bonus,
             "cost": self.calculate_upgrade_cost(stat_type, current_bonus),
             "at_max_cap": base_value + current_bonus >= cap,
         }
