@@ -1,4 +1,4 @@
-import { WeaponUpgradeRequest, WeaponUpgradeResponse, WeaponUpgradePreview } from "@/types/shop";
+import { WeaponUpgradeRequest, WeaponUpgradeResponse, WeaponUpgradePreview, WeaponUpgradeStatType } from "@/types/shop";
 import { API_BASE_URL, getAuthToken } from "./auth";
 
 /** 所持武器の custom_stats（power_bonus / accuracy_bonus）を1段階改造する */
@@ -27,7 +27,7 @@ export async function upgradePlayerWeapon(playerWeaponId: string, request: Weapo
 }
 
 /** 武器改造前に費用と改造後の値をプレビュー取得する（確認ダイアログ表示に使用） */
-export async function getWeaponUpgradePreview(playerWeaponId: string, statType: string): Promise<WeaponUpgradePreview> {
+export async function getWeaponUpgradePreview(playerWeaponId: string, statType: WeaponUpgradeStatType): Promise<WeaponUpgradePreview> {
   const token = await getAuthToken();
   const headers: HeadersInit = {};
 

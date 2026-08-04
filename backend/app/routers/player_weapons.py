@@ -124,8 +124,17 @@ def upgrade_player_weapon(
         WeaponUpgradeResponse: 更新後の武器インスタンス、残クレジット、消費コスト
 
     Raises:
-        HTTPException: パイロットが見つからない、上限到達、所持金不足などのエラー
+        HTTPException: パイロットが見つからない、武器が見つからない、権限なし、
+            上限到達、所持金不足などのエラー
     """
+    player_weapon = session.get(PlayerWeapon, pw_id)
+    if not player_weapon:
+        raise HTTPException(status_code=404, detail="武器インスタンスが見つかりません")
+    if player_weapon.user_id != user_id:
+        raise HTTPException(
+            status_code=403, detail="この武器インスタンスへのアクセス権がありません"
+        )
+
     statement = select(Pilot).where(Pilot.user_id == user_id)
     pilot = session.exec(statement).first()
     if not pilot:

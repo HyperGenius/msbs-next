@@ -119,12 +119,15 @@ export interface PlayerWeapon {
     acquired_at: string;
 }
 
+/** 武器改造で強化可能な custom_stats のキー（バックエンドの stat_type と一致させる） */
+export type WeaponUpgradeStatType = "power_bonus" | "accuracy_bonus";
+
 /**
  * 武器改造（custom_stats強化）リクエスト（Issue #411）。
  * 未装備の武器も改造可能。装備中の武器はバトル開始時に再同期される。
  */
 export interface WeaponUpgradeRequest {
-    target_stat: "power_bonus" | "accuracy_bonus";
+    target_stat: WeaponUpgradeStatType;
     steps?: number;
 }
 
@@ -139,7 +142,7 @@ export interface WeaponUpgradeResponse {
 /** 武器改造プレビューの情報（費用と改造後の値を事前確認するために使用） */
 export interface WeaponUpgradePreview {
     player_weapon_id: string;
-    stat_type: string;
+    stat_type: WeaponUpgradeStatType;
     current_value: number;
     new_value: number;
     cost: number;

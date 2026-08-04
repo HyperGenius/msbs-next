@@ -210,6 +210,46 @@ def test_upgrade_api_endpoint_at_max_cap_returns_400(
         app.dependency_overrides.pop(get_current_user, None)
 
 
+def test_upgrade_api_endpoint_weapon_not_found_returns_404(
+    client, session, pilot: Pilot
+):
+    """存在しない武器IDを指定した場合、改造APIは404を返す(所有権エラーの400と区別)."""
+    app.dependency_overrides[get_current_user] = lambda: pilot.user_id
+    try:
+        response = client.post(
+            "/api/player-weapons/00000000-0000-0000-0000-000000000000/upgrade",
+            json={"target_stat": "power_bonus", "steps": 1},
+        )
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_upgrade_api_endpoint_other_users_weapon_returns_403(
+    client, session, player_weapon: PlayerWeapon
+):
+    """他人の武器を改造しようとした場合、改造APIは403を返す."""
+    other_pilot = Pilot(
+        user_id="weapon_eng_other_user",
+        name="Other Pilot",
+        level=1,
+        exp=0,
+        credits=100000,
+    )
+    session.add(other_pilot)
+    session.commit()
+
+    app.dependency_overrides[get_current_user] = lambda: other_pilot.user_id
+    try:
+        response = client.post(
+            f"/api/player-weapons/{player_weapon.id}/upgrade",
+            json={"target_stat": "power_bonus", "steps": 1},
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
 def test_upgrade_preview_api_endpoint(
     client, session, pilot: Pilot, player_weapon: PlayerWeapon
 ):
