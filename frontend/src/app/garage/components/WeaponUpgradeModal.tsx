@@ -246,10 +246,11 @@ export default function WeaponUpgradeModal({
                 steps > 0 ? getWeaponRank(stat.rankStatName, base + finalBonus) : null;
               const isRankUp = !!previewRank && previewRank !== currentRank;
 
-              // 現在の1回分のコスト（[-]/[+]横に表示）
-              const nextStepCost = isMaxed
-                ? 0
-                : calcStepCost(stat, currentBonus + steps * stat.increment);
+              // 次の1回分のコスト（[-]/[+]横に表示）。finalBonus は simulateSteps で
+              // cap にクランプ済みのため、ペンディング分ですでに上限に達している
+              // 場合は素の (currentBonus + steps * increment) を使わずここで弾く
+              const nextStepCost =
+                isMaxed || finalBonus >= cap ? 0 : calcStepCost(stat, finalBonus);
 
               return (
                 <div key={stat.key} className="py-4 first:pt-0">

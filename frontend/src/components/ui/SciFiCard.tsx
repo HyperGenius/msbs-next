@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, KeyboardEvent } from "react";
 
 interface SciFiCardProps {
   children: ReactNode;
@@ -35,8 +35,24 @@ export default function SciFiCard({
     ${className}
   `.trim();
 
+  // interactive + onClick の場合のみキーボード操作(Enter/Space)を有効にする。
+  // e.target !== e.currentTarget の場合はカード内のネストしたボタン/Select等から
+  // バブリングしてきたキー操作なので無視する（ネスト要素側の本来の挙動と二重発火させないため）
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick?.();
+    }
+  };
+
+  const interactiveProps =
+    interactive && onClick
+      ? { role: "button" as const, tabIndex: 0, onKeyDown: handleKeyDown }
+      : {};
+
   return (
-    <div className={baseClasses} onClick={onClick}>
+    <div className={baseClasses} onClick={onClick} {...interactiveProps}>
       {children}
     </div>
   );

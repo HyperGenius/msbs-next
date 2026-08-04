@@ -147,11 +147,11 @@ export function useGarageEditor() {
     handleSelectMs(ms);
   };
 
-  // 武器改造モーダルでの改造完了時: 所持武器一覧とパイロットのクレジット残高を再検証する
-  // （PlayerWeapon 自体の最新値はモーダル側が API レスポンスで直接保持するため、ここでは
-  //   他画面と共有するSWRキャッシュの再検証のみ行う）
+  // 武器改造モーダルでの改造完了時: パイロットのクレジット残高を再検証する
+  // （所持武器一覧のSWRキャッシュは WeaponInventoryList 側が自身の現在のフィルタ状態
+  //   に対応するキーで mutate 済みのため、ここで重ねて mutatePlayerWeapons() を呼ぶと
+  //   フィルタOFF時に同一キーへの再検証が二重に走ってしまう。ここでは pilot のみ担当する）
   const handleWeaponUpgraded = () => {
-    mutatePlayerWeapons();
     mutatePilot();
   };
 

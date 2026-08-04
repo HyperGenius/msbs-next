@@ -113,7 +113,7 @@ interface WeaponInventoryListProps {
   pilot: Pilot | undefined;
   onNavigateToEquippedMs: (msId: string) => void;
   onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => Promise<void>;
-  /** 武器改造モーダルでの改造成功時に呼ばれる（呼び出し元で所持武器/パイロットのSWRキャッシュを再検証する） */
+  /** 武器改造モーダルでの改造成功時に呼ばれる（呼び出し元でパイロットのクレジット残高を再検証する。所持武器一覧自体は本コンポーネントが自分のSWRキーで再検証する） */
   onWeaponUpgraded: () => void;
 }
 
@@ -203,7 +203,8 @@ export default function WeaponInventoryList({
     mutatePlayerWeapons();
   };
 
-  // 武器改造成功時: モーダル内の表示を更新しつつ、一覧・パイロットのクレジット残高を再検証する
+  // 武器改造成功時: モーダル内の表示を更新し、現在のフィルタ状態に対応するSWRキーの
+  // 所持武器一覧を再検証する（パイロットのクレジット残高の再検証は onWeaponUpgraded 側の責務）
   const handleWeaponUpgraded = (updated: PlayerWeapon) => {
     setUpgradingWeapon(updated);
     mutatePlayerWeapons();
