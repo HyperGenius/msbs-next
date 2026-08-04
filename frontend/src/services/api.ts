@@ -8,6 +8,7 @@ export * from "./entry";
 export * from "./pilot";
 export * from "./shop";
 export * from "./upgrades";
+export * from "./weaponEngineering";
 export * from "./skills";
 export * from "./leaderboard";
 export * from "./friends";

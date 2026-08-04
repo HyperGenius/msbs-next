@@ -46,6 +46,35 @@ class WeaponService:
         return Weapon(**merged)
 
     @staticmethod
+    def resync_mobile_suit_weapons(session: Session, mobile_suit: MobileSuit) -> None:
+        """装備中の全 PlayerWeapon の実効スペックで MobileSuit.weapons を再同期する.
+
+        装備中の武器を改造（custom_stats 更新）しても、equip_weapon 実行時の
+        dual-write のみでは MobileSuit.weapons に改造差分が反映されない。
+        バトル開始前など、実効値の反映が必要なタイミングで呼び出すことで
+        再装備なしに改造差分をバトルエンジンへ反映できる（Issue #411）。
+
+        Args:
+            session: データベースセッション
+            mobile_suit: 再同期対象の機体（呼び出し元で add/commit すること）
+        """
+        equipped_stmt = select(PlayerWeapon).where(
+            PlayerWeapon.equipped_ms_id == mobile_suit.id
+        )
+        equipped_weapons = session.exec(equipped_stmt).all()
+        if not equipped_weapons:
+            return
+
+        new_weapons = list(mobile_suit.weapons or [])
+        for pw in equipped_weapons:
+            if pw.equipped_slot is None or pw.equipped_slot >= len(new_weapons):
+                continue
+            new_weapons[pw.equipped_slot] = WeaponService.apply_effective_spec(
+                pw.base_snapshot, pw.custom_stats
+            )
+        mobile_suit.weapons = new_weapons
+
+    @staticmethod
     def purchase_weapon(session: Session, user_id: str, weapon_id: str) -> PlayerWeapon:
         """武器を購入して PlayerWeapon 行を INSERT する.
 

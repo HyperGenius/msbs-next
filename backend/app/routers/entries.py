@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.core.auth import get_current_user
 from app.db import get_session
 from app.models.models import BattleEntry, BattleRoom, MobileSuit
+from app.services.weapon_service import WeaponService
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
 
@@ -108,6 +109,14 @@ async def create_entry(
     mobile_suit = session.get(MobileSuit, mobile_suit_uuid)
     if not mobile_suit:
         raise HTTPException(status_code=404, detail="Mobile Suit not found")
+
+    # 装備中の武器改造差分（PlayerWeapon.custom_stats）をバトル開始前に反映する
+    # （再装備なしでも改造結果がバトルエンジンに渡るようにするため。Issue #411）
+    # ここでは commit しない。以降の mobile_suit_snapshot（model_dump）に
+    # in-memory の状態を反映させれば十分で、永続化は既存エントリー作成/更新の
+    # commit にまとめて含める（余計なトランザクションを増やさないため）。
+    WeaponService.resync_mobile_suit_weapons(session, mobile_suit)
+    session.add(mobile_suit)
 
     # 現在募集中のルームを取得または作成
     room = get_or_create_open_room(session)
