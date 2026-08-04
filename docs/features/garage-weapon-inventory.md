@@ -51,6 +51,7 @@ MS強化タブ（`CustomizationModal` の `StatusTab.tsx`）とレイアウト�
 
 - `power_bonus`（威力） / `accuracy_bonus`（命中率）の2ステータスを、`StatusTab.tsx` の `STAT_TYPES` と同型の `WeaponStatInfo` 配列で定義する。コスト計算式（`baseCost * (1 + bonus / costDivisor)`）・上限（実効値が `base × capMultiplier` に達するまで）は `WeaponEngineeringService`（バックエンド）の定数値をクライアント側にも複製している（`StatusTab.tsx` が `EngineeringService` の式を複製しているのと同じパターン）
 - `[-]`/`[+]` ボタンで各ステータスのペンディングステップ数を増減し、`SciFiBlockIndicator` に現在値（緑）・今回追加予定（黄）・残り（黒）を表示する。ステップ数はクライアント側で `simulateSteps` によりコスト・改造後の実効値をシミュレーションし、リアルタイムにプレビューする
+- 威力・命中率とも「200」「85.0%」のような生の数値は表示せず、ランクバッジとブロックインジケーターのみで現在値・改造後の変化を表現する（`StatusTab.tsx` も同様に生値ではなくランク・インジケーター中心の表示にしている）
 - 末尾の `HoldSciFiButton`（長押し確定、誤タップ防止）を押すと、ペンディングステップが入っているステータスごとに `POST /api/player-weapons/{pw_id}/upgrade` を順次呼び出す（武器改造には bulk エンドポイントが無いため、同一 `player_weapon_id` への逐次呼び出しで対応。後続の呼び出しは先の更新を含んだ `PlayerWeapon` を返すため、最後のレスポンスが最終状態になる）
 - 改造後の実効値からランク（`getWeaponRank("weapon_power" | "weapon_accuracy", value)`）を計算し、ランクアップする場合は現在ランクの代わりに改造後ランクを表示して「✨RANK UP!」を添える
 - 改造成功時は最後のレスポンスの `player_weapon` を `onUpgraded` で呼び出し元（`WeaponInventoryList`）に渡し、一覧側の `resolveSpec`（`base_snapshot + custom_stats` をマージして実効スペックを計算、Issue #413 で改造差分を反映するよう修正）がランクバッジに即座に反映する。同時に `usePlayerWeapons` のSWRキャッシュとパイロットのクレジット残高（`usePilot`）も再検証する（`useGarageEditor.handleWeaponUpgraded`）

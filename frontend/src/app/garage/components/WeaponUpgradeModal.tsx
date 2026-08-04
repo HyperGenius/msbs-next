@@ -23,7 +23,6 @@ interface WeaponStatInfo {
   rankStatName: "weapon_power" | "weapon_accuracy";
   getBase: (pw: PlayerWeapon) => number;
   getBonus: (pw: PlayerWeapon) => number;
-  format: (val: number) => string;
   increment: number;
   /** 実効値(base+bonus)がこの倍率(base × capMultiplier)に達するまで改造可能 */
   capMultiplier: number;
@@ -39,7 +38,6 @@ const STAT_TYPES: WeaponStatInfo[] = [
     rankStatName: "weapon_power",
     getBase: (pw) => (pw.base_snapshot as { power?: number }).power ?? 0,
     getBonus: (pw) => pw.custom_stats?.power_bonus ?? 0,
-    format: (val) => val.toFixed(0),
     increment: 5,
     capMultiplier: 2.0,
     baseCost: 60,
@@ -51,7 +49,6 @@ const STAT_TYPES: WeaponStatInfo[] = [
     rankStatName: "weapon_accuracy",
     getBase: (pw) => (pw.base_snapshot as { accuracy?: number }).accuracy ?? 0,
     getBonus: (pw) => pw.custom_stats?.accuracy_bonus ?? 0,
-    format: (val) => `${val.toFixed(1)}%`,
     increment: 1.0,
     capMultiplier: 1.3,
     baseCost: 100,
@@ -329,19 +326,6 @@ export default function WeaponUpgradeModal({
                           {nextStepCost > 0 ? `${nextStepCost} CR` : ""}
                         </span>
                       </div>
-                    )}
-                  </div>
-
-                  {/* 実効値（現在値 → 改造後の値） */}
-                  <div className="mt-1 text-xs text-[#00ff41]/50 font-mono">
-                    {stat.format(base + currentBonus)}
-                    {steps > 0 && (
-                      <>
-                        {" → "}
-                        <span className="text-[#00f0ff]">
-                          {stat.format(base + finalBonus)}
-                        </span>
-                      </>
                     )}
                   </div>
                 </div>
