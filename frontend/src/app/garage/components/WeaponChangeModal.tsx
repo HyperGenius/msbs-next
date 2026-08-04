@@ -102,9 +102,9 @@ export default function WeaponChangeModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
       <SciFiPanel variant="accent" chiseled={true}>
-        <div className="p-8 max-w-2xl mx-4 h-[80vh] flex flex-col">
+        <div className="p-8 max-w-2xl max-h-[85dvh] flex flex-col">
           <SciFiHeading level={3} className="mb-1" variant="accent">
             武器変更
           </SciFiHeading>

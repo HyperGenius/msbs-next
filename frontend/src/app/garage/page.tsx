@@ -38,6 +38,7 @@ export default function GaragePage() {
     handleEquipWeapon,
     handleNavigateToEquippedMs,
     handleEquipFromInventory,
+    handleWeaponUpgraded,
   } = useGarageEditor();
 
   if (isError) {
@@ -114,8 +115,10 @@ export default function GaragePage() {
               <WeaponInventoryList
                 mobileSuits={mobileSuits}
                 isBusy={isSaving}
+                pilot={pilot}
                 onNavigateToEquippedMs={handleNavigateToEquippedMs}
                 onEquip={handleEquipFromInventory}
+                onWeaponUpgraded={handleWeaponUpgraded}
               />
             )}
           </div>

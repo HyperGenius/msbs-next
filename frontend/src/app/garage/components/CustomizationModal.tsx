@@ -58,14 +58,16 @@ export default function CustomizationModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-40"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-4xl mx-4 h-[90vh] flex flex-col">
-        <SciFiPanel variant="accent" chiseled={true}>
-          <div className="flex flex-col max-h-[90vh]">
+      {/* h-[85dvh]は固定高さ（max-h ではない）。タブ切り替えでコンテンツの高さが
+          変わってもモーダル・タブバーの位置がずれないようにするため（Issue #413） */}
+      <div className="w-full max-w-4xl h-[85dvh] flex flex-col">
+        <SciFiPanel variant="accent" chiseled={true} className="flex flex-col h-full">
+          <div className="flex flex-col h-full">
             {/* Header */}
             <div className="p-4 sm:p-6 border-b border-[#00f0ff]/30 flex-shrink-0">
               <div className="flex justify-between items-start">

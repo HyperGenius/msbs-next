@@ -160,12 +160,12 @@ def test_upgrade_rejects_other_users_weapon(
 
 
 def test_get_upgrade_preview(session: Session, player_weapon: PlayerWeapon) -> None:
-    """プレビューが現在値・改造後の値・コストを返すことを確認."""
+    """プレビューが現在値・改造後の値・コストを実効値(base+bonus)で返すことを確認."""
     service = WeaponEngineeringService(session)
     preview = service.get_upgrade_preview(str(player_weapon.id), "power_bonus")
 
-    assert preview["current_value"] == 0
-    assert preview["new_value"] == 5
+    assert preview["current_value"] == 100  # base power(100) + bonus(0)
+    assert preview["new_value"] == 105  # base power(100) + bonus(5)
     assert preview["cost"] == 60
     assert preview["at_max_cap"] is False
 
@@ -262,8 +262,10 @@ def test_upgrade_preview_api_endpoint(
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
-        assert data["current_value"] == 0
-        assert data["new_value"] == pytest.approx(1.0)
+        assert data["current_value"] == 60  # base accuracy(60) + bonus(0)
+        assert data["new_value"] == pytest.approx(
+            61.0
+        )  # base accuracy(60) + bonus(1.0)
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 

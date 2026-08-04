@@ -40,11 +40,32 @@ Garageページ（`frontend/src/app/garage/page.tsx`）にタブ切り替えを�
 
 ### 一覧からの操作
 
-- **装備中の武器の行**: 行自体はクリック不可（将来の武器改造モーダルの導線として予約するため）。装備先MS名・スロット番号を含む一体化ボタン「→ {MS名}へ移動（スロットN）」を、カード幅いっぱいの独自ボタン（`SciFiButton` は使わず素の `<button>`）として設置し、押すと装備先MSの `CustomizationModal` を開く（`useGarageEditor.handleNavigateToEquippedMs`）。カードの主目的アクションであるため、下線リンクではなくボタンとして視覚的な重みを持たせている。配色は新色を追加せず既存パレットの範囲内（`#00ff41`）に収め、通常時は1pxボーダー+透明背景、hover/active時のみ緑背景+黒文字に反転する構成にして、常時は主張しすぎない見た目にしている。武器変更モーダルへは自動遷移させず、ユーザーが次のアクション（LOADOUTタブ操作など）を自分で選べるようにする
+- **カード本体のクリック（すべての行が対象）**: 武器改造モーダル（`WeaponUpgradeModal`）を開く（Issue #413）。装備中・未装備どちらの武器も改造可能
+- **装備中の武器の行**: 装備先MS名・スロット番号を含む一体化ボタン「→ {MS名}へ移動（スロットN）」を、カード幅いっぱいの独自ボタン（`SciFiButton` は使わず素の `<button>`）として設置し、押すと装備先MSの `CustomizationModal` を開く（`useGarageEditor.handleNavigateToEquippedMs`）。カードの主目的アクションであるため、下線リンクではなくボタンとして視覚的な重みを持たせている。配色は新色を追加せず既存パレットの範囲内（`#00ff41`）に収め、通常時は1pxボーダー+透明背景、hover/active時のみ緑背景+黒文字に反転する構成にして、常時は主張しすぎない見た目にしている。武器変更モーダルへは自動遷移させず、ユーザーが次のアクション（LOADOUTタブ操作など）を自分で選べるようにする
 - **未装備の武器の行** → 装備先MS・スロットをインラインの `SciFiSelect` で選択し、「装備する」ボタンで直接装備できる（`useGarageEditor.handleEquipFromInventory` が `PUT /api/mobile_suits/{ms_id}/equip` を呼び出す既存の `equipWeapon` サービス関数を利用）
+- 上記2つの操作（移動ボタン・装備先選択+装備ボタン）はカード本体クリックとは別のアクションのため、内側を `onClick={(e) => e.stopPropagation()}` でラップし、カードの改造モーダルが誤って開かないようにしている
 
-> [!NOTE]
-> 行自体のクリックは、今後実装予定の武器改造（強化）モーダルへの導線として空けてある（関連: 武器改造機能に向けたデータモデル整理・マイグレーション Issue）。
+### 武器改造モーダル（`WeaponUpgradeModal.tsx`、Issue #413）
+
+MS強化タブ（`CustomizationModal` の `StatusTab.tsx`）とレイアウト・操作感を統一するため、`SciFiModal`（共通モーダルシェル、`z-[60]` で BottomNav の上に重なる）の中に `StatusTab.tsx` と同じ構成要素を配置している: 所持金（現在 ➔ 変更後）表示、ステータスごとの行（ランクバッジ + `SciFiBlockIndicator` + `[-]`/`[+]` ステッパー + 1ステップ分のコスト）、末尾の `HoldSciFiButton` 一括確定ボタン。
+
+- `power_bonus`（威力） / `accuracy_bonus`（命中率）の2ステータスを、`StatusTab.tsx` の `STAT_TYPES` と同型の `WeaponStatInfo` 配列で定義する。コスト計算式（`baseCost * (1 + bonus / costDivisor)`）・上限（実効値が `base × capMultiplier` に達するまで）は `WeaponEngineeringService`（バックエンド）の定数値をクライアント側にも複製している（`StatusTab.tsx` が `EngineeringService` の式を複製しているのと同じパターン）
+- `[-]`/`[+]` ボタンで各ステータスのペンディングステップ数を増減し、`SciFiBlockIndicator` に現在値（緑）・今回追加予定（黄）・残り（黒）を表示する。ステップ数はクライアント側で `simulateSteps` によりコスト・改造後の実効値をシミュレーションし、リアルタイムにプレビューする
+- 威力・命中率とも「200」「85.0%」のような生の数値は表示せず、ランクバッジとブロックインジケーターのみで現在値・改造後の変化を表現する（`StatusTab.tsx` も同様に生値ではなくランク・インジケーター中心の表示にしている）
+- 末尾の `HoldSciFiButton`（長押し確定、誤タップ防止）を押すと、ペンディングステップが入っているステータスごとに `POST /api/player-weapons/{pw_id}/upgrade` を順次呼び出す（武器改造には bulk エンドポイントが無いため、同一 `player_weapon_id` への逐次呼び出しで対応。後続の呼び出しは先の更新を含んだ `PlayerWeapon` を返すため、最後のレスポンスが最終状態になる）
+- 改造後の実効値からランク（`getWeaponRank("weapon_power" | "weapon_accuracy", value)`）を計算し、ランクアップする場合は現在ランクの代わりに改造後ランクを表示して「✨RANK UP!」を添える
+- 改造成功時は最後のレスポンスの `player_weapon` を `onUpgraded` で呼び出し元（`WeaponInventoryList`）に渡し、一覧側の `resolveSpec`（`base_snapshot + custom_stats` をマージして実効スペックを計算、Issue #413 で改造差分を反映するよう修正）がランクバッジに即座に反映する。同時に `usePlayerWeapons` のSWRキャッシュとパイロットのクレジット残高（`usePilot`）も再検証する（`useGarageEditor.handleWeaponUpgraded`）
+- `GET /api/player-weapons/{pw_id}/upgrade-preview/{stat_type}`（バックエンド実装済み）はこのUIからは呼び出していない。`StatusTab.tsx` が機体強化側の `GET /api/engineering/preview/...` を使わずクライアント計算のみで完結させているのと同じ判断で、コスト計算をクライアント側で完結させてAPI往復を減らしている
+
+### MS改造モーダル（`CustomizationModal.tsx`）の `z-index` 不具合修正（Issue #413）
+
+本Issueの作業中に、MS改造モーダル（`CustomizationModal.tsx`）と、その上に開く武器変更モーダル（`WeaponChangeModal.tsx`）がモバイルで `BottomNav`（`z-50 fixed bottom-0 h-16 md:hidden`）の裏に回り込み、下端が隠れる不具合を確認した。両モーダルは `SciFiModal` 導入以前からの実装で `z-40` / `z-50` のままになっており、`frontend/CLAUDE.md`「よくあるハマりポイント」に明記されている「モーダルは `z-[60]` 以上にすること」のルールを満たしていなかった。
+
+- `CustomizationModal.tsx`: `z-40` → `z-[60]`
+- `WeaponChangeModal.tsx`（`CustomizationModal` の上に重ねて開く）: `z-50` → `z-[70]`（`CustomizationModal` よりさらに前面に出す必要があるため）
+- 合わせて `vh` 指定を `dvh`（モバイルブラウザのアドレスバー等による表示領域変動に追従）に更新し、外側コンテナに `p-4` を付けて上下左右の余白を均等に確保した（`CustomizationModal.tsx` 側の重複していた `mx-4` は削除）
+  - `WeaponChangeModal.tsx`（タブ無し・単一ビュー）は `max-h-[85dvh]` + 内部 `overflow-y-auto`（他のモーダルと同じくコンテンツ量に応じて高さが変わる）
+  - `CustomizationModal.tsx`（STATUS/TERRAIN/LOADOUT/TACTICS のタブ切り替えあり）は `h-[85dvh]` **固定**にしている。`max-h` にしてしまうとタブごとのコンテンツ量の違いでモーダル自体の高さが伸縮し、タブ切り替えのたびにヘッダー・タブバーの表示位置がずれてユーザーが混乱する不具合になったため（Issue #413で `max-h-[85dvh]` → `h-[85dvh]` に修正）。タブ切り替えUIを持つモーダルを新規に作る場合は、このモーダルに限らず固定高さ + 内部 `overflow-y-auto` を使うこと
 
 ### 空状態・少数件時のレイアウト
 
@@ -55,18 +76,19 @@ Garageページ（`frontend/src/app/garage/page.tsx`）にタブ切り替えを�
 
 ## 関連ファイル
 
-- `frontend/src/app/garage/page.tsx` — タブ切り替えUIの追加
-- `frontend/src/app/garage/hooks/useGarageEditor.ts` — `activeTab` 状態、`handleNavigateToEquippedMs` / `handleEquipFromInventory` ハンドラを追加
-- `frontend/src/app/garage/components/WeaponInventoryList.tsx` — 所持武器一覧コンポーネント（新規）。自身で `usePlayerWeapons()` を呼び出し、装備先MSの参照は `mobileSuits` から作った `Map<id, MobileSuit>`（`msById`）でO(1)解決する
+- `frontend/src/app/garage/page.tsx` — タブ切り替えUIの追加。`pilot` / `handleWeaponUpgraded` を `WeaponInventoryList` に渡す
+- `frontend/src/app/garage/hooks/useGarageEditor.ts` — `activeTab` 状態、`handleNavigateToEquippedMs` / `handleEquipFromInventory` / `handleWeaponUpgraded`（Issue #413）ハンドラを追加
+- `frontend/src/app/garage/components/WeaponInventoryList.tsx` — 所持武器一覧コンポーネント。自身で `usePlayerWeapons()` を呼び出し、装備先MSの参照は `mobileSuits` から作った `Map<id, MobileSuit>`（`msById`）でO(1)解決する。`resolveSpec` は `base_snapshot + custom_stats` をマージした実効スペックを返す（Issue #413）。カードクリックで `WeaponUpgradeModal` を開く
+- `frontend/src/app/garage/components/WeaponUpgradeModal.tsx` — 武器改造モーダル（新規、Issue #413）
 - `frontend/src/hooks/usePlayerWeapons.ts` — 所持武器取得フック（既存、変更なし。`unequippedOnly` 引数で `?unequipped=true` を切り替え可能）
 - `frontend/src/app/garage/constants.ts` — `getWeaponSlots()`（既存、スロット選択に再利用）
-- `backend/app/routers/player_weapons.py` / `backend/app/services/weapon_service.py` — `GET /api/player-weapons`（既存、変更なし）
+- `frontend/src/services/weaponEngineering.ts` / `frontend/src/types/shop.ts` — 武器改造APIクライアント・型（Issue #411 で実装済み、本Issueで初めて画面から利用）
+- `backend/app/routers/player_weapons.py` / `backend/app/services/weapon_service.py` / `backend/app/services/weapon_engineering_service.py` — 武器改造API・ロジック（既存、変更なし）
 
 ---
 
 ## 今後の拡張
 
-- 武器改造（強化）機能実装後、本一覧に強化状態（`PlayerWeapon.custom_stats` 由来の差分）を表示する拡張を予定
 - 一覧から武器の売却・破棄（`DELETE /api/player-weapons/{pw_id}`）を行う導線は未実装（別Issueで検討）
 
 ---
