@@ -147,6 +147,14 @@ export function useGarageEditor() {
     handleSelectMs(ms);
   };
 
+  // 武器改造モーダルでの改造完了時: 所持武器一覧とパイロットのクレジット残高を再検証する
+  // （PlayerWeapon 自体の最新値はモーダル側が API レスポンスで直接保持するため、ここでは
+  //   他画面と共有するSWRキャッシュの再検証のみ行う）
+  const handleWeaponUpgraded = () => {
+    mutatePlayerWeapons();
+    mutatePilot();
+  };
+
   // 所持武器一覧から直接、指定機体・スロットへ武器を装備する
   const handleEquipFromInventory = async (
     playerWeaponId: string,
@@ -202,5 +210,6 @@ export function useGarageEditor() {
     handleEquipWeapon,
     handleNavigateToEquippedMs,
     handleEquipFromInventory,
+    handleWeaponUpgraded,
   };
 }

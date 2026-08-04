@@ -2,12 +2,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PlayerWeapon, Weapon } from "@/types/battle";
+import { PlayerWeapon, Weapon, Pilot } from "@/types/battle";
 import { EnrichedMobileSuit } from "@/utils/rankUtils";
 import { SciFiButton, SciFiCard, SciFiHeading, SciFiPanel, SciFiSelect } from "@/components/ui";
 import { getWeaponRank } from "@/utils/rankUtils";
 import { getWeaponSlots } from "../constants";
 import { usePlayerWeapons } from "@/hooks/usePlayerWeapons";
+import WeaponUpgradeModal from "./WeaponUpgradeModal";
 
 type TypeFilter = "ALL" | "BEAM" | "PHYSICAL";
 type EquipFilter = "ALL" | "UNEQUIPPED_ONLY";
@@ -109,25 +110,40 @@ function EmptyBoxIcon({ className }: { className?: string }) {
 interface WeaponInventoryListProps {
   mobileSuits: EnrichedMobileSuit[] | undefined;
   isBusy: boolean;
+  pilot: Pilot | undefined;
   onNavigateToEquippedMs: (msId: string) => void;
   onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => Promise<void>;
+  /** 武器改造モーダルでの改造成功時に呼ばれる（呼び出し元で所持武器/パイロットのSWRキャッシュを再検証する） */
+  onWeaponUpgraded: () => void;
 }
 
-/** base_snapshot / custom_stats を Weapon スペックとして安全に解決する（改造差分は現状常に空） */
+/** base_snapshot に custom_stats の改造差分（power_bonus/accuracy_bonus）をマージした実効スペックを解決する */
 function resolveSpec(pw: PlayerWeapon): Weapon {
-  return pw.base_snapshot as unknown as Weapon;
+  const base = pw.base_snapshot as unknown as Weapon;
+  const powerBonus = pw.custom_stats?.power_bonus ?? 0;
+  const accuracyBonus = pw.custom_stats?.accuracy_bonus ?? 0;
+  if (powerBonus === 0 && accuracyBonus === 0) return base;
+  return {
+    ...base,
+    power: base.power + powerBonus,
+    accuracy: base.accuracy + accuracyBonus,
+  };
 }
 
 export default function WeaponInventoryList({
   mobileSuits,
   isBusy,
+  pilot,
   onNavigateToEquippedMs,
   onEquip,
+  onWeaponUpgraded,
 }: WeaponInventoryListProps) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
   const [equipFilter, setEquipFilter] = useState<EquipFilter>("ALL");
   const [sortOrder, setSortOrder] = useState<SortOrder>("ACQUIRED_DESC");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  // 改造モーダルで表示中の武器（カードクリックで開く。null なら非表示）
+  const [upgradingWeapon, setUpgradingWeapon] = useState<PlayerWeapon | null>(null);
 
   // 「未装備のみ表示」がONの場合は GET /api/player-weapons?unequipped=true を使い、
   // 装備済みも含めた全件取得を避ける（同一URLのSWRキーはアプリ内で共有されるため、
@@ -187,8 +203,16 @@ export default function WeaponInventoryList({
     mutatePlayerWeapons();
   };
 
+  // 武器改造成功時: モーダル内の表示を更新しつつ、一覧・パイロットのクレジット残高を再検証する
+  const handleWeaponUpgraded = (updated: PlayerWeapon) => {
+    setUpgradingWeapon(updated);
+    mutatePlayerWeapons();
+    onWeaponUpgraded();
+  };
+
   return (
-    <SciFiPanel variant="primary">
+    <>
+      <SciFiPanel variant="primary">
       <div className="p-4 sm:p-6">
         <div className="flex items-baseline justify-between mb-3">
           <SciFiHeading level={3} className="text-lg sm:text-xl">
@@ -321,12 +345,23 @@ export default function WeaponInventoryList({
                 isBusy={isBusy}
                 onNavigateToEquippedMs={onNavigateToEquippedMs}
                 onEquip={handleEquip}
+                onOpenUpgrade={setUpgradingWeapon}
               />
             ))}
           </ul>
         )}
       </div>
-    </SciFiPanel>
+      </SciFiPanel>
+
+      {upgradingWeapon && (
+        <WeaponUpgradeModal
+          playerWeapon={upgradingWeapon}
+          pilot={pilot}
+          onClose={() => setUpgradingWeapon(null)}
+          onUpgraded={handleWeaponUpgraded}
+        />
+      )}
+    </>
   );
 }
 
@@ -337,6 +372,8 @@ interface WeaponInventoryRowProps {
   isBusy: boolean;
   onNavigateToEquippedMs: (msId: string) => void;
   onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => void;
+  /** カード本体クリックで武器改造モーダルを開く（装備中・未装備どちらの武器も対象） */
+  onOpenUpgrade: (playerWeapon: PlayerWeapon) => void;
 }
 
 function WeaponInventoryRow({
@@ -346,6 +383,7 @@ function WeaponInventoryRow({
   isBusy,
   onNavigateToEquippedMs,
   onEquip,
+  onOpenUpgrade,
 }: WeaponInventoryRowProps) {
   const spec = resolveSpec(playerWeapon);
   const isEquipped = playerWeapon.equipped_ms_id !== null;
@@ -365,7 +403,12 @@ function WeaponInventoryRow({
   const slots = getWeaponSlots(selectedMs?.weapon_slot_count);
 
   return (
-    <SciFiCard variant="primary" className="p-3">
+    <SciFiCard
+      variant="primary"
+      className="p-3"
+      interactive
+      onClick={() => onOpenUpgrade(playerWeapon)}
+    >
       <div className="flex justify-between items-start gap-3">
         <div className="font-bold text-base sm:text-lg">{spec.name}</div>
         <span
@@ -397,64 +440,67 @@ function WeaponInventoryRow({
         </span>
       </div>
 
-      <div className="mt-2">
-        {isEquipped ? (
-          equippedMs ? (
-            <button
-              type="button"
-              onClick={() => onNavigateToEquippedMs(equippedMs.id)}
-              className="w-full border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black active:bg-[#00ff41] active:text-black transition-colors font-bold font-mono text-sm px-4 py-2.5"
-            >
-              → {equippedMs.name}へ移動（スロット
-              {(playerWeapon.equipped_slot ?? 0) + 1}）
-            </button>
+      {/* カード本体のクリック（改造モーダルを開く）とは別の操作のため、伝播を止める */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <div className="mt-2">
+          {isEquipped ? (
+            equippedMs ? (
+              <button
+                type="button"
+                onClick={() => onNavigateToEquippedMs(equippedMs.id)}
+                className="w-full border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black active:bg-[#00ff41] active:text-black transition-colors font-bold font-mono text-sm px-4 py-2.5"
+              >
+                → {equippedMs.name}へ移動（スロット
+                {(playerWeapon.equipped_slot ?? 0) + 1}）
+              </button>
+            ) : (
+              <span className="text-xs sm:text-sm font-bold text-[#ffb000]">
+                装備先: 不明な機体
+              </span>
+            )
           ) : (
-            <span className="text-xs sm:text-sm font-bold text-[#ffb000]">
-              装備先: 不明な機体
-            </span>
-          )
-        ) : (
-          <span className="text-xs sm:text-sm text-[#00ff41]/50">未装備</span>
+            <span className="text-xs sm:text-sm text-[#00ff41]/50">未装備</span>
+          )}
+        </div>
+
+        {!isEquipped && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <SciFiSelect
+              value={selectedMsId}
+              onChange={(e) => {
+                setSelectedMsId(e.target.value);
+                setSelectedSlot(0);
+              }}
+              options={[
+                { value: "", label: "装備先の機体を選択" },
+                ...(mobileSuits?.map((ms) => ({ value: ms.id, label: ms.name })) ?? []),
+              ]}
+            />
+
+            {selectedMsId && (
+              <SciFiSelect
+                value={selectedSlot}
+                onChange={(e) => setSelectedSlot(Number(e.target.value))}
+                options={slots.map((slot) => ({
+                  value: slot.index,
+                  label: slot.labelJa,
+                }))}
+              />
+            )}
+
+            <SciFiButton
+              variant="accent"
+              size="sm"
+              disabled={!selectedMsId || isBusy}
+              onClick={() =>
+                onEquip(playerWeapon.id, selectedMsId, selectedSlot)
+              }
+            >
+              装備する
+            </SciFiButton>
+          </div>
         )}
       </div>
-
-      {!isEquipped && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <SciFiSelect
-            value={selectedMsId}
-            onChange={(e) => {
-              setSelectedMsId(e.target.value);
-              setSelectedSlot(0);
-            }}
-            options={[
-              { value: "", label: "装備先の機体を選択" },
-              ...(mobileSuits?.map((ms) => ({ value: ms.id, label: ms.name })) ?? []),
-            ]}
-          />
-
-          {selectedMsId && (
-            <SciFiSelect
-              value={selectedSlot}
-              onChange={(e) => setSelectedSlot(Number(e.target.value))}
-              options={slots.map((slot) => ({
-                value: slot.index,
-                label: slot.labelJa,
-              }))}
-            />
-          )}
-
-          <SciFiButton
-            variant="accent"
-            size="sm"
-            disabled={!selectedMsId || isBusy}
-            onClick={() =>
-              onEquip(playerWeapon.id, selectedMsId, selectedSlot)
-            }
-          >
-            装備する
-          </SciFiButton>
-        </div>
-      )}
     </SciFiCard>
   );
 }
