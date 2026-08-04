@@ -57,6 +57,14 @@ MS強化タブ（`CustomizationModal` の `StatusTab.tsx`）とレイアウト�
 - 改造成功時は最後のレスポンスの `player_weapon` を `onUpgraded` で呼び出し元（`WeaponInventoryList`）に渡し、一覧側の `resolveSpec`（`base_snapshot + custom_stats` をマージして実効スペックを計算、Issue #413 で改造差分を反映するよう修正）がランクバッジに即座に反映する。同時に `usePlayerWeapons` のSWRキャッシュとパイロットのクレジット残高（`usePilot`）も再検証する（`useGarageEditor.handleWeaponUpgraded`）
 - `GET /api/player-weapons/{pw_id}/upgrade-preview/{stat_type}`（バックエンド実装済み）はこのUIからは呼び出していない。`StatusTab.tsx` が機体強化側の `GET /api/engineering/preview/...` を使わずクライアント計算のみで完結させているのと同じ判断で、コスト計算をクライアント側で完結させてAPI往復を減らしている
 
+### MS改造モーダル（`CustomizationModal.tsx`）の `z-index` 不具合修正（Issue #413）
+
+本Issueの作業中に、MS改造モーダル（`CustomizationModal.tsx`）と、その上に開く武器変更モーダル（`WeaponChangeModal.tsx`）がモバイルで `BottomNav`（`z-50 fixed bottom-0 h-16 md:hidden`）の裏に回り込み、下端が隠れる不具合を確認した。両モーダルは `SciFiModal` 導入以前からの実装で `z-40` / `z-50` のままになっており、`frontend/CLAUDE.md`「よくあるハマりポイント」に明記されている「モーダルは `z-[60]` 以上にすること」のルールを満たしていなかった。
+
+- `CustomizationModal.tsx`: `z-40` → `z-[60]`
+- `WeaponChangeModal.tsx`（`CustomizationModal` の上に重ねて開く）: `z-50` → `z-[70]`（`CustomizationModal` よりさらに前面に出す必要があるため）
+- 合わせて、固定高さ指定（`h-[90vh]` / `h-[80vh]`）を他のモーダル（`SciFiModal`）と同じ `max-h-[85dvh]` + 内部 `overflow-y-auto` に統一し、外側コンテナに `p-4` を付けて上下左右の余白を均等に確保した（`CustomizationModal.tsx` 側の重複していた `mx-4` は削除）
+
 ### 空状態・少数件時のレイアウト
 
 - 0件（未所持、またはフィルタで該当なし）の場合は、アイコン付きの空状態メッセージ（所持数ゼロなら購入導線への案内文、フィルタ起因ならリセットボタン）を表示し、単なる空白に見えないようにしている
