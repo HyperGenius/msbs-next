@@ -263,6 +263,31 @@ luk: number;
 - `SciFiButton` は `primary`/`secondary`/`accent`/`danger` の**塗りつぶしvariantのみ**で、アウトライン（枠線のみ）variantは存在しない。ボーダーのみ→hover/active時に反転する強調ボタンが欲しい場合は `SciFiButton` を使わず素の `<button>` に自前でクラスを書く（例: `border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black`）
 - `SciFiCard` の `onClick` は `() => void`（イベント引数を受け取らない）。`(e) => e.stopPropagation()` のような使い方はできない
 
+## 強化・改造系モーダルのUI規約（Issue #413）
+
+機体強化（`StatusTab.tsx`、`CustomizationModal` の STATUS タブ）と武器改造（`WeaponUpgradeModal.tsx`）は、レイアウト・操作感を統一している。新しく強化・改造系のUI（ステータスを段階的に上げる操作）を追加する場合は、この2つを参考に同じパターンに揃えること。
+
+### 共通レイアウト（`StatusTab.tsx` が原型）
+
+1ステータスにつき1行、以下の要素をこの順で並べる:
+
+```
+[ラベル]                                    [ペンディング分のコスト]
+[ランクバッジ + ✨RANK UP!] [SciFiBlockIndicator] [[-] [ステップ数] [+] [1ステップ分のコスト]]
+```
+
+- **ランクバッジ + `SciFiBlockIndicator`（`components/ui/SciFiBlockIndicator.tsx`）+ `[-]`/`[+]` ステッパー** の3点セットを1行に横並びする。ステップ数はコンポーネント内 state（`pendingSteps: Record<string, number>`）で保持し、実際のAPI呼び出しは行わずクライアント側でシミュレーションしてプレビューする
+- 複数ステータスがある場合も、末尾に置いた **1つの `HoldSciFiButton`（長押し確定）でまとめて一括確定**する（`StatusTab.tsx` の `handleApplyAll` / `WeaponUpgradeModal.tsx` の `handleApplyAll` を参照）。ステータスごとに個別の確定ボタンを設けない
+- 先頭に所持クレジットの「現在 ➔ 変更後」表示（ペンディングがある時だけ矢印以降を表示、支払い可能なら `text-[#00f0ff]`、不可なら `text-red-400`）を置く
+
+### 生の数値（raw value）を表示しない
+
+**ステータスの実数値（例: 威力「200」「→ 205」、命中率「85.0%」など）はUIに出力しない。** ランクバッジ（S〜E）と `SciFiBlockIndicator` の埋まり具合のみで、現在の強さ・改造後の変化を表現する。理由: 武器改造UIで一度、実数値を表示する行を追加したが、バックエンドAPIの `current_value`/`new_value` の意味（実効値かボーナス値か）を取り違えて誤表示するバグを生んだ経緯があり、そもそも生数値を出さない方針に倒すことで作り込みとバグの両方を避けている（`WeaponUpgradeModal.tsx` 参照。武器改造プレビューAPI自体は実効値を返すよう既に修正済みだが、UIでは使っていない）。
+
+### コスト計算式はクライアント側にバックエンドと同じ式を複製する
+
+`StatusTab.tsx`（`EngineeringService` の式）・`WeaponUpgradeModal.tsx`（`WeaponEngineeringService` の式）はいずれも、コスト計算・上限キャップの式をクライアント側に複製し、プレビュー用APIを都度呼ばずに `+`/`-` ボタン操作を即座に反映させている。**バックエンド側の定数（`BASE_*_COST`、除数、増分、上限）を変更した場合は、対応するフロントエンドの定数も必ず同期して更新すること。** 式がずれると、クライアント側の見積もりと実際にAPIで確定した結果が食い違う（コストや上限判定がずれる）。
+
 ## アイコンの扱い
 
 プロジェクトにアイコンライブラリ（lucide-react, react-icons, heroicons等）は**導入されていない**。UIにアイコンが必要な場合は依存追加を避け、`stroke="currentColor"` ベースの最小限のインラインSVGをコンポーネント内にローカル関数として定義する。テキスト絵文字（`✕`など）で足りる場合はそちらでも可。
@@ -311,7 +336,7 @@ luk: number;
 | `vi.mock` が hoisting されない | `vi.mock(...)` はファイル先頭の `import` より前に動作する（Vitest が自動 hoist） |
 | SSR で `getAuthToken` が null を返す | 正常動作。`window.Clerk` はクライアントサイドのみ存在する |
 | `types/battle.ts` の名前衝突 | バトル実装型は `battleCore.ts` に置く。`battle.ts` はバレル専用 |
-| モーダルが BottomNav の裏に隠れる | `BottomNav` は `z-50 h-16 fixed bottom-0 md:hidden`。モーダルは `z-[60]` 以上にすること。また `items-center p-4` で上下均等マージンを確保すること |
+| モーダルが BottomNav の裏に隠れる | `BottomNav` は `z-50 h-16 fixed bottom-0 md:hidden`。モーダルは `z-[60]` 以上にすること。また `items-center p-4` で上下均等マージンを確保すること。可能なら独自に `fixed inset-0` を書かず共通コンポーネント `components/ui/SciFiModal.tsx`（`z-[60]` 固定、`max-h-[85dvh]` + `overflow-y-auto`、Esc/オーバーレイクリックで閉じる実装済み）を使う。過去に `CustomizationModal.tsx`（`z-40`）と、その上に重ねて開く `WeaponChangeModal.tsx`（`z-50`）が `SciFiModal` 導入前の実装のまま取り残され、この規約を満たしておらずBottomNavの裏に隠れる不具合になったことがある（Issue #413で `z-[60]`/`z-[70]` に修正）。モーダルの上にさらにモーダルを重ねる場合は、外側より高い `z-index`（例: `z-[70]`）にすること |
 | モバイルでコンテンツ末尾が BottomNav の裏に隠れる／逆にコンテンツが無いのに縦スクロールできる | `frontend/CLAUDE.md`「ルートレイアウトとページルート要素の規約」参照。`main`（`overflow-y-auto`）自体に `padding-bottom` を足すと `scrollHeight` が常に加算されズレる。BottomNav分のスペースは `layout.tsx` 側のflexスペーサーで確保済みなので、ページ側は `min-h-screen` を使わない |
 | `SciFiSelect` の幅・paddingが `className` で変わらない | base クラスに `w-full`/`px-4 py-2` が先に入っているため、`!w-auto` のように important修飾子を付けて上書きする |
 | `getRankColor`（`utils/rankUtils.ts`）でランクEが灰色になる | 元々 `S`〜`D` のみ定義され `E` は `default` にフォールバックしていた。`E` 用のケースを追加済みだが、ランク関連の新規UIを書く際は S〜E 全ケースが期待通り色分けされるか確認する |
