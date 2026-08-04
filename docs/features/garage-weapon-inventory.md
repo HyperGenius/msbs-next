@@ -63,7 +63,9 @@ MS強化タブ（`CustomizationModal` の `StatusTab.tsx`）とレイアウト�
 
 - `CustomizationModal.tsx`: `z-40` → `z-[60]`
 - `WeaponChangeModal.tsx`（`CustomizationModal` の上に重ねて開く）: `z-50` → `z-[70]`（`CustomizationModal` よりさらに前面に出す必要があるため）
-- 合わせて、固定高さ指定（`h-[90vh]` / `h-[80vh]`）を他のモーダル（`SciFiModal`）と同じ `max-h-[85dvh]` + 内部 `overflow-y-auto` に統一し、外側コンテナに `p-4` を付けて上下左右の余白を均等に確保した（`CustomizationModal.tsx` 側の重複していた `mx-4` は削除）
+- 合わせて `vh` 指定を `dvh`（モバイルブラウザのアドレスバー等による表示領域変動に追従）に更新し、外側コンテナに `p-4` を付けて上下左右の余白を均等に確保した（`CustomizationModal.tsx` 側の重複していた `mx-4` は削除）
+  - `WeaponChangeModal.tsx`（タブ無し・単一ビュー）は `max-h-[85dvh]` + 内部 `overflow-y-auto`（他のモーダルと同じくコンテンツ量に応じて高さが変わる）
+  - `CustomizationModal.tsx`（STATUS/TERRAIN/LOADOUT/TACTICS のタブ切り替えあり）は `h-[85dvh]` **固定**にしている。`max-h` にしてしまうとタブごとのコンテンツ量の違いでモーダル自体の高さが伸縮し、タブ切り替えのたびにヘッダー・タブバーの表示位置がずれてユーザーが混乱する不具合になったため（Issue #413で `max-h-[85dvh]` → `h-[85dvh]` に修正）。タブ切り替えUIを持つモーダルを新規に作る場合は、このモーダルに限らず固定高さ + 内部 `overflow-y-auto` を使うこと
 
 ### 空状態・少数件時のレイアウト
 
