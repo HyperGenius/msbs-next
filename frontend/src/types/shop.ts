@@ -118,3 +118,30 @@ export interface PlayerWeapon {
     equipped_slot: number | null;
     acquired_at: string;
 }
+
+/**
+ * 武器改造（custom_stats強化）リクエスト（Issue #411）。
+ * 未装備の武器も改造可能。装備中の武器はバトル開始時に再同期される。
+ */
+export interface WeaponUpgradeRequest {
+    target_stat: "power_bonus" | "accuracy_bonus";
+    steps?: number;
+}
+
+/** 武器改造後のレスポンス（更新後の武器インスタンスと消費クレジットを含む） */
+export interface WeaponUpgradeResponse {
+    message: string;
+    player_weapon: PlayerWeapon;
+    remaining_credits: number;
+    cost_paid: number;
+}
+
+/** 武器改造プレビューの情報（費用と改造後の値を事前確認するために使用） */
+export interface WeaponUpgradePreview {
+    player_weapon_id: string;
+    stat_type: string;
+    current_value: number;
+    new_value: number;
+    cost: number;
+    at_max_cap: boolean;
+}

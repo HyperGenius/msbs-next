@@ -87,12 +87,12 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 
 - `id`（UUID）/ `user_id` / `master_weapon_id`（`master_weapons` への論理FK）
 - `base_snapshot`: 購入時点の `Weapon` スペックのスナップショット（JSON）
-- `custom_stats`: **強化・改造による差分を持たせるための予約フィールド。現状は常に空 `{}` で、読み書きするロジックは未実装**（将来の武器改造機能で `base_snapshot + custom_stats` をマージして実効スペックを計算する設計を想定）
+- `custom_stats`: 強化・改造による差分（`power_bonus` / `accuracy_bonus` / `upgrade_level`、スキーマは `WeaponCustomStats`）。`WeaponEngineeringService`（`app/services/weapon_engineering_service.py`、Issue #411）が改造ロジックを担い、`pilot.credits` を消費して段階強化する。上限は base値に対する倍率（`power_bonus` は200%、`accuracy_bonus` は130%）。実効スペックは `WeaponService.apply_effective_spec` で `base_snapshot + custom_stats` をマージして計算する
 - `equipped_ms_id` / `equipped_slot`: 装備状態の正。`UniqueConstraint(equipped_ms_id, equipped_slot)` で1スロット1武器を担保
 
-一方で `MobileSuit.weapons`（JSON列）は**バトルエンジンが直接参照するためのスナップショットのリスト**であり、装備操作のたびに `PlayerWeapon` の内容から書き込まれる（dual-write）。装備状態を問い合わせる/表示する処理は必ず `PlayerWeapon.equipped_ms_id`/`equipped_slot` を正として使うこと。
+一方で `MobileSuit.weapons`（JSON列）は**バトルエンジンが直接参照するためのスナップショットのリスト**であり、装備操作のたびに `PlayerWeapon` の内容から書き込まれる（dual-write）。装備状態を問い合わせる/表示する処理は必ず `PlayerWeapon.equipped_ms_id`/`equipped_slot` を正として使うこと。装備中の武器を改造した場合は dual-write だけでは反映されないため、`WeaponService.resync_mobile_suit_weapons` がバトルエントリー登録時（`app/routers/entries.py`）に再同期している。
 
-**既知の設計上の矛盾**: `EngineeringService`（`app/services/engineering_service.py`）の `weapon_power` 強化項目は、`PlayerWeapon` インスタンス単位ではなく `MobileSuit.weapons` の**全スロットに一律加算**する実装になっている（`_apply_weapon_power_upgrade`）。そのため武器を外す・付け替えると強化投資が失われ、`PlayerWeapon.custom_stats` を正とする将来の武器インスタンス単位の改造機能とは非互換。武器改造機能を実装する際は、この既存の `weapon_power` 強化との関係（統合するか、別軸の強化として維持するか）を先に決める必要がある。
+**`weapon_power`（機体強化）との関係**: `EngineeringService`（`app/services/engineering_service.py`）の `weapon_power` 強化項目は、`PlayerWeapon` インスタンス単位ではなく `MobileSuit.weapons` の**全スロットに一律加算**する実装（`_apply_weapon_power_upgrade`）のまま維持されている。武器を外す・付け替えると強化投資が失われるが、これは「機体側のパイロット/システム補正」として意図的に武器インスタンス単位の改造（`custom_stats`）とは別軸として維持する方針（Issue #404 で決定、方針(b)）。詳細は `docs/features/weapon-data-model.md` を参照。
 
 ## コーディング規約
 `Agent.md` の `4. コーディング規約`を参照してください。
