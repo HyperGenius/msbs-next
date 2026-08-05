@@ -60,31 +60,50 @@ export default function BattleList({
       <div className="bg-gray-800 border border-green-800 rounded-lg p-4 max-h-[800px] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4 sticky top-0 bg-gray-800 pb-2">Records</h2>
         <div className="space-y-2">
-          {battles.map((battle) => (
-            <button
-              key={battle.id}
-              onClick={() => onSelectBattle(battle)}
-              className="w-full text-left p-4 rounded border-2 border-gray-700 hover:border-green-700 transition-all"
-            >
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold">{getMissionName(battle.mission_id, battle.created_at)}</span>
-                <span
-                  className={`px-2 py-1 rounded text-xs font-bold ${
-                    battle.win_loss === "WIN"
-                      ? "bg-green-900 text-green-300"
-                      : battle.win_loss === "LOSE"
-                      ? "bg-red-900 text-red-300"
-                      : "bg-yellow-900 text-yellow-300"
-                  }`}
-                >
-                  {battle.win_loss}
-                </span>
-              </div>
-              <p className="text-xs text-gray-400">
-                {new Date(battle.created_at).toLocaleString("ja-JP")}
-              </p>
-            </button>
-          ))}
+          {battles.map((battle) => {
+            const hasDigest = battle.digest_text != null;
+            return (
+              <button
+                key={battle.id}
+                onClick={() => onSelectBattle(battle)}
+                className="w-full text-left p-4 rounded border-2 border-gray-700 hover:border-green-700 transition-all"
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className="text-xs text-gray-500">{getMissionName(battle.mission_id, battle.created_at)}</span>
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-bold ${
+                      battle.win_loss === "WIN"
+                        ? "bg-green-900 text-green-300"
+                        : battle.win_loss === "LOSE"
+                        ? "bg-red-900 text-red-300"
+                        : "bg-yellow-900 text-yellow-300"
+                    }`}
+                  >
+                    {battle.win_loss}
+                  </span>
+                </div>
+                {hasDigest ? (
+                  <>
+                    <p className="text-sm font-bold mb-1">
+                      {battle.player_survived ? "生還" : "撃墜"}
+                      {" / 撃破: "}
+                      {battle.kills ?? 0}
+                      {"機 / 被弾: "}
+                      {battle.damage_severity}
+                      {" / 搭乗機: "}
+                      {battle.pilot_ms_name}
+                    </p>
+                    <p className="text-xs text-gray-400 italic mb-1">「{battle.digest_text}」</p>
+                  </>
+                ) : (
+                  <p className="text-sm font-bold mb-1">{getMissionName(battle.mission_id, battle.created_at)}</p>
+                )}
+                <p className="text-xs text-gray-500">
+                  {new Date(battle.created_at).toLocaleString("ja-JP")}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

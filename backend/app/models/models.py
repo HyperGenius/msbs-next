@@ -782,6 +782,27 @@ class BattleResult(SQLModel, table=True):
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
 
+    # --- 戦闘ダイジェスト (Battle History 一覧の物語化, Issue #415) ---
+    # 既存レコードとの互換のためすべて nullable。バトル終了時に一度だけ計算して保存する。
+    player_survived: bool | None = Field(default=None, description="生還したかどうか")
+    min_hp_percent: int | None = Field(
+        default=None, description="バトル中の最低到達HP割合 (%)"
+    )
+    damage_severity: str | None = Field(
+        default=None, description="被弾ランク (無傷/軽微/中破/大破/撃墜)"
+    )
+    damage_taken_count: int | None = Field(default=None, description="被弾回数")
+    max_hit_damage: int | None = Field(default=None, description="与ダメージ最大一撃")
+    dodge_count: int | None = Field(default=None, description="回避回数")
+    attacks_received_count: int | None = Field(
+        default=None, description="被攻撃回数（被弾+回避）"
+    )
+    pilot_ms_name: str | None = Field(default=None, description="搭乗機体名")
+    digest_tag: str | None = Field(
+        default=None, description="ダイジェストタグ (辛勝/完封/殲滅 等)"
+    )
+    digest_text: str | None = Field(default=None, description="一言ログ（生成済み）")
+
 
 class BattleResultSummary(SQLModel):
     """バトル結果サマリー (logsを含まない軽量レスポンス用)."""
@@ -805,6 +826,18 @@ class BattleResultSummary(SQLModel):
     level_up: bool = False
     is_read: bool = False
     created_at: datetime
+
+    # --- 戦闘ダイジェスト (Issue #415) ---
+    player_survived: bool | None = None
+    min_hp_percent: int | None = None
+    damage_severity: str | None = None
+    damage_taken_count: int | None = None
+    max_hit_damage: int | None = None
+    dodge_count: int | None = None
+    attacks_received_count: int | None = None
+    pilot_ms_name: str | None = None
+    digest_tag: str | None = None
+    digest_text: str | None = None
 
 
 class BattleRoom(SQLModel, table=True):
