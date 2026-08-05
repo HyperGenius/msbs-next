@@ -57,10 +57,17 @@ export default function BattleList({
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-gray-800 border border-green-800 rounded-lg p-4 max-h-[800px] overflow-y-auto">
-        {/* mb-4ではなくpb-4にする: marginは背景色でカバーされずスクロール中のカードが透けて見えてしまうため */}
-        <h2 className="text-xl font-bold sticky top-0 z-10 bg-gray-800 pb-4">Records</h2>
-        <div className="space-y-2">
+      <div className="bg-gray-800 border border-green-800 rounded-lg max-h-[800px] overflow-y-auto">
+        {/*
+          コンテナ側に上paddingを付けると、sticky見出しはそのpadding分だけ
+          下にずれた位置で止まるため、paddingの隙間をスクロール中のカードが
+          突き抜けて見えてしまう（Issue #415で発生）。paddingは見出し自身に
+          持たせ、見出しをコンテナの最上端に完全密着させて隙間を無くす。
+        */}
+        <h2 className="text-xl font-bold sticky top-0 z-10 bg-gray-800 px-4 pt-4 pb-4">
+          Records
+        </h2>
+        <div className="space-y-2 px-4 pb-4">
           {battles.map((battle) => {
             const hasDigest = battle.digest_text != null;
             // 辛勝タグは「土壇場で耐えた」ドラマを強調するため、枠と背景を警告色にする
