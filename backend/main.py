@@ -14,6 +14,7 @@ from sqlmodel import Session, desc, select
 # DB関連
 from app.core.auth import get_current_user, get_current_user_optional
 from app.db import get_session
+from app.engine.battle_digest import build_digest, compute_digest_stats
 from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -189,6 +190,19 @@ async def reload_master() -> dict:
     return {"status": "ok", "reloaded": result}
 
 
+def _get_previous_digest_text(session: Session, user_id: str | None) -> str | None:
+    """ユーザーの直前のバトルの一言ログを取得する（連続選出回避用）."""
+    if not user_id:
+        return None
+    prev_battle = session.exec(
+        select(BattleResult)
+        .where(BattleResult.user_id == user_id)
+        .order_by(desc(BattleResult.created_at))
+        .limit(1)
+    ).first()
+    return prev_battle.digest_text if prev_battle else None
+
+
 @app.post("/api/battle/simulate", response_model=BattleResponse)
 async def simulate_battle(
     mission_id: int = 1,
@@ -258,10 +272,12 @@ async def simulate_battle(
         battlefield=BattleField(),
     )
     max_steps = 50
+    steps_used = 0
     for _ in range(max_steps):
         if sim.is_finished:
             break
         sim.step()
+        steps_used += 1
 
     # 6. 勝者判定と撃墜数カウント
     winner_id = None
@@ -322,7 +338,20 @@ async def simulate_battle(
     session.add(battle_log_record)
     session.flush()
 
-    # 9. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
+    # 9. 戦闘ダイジェスト（一言ログ）を生成する（Issue #415）
+    #    直前のバトルの一言ログを1件だけ取得し、同じ文言の連続選出を避ける
+    avoid_text = _get_previous_digest_text(session, user_id)
+    digest_stats = compute_digest_stats(
+        player=player,
+        logs=sim.logs,
+        kills=kills,
+        win_loss=win_loss,
+        steps_used=steps_used,
+        max_steps=max_steps,
+    )
+    digest_tag, digest_text = build_digest(digest_stats, avoid_text=avoid_text)
+
+    # 10. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
     obstacles_data = [
         {
             "obstacle_id": obs.obstacle_id,
@@ -350,6 +379,16 @@ async def simulate_battle(
         level_up=level_up,
         is_read=False,
         created_at=datetime.now(UTC),
+        player_survived=digest_stats.player_survived,
+        min_hp_percent=digest_stats.min_hp_percent,
+        damage_severity=digest_stats.damage_severity,
+        damage_taken_count=digest_stats.damage_taken_count,
+        max_hit_damage=digest_stats.max_hit_damage,
+        dodge_count=digest_stats.dodge_count,
+        attacks_received_count=digest_stats.attacks_received_count,
+        pilot_ms_name=digest_stats.pilot_ms_name,
+        digest_tag=digest_tag,
+        digest_text=digest_text,
     )
     session.add(battle_result)
     session.commit()

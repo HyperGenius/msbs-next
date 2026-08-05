@@ -74,6 +74,18 @@ export interface BattleResult {
     level_up?: boolean;
     is_read?: boolean;
     created_at: string;
+    /** 戦闘ダイジェスト（Issue #415）。マイグレーション前の既存レコードは null */
+    player_survived?: boolean | null;
+    min_hp_percent?: number | null;
+    damage_severity?: "無傷" | "軽微" | "中破" | "大破" | "撃墜" | null;
+    damage_taken_count?: number | null;
+    max_hit_damage?: number | null;
+    dodge_count?: number | null;
+    attacks_received_count?: number | null;
+    pilot_ms_name?: string | null;
+    digest_tag?: string | null;
+    /** ルールベースで生成された一言ログ */
+    digest_text?: string | null;
 }
 
 /** battle_logsテーブルのレコード（リプレイ用の全ログを保持） */

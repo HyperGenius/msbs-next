@@ -58,33 +58,82 @@ export default function BattleList({
   return (
     <div className="max-w-2xl mx-auto">
       <div className="bg-gray-800 border border-green-800 rounded-lg p-4 max-h-[800px] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4 sticky top-0 bg-gray-800 pb-2">Records</h2>
+        {/* mb-4ではなくpb-4にする: marginは背景色でカバーされずスクロール中のカードが透けて見えてしまうため */}
+        <h2 className="text-xl font-bold sticky top-0 z-10 bg-gray-800 pb-4">Records</h2>
         <div className="space-y-2">
-          {battles.map((battle) => (
-            <button
-              key={battle.id}
-              onClick={() => onSelectBattle(battle)}
-              className="w-full text-left p-4 rounded border-2 border-gray-700 hover:border-green-700 transition-all"
-            >
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold">{getMissionName(battle.mission_id, battle.created_at)}</span>
-                <span
-                  className={`px-2 py-1 rounded text-xs font-bold ${
-                    battle.win_loss === "WIN"
-                      ? "bg-green-900 text-green-300"
-                      : battle.win_loss === "LOSE"
-                      ? "bg-red-900 text-red-300"
-                      : "bg-yellow-900 text-yellow-300"
-                  }`}
-                >
-                  {battle.win_loss}
-                </span>
-              </div>
-              <p className="text-xs text-gray-400">
-                {new Date(battle.created_at).toLocaleString("ja-JP")}
-              </p>
-            </button>
-          ))}
+          {battles.map((battle) => {
+            const hasDigest = battle.digest_text != null;
+            // 辛勝タグは「土壇場で耐えた」ドラマを強調するため、枠と背景を警告色にする
+            const isCritical = battle.digest_tag === "辛勝";
+            const damageLabel =
+              battle.damage_severity === "無傷" ? "なし" : battle.damage_severity;
+
+            return (
+              <button
+                key={battle.id}
+                onClick={() => onSelectBattle(battle)}
+                className={`w-full text-left p-4 rounded border-2 transition-all ${
+                  isCritical
+                    ? "border-orange-600/70 bg-red-950/20 hover:border-orange-500"
+                    : "border-gray-700 hover:border-green-700"
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <span className="font-bold">{getMissionName(battle.mission_id, battle.created_at)}</span>
+                  <span
+                    className={`px-2 py-1 rounded text-xs font-bold ${
+                      battle.win_loss === "WIN"
+                        ? "bg-green-900 text-green-300"
+                        : battle.win_loss === "LOSE"
+                        ? "bg-red-900 text-red-300"
+                        : "bg-yellow-900 text-yellow-300"
+                    }`}
+                  >
+                    {battle.win_loss}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  {new Date(battle.created_at).toLocaleString("ja-JP")}
+                </p>
+                {hasDigest ? (
+                  <>
+                    <div className="border-t border-dashed border-gray-700 pt-2 mb-2">
+                      <p className="text-sm">
+                        <span
+                          className={`font-bold ${
+                            battle.player_survived ? "text-green-300" : "text-red-400"
+                          }`}
+                        >
+                          {battle.player_survived ? "生還" : "撃墜"}
+                        </span>
+                        <span className="text-gray-600 mx-1">/</span>
+                        <span className="text-gray-500">撃破</span>{" "}
+                        <span className="font-bold">{battle.kills ?? 0}機</span>
+                        <span className="text-gray-600 mx-1">/</span>
+                        {isCritical ? (
+                          <>
+                            <span className="text-gray-500">HP最低</span>{" "}
+                            <span className="font-bold text-orange-400">
+                              {battle.min_hp_percent}%
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-gray-500">被弾</span>{" "}
+                            <span className="font-bold">{damageLabel}</span>
+                          </>
+                        )}
+                        <span className="text-gray-600 mx-1">/</span>
+                        <span className="text-gray-500">搭乗MS</span>{" "}
+                        <span className="font-bold">{battle.pilot_ms_name}</span>
+                      </p>
+                    </div>
+                    <p className="text-sm text-green-300 italic">「{battle.digest_text}」</p>
+                  </>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
