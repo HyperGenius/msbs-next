@@ -16,10 +16,9 @@ from datetime import UTC, datetime, timedelta
 # パスを通す
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from sqlmodel import Session, desc, select
+from sqlmodel import Session, select
 
 from app.db import engine
-from app.engine.battle_digest import build_digest, compute_digest_stats
 from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -32,6 +31,7 @@ from app.models.models import (
     Vector3,
     Weapon,
 )
+from app.services.battle_digest_service import compute_battle_digest_fields
 from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
@@ -214,19 +214,6 @@ def _run_simulation(
     return simulator, primary_player_win, kills, steps_used
 
 
-def _get_previous_digest_text(session: Session, user_id: str | None) -> str | None:
-    """ユーザーの直前のバトルの一言ログを取得する（連続選出回避用）."""
-    if not user_id:
-        return None
-    prev_battle = session.exec(
-        select(BattleResult)
-        .where(BattleResult.user_id == user_id)
-        .order_by(desc(BattleResult.created_at))
-        .limit(1)
-    ).first()
-    return prev_battle.digest_text if prev_battle else None
-
-
 def _save_battle_results(
     session: Session,
     room: BattleRoom,
@@ -322,11 +309,14 @@ def _save_battle_results(
 
         # 戦闘ダイジェスト（一言ログ）を生成する（Issue #415）
         # live_units_by_id から取れない場合（テスト等）はHPが不明なため pre-battle
-        # スナップショットにフォールバックする
+        # スナップショットにフォールバックする。BattleResultのもう一つの生成箇所
+        # main.py と共通のヘルパーを使う（個別実装すると更新漏れが起きるため）
         live_entry_unit = live_units_by_id.get(
             str(entry_unit_for_info.id), entry_unit_for_info
         )
-        digest_stats = compute_digest_stats(
+        digest_fields = compute_battle_digest_fields(
+            session=session,
+            user_id=entry.user_id,
             player=live_entry_unit,
             logs=simulator.logs,
             kills=individual_kills,
@@ -334,8 +324,6 @@ def _save_battle_results(
             steps_used=steps_used,
             max_steps=_MAX_SIMULATION_STEPS,
         )
-        avoid_text = _get_previous_digest_text(session, entry.user_id)
-        digest_tag, digest_text = build_digest(digest_stats, avoid_text=avoid_text)
 
         battle_result = BattleResult(
             user_id=entry.user_id,
@@ -352,16 +340,7 @@ def _save_battle_results(
             level_after=level_after,
             level_up=level_up,
             is_read=False,
-            player_survived=digest_stats.player_survived,
-            min_hp_percent=digest_stats.min_hp_percent,
-            damage_severity=digest_stats.damage_severity,
-            damage_taken_count=digest_stats.damage_taken_count,
-            max_hit_damage=digest_stats.max_hit_damage,
-            dodge_count=digest_stats.dodge_count,
-            attacks_received_count=digest_stats.attacks_received_count,
-            pilot_ms_name=digest_stats.pilot_ms_name,
-            digest_tag=digest_tag,
-            digest_text=digest_text,
+            **digest_fields,
         )
         session.add(battle_result)
 
