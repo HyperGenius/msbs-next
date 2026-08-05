@@ -99,6 +99,14 @@ export default function BattleList({
                   <>
                     <div className="border-t border-dashed border-gray-700 pt-2 mb-2">
                       <p className="text-sm">
+                        <span
+                          className={`font-bold ${
+                            battle.player_survived ? "text-green-300" : "text-red-400"
+                          }`}
+                        >
+                          {battle.player_survived ? "生還" : "撃墜"}
+                        </span>
+                        <span className="text-gray-600 mx-1">/</span>
                         <span className="text-gray-500">撃破</span>{" "}
                         <span className="font-bold">{battle.kills ?? 0}機</span>
                         <span className="text-gray-600 mx-1">/</span>

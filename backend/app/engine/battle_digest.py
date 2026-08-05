@@ -69,8 +69,10 @@ def compute_digest_stats(
     最終 current_hp がそのままバトル中の最低到達HPと一致する前提で計算する。
     """
     player_survived = player.current_hp > 0
+    # 辛勝判定などの閾値比較に使うため round() ではなく切り捨てにする
+    # （例: 199/1000=19.9% が round() では20%に丸まり「20%未満」から漏れてしまう）
     min_hp_percent = (
-        round(max(player.current_hp, 0) / player.max_hp * 100) if player.max_hp else 0
+        int(max(player.current_hp, 0) / player.max_hp * 100) if player.max_hp else 0
     )
 
     damage_taken_count = 0
