@@ -94,6 +94,37 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 
 **`weapon_power`（機体強化）との関係**: `EngineeringService`（`app/services/engineering_service.py`）の `weapon_power` 強化項目は、`PlayerWeapon` インスタンス単位ではなく `MobileSuit.weapons` の**全スロットに一律加算**する実装（`_apply_weapon_power_upgrade`）のまま維持されている。武器を外す・付け替えると強化投資が失われるが、これは「機体側のパイロット/システム補正」として意図的に武器インスタンス単位の改造（`custom_stats`）とは別軸として維持する方針（Issue #404 で決定、方針(b)）。詳細は `docs/features/weapon-data-model.md` を参照。
 
+## バトル結果の集計値（ダイジェスト等）は書き込み時に1回だけ計算する
+
+`BattleResult` は `battle_logs.logs`（`BattleLogRecord.logs`, JSON列）というターンごとの生ログを別テーブルに持っているが、
+「撃破数」「被弾ランク」「一言ログ」のような**集計・派生値を一覧表示のたびにJSONから再計算するのは避ける**。
+唯一の `BattleResult` 生成箇所（`main.py` の `simulate_battle`）でログ確定後に一度だけ集計し、`BattleResult` の
+非正規化カラムとして保存する（`app/engine/battle_digest.py` がこのパターンの実装例。Issue #415）。
+既存レコードとの互換のため、追加カラムは nullable にしてバックフィルはしない方針で問題ない
+（フロントエンド側で `null` 時のフォールバック表示を用意する）。
+
+新たに `BattleResult` の生成箇所が増えた場合（マルチプレイ/ルーム戦など）は、集計ロジックを `main.py` に重複実装せず
+`battle_digest.py` のような独立モジュールを呼び出す形にすること。
+
+### 割合の閾値判定には `round()` を使わない
+
+「HP20%未満なら辛勝」のような**閾値判定に使う割合**は `round()` で丸めると、`19.9%` が `20%` に繰り上がり
+条件から漏れる、といった境界のズレが起きる（`battle_digest.py` の `min_hp_percent` で実際に発生し、Copilotレビューで指摘された）。
+表示用の丸めと閾値判定用の丸めは別物と考え、閾値判定には `int()`（切り捨て）を使うこと。
+
+### HPには回復要素がない
+
+`app/engine/simulation.py`/`combat.py` にHP回復（repair）処理は存在しない。そのため「バトル中の最低到達HP」を
+求めたいだけなら、ログを走査せずバトル終了時点の `current_hp` をそのまま使ってよい（`compute_digest_stats` 参照）。
+将来 repair 系のスキル/機構を追加する場合はこの前提が崩れるため、`battle_digest.py` の集計ロジックも合わせて見直すこと。
+
+## Neon DB（`NEON_DATABASE_URL`）はチーム共有のリモートDB
+
+`backend/.env` の `NEON_DATABASE_URL` はローカル専用DBではなく共有のリモート（Neon）インスタンスを指している。
+`alembic upgrade`/`downgrade` を含む「実DBへの書き込みを伴う操作」は、ユーザーに確認してから実行すること。
+マイグレーションファイル自体の妥当性は `alembic heads`/`alembic history`（DB接続不要）や `python -m py_compile` で
+静的に確認できるので、実DBに当てずに検証したい場合はそちらを使う。
+
 ## コーディング規約
 `Agent.md` の `4. コーディング規約`を参照してください。
 
