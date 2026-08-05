@@ -250,3 +250,64 @@ def test_save_battle_results_snapshot_immutability(in_memory_session):
     # スナップショットはエントリー時のものと一致する
     assert result.ms_snapshot["name"] == original_snapshot["name"]
     assert result.ms_snapshot["max_hp"] == original_snapshot["max_hp"]
+
+
+def test_save_battle_results_sets_digest_fields(in_memory_session):
+    """戦闘ダイジェスト（Issue #415）が room 経由のバトルでも保存されること.
+
+    バッチ経由（デイリーバトルロイヤル等）のBattleResultはsimulate_battle
+    （main.py）とは別経路で生成されるため、digest計算が漏れていた不具合の
+    再発防止用リグレッションテスト。player_unit（simulator実行後、current_hp
+    が更新された「生きた」オブジェクト）を元にダイジェストが計算されることを
+    確認する。
+    """
+    from sqlmodel import select
+
+    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+
+    session = in_memory_session
+    room = _make_room(session)
+
+    snapshot = _make_snapshot("Digest Gundam")
+    entry_suit = MobileSuit(
+        **{k: v for k, v in snapshot.items() if k in MobileSuit.model_fields}
+    )
+    snapshot["team_id"] = str(entry_suit.id)
+
+    entry = _make_entry(session, room, "user_digest", snapshot)
+
+    # player_unit はシミュレーション実行後を模して current_hp を更新しておく
+    # （entry.mobile_suit_snapshot は常にエントリー時点=満タンHPのまま）
+    player_unit = _convert_snapshot_to_mobile_suit(dict(snapshot))
+    player_unit.side = "PLAYER"
+    player_unit.team_id = snapshot["team_id"]
+    player_unit.current_hp = 100  # 最大1000に対し10% = 辛勝タグの閾値内
+
+    simulator = _make_simulator_mock([player_unit])
+
+    _save_battle_results(
+        session=session,
+        room=room,
+        player_entries=[entry],
+        npc_entries=[],
+        simulator=simulator,
+        primary_player_win=True,
+        kills=1,
+        player_unit=player_unit,
+        enemy_units=[],
+        steps_used=5,
+    )
+
+    results = list(
+        session.exec(select(BattleResult).where(BattleResult.room_id == room.id)).all()
+    )
+    assert len(results) == 1
+    result = results[0]
+
+    # entry.mobile_suit_snapshot（満タンHP）ではなく player_unit の最終HPを
+    # 元にダイジェストが計算されていること
+    assert result.digest_text is not None
+    assert result.digest_tag == "辛勝"
+    assert result.min_hp_percent == 10
+    assert result.player_survived is True
+    assert result.pilot_ms_name == "Digest Gundam"

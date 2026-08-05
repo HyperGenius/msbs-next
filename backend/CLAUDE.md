@@ -98,13 +98,30 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 
 `BattleResult` は `battle_logs.logs`（`BattleLogRecord.logs`, JSON列）というターンごとの生ログを別テーブルに持っているが、
 「撃破数」「被弾ランク」「一言ログ」のような**集計・派生値を一覧表示のたびにJSONから再計算するのは避ける**。
-唯一の `BattleResult` 生成箇所（`main.py` の `simulate_battle`）でログ確定後に一度だけ集計し、`BattleResult` の
-非正規化カラムとして保存する（`app/engine/battle_digest.py` がこのパターンの実装例。Issue #415）。
+`BattleResult` 生成箇所でログ確定後に一度だけ集計し、`BattleResult` の非正規化カラムとして保存する
+（`app/engine/battle_digest.py` がこのパターンの実装例。Issue #415）。
 既存レコードとの互換のため、追加カラムは nullable にしてバックフィルはしない方針で問題ない
 （フロントエンド側で `null` 時のフォールバック表示を用意する）。
 
-新たに `BattleResult` の生成箇所が増えた場合（マルチプレイ/ルーム戦など）は、集計ロジックを `main.py` に重複実装せず
-`battle_digest.py` のような独立モジュールを呼び出す形にすること。
+### `BattleResult` の生成箇所は2つある（1つだと思い込まないこと）
+
+`grep -rl "BattleResult(" backend --include="*.py"` で確認できる通り、`BattleResult` は以下**2箇所**で生成される。
+どちらも独立した生成経路なので、片方だけ集計ロジックを追加するともう片方は永遠に `NULL` のままになる
+（実際にIssue #415で `backend/main.py` にしか `battle_digest.py` の呼び出しを追加せず、本番の「デイリーバトルロイヤル」
+（下記②のスケジュール実行バッチ）では一切ダイジェストが計算されない状態でリリースしてしまい、ユーザー報告で発覚した）。
+
+1. `backend/main.py` の `simulate_battle`（`POST /api/battle/simulate`）: ユーザーが即座にプレイするソロミッション用
+2. `backend/scripts/run_batch.py` の `_save_battle_results`: `.github/workflows/scheduled-battle.yaml` から `cron` で
+   定期実行される「デイリーバトルロイヤル」等のルーム対戦バッチ用。こちらは複数プレイヤー分の `BattleResult` をループで
+   1回のバッチ実行につき複数件生成する
+
+新たに `BattleResult` の生成箇所を追加・変更する場合は、集計ロジック自体は `battle_digest.py` のような独立モジュールを
+呼び出す形にして重複実装を避けつつ、**上記2箇所の両方**に確実に組み込むこと。①では `player`（`MobileSuit`）に
+バトル後の最終状態がそのまま入っているが、②では `entry.mobile_suit_snapshot` から再構築した
+`entry_unit_for_info` はエントリー時点（バトル前・満タンHP）のスナップショットで、`player_info`/`ms_snapshot` に
+意図的にそのまま保存される設計になっている。ダイジェスト計算にはバトル後のHPが必要なため、`simulator` に渡した
+（＝`simulator.step()` で実際に書き換えられる）`player_unit`/`enemy_units` 側からIDで対応するユニットを引くこと
+（`live_units_by_id` 参照）。
 
 ### 割合の閾値判定には `round()` を使わない
 
