@@ -58,7 +58,8 @@ export default function BattleList({
   return (
     <div className="max-w-2xl mx-auto">
       <div className="bg-gray-800 border border-green-800 rounded-lg p-4 max-h-[800px] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4 sticky top-0 bg-gray-800 pb-2">Records</h2>
+        {/* mb-4ではなくpb-4にする: marginは背景色でカバーされずスクロール中のカードが透けて見えてしまうため */}
+        <h2 className="text-xl font-bold sticky top-0 z-10 bg-gray-800 pb-4">Records</h2>
         <div className="space-y-2">
           {battles.map((battle) => {
             const hasDigest = battle.digest_text != null;
