@@ -31,6 +31,7 @@ from app.models.models import (
     Vector3,
     Weapon,
 )
+from app.services.battle_digest_service import compute_battle_digest_fields
 from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
@@ -184,7 +185,7 @@ def _prepare_battle_units(
 
 def _run_simulation(
     player_unit: MobileSuit, enemy_units: list[MobileSuit]
-) -> tuple[BattleSimulator, bool, int]:
+) -> tuple[BattleSimulator, bool, int, int]:
     """戦闘シミュレーションを実行.
 
     Args:
@@ -192,14 +193,16 @@ def _run_simulation(
         enemy_units: 敵ユニットリスト
 
     Returns:
-        (シミュレーター, 勝利フラグ, 撃墜数)
+        (シミュレーター, 勝利フラグ, 撃墜数, 消費ステップ数)
     """
     simulator = BattleSimulator(player_unit, enemy_units, battlefield=BattleField())
 
+    steps_used = 0
     for _step_count in range(_MAX_SIMULATION_STEPS):
         if simulator.is_finished:
             break
         simulator.step()
+        steps_used += 1
 
     print(f"  戦闘終了 (経過時間: {simulator.elapsed_time:.1f}s)")
 
@@ -208,7 +211,7 @@ def _run_simulation(
     primary_player_win = player_unit.team_id in alive_team_ids
     kills = sum(1 for e in enemy_units if e.current_hp <= 0)
 
-    return simulator, primary_player_win, kills
+    return simulator, primary_player_win, kills, steps_used
 
 
 def _save_battle_results(
@@ -221,6 +224,7 @@ def _save_battle_results(
     kills: int,
     player_unit: MobileSuit,
     enemy_units: list[MobileSuit],
+    steps_used: int = 0,
 ) -> None:
     """戦闘結果を保存し報酬を付与.
 
@@ -232,10 +236,16 @@ def _save_battle_results(
         simulator: シミュレーター
         primary_player_win: 勝利フラグ
         kills: 撃墜数
-        player_unit: プレイヤーユニット（スナップショット保存用）
-        enemy_units: 敵ユニットリスト（スナップショット保存用）
+        player_unit: プレイヤーユニット（スナップショット保存用。実バトルでは
+            シミュレーションによって current_hp 等が最終状態まで更新済み）
+        enemy_units: 敵ユニットリスト（スナップショット保存用。同上）
+        steps_used: シミュレーションが消費したステップ数（ダイジェストの
+            長期戦判定に使用。テスト等でシミュレーションを行わない場合は0のままでよい）
     """
     pilot_service = PilotService(session)
+    # entry.mobile_suit_snapshot はエントリー時点（バトル前）のHPしか持たないため、
+    # ダイジェスト集計にはシミュレーションで実際に更新された live なユニットを使う
+    live_units_by_id = {str(u.id): u for u in [player_unit, *enemy_units]}
 
     # バトルログをルーム単位で1件保存（全参加者で共有）
     battle_log_record = BattleLogRecord(
@@ -297,6 +307,24 @@ def _save_battle_results(
             if str(u.id) != str(entry_unit_for_info.id)
         ]
 
+        # 戦闘ダイジェスト（一言ログ）を生成する（Issue #415）
+        # live_units_by_id から取れない場合（テスト等）はHPが不明なため pre-battle
+        # スナップショットにフォールバックする。BattleResultのもう一つの生成箇所
+        # main.py と共通のヘルパーを使う（個別実装すると更新漏れが起きるため）
+        live_entry_unit = live_units_by_id.get(
+            str(entry_unit_for_info.id), entry_unit_for_info
+        )
+        digest_fields = compute_battle_digest_fields(
+            session=session,
+            user_id=entry.user_id,
+            player=live_entry_unit,
+            logs=simulator.logs,
+            kills=individual_kills,
+            win_loss=individual_win_loss,
+            steps_used=steps_used,
+            max_steps=_MAX_SIMULATION_STEPS,
+        )
+
         battle_result = BattleResult(
             user_id=entry.user_id,
             room_id=room.id,
@@ -312,6 +340,7 @@ def _save_battle_results(
             level_after=level_after,
             level_up=level_up,
             is_read=False,
+            **digest_fields,
         )
         session.add(battle_result)
 
@@ -376,7 +405,9 @@ def _process_room(session: Session, room: BattleRoom) -> None:
     print(f"  敵機: {len(enemy_units)} 機")
 
     # シミュレーション実行
-    simulator, primary_player_win, kills = _run_simulation(player_unit, enemy_units)
+    simulator, primary_player_win, kills, steps_used = _run_simulation(
+        player_unit, enemy_units
+    )
 
     if primary_player_win:
         print(f"  結果: プレイヤー勝利 (撃墜: {kills}機)")
@@ -394,6 +425,7 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         kills,
         player_unit,
         enemy_units,
+        steps_used,
     )
 
     print("  結果を保存しました")

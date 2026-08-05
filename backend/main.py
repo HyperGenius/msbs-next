@@ -14,7 +14,6 @@ from sqlmodel import Session, desc, select
 # DB関連
 from app.core.auth import get_current_user, get_current_user_optional
 from app.db import get_session
-from app.engine.battle_digest import build_digest, compute_digest_stats
 from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -40,6 +39,7 @@ from app.routers import (
     shop,
     teams,
 )
+from app.services.battle_digest_service import compute_battle_digest_fields
 
 app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 
@@ -190,19 +190,6 @@ async def reload_master() -> dict:
     return {"status": "ok", "reloaded": result}
 
 
-def _get_previous_digest_text(session: Session, user_id: str | None) -> str | None:
-    """ユーザーの直前のバトルの一言ログを取得する（連続選出回避用）."""
-    if not user_id:
-        return None
-    prev_battle = session.exec(
-        select(BattleResult)
-        .where(BattleResult.user_id == user_id)
-        .order_by(desc(BattleResult.created_at))
-        .limit(1)
-    ).first()
-    return prev_battle.digest_text if prev_battle else None
-
-
 @app.post("/api/battle/simulate", response_model=BattleResponse)
 async def simulate_battle(
     mission_id: int = 1,
@@ -339,9 +326,11 @@ async def simulate_battle(
     session.flush()
 
     # 9. 戦闘ダイジェスト（一言ログ）を生成する（Issue #415）
-    #    直前のバトルの一言ログを1件だけ取得し、同じ文言の連続選出を避ける
-    avoid_text = _get_previous_digest_text(session, user_id)
-    digest_stats = compute_digest_stats(
+    #    BattleResultのもう一つの生成箇所 scripts/run_batch.py と共通のヘルパーを使う
+    #    （個別実装すると片方だけ更新漏れになる事故が起きるため）
+    digest_fields = compute_battle_digest_fields(
+        session=session,
+        user_id=user_id,
         player=player,
         logs=sim.logs,
         kills=kills,
@@ -349,7 +338,6 @@ async def simulate_battle(
         steps_used=steps_used,
         max_steps=max_steps,
     )
-    digest_tag, digest_text = build_digest(digest_stats, avoid_text=avoid_text)
 
     # 10. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
     obstacles_data = [
@@ -379,16 +367,7 @@ async def simulate_battle(
         level_up=level_up,
         is_read=False,
         created_at=datetime.now(UTC),
-        player_survived=digest_stats.player_survived,
-        min_hp_percent=digest_stats.min_hp_percent,
-        damage_severity=digest_stats.damage_severity,
-        damage_taken_count=digest_stats.damage_taken_count,
-        max_hit_damage=digest_stats.max_hit_damage,
-        dodge_count=digest_stats.dodge_count,
-        attacks_received_count=digest_stats.attacks_received_count,
-        pilot_ms_name=digest_stats.pilot_ms_name,
-        digest_tag=digest_tag,
-        digest_text=digest_text,
+        **digest_fields,
     )
     session.add(battle_result)
     session.commit()
