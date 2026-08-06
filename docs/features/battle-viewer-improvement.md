@@ -294,3 +294,23 @@ Phase 3（ビジュアル強化）
 
 `MAX_VELOCITY_EXTRAPOLATION_SECONDS`（1.0秒）を超える `dt` では外挿を行わず、直近の実位置（`position_snapshot`）
 に留める。併せて `TargetLine` は自機（`playerState.hp > 0`）・ターゲット双方の生存を表示条件に加えている。
+
+---
+
+## BattleViewerのカメラ初期化タイミング（Issue #425）
+
+`BattleDetailModal` は `battle.player_info` / `enemies_info`（同期データ）のみで `hasReplayData` を判定していたため、
+`useBattleLogs` によるバトルログの非同期取得（`logsLoading`）が完了する前に `BattleViewer` が先にマウントされていた。
+
+`useBattleSnapshot.ts` の `getBattleSnapshot()` は `logs` が空の場合 `pos = initialMs.position` にフォールバックするが、
+この値は実際の戦闘開始位置ではない（ガレージ格納時などの座標）。一方 `BattleScene.tsx` の `CameraInitializer` は
+マウント時（`useEffect` の依存配列が空）に一度だけこのフォールバック座標を基準としてカメラ位置・`OrbitControls` の
+`target` を固定する。バトルログの読み込みが完了すると自機の描画位置は実ログの `position_snapshot` に基づく本来の
+位置に切り替わるが、カメラは追従しないため、自機がビューポート外に外れて見失われる不具合が発生していた。
+
+**修正:** `BattleDetailModal.tsx` にて `logsLoading` 中は `BattleViewer` をマウントせず、同サイズのプレースホルダー
+（「ビューアを準備中...」）を表示するようにした。ログ読み込み完了後に確定した実位置で `BattleViewer` が初めて
+マウントされるため、`CameraInitializer` は常に正しい初期位置を基準にカメラを配置する。
+
+**影響ファイル:**
+- `frontend/src/components/history/BattleDetailModal.tsx`

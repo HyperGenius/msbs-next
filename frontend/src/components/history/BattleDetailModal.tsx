@@ -66,21 +66,31 @@ export default function BattleDetailModal({
           {/* 上部固定: 3D Replay Viewer + ターンコントローラー */}
           <div className="flex-none p-4 border-b border-gray-700">
             {hasReplayData ? (
-              <>
-                <BattleViewer
-                  logs={logs}
-                  player={battle.player_info as MobileSuit}
-                  enemies={battle.enemies_info as MobileSuit[]}
-                  obstacles={battle.obstacles_info}
-                  currentTimestamp={currentTimestamp}
-                  environment={battle.environment || "SPACE"}
-                />
-                <TurnController
-                  currentTimestamp={currentTimestamp}
-                  maxTimestamp={maxTimestamp}
-                  onTimestampChange={setCurrentTimestamp}
-                />
-              </>
+              logsLoading ? (
+                // ログ読み込み完了前にBattleViewerをマウントすると、
+                // 実ログ未確定の仮位置でカメラが初期配置されてしまい、
+                // ログ読み込み完了後の再描画で自機が視界外に外れる不具合があった（Issue #425）。
+                // ログ確定後にマウントすることで、確定した初期位置を基準にカメラを配置させる。
+                <div className="w-full h-[300px] sm:h-[400px] md:h-[500px] rounded border border-green-800 mb-4 flex items-center justify-center bg-gray-900/50">
+                  <p className="text-gray-400 text-sm">ビューアを準備中...</p>
+                </div>
+              ) : (
+                <>
+                  <BattleViewer
+                    logs={logs}
+                    player={battle.player_info as MobileSuit}
+                    enemies={battle.enemies_info as MobileSuit[]}
+                    obstacles={battle.obstacles_info}
+                    currentTimestamp={currentTimestamp}
+                    environment={battle.environment || "SPACE"}
+                  />
+                  <TurnController
+                    currentTimestamp={currentTimestamp}
+                    maxTimestamp={maxTimestamp}
+                    onTimestampChange={setCurrentTimestamp}
+                  />
+                </>
+              )
             ) : (
               <div className="p-3 bg-yellow-900/20 border border-yellow-700 rounded" role="alert">
                 <p className="text-yellow-400 text-sm">
