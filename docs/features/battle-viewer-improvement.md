@@ -297,6 +297,39 @@ Phase 3（ビジュアル強化）
 
 ---
 
+## 密集戦闘時の自機識別マーカー（Issue #426）
+
+格闘戦（近接戦闘）で複数ユニットの球体が密集すると、自機・敵機ともに同じ `MobileSuitMesh` の球体で
+描画され HP による色分けしかないため、ユーザーが自機を見失いやすい問題があった。
+
+**調査で判明した前提:** 自機が `isTargeted`（敵のターゲットハイライトリング、赤）の対象になる経路は
+コード上そもそも存在しない。`BattleScene.tsx` で自機は専用の `<MobileSuitMesh>` 呼び出しで描画され、この
+呼び出しには `isTargeted` prop が渡されない。敵側の `isTargeted={enemy.id === playerState.targetId}` は
+`enemyStates`（`enemies` prop 由来、自機とは別変数）に対してのみ評価される。バックエンド側も
+`main.py`/`run_batch.py` の両生成箇所で `player_info`/`enemies_info` を構造的に分離しており（後者は
+`enemies_info` 生成時に自ユニットIDを明示的に除外）、自機を敵側の配列に混入させる経路は無い。そのため
+自機用の常時マーカーを追加しても、既存の `isTargeted` リングと表示が衝突する懸念はない。
+
+**実装:**
+- `MobileSuitMesh.tsx` に `isSelf?: boolean` prop を追加し、true の場合のみ常時表示の識別リングを描画する
+  - 色は新規に導入せず、既存パレットの青系（向き矢印と同じ `#4488ff`）を使用。既存の `isTargeted` リング
+    （赤、半径 1.4〜1.8・細め）・センサーリング（緑、`AnimatedSensorRing`）とは、より太い幅（半径 1.9〜2.4）
+    とパルス点滅（`opacity` を sin波で周期的に変化）で区別する。ラベル文字（"YOU"等）は視認性を悪化させる
+    ため採用しない
+- 識別リングは射撃反動アニメーション用の `innerGroupRef` の**外側**（`hoverGroupRef` 直下）に配置し、
+  反動でブレず自機の位置を安定して示せるようにしている
+- `BattleScene.tsx` の自機用 `<MobileSuitMesh>` 呼び出しに `isSelf={true}` を追加
+
+> [!IMPORTANT]
+> 3Dビューアの配色パレットからの逸脱は禁止（`frontend/CLAUDE.md`「BattleViewerの配色パレット」参照）。
+> 新しい視覚要素を追加する際は、既存色の太さ・点滅など表現方法の差異で区別すること。
+
+**影響ファイル:**
+- `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx`
+- `frontend/src/components/BattleViewer/scene/BattleScene.tsx`
+
+---
+
 ## BattleViewerのカメラ初期化タイミング（Issue #425）
 
 `BattleDetailModal` は `battle.player_info` / `enemies_info`（同期データ）のみで `hasReplayData` を判定していたため、

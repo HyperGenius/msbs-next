@@ -299,6 +299,21 @@ luk: number;
 - 単一コンポーネント内でしか使わない一時的なアイコン: そのファイル内にローカル関数として定義する（例: `WeaponInventoryList.tsx` の `FilterIcon` / `TypeIcon` / `SortIcon` / `EmptyBoxIcon`）
 - 複数コンポーネントで共有するアイコン: `frontend/src/components/icons/TablerIcons.tsx` に集約する。Header/BottomNav等のグローバルUIは[Tabler Icons](https://tabler.io/icons)（outline, MIT License）のSVGパスをここに複製して使う。**新しいグローバルアイコンが必要になった場合も、このファイルに追記し、他のアイコンセットと混在させないこと**（`BottomNav.tsx`, `Avatar.tsx` が利用例）
 
+## BattleViewer（3Dビューア）の配色パレット
+
+`frontend/src/components/BattleViewer/scene/` 配下の各コンポーネントは、以下の固定配色を使用している。
+
+| 色 | 用途 | 定義箇所 |
+|---|---|---|
+| `#ff4444`（赤） | 敵ターゲットハイライトリング（`isTargeted`） | `MobileSuitMesh.tsx` |
+| `#00ff00`（緑） | センサー範囲リング（`showSensorRange`） | `AnimatedSensorRing.tsx` |
+| `#4488ff`（青） | 向き矢印（`heading`）、自機識別リング（`isSelf`、Issue #426） | `MobileSuitMesh.tsx` |
+| `#ff9800`/`#ffeb3b`/`#2196f3` | 警告アイコン（弾切れ/EN不足/クールダウン） | `MobileSuitMesh.tsx` |
+
+**新しい視覚要素（マーカー・リング・ラベル等）を追加する際、このパレットから外れる新規の色を独断で導入してはいけない。** 密集戦闘時の自機識別マーカー（Issue #426）で当初マゼンタ（`#ff00ff`）を新規に使ったが、既存パレットからの逸脱だとしてユーザーから差し戻された経緯がある。同種の要素と区別したい場合は、既存色を使い回した上で太さ・点滅（パルスアニメーション）・破線などの**表現方法の違い**で区別すること。既存パレットでは要件を満たせないと判断した場合は、実装前に新しい色の採用についてユーザーと協議すること。
+
+---
+
 ## SWRフックはコンポーネント側で直接呼んでよい（プロップドリリング不要）
 
 親コンポーネントが既に同じデータソースを別条件で fetch している場合でも、子コンポーネントが異なるクエリパラメータで取得したい時は、子側で直接 SWR フック（`usePlayerWeapons(unequippedOnly)` など）を呼び出してよい。SWR は同一URLをグローバルキャッシュキーとして重複排除するため、条件が親と同じ（例: フィルタOFF時）であれば追加のネットワークリクエストは発生せず、条件が異なる（例: `?unequipped=true` を付けたい時）場合だけ新しいキーとして取得される。`playerWeapons` を毎回 prop で渡す設計より、こちらの方が「必要な時だけ絞り込みクエリを叩く」実装をシンプルに保てる（`WeaponInventoryList.tsx` 参照）。
