@@ -410,6 +410,7 @@ export function BattleScene({
                 heading={playerState.heading}
                 isAttacking={attackingUnitIds?.has(String(player.id))}
                 isFlashing={flashingUnitIds.has(String(player.id))}
+                isSelf={true}
             />
 
             {/* Enemies */}

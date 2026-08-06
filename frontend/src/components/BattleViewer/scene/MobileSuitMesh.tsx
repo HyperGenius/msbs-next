@@ -24,6 +24,7 @@ export function MobileSuitMesh({
     isTargeted,
     isAttacking,
     isFlashing,
+    isSelf,
 }: {
     position: { x: number; y: number; z: number };
     maxHp: number;
@@ -41,6 +42,8 @@ export function MobileSuitMesh({
     isAttacking?: boolean;
     /** クリティカルヒット被弾時 true — emissiveIntensity フラッシュ用 (Issue #367) */
     isFlashing?: boolean;
+    /** 自機の場合 true — 密集戦闘時の視認性向上のための常時識別マーカー表示に使用 (Issue #426) */
+    isSelf?: boolean;
 }) {
     const scale = 0.05;
     const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
@@ -63,6 +66,9 @@ export function MobileSuitMesh({
     const sphereMeshRef = useRef<THREE.Mesh>(null);
     const flashTimeRef = useRef(0);
     const FLASH_DURATION = 0.4;
+
+    // 自機識別リング用 ref（密集戦闘時の視認性向上、Issue #426）
+    const selfRingRef = useRef<THREE.Mesh>(null);
 
     useFrame((state, delta) => {
         // B-4: ホバリングアニメーション（宇宙浮遊感）
@@ -104,6 +110,12 @@ export function MobileSuitMesh({
                 (sphereMeshRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity =
                     baseIntensity;
             }
+        }
+
+        // 自機識別リングのパルスアニメーション（密集時でも常に動きで目を引くように、Issue #426）
+        if (selfRingRef.current) {
+            const opacity = 0.6 + Math.sin(state.clock.elapsedTime * 3) * 0.3;
+            (selfRingRef.current.material as THREE.MeshBasicMaterial).opacity = opacity;
         }
     });
 
@@ -203,6 +215,28 @@ export function MobileSuitMesh({
                     </Html>
                 )}
             </group>
+
+            {/* 自機識別マーカー: 反動アニメーション(innerGroupRef)の影響を受けないよう外側に配置 (Issue #426) */}
+            {isSelf && (
+                <>
+                    <mesh ref={selfRingRef} rotation={[-Math.PI / 2, 0, 0]}>
+                        <ringGeometry args={[2.0, 2.3, 32]} />
+                        <meshBasicMaterial color="#ff00ff" side={THREE.DoubleSide} transparent opacity={0.8} />
+                    </mesh>
+                    <Html position={[0, 4, 0]} center>
+                        <div
+                            className="pointer-events-none select-none text-xs font-bold px-2 py-0.5 rounded"
+                            style={{
+                                backgroundColor: "rgba(0, 0, 0, 0.8)",
+                                border: "2px solid #ff00ff",
+                                color: "#ff00ff",
+                            }}
+                        >
+                            YOU
+                        </div>
+                    </Html>
+                </>
+            )}
             </group>
         </group>
     );
