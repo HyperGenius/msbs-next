@@ -149,6 +149,17 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 マイグレーションファイル自体の妥当性は `alembic heads`/`alembic history`（DB接続不要）や `python -m py_compile` で
 静的に確認できるので、実DBに当てずに検証したい場合はそちらを使う。
 
+## `BattleLog` の `velocity_snapshot` は `DESTROYED` ログに含まれない
+
+`combat.py`/`movement.py` の各 `BattleLog` 生成箇所はほぼ毎ティック `velocity_snapshot`（行動時点の速度ベクトル）を
+付与しているが、`_process_destruction`（`combat.py`、撃破処理）が出す `action_type="DESTROYED"` のログだけは
+`velocity_snapshot` を持たない。フロントエンド（`useBattleSnapshot.ts`）はログ間の位置を
+`直近position_snapshot + velocity_snapshot × dt` で外挿して滑らかに表示しているため、撃破後は最後の生存時点の
+速度ベクトルのまま `dt` が伸び続け、実位置から大きくズレた位置に外挿されてしまう不具合が実際に発生した
+（BattleViewerの照準線が無関係な方向を指す。Issue #421、フロントエンド側で `dt` に上限を設けて対応）。
+`BattleLog` の生成箇所を新たに追加・変更する場合、この非対称性（`DESTROYED` だけ `velocity_snapshot` が無い）を
+踏まえてフロントエンド側の外挿・補間ロジックに影響しないか確認すること。
+
 ## コーディング規約
 `Agent.md` の `4. コーディング規約`を参照してください。
 

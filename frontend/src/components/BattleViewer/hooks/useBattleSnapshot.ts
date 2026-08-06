@@ -7,6 +7,16 @@ import { WarningType } from "../types";
 /** 浮動小数点数の誤差許容値（タイムスタンプ比較用） */
 const TIMESTAMP_EPSILON = 1e-9;
 
+/**
+ * 物理補間（velocity外挿）を適用する最大時間（秒）。
+ * MOVE ログは残距離が MOVE_LOG_MIN_DIST 未満になると出力されなくなるため、
+ * 停止・撃破後は velocity_snapshot が更新されないまま古い速度ベクトルが残り続ける。
+ * dt に上限を設けないと、そのまま停止/撃破後も古い速度で位置を外挿し続けてしまい、
+ * 戦闘終盤ほど実際の位置から大きくズレた場所に照準線・攻撃ラインが表示される
+ * （BattleViewerで照準線が無関係な方向を指す不具合の原因）。
+ */
+const MAX_VELOCITY_EXTRAPOLATION_SECONDS = 1.0;
+
 /** 角度を最短回転方向で線形補間する（度数法） */
 function lerpAngle(from: number, to: number, t: number): number {
     const diff = ((to - from + 180) % 360) - 180;
@@ -117,9 +127,13 @@ export function getBattleSnapshot(
     }
 
     // 物理補間: pos = prev_pos + velocity × dt（ログ間の滑らかな移動表示）
+    // dt が MAX_VELOCITY_EXTRAPOLATION_SECONDS を超える場合は外挿を行わない
+    // （撃破後など velocity_snapshot の更新が止まった場合に、古い速度ベクトルのまま
+    // 無限に外挿されて実際の位置から大きくズレるのを防ぐ。この場合 pos は上のループで
+    // 設定済みの最後の position_snapshot のままになる）
     if (lastVelocity && lastVelocityTs !== undefined && lastVelocityPos !== undefined) {
         const dt = currentTimestamp - lastVelocityTs;
-        if (dt > 0) {
+        if (dt > 0 && dt <= MAX_VELOCITY_EXTRAPOLATION_SECONDS) {
             pos = {
                 x: lastVelocityPos.x + lastVelocity.x * dt,
                 y: lastVelocityPos.y + lastVelocity.y * dt,

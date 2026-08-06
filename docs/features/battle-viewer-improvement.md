@@ -279,3 +279,18 @@ Phase 3（ビジュアル強化）
 | `frontend/src/hooks/useBattleLogic.ts` | ログフィルタロジック |
 | `backend/app/models/models.py` | DBモデル（obstacles_info追加） |
 | `backend/alembic/versions/` | DBマイグレーション |
+
+---
+
+## velocity外挿のdt上限（Issue #421）
+
+`useBattleSnapshot.ts` の `getBattleSnapshot()` は、ログ間の滑らかな移動表示のため
+`pos = 直近のposition_snapshot + velocity_snapshot × dt` で位置を外挿している。
+
+`velocity_snapshot` はほぼ毎ティックのログに付与されるが、`DESTROYED` ログ（`backend/app/engine/combat.py`
+`_process_destruction`）には含まれない。そのため撃破後や長時間移動が発生しない区間では `dt` が伸び続け、
+古い速度ベクトルのまま実位置から大きくズレた場所まで外挿されてしまい、照準線（`TargetLine`）や攻撃ライン
+（`AttackLine`）が無関係な方向を指す不具合が発生していた。
+
+`MAX_VELOCITY_EXTRAPOLATION_SECONDS`（1.0秒）を超える `dt` では外挿を行わず、直近の実位置（`position_snapshot`）
+に留める。併せて `TargetLine` は自機（`playerState.hp > 0`）・ターゲット双方の生存を表示条件に加えている。
