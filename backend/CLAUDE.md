@@ -149,6 +149,12 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 マイグレーションファイル自体の妥当性は `alembic heads`/`alembic history`（DB接続不要）や `python -m py_compile` で
 静的に確認できるので、実DBに当てずに検証したい場合はそちらを使う。
 
+### 直近バトル結果を実DBから確認したい場合
+
+`backend/scripts/verify/fetch_recent_battles.py`（Issue #419）で `battle_results` の直近レコードを取得し、
+コンソール表示 + JSON出力できる（読み取り専用）。使い方は `docs/features/balance-cli-tools.md` を参照。
+出力先 `backend/scripts/verify/output/` は `.gitignore` 対象なので、取得した実データがコミットされる心配はない。
+
 ## コーディング規約
 `Agent.md` の `4. コーディング規約`を参照してください。
 
