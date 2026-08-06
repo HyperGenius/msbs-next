@@ -311,15 +311,18 @@ Phase 3（ビジュアル強化）
 自機用の常時マーカーを追加しても、既存の `isTargeted` リングと表示が衝突する懸念はない。
 
 **実装:**
-- `MobileSuitMesh.tsx` に `isSelf?: boolean` prop を追加し、true の場合のみ以下を描画する
-  - 常時表示の識別リング（マゼンタ `#ff00ff`、半径 2.0〜2.3。既存の `isTargeted` リング（赤、半径 1.4〜1.8）
-    ・センサーリング（緑、`AnimatedSensorRing`）と色・半径ともに重複しない）
-  - パルスアニメーション（`opacity` を sin波で 0.3〜0.9 の範囲で周期的に変化させ、密集時でも動きで目を引く）
-  - 常時表示の "YOU" ラベル（`Html` オーバーレイ、既存の警告アイコン表示位置 `[0, 3, 0]` と重ならないよう
-    `[0, 4, 0]` に配置）
-- 識別リング・ラベルは射撃反動アニメーション用の `innerGroupRef` の**外側**（`hoverGroupRef` 直下）に配置し、
+- `MobileSuitMesh.tsx` に `isSelf?: boolean` prop を追加し、true の場合のみ常時表示の識別リングを描画する
+  - 色は新規に導入せず、既存パレットの青系（向き矢印と同じ `#4488ff`）を使用。既存の `isTargeted` リング
+    （赤、半径 1.4〜1.8・細め）・センサーリング（緑、`AnimatedSensorRing`）とは、より太い幅（半径 1.9〜2.4）
+    とパルス点滅（`opacity` を sin波で周期的に変化）で区別する。ラベル文字（"YOU"等）は視認性を悪化させる
+    ため採用しない
+- 識別リングは射撃反動アニメーション用の `innerGroupRef` の**外側**（`hoverGroupRef` 直下）に配置し、
   反動でブレず自機の位置を安定して示せるようにしている
 - `BattleScene.tsx` の自機用 `<MobileSuitMesh>` 呼び出しに `isSelf={true}` を追加
+
+> [!IMPORTANT]
+> 3Dビューアの配色パレットからの逸脱は禁止（`frontend/CLAUDE.md`「BattleViewerの配色パレット」参照）。
+> 新しい視覚要素を追加する際は、既存色の太さ・点滅など表現方法の差異で区別すること。
 
 **影響ファイル:**
 - `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx`

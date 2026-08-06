@@ -216,26 +216,14 @@ export function MobileSuitMesh({
                 )}
             </group>
 
-            {/* 自機識別マーカー: 反動アニメーション(innerGroupRef)の影響を受けないよう外側に配置 (Issue #426) */}
+            {/* 自機識別リング: 反動アニメーション(innerGroupRef)の影響を受けないよう外側に配置 (Issue #426) */}
+            {/* 既存パレットの青系（向き矢印と同じ #4488ff）を使用し、isTargeted/センサーリングとは
+                太さ（幅広）とパルス点滅で区別する。新規の色を導入しない */}
             {isSelf && (
-                <>
-                    <mesh ref={selfRingRef} rotation={[-Math.PI / 2, 0, 0]}>
-                        <ringGeometry args={[2.0, 2.3, 32]} />
-                        <meshBasicMaterial color="#ff00ff" side={THREE.DoubleSide} transparent opacity={0.8} />
-                    </mesh>
-                    <Html position={[0, 4, 0]} center>
-                        <div
-                            className="pointer-events-none select-none text-xs font-bold px-2 py-0.5 rounded"
-                            style={{
-                                backgroundColor: "rgba(0, 0, 0, 0.8)",
-                                border: "2px solid #ff00ff",
-                                color: "#ff00ff",
-                            }}
-                        >
-                            YOU
-                        </div>
-                    </Html>
-                </>
+                <mesh ref={selfRingRef} rotation={[-Math.PI / 2, 0, 0]}>
+                    <ringGeometry args={[1.9, 2.4, 32]} />
+                    <meshBasicMaterial color="#4488ff" side={THREE.DoubleSide} transparent opacity={0.8} />
+                </mesh>
             )}
             </group>
         </group>
