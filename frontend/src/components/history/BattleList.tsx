@@ -72,8 +72,6 @@ export default function BattleList({
             const hasDigest = battle.digest_text != null;
             // 辛勝タグは「土壇場で耐えた」ドラマを強調するため、枠と背景を警告色にする
             const isCritical = battle.digest_tag === "辛勝";
-            const damageLabel =
-              battle.damage_severity === "無傷" ? "なし" : battle.damage_severity;
 
             return (
               <button
@@ -116,23 +114,29 @@ export default function BattleList({
                         <span className="text-gray-600 mx-1">/</span>
                         <span className="text-gray-500">撃破</span>{" "}
                         <span className="font-bold">{battle.kills ?? 0}機</span>
-                        <span className="text-gray-600 mx-1">/</span>
                         {isCritical ? (
                           <>
+                            <span className="text-gray-600 mx-1">/</span>
                             <span className="text-gray-500">HP最低</span>{" "}
                             <span className="font-bold text-orange-400">
                               {battle.min_hp_percent}%
                             </span>
                           </>
-                        ) : (
-                          <>
-                            <span className="text-gray-500">被弾</span>{" "}
-                            <span className="font-bold">{damageLabel}</span>
-                          </>
-                        )}
+                        ) : null}
                         <span className="text-gray-600 mx-1">/</span>
                         <span className="text-gray-500">搭乗MS</span>{" "}
                         <span className="font-bold">{battle.pilot_ms_name}</span>
+                      </p>
+                      <p className="text-sm mt-1">
+                        <span className="text-gray-500">獲得Credits</span>{" "}
+                        <span className="font-bold text-yellow-300">
+                          {(battle.credits_gained ?? 0).toLocaleString()}
+                        </span>
+                        <span className="text-gray-600 mx-1">/</span>
+                        <span className="text-gray-500">獲得Exp</span>{" "}
+                        <span className="font-bold text-cyan-300">
+                          {(battle.exp_gained ?? 0).toLocaleString()}
+                        </span>
                       </p>
                     </div>
                     <p className="text-sm text-green-300 italic">「{battle.digest_text}」</p>
