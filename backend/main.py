@@ -107,6 +107,7 @@ class BattleResponse(BaseModel):
     logs: list[BattleLog]
     player_info: MobileSuit
     enemies_info: list[MobileSuit]
+    obstacles_info: list[dict] | None = None
     rewards: BattleRewards | None = None
 
 
@@ -377,6 +378,7 @@ async def simulate_battle(
         logs=sim.logs,
         player_info=player,
         enemies_info=enemies,
+        obstacles_info=obstacles_data if obstacles_data else None,
         rewards=rewards,
     )
 

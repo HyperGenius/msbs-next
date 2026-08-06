@@ -85,6 +85,7 @@ export default function Home() {
     setSelectedMissionId,
     playerData,
     enemiesData,
+    obstaclesData,
     rewards,
     currentEnvironment,
     startBattle,
@@ -151,6 +152,7 @@ export default function Home() {
               logs={logs}
               player={playerData}
               enemies={enemiesData}
+              obstacles={obstaclesData}
               currentTimestamp={currentTimestamp}
               environment={currentEnvironment}
             />
