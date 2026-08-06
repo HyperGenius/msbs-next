@@ -56,8 +56,12 @@ export default function BattleList({
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-gray-800 border border-green-800 rounded-lg max-h-[800px] overflow-y-auto">
+    <div className="max-w-2xl mx-auto w-full h-full flex flex-col min-h-0">
+      {/*
+        History ページ自体はスクロールさせず（main側で二重スクロールになるため）、
+        この Records カード内だけを flex-1 + overflow-y-auto でスクロール領域にする。
+      */}
+      <div className="bg-gray-800 border border-green-800 rounded-lg flex-1 min-h-0 overflow-y-auto">
         {/*
           コンテナ側に上paddingを付けると、sticky見出しはそのpadding分だけ
           下にずれた位置で止まるため、paddingの隙間をスクロール中のカードが
