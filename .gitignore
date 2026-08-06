@@ -24,3 +24,6 @@ node_modules/
 
 # Deployment artifacts
 battle_logs/
+
+# Verification script output (fetched DB data, not for version control)
+backend/scripts/verify/output/

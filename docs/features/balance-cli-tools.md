@@ -223,3 +223,31 @@ BALANCE_WARN_DRAW_RATE: float = 0.20     # 引き分け率がこれを超える�
 BALANCE_WARN_WIN_RATE: float = 0.80      # 勝率がこれを超えると警告（一方的優位）
 BALANCE_WARN_AVG_DURATION: float = 200.0 # 平均戦闘時間（秒）がこれを超えると警告
 ```
+
+---
+
+## 直近バトル結果の取得・検証（`fetch_recent_battles.py`）
+
+上記の各ツールがオフラインでのシミュレーション実行を対象とするのに対し、
+`backend/scripts/verify/fetch_recent_battles.py` は**実際にDBへ保存された `battle_results` を直近から取得**して
+コンソール表示・JSON出力する検証用スクリプトです（Issue #419）。
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# 直近20件を取得（デフォルト）
+python scripts/verify/fetch_recent_battles.py
+
+# 件数・ユーザーを絞り込み
+python scripts/verify/fetch_recent_battles.py --limit 50
+python scripts/verify/fetch_recent_battles.py --user-id user_xxxx
+
+# ターンごとの生ログ（battle_logs.logs）も含めて出力
+python scripts/verify/fetch_recent_battles.py --with-logs
+```
+
+出力JSONは `backend/scripts/verify/output/` 配下にタイムスタンプ付きで生成されます。
+このディレクトリは `.gitignore` 対象のため、取得したバトルデータがリポジトリにコミットされることはありません。
+
+`NEON_DATABASE_URL`（共有のリモートDB）に接続する読み取り専用の参照ツールです。書き込みは行いません。
