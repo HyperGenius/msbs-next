@@ -46,15 +46,20 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="min-h-full bg-gray-900 text-green-400 p-8 font-mono">
-      <div className="max-w-6xl mx-auto">
+    // Records一覧内だけをスクロール領域にするため、モバイル幅（main が h-[100dvh] で
+    // 高さ固定される範囲）ではこのページ自身を overflow-hidden で高さ固定し、
+    // main側とRecords側の二重スクロールを防ぐ。md以上はmain側がoverflow-visibleに
+    // なる（layout.tsxのウィンドウスクロール方式）ため、このページも通常通り
+    // 高さ自動・overflow-visibleに戻す。
+    <div className="h-full overflow-hidden md:h-auto md:overflow-visible bg-gray-900 text-green-400 p-8 font-mono flex flex-col">
+      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 min-h-0">
 
-        <div className="mb-6 flex justify-between items-center">
+        <div className="mb-6 flex justify-between items-center shrink-0">
           <h1 className="text-3xl font-bold border-l-4 border-green-500 pl-2">Battle History</h1>
         </div>
 
         {clerkTimedOut && !isLoaded ? (
-          <div className="bg-yellow-900/30 border border-yellow-500 p-6 rounded text-center">
+          <div className="bg-yellow-900/30 border border-yellow-500 p-6 rounded text-center shrink-0">
             <p className="text-yellow-400 mb-4">認証の初期化に時間がかかっています。</p>
             <button
               onClick={() => window.location.reload()}
