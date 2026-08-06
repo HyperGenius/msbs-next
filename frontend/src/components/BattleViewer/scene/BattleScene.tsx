@@ -430,8 +430,8 @@ export function BattleScene({
                 />
             ))}
 
-            {/* 自機 → ターゲット敵MSへの照準線 */}
-            {targetedEnemy && targetedEnemy.state.hp > 0 && (
+            {/* 自機 → ターゲット敵MSへの照準線（自機・ターゲット双方が生存している場合のみ表示） */}
+            {playerState.hp > 0 && targetedEnemy && targetedEnemy.state.hp > 0 && (
                 <TargetLine
                     playerPos={playerState.pos}
                     targetPos={targetedEnemy.state.pos}
