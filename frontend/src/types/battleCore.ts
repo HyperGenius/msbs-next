@@ -52,7 +52,7 @@ export interface BattleResponse {
     enemies_info: MobileSuit[];
     rewards?: BattleRewards;
     /** フィールド範囲 [min, max] (m)。BattleViewerの背景グリッド整列用 (Issue #436) */
-    map_bounds?: [number, number];
+    map_bounds?: [number, number] | null;
 }
 
 /** バトル結果の履歴レコード（ログを含まない軽量版） */

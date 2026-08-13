@@ -334,7 +334,7 @@ POST /api/battle/simulate レスポンスの obstacles_info
 
 ### 対応内容
 
-1. **バックエンド**: `BattleSimulator.map_bounds` を `map_bounds: list[float] | None`（`[min, max]`）として `BattleResult`（DB, `battle_results.map_bounds` カラム）と `/api/battle/simulate` の `BattleResponse` の両方に含める。`BattleResult` の生成箇所は2箇所ある（`backend/main.py` / `backend/scripts/run_batch.py`）ため、障害物情報と同様に両方に設定が必要。マイグレーション前の既存レコードは `null`（バックフィルなし、既存カラムと同じ方針）
+1. **バックエンド**: `BattleSimulator.map_bounds`（`tuple[float, float]`、`(0.0, side_len)`）を `BattleResult.map_bounds`（`list[float] | None`、DB, `battle_results.map_bounds` カラム）と `/api/battle/simulate` の `BattleResponse.map_bounds`（`tuple[float, float] | None`）の両方に含める。`BattleResult` の生成箇所は2箇所ある（`backend/main.py` / `backend/scripts/run_batch.py`）ため、障害物情報と同様に両方に設定が必要。マイグレーション前の既存レコードは `null`（バックフィルなし、既存カラムと同じ方針）
 2. **フロントエンド**: `BattleScene.tsx` が `mapBounds` prop（`[number, number] | null | undefined`）を受け取り、フィールド中心 `(min+max)/2 * POSITION_SCALE` を `<Grid position>` に設定。`fadeDistance` もフィールドの一辺長（`(max-min) * POSITION_SCALE`）に応じて動的に拡大する（最低値100は維持）。`mapBounds` が未取得（`null`/`undefined`、マイグレーション前の履歴データ等）の場合は `DEFAULT_MAP_BOUNDS = [0, 5000]`（`backend/app/engine/constants.py` の `MAP_BOUNDS` デフォルトと同値）にフォールバックする
 
 ### データフロー
