@@ -144,7 +144,7 @@ BattleViewer
 - `CameraInitializer` コンポーネント（`Canvas` の子）が `useEffect` でマウント時に1回だけ実行
 - カメラ位置: `[px + 50, py + 50, pz + 50]`（自機初期 Three.js 座標からの固定オフセット）
 - `OrbitControls` の target（注視点）: `[px, py, pz]`（自機初期 Three.js 座標）
-- 座標変換: `scale = 0.05`、`game.z → three.y`、`game.y → three.z`（`MobileSuitMesh` と統一）
+- 座標変換: `scale = 0.05`、`game.x/y/z → three.x/y/z` の直接対応（`MobileSuitMesh` 等 BattleViewer 全体と統一。ゲームエンジン側は `x`/`z` が地面平面、`y` が高度（通常0）。以前は `game.z → three.y` / `game.y → three.z` と軸が入れ替わっており、障害物・機体とも本来の配置が「高さ」方向に潰れて平面的に見える不具合があった（Issue #433 で修正）
 
 ### 実装詳細
 
@@ -567,7 +567,7 @@ BattleViewer
 - `CameraInitializer` コンポーネント（`Canvas` の子）が `useEffect` でマウント時に1回だけ実行
 - カメラ位置: `[px + 50, py + 50, pz + 50]`（自機初期 Three.js 座標からの固定オフセット）
 - `OrbitControls` の target（注視点）: `[px, py, pz]`（自機初期 Three.js 座標）
-- 座標変換: `scale = 0.05`、`game.z → three.y`、`game.y → three.z`（`MobileSuitMesh` と統一）
+- 座標変換: `scale = 0.05`、`game.x/y/z → three.x/y/z` の直接対応（`MobileSuitMesh` 等 BattleViewer 全体と統一。ゲームエンジン側は `x`/`z` が地面平面、`y` が高度（通常0）。以前は `game.z → three.y` / `game.y → three.z` と軸が入れ替わっており、障害物・機体とも本来の配置が「高さ」方向に潰れて平面的に見える不具合があった（Issue #433 で修正）
 
 ### 実装詳細
 

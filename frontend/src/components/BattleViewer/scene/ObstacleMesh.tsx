@@ -16,8 +16,8 @@ interface ObstacleMeshProps {
 
 export function ObstacleMesh({ obstacle, environment = "SPACE", isBlocking = false }: ObstacleMeshProps) {
     const x = obstacle.position.x * OBSTACLE_SCALE;
-    const y = obstacle.position.z * OBSTACLE_SCALE;
-    const z = obstacle.position.y * OBSTACLE_SCALE;
+    const y = obstacle.position.y * OBSTACLE_SCALE;
+    const z = obstacle.position.z * OBSTACLE_SCALE;
     const r = obstacle.radius * OBSTACLE_SCALE;
     const h = Math.max(obstacle.height * OBSTACLE_SCALE, r * 2);
 
