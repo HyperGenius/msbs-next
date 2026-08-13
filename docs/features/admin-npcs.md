@@ -1,5 +1,26 @@
 # NPCデータ管理画面 — 管理者専用エディタ（Issue #441）
 
+## パイロット名について（Issue #444）
+
+通常NPC（非エース）の `Pilot.name` は `backend/app/core/npc_data.py` の `generate_npc_pilot_name()`
+（`NPC_PILOT_FIRST_NAMES` × `NPC_PILOT_LAST_NAMES` からランダムに1件ずつ選び `"名 姓"` を生成、400通り）
+で採番される。`MatchingService._create_npc_mobile_suit()` が生成する `MobileSuit.pilot_name` にこの値を
+設定しており、NPCパイロット作成時（`create_room_matches()` 内の
+`pilot_name = npc_suit.pilot_name or npc_suit.name`）にそのまま使われる。
+
+以前は `MobileSuit.pilot_name` が未設定のままだったため、上記フォールバックにより機体名
+（例: `"Zaku II (NPC)"`）がパイロット名として保存されてしまっていた。既存データはマイグレーション
+`backend/alembic/versions/x7y8z9a0b1c2_backfill_npc_pilot_human_names.py` で一括バックフィル済み
+（対象は `pilots.name` が `"... (NPC)"` 形式の機体名パターンに一致する行のみ。エース由来NPCや、
+既に手動で人名へ修正済みの行を誤って上書きしないための絞り込み）。バックフィルは `pilots.name` だけでなく、
+同じ `user_id` を持つ `mobile_suits.pilot_name` にも同一の人名を書き込む。`mobile_suits.pilot_name` は
+バトルログ表示（`battle_utils.py` の `f"[{pilot_name}]の{actor.name}"`）やNPC再利用時のログ
+（`MatchingService.select_npcs_for_room` 経由の再利用）でも参照されるため、`pilots.name` のみ更新すると
+これらの表示が機体名のまま残ってしまう。
+
+エースNPCのパイロット名は引き続き `npc_data.py` の `ACE_PILOTS[*]["pilot_name"]`（例: `"Char Aznable"`）
+由来で、本セクションの対象外。
+
 ## 概要
 
 NPC（`Pilot.is_npc=True`）を、通常ユーザと同じ `pilots`/`mobile_suits` テーブルを共用したまま、

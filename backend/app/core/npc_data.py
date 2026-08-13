@@ -1,10 +1,70 @@
 """NPC and Ace Pilot data definitions."""
 
+import random
+
 from app.models.models import Weapon
 
 # --- Personality Types ---
 
 PERSONALITY_TYPES = ["AGGRESSIVE", "CAUTIOUS", "SNIPER"]
+
+# --- NPC Pilot Name Generation ---
+# 通常NPC（非エース）のパイロット名。機体名をそのままパイロット名に流用していた
+# 問題（Issue #444）の修正用。組み合わせでランダムなパイロット名を生成する。
+
+NPC_PILOT_FIRST_NAMES = [
+    "Jin",
+    "Marco",
+    "Elena",
+    "Kaito",
+    "Fenn",
+    "Sara",
+    "Dmitri",
+    "Youko",
+    "Leon",
+    "Nadia",
+    "Ryo",
+    "Ingrid",
+    "Theo",
+    "Mika",
+    "Otto",
+    "Renna",
+    "Hugo",
+    "Saya",
+    "Viktor",
+    "Aina",
+]
+
+NPC_PILOT_LAST_NAMES = [
+    "Reyes",
+    "Voss",
+    "Kagura",
+    "Halden",
+    "Iskandar",
+    "Brandt",
+    "Sumeragi",
+    "Falk",
+    "Orlov",
+    "Tessin",
+    "Nakada",
+    "Wexler",
+    "Ardin",
+    "Kessler",
+    "Blanc",
+    "Mizushima",
+    "Karlsen",
+    "Torres",
+    "Fenrir",
+    "Amagi",
+]
+
+
+def generate_npc_pilot_name() -> str:
+    """通常NPC用のランダムなパイロット名(名 姓)を生成する."""
+    first = random.choice(NPC_PILOT_FIRST_NAMES)
+    last = random.choice(NPC_PILOT_LAST_NAMES)
+    return f"{first} {last}"
+
 
 # --- Battle Chatter (Personality-based dialogue) ---
 
