@@ -136,6 +136,10 @@ SPAWN_CENTER_SEARCH_MAX_TRIES: int = 30  # 障害物回避位置の探索最大�
 # ため、ユニット数が少なくフィールドが MIN_FIELD_SIZE にクランプされる戦闘では
 # スポーン直後から索敵が成立してしまうケースがあった。戦闘参加ユニットの最大
 # sensor_range を実測して必要フィールドサイズを動的に拡張することで解決する。
+# なお、障害物が生成される場合はスポーン中心が _find_clear_spawn_center() により
+# 最大 SPAWN_CENTER_JITTER_RADIUS だけジッターしうるため、必要フィールドサイズの
+# 計算では両ゾーン分（2 × SPAWN_CENTER_JITTER_RADIUS）を安全マージンに追加で
+# 上乗せしている（`BattleSimulator.__init__` 参照）。
 SPAWN_ZONE_MAP_OFFSET: float = 500.0  # スポーン中心のマップ端からのオフセット (m)
 SPAWN_DETECTION_SAFETY_MARGIN: float = (
     200.0  # 最大 sensor_range に上乗せする安全マージン (m)

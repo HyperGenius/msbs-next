@@ -1437,7 +1437,9 @@ Phase 6-3（§14）で導入したデフォルトスポーン領域の「チー�
 以下の条件を満たすまで拡張する。
 
 ```
-required_separation = max(全ユニットの sensor_range) + SPAWN_DETECTION_SAFETY_MARGIN
+required_separation = max(全ユニットの sensor_range)
+                       + SPAWN_DETECTION_SAFETY_MARGIN
+                       + 2 × SPAWN_CENTER_JITTER_RADIUS
 （異チームのスポーン領域は、中心間距離 − 両ゾーンの radius ≥ required_separation を満たす）
 ```
 
@@ -1450,6 +1452,14 @@ required_separation = max(全ユニットの sensor_range) + SPAWN_DETECTION_SAF
 SPAWN_ZONE_MAP_OFFSET: float = 500.0          # スポーン中心のマップ端からのオフセット (m)
 SPAWN_DETECTION_SAFETY_MARGIN: float = 200.0  # 最大 sensor_range に上乗せする安全マージン (m)
 ```
+
+> **障害物ジッターの考慮（Copilotレビュー指摘対応）**: 障害物が生成される場合、
+> スポーン中心は `_find_clear_spawn_center()`（§14.4, #437）により最大
+> `SPAWN_CENTER_JITTER_RADIUS`（300m）だけ障害物回避のためジッターしうる。
+> 最悪ケース（異チームの2ゾーンが互いに近づく向きへジッター）でもガードが崩れない
+> よう、`required_separation` には両ゾーン分（`2 × SPAWN_CENTER_JITTER_RADIUS`）を
+> 追加で上乗せしている。`test_2team_spawn_zones_guarantee_detection_safety_with_obstacle_jitter`
+> （`obstacle_density="DENSE"` で複数回試行）で回帰を検証する。
 
 `side_len` は「ユニット数に応じた面積ベースの辺長（Phase 6-5, §16.2）」と
 「索敵回避に必要な辺長」の**大きい方**を採用し、`MAX_FIELD_SIZE` でクランプする。

@@ -252,10 +252,13 @@ def test_spawn_zones_2team_differ_by_unit_count() -> None:
         p_small, [e_small], battlefield=BattleField(obstacle_density="NONE")
     )
 
-    # 大規模 (20 units, 2 teams) → sqrt(20 * 250000) ≈ 2236 > MIN_FIELD_SIZE
+    # 大規模 (40 units, 2 teams) → sqrt(40 * 250000) ≈ 3162
+    # 索敵回避フロア（sensor_range + マージン + ジッター余裕を考慮した必要フィールド
+    # サイズ、この sensor_range=500 では約 2485m）を area ベースの辺長が明確に上回る
+    # ユニット数まで増やし、ユニット数によるスケーリングの効果を検証できるようにする
     p_large = _make_unit_with_sensor_range("P2", "PLAYER", "PT", 500.0)
     enemies_large = [
-        _make_unit_with_sensor_range(f"E{i}", "ENEMY", "ET", 500.0) for i in range(19)
+        _make_unit_with_sensor_range(f"E{i}", "ENEMY", "ET", 500.0) for i in range(39)
     ]
     sim_large = BattleSimulator(
         p_large, enemies_large, battlefield=BattleField(obstacle_density="NONE")

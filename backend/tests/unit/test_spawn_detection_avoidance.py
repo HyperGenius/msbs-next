@@ -17,6 +17,7 @@ import math
 import numpy as np
 
 from app.engine.constants import (
+    MIN_FIELD_SIZE,
     SPAWN_DETECTION_SAFETY_MARGIN,
     SPAWN_INITIAL_SPEED_RATIO,
 )
@@ -127,6 +128,25 @@ def test_5team_circular_spawn_zones_guarantee_detection_safety() -> None:
     assert edge_dist >= 900.0 + SPAWN_DETECTION_SAFETY_MARGIN - 1e-6
 
 
+def test_2team_spawn_zones_guarantee_detection_safety_with_obstacle_jitter() -> None:
+    """障害物によるスポーン中心のジッターが発生しても索敵回避の保証が崩れないこと.
+
+    `_find_clear_spawn_center` によるジッター最悪ケース（両ゾーンが互いに近づく
+    向きへジッター）を見込んだ安全マージンにより保証されること（Copilotレビュー
+    指摘への回帰テスト）。
+    """
+    for _ in range(20):
+        player = _make_unit("P", "PT", sensor_range=900.0)
+        enemy = _make_unit("E", "ET", sensor_range=900.0)
+        sim = BattleSimulator(
+            player, [enemy], battlefield=BattleField(obstacle_density="DENSE")
+        )
+        zones = sim.battlefield.spawn_zones
+        assert len(zones) == 2
+        edge_dist = _min_edge_to_edge_distance(zones)
+        assert edge_dist >= 900.0 + SPAWN_DETECTION_SAFETY_MARGIN - 1e-6
+
+
 def test_field_expands_when_min_field_size_too_small_for_sensor_range() -> None:
     """少数ユニット戦闘 (MIN_FIELD_SIZE クランプ対象) でも索敵回避が保証されること."""
     player = _make_unit("P", "PT", sensor_range=900.0)
@@ -146,10 +166,13 @@ def test_explicit_spawn_zones_bypass_field_expansion() -> None:
     player = _make_unit("P", "PT", sensor_range=900.0)
     enemy = _make_unit("E", "ET", sensor_range=900.0)
     sim = BattleSimulator(player, [enemy], battlefield=bf)
-    # 明示的に渡した狭いゾーンがそのまま使われ、フィールドも拡張されない
+    # 明示的に渡した狭いゾーンがそのまま使われる
     zone_map = {sz.team_id: sz for sz in sim.battlefield.spawn_zones}
     assert zone_map["PT"].center.x == 200.0
     assert zone_map["ET"].center.x == 400.0
+    # 索敵回避のためのフィールド拡張も行われないこと（2ユニットなので
+    # 面積ベースの計算値は MIN_FIELD_SIZE にクランプされるのみのはず）
+    assert sim.map_bounds == (0.0, MIN_FIELD_SIZE)
 
 
 # ---------------------------------------------------------------------------

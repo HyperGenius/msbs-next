@@ -220,7 +220,16 @@ class BattleSimulator(
         if uses_default_spawn_zones:
             n_teams = len({u.team_id for u in self.units if u.team_id is not None})
             max_sensor_range = max((u.sensor_range for u in self.units), default=500.0)
-            required_separation = max_sensor_range + SPAWN_DETECTION_SAFETY_MARGIN
+            # 障害物が生成される場合、スポーン中心は _find_clear_spawn_center() により
+            # 最大 SPAWN_CENTER_JITTER_RADIUS だけ障害物回避のためジッターしうる。
+            # 最悪ケース（異チームの2ゾーンが互いに近づく向きへジッター）でも
+            # required_separation を下回らないよう、両ゾーン分（×2）を安全マージンに
+            # 上乗せしておく（Copilotレビュー指摘への対応）。
+            required_separation = (
+                max_sensor_range
+                + SPAWN_DETECTION_SAFETY_MARGIN
+                + 2.0 * SPAWN_CENTER_JITTER_RADIUS
+            )
             required_field_size = self._min_field_size_for_team_layout(
                 n_teams, required_separation
             )
