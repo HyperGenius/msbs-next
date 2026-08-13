@@ -362,8 +362,10 @@ def test_obstacles_not_generated_with_none_density() -> None:
 
 def test_obstacles_not_generated_when_obstacles_explicitly_passed() -> None:
     """Obstacles を明示的に渡した場合、自動生成が行われないこと."""
-    player = _make_unit("P", "PLAYER", "PT")
-    enemy = _make_unit("E", "ENEMY", "ET")
+    # sensor_range を低めに設定し、索敵回避のためのフィールド拡張の影響を受けず
+    # 手動障害物の座標がスポーン領域外に収まるようにする
+    player = _make_unit("P", "PLAYER", "PT", sensor_range=500.0)
+    enemy = _make_unit("E", "ENEMY", "ET", sensor_range=500.0)
     obs = Obstacle(
         obstacle_id="manual_obs", position=Vector3(x=2500, y=0, z=2500), radius=100
     )

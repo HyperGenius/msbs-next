@@ -20,6 +20,9 @@ from app.engine.constants import (
     OBSTACLE_GRID_PARAMS,
     SPAWN_CENTER_JITTER_RADIUS,
     SPAWN_CENTER_SEARCH_MAX_TRIES,
+    SPAWN_DETECTION_SAFETY_MARGIN,
+    SPAWN_INITIAL_SPEED_RATIO,
+    SPAWN_ZONE_MAP_OFFSET,
     SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR,
     SPAWN_ZONE_RADIUS_2TEAM,
     SPAWN_ZONE_RADIUS_3TEAM,
@@ -191,11 +194,46 @@ class BattleSimulator(
             self.player, self.enemies, self.player_pilot_stats, npc_pilot_stats
         )
 
+        # team_id が未設定のユニットにはソロ参加用のIDを自動付与
+        # (map_bounds 計算でチーム数を使うため、フィールドサイズ決定より前に行う)
+        for unit in self.units:
+            if unit.team_id is None:
+                unit.team_id = str(unit.id)
+
         # フィールドスケーリング: 総ユニット数に応じて map_bounds を動的計算 (Phase 6-5)
         # グローバル定数 MAP_BOUNDS を変更せず、インスタンス変数として保持する
         n_total = len(self.units)
         side_len = math.sqrt(n_total * AREA_PER_UNIT)
         side_len = max(MIN_FIELD_SIZE, min(MAX_FIELD_SIZE, side_len))
+
+        # スポーン時の索敵回避: デフォルトスポーン領域を使う場合、チーム間のスポーン領域が
+        # 「戦闘参加ユニットの最大 sensor_range + 安全マージン」以上離れるようフィールド
+        # サイズを拡張する。ユニット数が少ない戦闘では AREA_PER_UNIT 由来の面積が
+        # MIN_FIELD_SIZE にクランプされてしまい、sensor_range に対してフィールドが
+        # 狭すぎ、スポーン直後から索敵が成立してしまうケースがあったための対応。
+        # battlefield が明示的に渡されなかった場合、_resolve_obstacles_and_spawn_zones
+        # 自体が呼ばれず spawn_zones は生成されない（後方互換性）ため、その場合は
+        # フィールド拡張も行わない
+        uses_default_spawn_zones = (
+            battlefield is not None and not battlefield.spawn_zones
+        )
+        if uses_default_spawn_zones:
+            n_teams = len({u.team_id for u in self.units if u.team_id is not None})
+            max_sensor_range = max((u.sensor_range for u in self.units), default=500.0)
+            required_separation = max_sensor_range + SPAWN_DETECTION_SAFETY_MARGIN
+            required_field_size = self._min_field_size_for_team_layout(
+                n_teams, required_separation
+            )
+            if required_field_size > MAX_FIELD_SIZE:
+                logger.warning(
+                    "チーム数 %d・最大索敵範囲 %.1fm では MAX_FIELD_SIZE=%.1fm 内で"
+                    "スポーン時の索敵回避を保証できません。フィールドを上限まで拡張します。",
+                    n_teams,
+                    max_sensor_range,
+                    MAX_FIELD_SIZE,
+                )
+            side_len = max(side_len, min(MAX_FIELD_SIZE, required_field_size))
+
         self.map_bounds: tuple[float, float] = (0.0, side_len)
 
         # battlefield パラメータの解決 (Phase 6-3)
@@ -216,11 +254,6 @@ class BattleSimulator(
 
         # チームレベルイベントのダミー actor_id (AiDecisionMixin で参照)
         self._team_event_actor_id: uuid.UUID = _TEAM_EVENT_ACTOR_ID
-
-        # team_id が未設定のユニットにはソロ参加用のIDを自動付与
-        for unit in self.units:
-            if unit.team_id is None:
-                unit.team_id = str(unit.id)
 
         # 索敵状態管理 (チーム単位で共有)
         self.team_detected_units: dict[str, set] = {
@@ -356,6 +389,47 @@ class BattleSimulator(
 
         self._apply_spawn_zones()
 
+    @staticmethod
+    def _min_field_size_for_team_layout(
+        n_teams: int, required_separation: float
+    ) -> float:
+        """デフォルトスポーン配置で異チーム間隔が required_separation 以上になるために必要な最小フィールド辺長を計算する.
+
+        `_generate_default_spawn_zones` が生成する対称配置（2チーム: 対角、
+        3/4チーム: 均等分割、5チーム以上: 円周上均等配置）ごとに、最も近接する
+        ペアの中心間距離からスポーン半径を差し引いた間隔が required_separation を
+        満たす条件を辺長 L について逆算する。
+
+        Args:
+            n_teams: チーム数
+            required_separation: 異チームのスポーン領域間で確保したい最小間隔 (m)。
+                中心間距離から両ゾーンの radius を差し引いた「縁と縁の距離」を指す。
+
+        Returns:
+            必要な最小フィールド辺長 (m)
+        """
+        offset = SPAWN_ZONE_MAP_OFFSET
+        if n_teams <= 1:
+            return MIN_FIELD_SIZE
+
+        if n_teams == 2:
+            # 対角配置: 中心間距離 = sqrt(2) * (L - 2*offset)
+            radius = SPAWN_ZONE_RADIUS_2TEAM
+            return 2.0 * offset + (required_separation + 2.0 * radius) / math.sqrt(2.0)
+
+        if n_teams in (3, 4):
+            # 最も近接するペア（同一辺上に並ぶ隣接頂点）: 中心間距離 = L - 2*offset
+            radius = (
+                SPAWN_ZONE_RADIUS_3TEAM if n_teams == 3 else SPAWN_ZONE_RADIUS_4TEAM
+            )
+            return 2.0 * offset + required_separation + 2.0 * radius
+
+        # 5チーム以上: 円周上の隣接ペアの弦長 = 2 * r_field * sin(pi / n_teams)
+        radius = SPAWN_ZONE_RADIUS_4TEAM
+        chord_needed = required_separation + 2.0 * radius
+        r_field = chord_needed / (2.0 * math.sin(math.pi / n_teams))
+        return 2.0 * (r_field + offset)
+
     def _generate_default_spawn_zones(self) -> list[SpawnZone]:
         """チーム数とマップサイズに応じたデフォルトスポーン領域を生成する (Phase 6-3).
 
@@ -366,7 +440,7 @@ class BattleSimulator(
             生成されたスポーン領域リスト
         """
         map_min, map_max = self.map_bounds
-        offset = 500.0  # マップ端からのオフセット (m)
+        offset = SPAWN_ZONE_MAP_OFFSET  # マップ端からのオフセット (m)
 
         # チームIDを収集（順序安定化のためソート）
         team_ids = sorted(
@@ -580,11 +654,14 @@ class BattleSimulator(
         return np.array([zone.center.x, zone.center.y, zone.center.z])
 
     def _apply_spawn_zones(self) -> None:
-        """スポーン領域に基づいて全ユニットの初期位置を設定する (Phase 6-3).
+        """スポーン領域に基づいて全ユニットの初期位置・初速を設定する (Phase 6-3).
 
         self.battlefield.spawn_zones から team_id をキーとした領域マップを作成し、
         各チームのユニットを対応する領域内にランダム配置する。
         ALLY_REPULSION_RADIUS 以上の同チーム内間隔を保証する。
+        また、各ユニットにはスポーン領域中心からフィールド中心へ向かう方向へ
+        SPAWN_INITIAL_SPEED_RATIO 分の初速を付与し、フィールドに侵入していく
+        シチュエーションを表現する。
         """
         zone_map: dict[str, SpawnZone] = {
             sz.team_id: sz for sz in self.battlefield.spawn_zones
@@ -598,9 +675,25 @@ class BattleSimulator(
             if unit.team_id and unit.team_id in zone_map:
                 team_units.setdefault(unit.team_id, []).append(unit)
 
+        map_min, map_max = self.map_bounds
+        field_center = (map_min + map_max) / 2.0
+
         rng = np.random.default_rng()
         for team_id, units in team_units.items():
             zone = zone_map[team_id]
+
+            # スポーン領域中心からフィールド中心への単位方向ベクトル (XZ平面)
+            direction = np.array(
+                [field_center - zone.center.x, 0.0, field_center - zone.center.z]
+            )
+            direction_norm = float(np.linalg.norm(direction))
+            unit_direction = (
+                direction / direction_norm if direction_norm > 1e-6 else np.zeros(3)
+            )
+            heading_deg = math.degrees(
+                math.atan2(float(unit_direction[2]), float(unit_direction[0]))
+            )
+
             placed: list[np.ndarray] = []
             for unit in units:
                 pos = self._sample_position_in_zone(
@@ -610,6 +703,15 @@ class BattleSimulator(
                     x=float(pos[0]), y=float(pos[1]), z=float(pos[2])
                 )
                 placed.append(pos)
+
+                initial_velocity = (
+                    unit_direction * unit.max_speed * SPAWN_INITIAL_SPEED_RATIO
+                )
+                unit.velocity = Vector3.from_numpy(initial_velocity)
+                resources = self.unit_resources[str(unit.id)]
+                resources["velocity_vec"] = initial_velocity
+                resources["movement_heading_deg"] = heading_deg
+                resources["body_heading_deg"] = heading_deg
 
     def _generate_obstacles(self) -> list[Obstacle]:
         """障害物をグリッド分割＋ランダムオフセット方式で自動生成する (Phase 6-3).

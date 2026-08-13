@@ -220,18 +220,43 @@ def test_spawn_zones_use_dynamic_map_bounds() -> None:
         )
 
 
+def _make_unit_with_sensor_range(
+    name: str, side: str, team_id: str, sensor_range: float
+) -> MobileSuit:
+    """索敵回避によるフィールド拡張の影響を受けにくい sensor_range を明示してユニットを生成する.
+
+    このモジュールの _make_unit はデフォルト sensor_range=2000.0 と大きめのため、
+    ユニット数によるスケーリングを検証したいこのテストでは索敵回避フロアが
+    支配的にならないよう小さめの値を明示する。
+    """
+    return MobileSuit(
+        name=name,
+        max_hp=100,
+        current_hp=100,
+        armor=0,
+        mobility=1.0,
+        position=Vector3(x=0, y=0, z=0),
+        sensor_range=sensor_range,
+        side=side,
+        team_id=team_id,
+        weapons=[_make_weapon()],
+    )
+
+
 def test_spawn_zones_2team_differ_by_unit_count() -> None:
     """ユニット数が異なると 2 チームのスポーン中心間距離が変わること."""
     # 小規模 (2 units) → map_bounds = (0, 2000) (MIN_FIELD_SIZE クランプ)
-    p_small = _make_unit("P", "PLAYER", "PT")
-    e_small = _make_unit("E", "ENEMY", "ET")
+    p_small = _make_unit_with_sensor_range("P", "PLAYER", "PT", 500.0)
+    e_small = _make_unit_with_sensor_range("E", "ENEMY", "ET", 500.0)
     sim_small = BattleSimulator(
         p_small, [e_small], battlefield=BattleField(obstacle_density="NONE")
     )
 
     # 大規模 (20 units, 2 teams) → sqrt(20 * 250000) ≈ 2236 > MIN_FIELD_SIZE
-    p_large = _make_unit("P2", "PLAYER", "PT")
-    enemies_large = [_make_unit(f"E{i}", "ENEMY", "ET") for i in range(19)]
+    p_large = _make_unit_with_sensor_range("P2", "PLAYER", "PT", 500.0)
+    enemies_large = [
+        _make_unit_with_sensor_range(f"E{i}", "ENEMY", "ET", 500.0) for i in range(19)
+    ]
     sim_large = BattleSimulator(
         p_large, enemies_large, battlefield=BattleField(obstacle_density="NONE")
     )
