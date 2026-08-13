@@ -288,9 +288,13 @@ interface UnitSnapshot {
 | 色（通常） | SPACE: `#5a4a3a` / GROUND: `#4a5a4a` |
 | 色（LOS 遮断時） | `#8a3a3a`（赤みがかった色）、`opacity: 0.9` |
 | 透明度（通常） | `opacity: 0.75` |
+| 輪郭線（`Edges`, drei） | SPACE: `#b89b78` / GROUND: `#8fb88f`（塗りと同色相の明るいトーン）、LOS遮断時は既存パレットの `#ff4444` を流用。暗い背景色（SPACE: `#000000` 等）とのコントラストが低く視認しづらい問題への対応（Issue #431） |
+| 接地影 | 障害物ベース位置に半透明円（`opacity: 0.35`）を敷いて奥行きの手がかりにする |
 | スケール | `0.05`（既存 MS 座標スケールと統一） |
 | Y オフセット | 円柱の底面をグリッド面（y=0）に合わせるため `y + h/2` |
 | `isBlocking` prop | `true` のとき LOS 遮断障害物として強調表示 |
+
+`BattleScene.tsx` 側では環境背景色（`getEnvironmentColor`）に合わせた `<fog>`（`near=90, far=220`）を設定し、遠景が背景色に自然に馴染むことで奥行き感を補強している。
 
 ### データフロー
 
@@ -622,9 +626,13 @@ function CameraInitializer({ px, py, pz, controlsRef }) {
 | 色（通常） | SPACE: `#5a4a3a` / GROUND: `#4a5a4a` |
 | 色（LOS 遮断時） | `#8a3a3a`（赤みがかった色）、`opacity: 0.9` |
 | 透明度（通常） | `opacity: 0.75` |
+| 輪郭線（`Edges`, drei） | SPACE: `#b89b78` / GROUND: `#8fb88f`（塗りと同色相の明るいトーン）、LOS遮断時は既存パレットの `#ff4444` を流用。暗い背景色（SPACE: `#000000` 等）とのコントラストが低く視認しづらい問題への対応（Issue #431） |
+| 接地影 | 障害物ベース位置に半透明円（`opacity: 0.35`）を敷いて奥行きの手がかりにする |
 | スケール | `0.05`（既存 MS 座標スケールと統一） |
 | Y オフセット | 円柱の底面をグリッド面（y=0）に合わせるため `y + h/2` |
 | `isBlocking` prop | `true` のとき LOS 遮断障害物として強調表示 |
+
+`BattleScene.tsx` 側では環境背景色（`getEnvironmentColor`）に合わせた `<fog>`（`near=90, far=220`）を設定し、遠景が背景色に自然に馴染むことで奥行き感を補強している。
 
 ### データフロー
 
