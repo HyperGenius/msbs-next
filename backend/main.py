@@ -81,6 +81,7 @@ app.include_router(teams.router)
 app.include_router(admin.router)
 app.include_router(admin.weapon_router)
 app.include_router(admin.simulation_router)
+app.include_router(admin.npc_router)
 app.include_router(player_weapons.router)
 
 # --- Response Schemas ---
