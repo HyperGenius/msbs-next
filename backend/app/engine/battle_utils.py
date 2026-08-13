@@ -8,7 +8,33 @@ from app.core.npc_data import BATTLE_CHATTER
 from app.models.models import BattleLog, MobileSuit
 
 if TYPE_CHECKING:
-    pass
+    from app.models.models import Obstacle
+
+
+def serialize_obstacles(obstacles: "list[Obstacle]") -> list[dict[str, Any]] | None:
+    """障害物リストを BattleResult.obstacles_info / BattleResponse 用に変換する.
+
+    `BattleResult` の生成箇所は main.py（即時実行）と run_batch.py（バッチ実行）の
+    2箇所あり、どちらも同じ変換ロジックを必要とするため共通化している。
+
+    Args:
+        obstacles: BattleSimulator.obstacles
+
+    Returns:
+        障害物が無い場合は None（DB上は NULL として保存される）
+    """
+    if not obstacles:
+        return None
+    return [
+        {
+            "obstacle_id": obs.obstacle_id,
+            "position": {"x": obs.position.x, "y": obs.position.y, "z": obs.position.z},
+            "radius": obs.radius,
+            "height": obs.height,
+        }
+        for obs in obstacles
+    ]
+
 
 # バトルログ保存時に除去するデバッグ専用フィールドのセット
 _BATTLE_LOG_DEBUG_FIELDS: frozenset[str] = frozenset({"fuzzy_scores"})

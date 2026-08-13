@@ -14,7 +14,7 @@ from sqlmodel import Session, desc, select
 # DB関連
 from app.core.auth import get_current_user, get_current_user_optional
 from app.db import get_session
-from app.engine.battle_utils import strip_debug_fields
+from app.engine.battle_utils import serialize_obstacles, strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleField,
@@ -107,6 +107,7 @@ class BattleResponse(BaseModel):
     logs: list[BattleLog]
     player_info: MobileSuit
     enemies_info: list[MobileSuit]
+    obstacles_info: list[dict] | None = None
     rewards: BattleRewards | None = None
 
 
@@ -340,15 +341,7 @@ async def simulate_battle(
     )
 
     # 10. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
-    obstacles_data = [
-        {
-            "obstacle_id": obs.obstacle_id,
-            "position": {"x": obs.position.x, "y": obs.position.y, "z": obs.position.z},
-            "radius": obs.radius,
-            "height": obs.height,
-        }
-        for obs in sim.obstacles
-    ]
+    obstacles_data = serialize_obstacles(sim.obstacles)
     battle_result = BattleResult(
         user_id=user_id,
         mission_id=mission_id,
@@ -357,7 +350,7 @@ async def simulate_battle(
         environment=mission.environment,
         player_info=player.model_dump(),
         enemies_info=[e.model_dump() for e in enemies],
-        obstacles_info=obstacles_data if obstacles_data else None,
+        obstacles_info=obstacles_data,
         ms_snapshot=player.model_dump(),
         kills=kills,
         exp_gained=exp_gained,
@@ -377,6 +370,7 @@ async def simulate_battle(
         logs=sim.logs,
         player_info=player,
         enemies_info=enemies,
+        obstacles_info=obstacles_data,
         rewards=rewards,
     )
 

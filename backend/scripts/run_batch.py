@@ -19,7 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from sqlmodel import Session, select
 
 from app.db import engine
-from app.engine.battle_utils import strip_debug_fields
+from app.engine.battle_utils import serialize_obstacles, strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleEntry,
@@ -246,6 +246,7 @@ def _save_battle_results(
     # entry.mobile_suit_snapshot はエントリー時点（バトル前）のHPしか持たないため、
     # ダイジェスト集計にはシミュレーションで実際に更新された live なユニットを使う
     live_units_by_id = {str(u.id): u for u in [player_unit, *enemy_units]}
+    obstacles_data = serialize_obstacles(simulator.obstacles)
 
     # バトルログをルーム単位で1件保存（全参加者で共有）
     battle_log_record = BattleLogRecord(
@@ -332,6 +333,7 @@ def _save_battle_results(
             win_loss=individual_win_loss,
             player_info=entry_unit_for_info.model_dump(),
             enemies_info=enemies_info_for_entry,
+            obstacles_info=obstacles_data,
             ms_snapshot=entry.mobile_suit_snapshot,
             kills=individual_kills,
             exp_gained=exp_gained,

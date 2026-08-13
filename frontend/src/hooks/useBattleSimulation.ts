@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { BattleLog, BattleRewards, Mission, MobileSuit } from "@/types/battle";
+import { Obstacle } from "@/types/geometry";
 
 interface ModalResult {
   winLoss: "WIN" | "LOSE" | "DRAW";
@@ -31,6 +32,7 @@ interface UseBattleSimulationReturn {
   setSelectedMissionId: (id: number) => void;
   playerData: MobileSuit | null;
   enemiesData: MobileSuit[];
+  obstaclesData: Obstacle[];
   rewards: BattleRewards | null;
   currentEnvironment: string;
   startBattle: (missionId: number) => Promise<void>;
@@ -56,6 +58,7 @@ export function useBattleSimulation({
   const [selectedMissionId, setSelectedMissionId] = useState<number>(1);
   const [playerData, setPlayerData] = useState<MobileSuit | null>(null);
   const [enemiesData, setEnemiesData] = useState<MobileSuit[]>([]);
+  const [obstaclesData, setObstaclesData] = useState<Obstacle[]>([]);
   const [rewards, setRewards] = useState<BattleRewards | null>(null);
   const [currentEnvironment, setCurrentEnvironment] =
     useState<string>("SPACE");
@@ -80,6 +83,7 @@ export function useBattleSimulation({
     setWinLoss(null);
     setCurrentTimestamp(0);
     setRewards(null);
+    setObstaclesData([]);
 
     try {
       const token = await getToken();
@@ -128,6 +132,7 @@ export function useBattleSimulation({
 
       setPlayerData(data.player_info);
       setEnemiesData(data.enemies_info);
+      setObstaclesData(data.obstacles_info ?? []);
 
       if (data.rewards) {
         setRewards(data.rewards);
@@ -159,6 +164,7 @@ export function useBattleSimulation({
     setSelectedMissionId,
     playerData,
     enemiesData,
+    obstaclesData,
     rewards,
     currentEnvironment,
     startBattle,
