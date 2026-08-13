@@ -499,11 +499,16 @@ class BattleSimulator(
             return candidate
 
         map_min, map_max = self.map_bounds
+        # 中心のクランプ範囲は radius ぶんのマージンを確保する（スポーン領域自体が
+        # フィールド外へはみ出さないようにするため）。フィールドが radius の2倍より
+        # 狭い極端なケースではマージンを縮小してクランプ範囲の逆転を防ぐ。
+        margin = min(radius, (map_max - map_min) / 2.0)
+        clamp_min, clamp_max = map_min + margin, map_max - margin
         for _ in range(SPAWN_CENTER_SEARCH_MAX_TRIES):
             angle = rng.uniform(0.0, 2.0 * math.pi)
             dist = rng.uniform(0.0, SPAWN_CENTER_JITTER_RADIUS)
-            x = min(max(cx + dist * math.cos(angle), map_min), map_max)
-            z = min(max(cz + dist * math.sin(angle), map_min), map_max)
+            x = min(max(cx + dist * math.cos(angle), clamp_min), clamp_max)
+            z = min(max(cz + dist * math.sin(angle), clamp_min), clamp_max)
             if not self._spawn_center_overlaps_obstacles(x, z, radius, self.obstacles):
                 return (x, z)
 

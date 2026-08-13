@@ -459,6 +459,39 @@ def test_obstacles_generated_before_spawn_zones_still_span_field() -> None:
     assert len(center_nearby) > 0, "フィールド中心付近に障害物が生成されていない"
 
 
+def test_find_clear_spawn_center_result_stays_within_field_margin() -> None:
+    """ジッター後のスポーン中心が radius マージンを保ってフィールド内に収まること.
+
+    GitHub Copilot レビュー指摘（PR #439）の回帰テスト:
+    クランプ範囲が `map_min..map_max` そのものだと、中心が端に寄った場合に
+    スポーン領域の半径ぶんフィールド外へはみ出しうる。
+    """
+    player = _make_unit("P", "PLAYER", "PT")
+    enemy = _make_unit("E", "ENEMY", "ET")
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="NONE")
+    )
+    map_min, map_max = sim.map_bounds
+    radius = SPAWN_ZONE_RADIUS_2TEAM
+
+    candidate = (map_min, map_min)  # フィールド最端の候補点
+    # 候補点そのものを覆う障害物を置き、ジッター探索を強制する
+    sim.obstacles = [
+        Obstacle(
+            obstacle_id="blocker",
+            position=Vector3(x=map_min, y=0.0, z=map_min),
+            radius=10.0,
+        )
+    ]
+    rng = np.random.default_rng(1)
+    x, z = sim._find_clear_spawn_center(candidate, radius, rng)
+
+    assert x - radius >= map_min - 1e-6, f"x={x} がフィールド外にはみ出している"
+    assert x + radius <= map_max + 1e-6, f"x={x} がフィールド外にはみ出している"
+    assert z - radius >= map_min - 1e-6, f"z={z} がフィールド外にはみ出している"
+    assert z + radius <= map_max + 1e-6, f"z={z} がフィールド外にはみ出している"
+
+
 def test_auto_generated_obstacles_have_valid_ids() -> None:
     """自動生成された障害物に一意の ID が付与されること."""
     player = _make_unit("P", "PLAYER", "PT")
