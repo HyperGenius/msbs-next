@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from app.core.gamedata import get_shop_listing_by_id
 from app.core.npc_data import ACE_PILOTS
@@ -108,11 +108,12 @@ class PilotService:
             statement = statement.where(Pilot.level >= min_level)
         if max_level is not None:
             statement = statement.where(Pilot.level <= max_level)
+        if ace_only is True:
+            statement = statement.where(Pilot.name.in_(ACE_PILOT_NAMES))  # type: ignore[attr-defined]
+        elif ace_only is False:
+            statement = statement.where(Pilot.name.not_in(ACE_PILOT_NAMES))  # type: ignore[attr-defined]
 
-        pilots = list(session.exec(statement).all())
-        if ace_only is None:
-            return pilots
-        return [p for p in pilots if (p.name in ACE_PILOT_NAMES) == ace_only]
+        return list(session.exec(statement).all())
 
     @staticmethod
     def get_npc_pilot_by_id(session: Session, pilot_id: uuid.UUID) -> Pilot | None:
@@ -130,6 +131,28 @@ class PilotService:
             Pilot.is_npc == True,  # noqa: E712
         )
         return session.exec(statement).first()
+
+    @staticmethod
+    def count_owned_mobile_suits_by_user_id(
+        session: Session, user_ids: list[str]
+    ) -> dict[str, int]:
+        """複数NPCの所有機体数を一括取得する（管理者用、一覧表示のN+1回避）.
+
+        Args:
+            session: データベースセッション
+            user_ids: NPC の合成 user_id (npc-{uuid} 形式) のリスト
+
+        Returns:
+            dict[str, int]: user_id -> 所有機体数。0件のuser_idはキーに含まれない
+        """
+        if not user_ids:
+            return {}
+        statement = (
+            select(MobileSuit.user_id, func.count(MobileSuit.id))  # type: ignore[arg-type]
+            .where(MobileSuit.user_id.in_(user_ids))  # type: ignore[union-attr]
+            .group_by(MobileSuit.user_id)  # type: ignore[arg-type]
+        )
+        return dict(session.exec(statement).all())  # type: ignore[arg-type]
 
     @staticmethod
     def get_npc_owned_mobile_suits(session: Session, user_id: str) -> list[MobileSuit]:

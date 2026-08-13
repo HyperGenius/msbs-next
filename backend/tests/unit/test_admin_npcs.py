@@ -153,6 +153,39 @@ def test_list_npcs_ace_only_filter(client_admin, session):
     assert any(e["name"] == "Char Aznable" for e in data)
     assert not any(e["name"] == "Random Grunt" for e in data)
 
+    response = client_admin.get(
+        "/api/admin/npcs", headers=HEADERS, params={"ace_only": False}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert all(not e["is_ace"] for e in data)
+    assert any(e["name"] == "Random Grunt" for e in data)
+    assert not any(e["name"] == "Char Aznable" for e in data)
+
+
+def test_count_owned_mobile_suits_by_user_id(session, npc_pilot_with_suit):
+    """複数NPCの所有機体数を一括取得できること（一覧表示のN+1回避用）."""
+    pilot, suit = npc_pilot_with_suit
+    other_suit = MobileSuit(
+        user_id=pilot.user_id,
+        name="Second Suit",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],
+        side="ENEMY",
+    )
+    session.add(other_suit)
+    session.commit()
+
+    counts = PilotService.count_owned_mobile_suits_by_user_id(
+        session, [pilot.user_id, "npc-nonexistent"]
+    )
+    assert counts[pilot.user_id] == 2
+    assert "npc-nonexistent" not in counts
+    assert PilotService.count_owned_mobile_suits_by_user_id(session, []) == {}
+
 
 # ===================== 詳細取得テスト =====================
 

@@ -337,12 +337,13 @@ def list_npcs(
         max_level=max_level,
         ace_only=ace_only,
     )
+    counts = PilotService.count_owned_mobile_suits_by_user_id(
+        session, [pilot.user_id for pilot in pilots]
+    )
     entries = []
     for pilot in pilots:
         entry = _pilot_to_entry(pilot)
-        entry.mobile_suit_count = len(
-            PilotService.get_npc_owned_mobile_suits(session, pilot.user_id)
-        )
+        entry.mobile_suit_count = counts.get(pilot.user_id, 0)
         entries.append(entry)
     return entries
 
