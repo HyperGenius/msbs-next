@@ -129,6 +129,29 @@ SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR: float = (
 SPAWN_CENTER_JITTER_RADIUS: float = 300.0  # 障害物回避のためのジッター探索半径 (m)
 SPAWN_CENTER_SEARCH_MAX_TRIES: int = 30  # 障害物回避位置の探索最大試行回数
 
+# スポーン時の索敵回避定数
+# デフォルトスポーン領域はマップ端から SPAWN_ZONE_MAP_OFFSET だけ内側に配置される。
+# 従来はチーム間距離を「sensor_range のデフォルト値(500m)×2=1000m」という固定値で
+# 保証していたが、実際の索敵範囲（ユニットごとの sensor_range）を考慮していなかった
+# ため、ユニット数が少なくフィールドが MIN_FIELD_SIZE にクランプされる戦闘では
+# スポーン直後から索敵が成立してしまうケースがあった。戦闘参加ユニットの最大
+# sensor_range を実測して必要フィールドサイズを動的に拡張することで解決する。
+# なお、障害物が生成される場合はスポーン中心が _find_clear_spawn_center() により
+# 最大 SPAWN_CENTER_JITTER_RADIUS だけジッターしうるため、必要フィールドサイズの
+# 計算では両ゾーン分（2 × SPAWN_CENTER_JITTER_RADIUS）を安全マージンに追加で
+# 上乗せしている（`BattleSimulator.__init__` 参照）。
+SPAWN_ZONE_MAP_OFFSET: float = 500.0  # スポーン中心のマップ端からのオフセット (m)
+SPAWN_DETECTION_SAFETY_MARGIN: float = (
+    200.0  # 最大 sensor_range に上乗せする安全マージン (m)
+)
+
+# スポーン時初速定数
+# 「フィールドに侵入していく」体験を出すため、スポーン領域中心からフィールド中心へ
+# 向かう方向に初速を付与する。
+SPAWN_INITIAL_SPEED_RATIO: float = (
+    0.3  # スポーン時の初速 = 各ユニットの max_speed × この比率
+)
+
 # フィールドスケーリング定数 (Phase 6-5)
 AREA_PER_UNIT: float = 250_000.0  # 1ユニットあたりの面積 (m²) = 500m × 500m
 MIN_FIELD_SIZE: float = 2000.0  # 最小フィールド辺長 (m)

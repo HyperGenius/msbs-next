@@ -889,7 +889,11 @@ BattleField を battlefield=BattleField(...) で渡した場合:
 | 4チーム | 四隅 | `(500, 500)` 等 | `300m` |
 | 5チーム以上 | 円周均等配置 | 中心から放射状 | `300m` |
 
-2チームの場合、スポーン中心間距離は約 `5657m`（`≥ 1000m` の要件を満たす）。
+2チームの場合、スポーン中心間距離は約 `5657m`。
+
+> **注意（Issue: 初期配置での索敵回避 / 初速付与）**: 上記は `map_bounds = (0.0, 5000.0)` 時点の目安値であり、
+> 実際の間隔保証は「参加ユニットの最大 `sensor_range` + 安全マージン」を基準に動的計算される。
+> 詳細は [§21](#21-issue-初期配置での索敵回避--スポーン時初速の付与) を参照。
 
 ### 14.6 障害物自動生成パラメータ
 
@@ -1404,4 +1408,101 @@ if current_action == "ATTACK" and target is not None:
 - **原因**: `backend/requirements.txt` の `fastapi` にバージョン指定がなく、インストールタイミングにより取得されるバージョンが変わる。FastAPI 0.137 以降、`include_router()` で追加されたルーターが `app.routes` 内で遅延解決の `_IncludedRouter`（`.path` 属性を持たない）としてまとめて格納されることがあり、`route.path for route in app.routes` のように直接走査するコードが壊れる。
 - **対応**: `tests/test_api_structure.py` / `tests/test_entry_feature.py` / `tests/test_ranking_system.py` で `app.routes` の直接走査をやめ、`app.openapi()["paths"].keys()` からエンドポイント一覧を取得するように変更した（FastAPI のバージョンに依存しない安定した方法）。
 - **今後の注意**: 登録済みエンドポイントの存在を確認するテストは `app.routes` を直接走査せず、`app.openapi()["paths"]` を使うこと。
+
+---
+
+## 21. Issue: 初期配置での索敵回避 + スポーン時初速の付与
+
+### 21.1 概要
+
+Phase 6-3（§14）で導入したデフォルトスポーン領域の「チーム間距離の保証」は、
+`sensor_range` の**デフォルト値（500m）を固定で 2 倍した 1000m** を基準にしており、
+以下 2 点を考慮していなかった。
+
+1. 実際に参加するユニットの `sensor_range`（NPC エースは最大 900m、ミッション設定次第ではさらに大きい値も取りうる）
+2. スポーン領域自体の半径（中心間距離であって、ユニットが実際に出現しうる縁と縁の距離ではない）
+
+その結果、Phase 6-5（§16）のフィールドスケーリングでユニット数が少なく
+`MIN_FIELD_SIZE=2000m` にクランプされる戦闘（1 vs 1 のソロミッションなど、
+最も頻度の高いケース）では、スポーン領域の縁と縁の距離が実際の `sensor_range` を
+下回り、**戦闘開始直後から敵を発見できてしまう**ケースがあった。
+
+あわせて、「ある程度の初速を持ってフィールドに侵入していく」というゲーム体験を
+実現するため、スポーン時に各ユニットへ初速を付与するようにした。
+
+### 21.2 索敵回避: フィールドサイズの動的拡張
+
+`BattleSimulator.__init__()` で `battlefield` が明示的に渡され、かつ
+`spawn_zones` が未指定（デフォルト自動生成が使われる）の場合、フィールド辺長を
+以下の条件を満たすまで拡張する。
+
+```
+required_separation = max(全ユニットの sensor_range)
+                       + SPAWN_DETECTION_SAFETY_MARGIN
+                       + 2 × SPAWN_CENTER_JITTER_RADIUS
+（異チームのスポーン領域は、中心間距離 − 両ゾーンの radius ≥ required_separation を満たす）
+```
+
+チーム配置ごとの必要フィールド辺長は `BattleSimulator._min_field_size_for_team_layout()`
+で、`_generate_default_spawn_zones()` が生成する対称配置（2チーム: 対角、
+3/4チーム: 均等分割、5チーム以上: 円周均等配置）それぞれの幾何から逆算する。
+
+```python
+# constants.py
+SPAWN_ZONE_MAP_OFFSET: float = 500.0          # スポーン中心のマップ端からのオフセット (m)
+SPAWN_DETECTION_SAFETY_MARGIN: float = 200.0  # 最大 sensor_range に上乗せする安全マージン (m)
+```
+
+> **障害物ジッターの考慮（Copilotレビュー指摘対応）**: 障害物が生成される場合、
+> スポーン中心は `_find_clear_spawn_center()`（§14.4, #437）により最大
+> `SPAWN_CENTER_JITTER_RADIUS`（300m）だけ障害物回避のためジッターしうる。
+> 最悪ケース（異チームの2ゾーンが互いに近づく向きへジッター）でもガードが崩れない
+> よう、`required_separation` には両ゾーン分（`2 × SPAWN_CENTER_JITTER_RADIUS`）を
+> 追加で上乗せしている。`test_2team_spawn_zones_guarantee_detection_safety_with_obstacle_jitter`
+> （`obstacle_density="DENSE"` で複数回試行）で回帰を検証する。
+
+`side_len` は「ユニット数に応じた面積ベースの辺長（Phase 6-5, §16.2）」と
+「索敵回避に必要な辺長」の**大きい方**を採用し、`MAX_FIELD_SIZE` でクランプする。
+チーム数が多い・`sensor_range` が非常に大きいなどの理由で `MAX_FIELD_SIZE` を
+超えてしまう場合は、警告ログを出したうえでベストエフォートでフィールド上限まで
+拡張する（保証を満たせない旨をログで明示する）。
+
+> **注意**: `battlefield=None`（後方互換モード）や `spawn_zones` を明示的に渡した場合は、
+> このフィールド拡張は行われない（呼び出し側が意図した配置をそのまま尊重する）。
+
+### 21.3 スポーン時初速の付与
+
+`BattleSimulator._apply_spawn_zones()` で、各ユニットの位置決定後に
+「スポーン領域中心 → フィールド中心」方向への初速を付与する。
+
+```python
+# constants.py
+SPAWN_INITIAL_SPEED_RATIO: float = 0.3  # 初速 = 各ユニットの max_speed × この比率
+```
+
+- `unit.velocity`（API/フロントエンド向けスナップショット）と
+  `unit_resources[unit_id]["velocity_vec"]`（実シミュレーションが参照する内部状態）の
+  両方に同じ初速ベクトルを設定する
+- `movement_heading_deg` / `body_heading_deg` も初速の向きに合わせて初期化する
+- フィールド中心とスポーン領域中心が一致する場合（実質的に発生しない想定だが）は
+  ゼロベクトルにフォールバックする
+- `battlefield=None`（後方互換モード）の場合は初速も付与されない（`unit.velocity` はゼロのまま）
+
+### 21.4 テスト
+
+`backend/tests/unit/test_spawn_detection_avoidance.py`
+
+- 2〜5 チームの各配置で、スポーン領域の縁と縁の距離が
+  `sensor_range + SPAWN_DETECTION_SAFETY_MARGIN` 以上であること
+- `MIN_FIELD_SIZE` クランプ対象の少人数戦でもフィールドが拡張されること
+- 明示的な `spawn_zones` を渡した場合はフィールド拡張が行われないこと
+- スポーン直後のユニットが `max_speed × SPAWN_INITIAL_SPEED_RATIO` の初速を持ち、
+  フィールド中心方向を向いていること
+- `unit_resources["velocity_vec"]` が `unit.velocity` と一致すること
+- `battlefield` 未指定時は初速が付与されないこと（後方互換性）
+
+`backend/tests/unit/test_field_scaling.py` / `test_phase_6_3_field_init.py` の
+既存テストは、上記のフィールド拡張ロジックを踏まえて期待値・テストユニットの
+`sensor_range` を見直した（実際の索敵回避フロアが支配的にならないよう、
+検証したい観点に応じて `sensor_range` を明示するよう変更）。
 
