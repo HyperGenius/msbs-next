@@ -861,10 +861,22 @@ def __init__(
 
 ```
 BattleField を battlefield=BattleField(...) で渡した場合:
-  1. spawn_zones が空 → _generate_default_spawn_zones() でデフォルト領域を生成
-  2. _apply_spawn_zones() で全ユニットをスポーン領域内にランダム配置
-  3. obstacles が空 かつ obstacle_density != "NONE" → _generate_obstacles() で自動生成
+  1. obstacles が空 かつ obstacle_density != "NONE" → _generate_obstacles() で自動生成
+  2. spawn_zones が空 → _generate_default_spawn_zones() でデフォルト領域を生成
+     （対称配置の候補点が障害物と重なる場合、_find_clear_spawn_center() が
+      近傍でジッター探索して回避する）
+  3. ジッターでも回避しきれなかった障害物・明示的な spawn_zones と重複する障害物は
+     _remove_obstacles_overlapping_spawn_zones() で最終的に除去する
+  4. _apply_spawn_zones() で全ユニットをスポーン領域内にランダム配置
 ```
+
+**Issue #437 での変更点（障害物→スポーンの順への変更）:** 旧実装ではスポーン領域を
+先に確定し、障害物生成側がスポーン領域と重なるグリッドセルをスキップしていた。この
+場合、常にスポーン中心の周囲だけが円形に障害物ゼロの「安全地帯」になり、障害物が
+実際の交戦（移動経路・LOS）にほとんど影響しない問題があった。障害物を先に配置する
+順に変更し、スポーン中心側が障害物配置に応じて（対称配置を保ったまま）ジッター移動
+するようにしたことで、障害物の抜け方が毎回異なる非対称な形状になり、障害物がカバー
+や進路の障壁として機能しやすくなった。
 
 ### 14.5 デフォルトスポーン領域
 
@@ -888,7 +900,9 @@ BattleField を battlefield=BattleField(...) で渡した場合:
 | `"DENSE"` | 10 | 0.8 | 60〜120m |
 | `"NONE"` | — | — | 障害物なし |
 
-生成方式: グリッド分割＋ランダムオフセット。スポーン領域と重複する位置には配置しない。
+生成方式: グリッド分割＋ランダムオフセット。障害物はスポーン領域より先に生成されるため、
+生成時点ではスポーン領域を考慮しない（フィールド全体に一様分布する）。スポーン領域との
+重複回避は、スポーン領域決定時のジッター探索・最終フィルタ側で行う（#437）。
 
 ### 14.7 新定数 (`constants.py`)
 
@@ -903,6 +917,10 @@ SPAWN_ZONE_RADIUS_2TEAM: float = 400.0
 SPAWN_ZONE_RADIUS_3TEAM: float = 400.0
 SPAWN_ZONE_RADIUS_4TEAM: float = 300.0
 SPAWN_ZONE_SAMPLE_MAX_TRIES: int = 50
+
+# スポーン中心の障害物回避 (#437)
+SPAWN_CENTER_JITTER_RADIUS: float = 300.0    # 障害物回避のためのジッター探索半径 (m)
+SPAWN_CENTER_SEARCH_MAX_TRIES: int = 30      # 障害物回避位置の探索最大試行回数
 ```
 
 ### 14.8 使用例

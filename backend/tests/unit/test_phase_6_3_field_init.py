@@ -397,6 +397,101 @@ def test_auto_generated_obstacles_not_in_spawn_zones() -> None:
             )
 
 
+def test_default_spawn_zones_5_teams_ring_formation() -> None:
+    """5チーム以上のデフォルトスポーン領域が円周上に均等配置されること."""
+    p = _make_unit("P", "PLAYER", "T0")
+    enemies = [_make_unit(f"E{i}", "ENEMY", f"T{i}") for i in range(1, 5)]
+    sim = BattleSimulator(p, enemies, battlefield=BattleField(obstacle_density="NONE"))
+    zones = sim.battlefield.spawn_zones
+    assert len(zones) == 5
+    for sz in zones:
+        assert sz.radius == SPAWN_ZONE_RADIUS_4TEAM
+
+    # ユニット数に応じて動的に決まる実際のフィールド範囲 (Phase 6-5) を使う
+    map_min, map_max = sim.map_bounds
+    cx = (map_min + map_max) / 2.0
+    cz = (map_min + map_max) / 2.0
+    # 障害物なし (obstacle_density=NONE) のためジッターは発生せず、
+    # 厳密に円周上（フィールド中心からの距離が全チーム一定）に乗ること
+    distances = [
+        math.sqrt((sz.center.x - cx) ** 2 + (sz.center.z - cz) ** 2) for sz in zones
+    ]
+    assert max(distances) - min(distances) < 1e-6
+
+
+def test_5_teams_no_obstacles_in_spawn_zones() -> None:
+    """5チーム以上・障害物ありでも、最終的なスポーン領域は障害物と重ならないこと."""
+    p = _make_unit("P", "PLAYER", "T0")
+    enemies = [_make_unit(f"E{i}", "ENEMY", f"T{i}") for i in range(1, 6)]
+    sim = BattleSimulator(p, enemies, battlefield=BattleField(obstacle_density="DENSE"))
+    assert len(sim.battlefield.spawn_zones) == 6
+    for obs in sim.obstacles:
+        for sz in sim.battlefield.spawn_zones:
+            dx = obs.position.x - sz.center.x
+            dz = obs.position.z - sz.center.z
+            dist = math.sqrt(dx * dx + dz * dz)
+            assert dist >= sz.radius + obs.radius - 1e-6, (
+                f"障害物 {obs.obstacle_id} がスポーン領域 {sz.team_id} と重複: "
+                f"dist={dist:.1f} < radius_sum={sz.radius + obs.radius:.1f}"
+            )
+
+
+def test_obstacles_generated_before_spawn_zones_still_span_field() -> None:
+    """障害物→スポーンの順に生成しても、障害物はフィールド全体に分布すること (#437)."""
+    player = _make_unit("P", "PLAYER", "PT")
+    enemy = _make_unit("E", "ENEMY", "ET")
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="DENSE")
+    )
+    assert len(sim.obstacles) > 0
+    # フィールド中心付近にも障害物が存在しうること（スポーン専用の除外がないため）
+    map_min, map_max = sim.map_bounds
+    field_center = ((map_min + map_max) / 2.0, (map_min + map_max) / 2.0)
+    center_nearby = [
+        obs
+        for obs in sim.obstacles
+        if math.sqrt(
+            (obs.position.x - field_center[0]) ** 2
+            + (obs.position.z - field_center[1]) ** 2
+        )
+        < (map_max - map_min) / 4.0
+    ]
+    assert len(center_nearby) > 0, "フィールド中心付近に障害物が生成されていない"
+
+
+def test_find_clear_spawn_center_result_stays_within_field_margin() -> None:
+    """ジッター後のスポーン中心が radius マージンを保ってフィールド内に収まること.
+
+    GitHub Copilot レビュー指摘（PR #439）の回帰テスト:
+    クランプ範囲が `map_min..map_max` そのものだと、中心が端に寄った場合に
+    スポーン領域の半径ぶんフィールド外へはみ出しうる。
+    """
+    player = _make_unit("P", "PLAYER", "PT")
+    enemy = _make_unit("E", "ENEMY", "ET")
+    sim = BattleSimulator(
+        player, [enemy], battlefield=BattleField(obstacle_density="NONE")
+    )
+    map_min, map_max = sim.map_bounds
+    radius = SPAWN_ZONE_RADIUS_2TEAM
+
+    candidate = (map_min, map_min)  # フィールド最端の候補点
+    # 候補点そのものを覆う障害物を置き、ジッター探索を強制する
+    sim.obstacles = [
+        Obstacle(
+            obstacle_id="blocker",
+            position=Vector3(x=map_min, y=0.0, z=map_min),
+            radius=10.0,
+        )
+    ]
+    rng = np.random.default_rng(1)
+    x, z = sim._find_clear_spawn_center(candidate, radius, rng)
+
+    assert x - radius >= map_min - 1e-6, f"x={x} がフィールド外にはみ出している"
+    assert x + radius <= map_max + 1e-6, f"x={x} がフィールド外にはみ出している"
+    assert z - radius >= map_min - 1e-6, f"z={z} がフィールド外にはみ出している"
+    assert z + radius <= map_max + 1e-6, f"z={z} がフィールド外にはみ出している"
+
+
 def test_auto_generated_obstacles_have_valid_ids() -> None:
     """自動生成された障害物に一意の ID が付与されること."""
     player = _make_unit("P", "PLAYER", "PT")
