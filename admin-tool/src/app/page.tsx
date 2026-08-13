@@ -20,6 +20,11 @@ export default function HomePage() {
               武器マスタ管理
             </SciFiButton>
           </Link>
+          <Link href="/npcs">
+            <SciFiButton className="w-full" variant="secondary">
+              NPCパイロット管理
+            </SciFiButton>
+          </Link>
         </div>
       </SciFiPanel>
     </main>

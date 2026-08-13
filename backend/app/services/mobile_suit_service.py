@@ -1,5 +1,6 @@
 # backend/app/services/mobile_suit_service.py
 import re
+import uuid
 
 from sqlmodel import Session, select
 
@@ -46,7 +47,7 @@ class MobileSuitService:
 
     @staticmethod
     def update_mobile_suit(
-        session: Session, ms_id: str, update_data: MobileSuitUpdate
+        session: Session, ms_id: str | uuid.UUID, update_data: MobileSuitUpdate
     ) -> MobileSuit | None:
         """機体データを更新する."""
         # IDで検索

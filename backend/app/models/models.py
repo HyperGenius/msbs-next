@@ -950,6 +950,75 @@ class Pilot(SQLModel, table=True):
     )
 
 
+# --- NPC Admin Models ---
+
+
+class NpcMobileSuitEntry(SQLModel):
+    """NPC所有機体エントリー定義（管理者用レスポンス）."""
+
+    id: uuid.UUID
+    name: str
+    max_hp: int
+    current_hp: int
+    armor: int
+    mobility: float
+    personality: str | None = None
+    is_ace: bool = False
+    ace_id: str | None = None
+    pilot_name: str | None = None
+    bounty_exp: int = 0
+    bounty_credits: int = 0
+
+
+class NpcPilotEntry(SQLModel):
+    """NPCパイロットエントリー定義（管理者用レスポンス）."""
+
+    id: uuid.UUID
+    user_id: str
+    name: str
+    npc_personality: str | None = None
+    is_ace: bool = False
+    level: int
+    exp: int
+    credits: int
+    skill_points: int
+    status_points: int
+    sht: int
+    mel: int
+    intel: int
+    ref: int
+    tou: int
+    luk: int
+    awq: int
+    mobile_suit_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class NpcPilotDetail(NpcPilotEntry):
+    """NPCパイロット詳細定義（管理者用レスポンス、所有機体一覧付き）."""
+
+    mobile_suits: list[NpcMobileSuitEntry] = Field(default_factory=list)
+
+
+class NpcPilotUpdate(SQLModel):
+    """NPCパイロット更新リクエスト."""
+
+    npc_personality: str | None = None
+    level: int | None = Field(default=None, ge=1)
+    exp: int | None = Field(default=None, ge=0)
+    credits: int | None = Field(default=None, ge=0)
+    skill_points: int | None = Field(default=None, ge=0)
+    status_points: int | None = Field(default=None, ge=0)
+    sht: int | None = Field(default=None, ge=0)
+    mel: int | None = Field(default=None, ge=0)
+    intel: int | None = Field(default=None, ge=0)
+    ref: int | None = Field(default=None, ge=0)
+    tou: int | None = Field(default=None, ge=0)
+    luk: int | None = Field(default=None, ge=0)
+    awq: int | None = Field(default=None, ge=0)
+
+
 class Season(SQLModel, table=True):
     """シーズン管理テーブル."""
 

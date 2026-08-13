@@ -1,8 +1,10 @@
 """管理者専用 API ルーター.
 
-マスター機体データおよびマスター武器データの CRUD エンドポイントを提供する。
+マスター機体データ・マスター武器データ・NPC(Pilot)データの CRUD エンドポイントを提供する。
 全エンドポイントは ADMIN_API_KEY ヘッダー (X-API-Key) による認証が必要。
 """
+
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
@@ -20,10 +22,17 @@ from app.models.models import (
     MasterWeaponEntry,
     MasterWeaponSpec,
     MasterWeaponUpdate,
+    MobileSuitUpdate,
+    NpcMobileSuitEntry,
+    NpcPilotDetail,
+    NpcPilotEntry,
+    NpcPilotUpdate,
+    Pilot,
     Weapon,
 )
 from app.services.combat_simulation_service import CombatSimulationService
 from app.services.mobile_suit_service import MobileSuitService
+from app.services.pilot_service import PilotService
 from app.services.weapon_service import WeaponService
 
 router = APIRouter(
@@ -41,6 +50,12 @@ weapon_router = APIRouter(
 simulation_router = APIRouter(
     prefix="/api/admin",
     tags=["admin-simulation"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
+npc_router = APIRouter(
+    prefix="/api/admin/npcs",
+    tags=["admin-npcs"],
     dependencies=[Depends(verify_admin_api_key)],
 )
 
@@ -268,3 +283,167 @@ def simulate_combat(data: CombatSimulationRequest) -> CombatSimulationResponse:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         ) from e
+
+
+# ===========================================================
+# NPC(Pilot) データ管理 エンドポイント (Issue #441)
+# ===========================================================
+
+
+def _pilot_to_entry(pilot: Pilot) -> NpcPilotEntry:
+    """Pilot モデルを NpcPilotEntry レスポンスに変換する."""
+    return NpcPilotEntry(
+        id=pilot.id,
+        user_id=pilot.user_id,
+        name=pilot.name,
+        npc_personality=pilot.npc_personality,
+        is_ace=PilotService.is_ace_pilot(pilot),
+        level=pilot.level,
+        exp=pilot.exp,
+        credits=pilot.credits,
+        skill_points=pilot.skill_points,
+        status_points=pilot.status_points,
+        sht=pilot.sht,
+        mel=pilot.mel,
+        intel=pilot.intel,
+        ref=pilot.ref,
+        tou=pilot.tou,
+        luk=pilot.luk,
+        awq=pilot.awq,
+        mobile_suit_count=0,
+        created_at=pilot.created_at,
+        updated_at=pilot.updated_at,
+    )
+
+
+@npc_router.get("", response_model=list[NpcPilotEntry])
+def list_npcs(
+    personality: str | None = None,
+    min_level: int | None = None,
+    max_level: int | None = None,
+    ace_only: bool | None = None,
+    session: Session = Depends(get_session),
+) -> list[NpcPilotEntry]:
+    """NPC(is_npc=True)パイロット一覧を返す.
+
+    - `personality`: 性格タイプで絞り込む (AGGRESSIVE/CAUTIOUS/SNIPER)
+    - `min_level` / `max_level`: レベル範囲で絞り込む
+    - `ace_only`: True でエース由来のNPCのみ、False で通常NPCのみに絞り込む
+    """
+    pilots = PilotService.list_npc_pilots(
+        session,
+        personality=personality,
+        min_level=min_level,
+        max_level=max_level,
+        ace_only=ace_only,
+    )
+    counts = PilotService.count_owned_mobile_suits_by_user_id(
+        session, [pilot.user_id for pilot in pilots]
+    )
+    entries = []
+    for pilot in pilots:
+        entry = _pilot_to_entry(pilot)
+        entry.mobile_suit_count = counts.get(pilot.user_id, 0)
+        entries.append(entry)
+    return entries
+
+
+@npc_router.get("/{pilot_id}", response_model=NpcPilotDetail)
+def get_npc(
+    pilot_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> NpcPilotDetail:
+    """NPCパイロットの詳細（所有機体一覧付き）を返す."""
+    pilot = PilotService.get_npc_pilot_by_id(session, pilot_id)
+    if pilot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"NPC pilot '{pilot_id}' not found.",
+        )
+    mobile_suits = PilotService.get_npc_owned_mobile_suits(session, pilot.user_id)
+    entry = _pilot_to_entry(pilot)
+    return NpcPilotDetail(
+        **entry.model_dump(exclude={"mobile_suit_count"}),
+        mobile_suit_count=len(mobile_suits),
+        mobile_suits=[
+            NpcMobileSuitEntry(
+                id=ms.id,
+                name=ms.name,
+                max_hp=ms.max_hp,
+                current_hp=ms.current_hp,
+                armor=ms.armor,
+                mobility=ms.mobility,
+                personality=ms.personality,
+                is_ace=ms.is_ace,
+                ace_id=ms.ace_id,
+                pilot_name=ms.pilot_name,
+                bounty_exp=ms.bounty_exp,
+                bounty_credits=ms.bounty_credits,
+            )
+            for ms in mobile_suits
+        ],
+    )
+
+
+@npc_router.put("/{pilot_id}", response_model=NpcPilotDetail)
+def update_npc(
+    pilot_id: uuid.UUID,
+    data: NpcPilotUpdate,
+    session: Session = Depends(get_session),
+) -> NpcPilotDetail:
+    """NPCパイロットのステータス（レベル/exp/credits/各種能力値等）を更新する."""
+    updated = PilotService.update_npc_pilot(session, pilot_id, data)
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"NPC pilot '{pilot_id}' not found.",
+        )
+    return get_npc(pilot_id, session)
+
+
+@npc_router.put("/{pilot_id}/mobile-suits/{ms_id}", response_model=NpcMobileSuitEntry)
+def update_npc_mobile_suit(
+    pilot_id: uuid.UUID,
+    ms_id: uuid.UUID,
+    data: MobileSuitUpdate,
+    session: Session = Depends(get_session),
+) -> NpcMobileSuitEntry:
+    """NPCパイロットが所有する機体のステータスを更新する.
+
+    - `ms_id` が `pilot_id` の所有機体でない場合は 404 を返す
+    """
+    pilot = PilotService.get_npc_pilot_by_id(session, pilot_id)
+    if pilot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"NPC pilot '{pilot_id}' not found.",
+        )
+    owned_ids = {
+        ms.id for ms in PilotService.get_npc_owned_mobile_suits(session, pilot.user_id)
+    }
+    if ms_id not in owned_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Mobile suit '{ms_id}' not owned by NPC pilot '{pilot_id}'.",
+        )
+
+    updated = MobileSuitService.update_mobile_suit(session, ms_id, data)
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Mobile suit '{ms_id}' not found.",
+        )
+    return NpcMobileSuitEntry(
+        id=updated.id,
+        name=updated.name,
+        max_hp=updated.max_hp,
+        current_hp=updated.current_hp,
+        armor=updated.armor,
+        mobility=updated.mobility,
+        personality=updated.personality,
+        is_ace=updated.is_ace,
+        ace_id=updated.ace_id,
+        pilot_name=updated.pilot_name,
+        bounty_exp=updated.bounty_exp,
+        bounty_credits=updated.bounty_credits,
+    )

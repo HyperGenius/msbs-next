@@ -3,14 +3,22 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from app.core.gamedata import get_shop_listing_by_id
+from app.core.npc_data import ACE_PILOTS
 from app.core.skills import SKILL_COST, get_skill_definition
-from app.models.models import MobileSuit, Pilot
+from app.models.models import MobileSuit, NpcPilotUpdate, Pilot
 
 # レベルアップ時に付与するステータスポイント数
 STATUS_POINTS_PER_LEVEL: int = 2
+
+# npc_data.ACE_PILOTS に由来するパイロット名の集合。
+# エースはMobileSuit(user_id=None)として都度生成されPilotテーブルに永続化されないため、
+# 名前の一致による best-effort な識別に留める（Issue #441）。
+ACE_PILOT_NAMES: frozenset[str] = frozenset(
+    str(ace["pilot_name"]) for ace in ACE_PILOTS
+)
 
 
 class PilotService:
@@ -72,6 +80,134 @@ class PilotService:
         """
         statement = select(Pilot).where(Pilot.user_id == user_id, Pilot.is_npc == True)  # noqa: E712
         return self.session.exec(statement).first()
+
+    @staticmethod
+    def list_npc_pilots(
+        session: Session,
+        personality: str | None = None,
+        min_level: int | None = None,
+        max_level: int | None = None,
+        ace_only: bool | None = None,
+    ) -> list[Pilot]:
+        """NPCパイロット一覧を取得する（管理者用）.
+
+        Args:
+            session: データベースセッション
+            personality: 性格タイプで絞り込む (AGGRESSIVE/CAUTIOUS/SNIPER)
+            min_level: レベル下限（この値以上）
+            max_level: レベル上限（この値以下）
+            ace_only: True の場合エース由来のNPCのみ、False の場合通常NPCのみに絞り込む
+
+        Returns:
+            list[Pilot]: NPCパイロットのリスト
+        """
+        statement = select(Pilot).where(Pilot.is_npc == True)  # noqa: E712
+        if personality is not None:
+            statement = statement.where(Pilot.npc_personality == personality)
+        if min_level is not None:
+            statement = statement.where(Pilot.level >= min_level)
+        if max_level is not None:
+            statement = statement.where(Pilot.level <= max_level)
+        if ace_only is True:
+            statement = statement.where(Pilot.name.in_(ACE_PILOT_NAMES))  # type: ignore[attr-defined]
+        elif ace_only is False:
+            statement = statement.where(Pilot.name.not_in(ACE_PILOT_NAMES))  # type: ignore[attr-defined]
+
+        return list(session.exec(statement).all())
+
+    @staticmethod
+    def get_npc_pilot_by_id(session: Session, pilot_id: uuid.UUID) -> Pilot | None:
+        """NPCパイロットをidで取得する（管理者用）.
+
+        Args:
+            session: データベースセッション
+            pilot_id: パイロットのUUID
+
+        Returns:
+            Pilot | None: NPCパイロット。見つからない場合は None
+        """
+        statement = select(Pilot).where(
+            Pilot.id == pilot_id,
+            Pilot.is_npc == True,  # noqa: E712
+        )
+        return session.exec(statement).first()
+
+    @staticmethod
+    def count_owned_mobile_suits_by_user_id(
+        session: Session, user_ids: list[str]
+    ) -> dict[str, int]:
+        """複数NPCの所有機体数を一括取得する（管理者用、一覧表示のN+1回避）.
+
+        Args:
+            session: データベースセッション
+            user_ids: NPC の合成 user_id (npc-{uuid} 形式) のリスト
+
+        Returns:
+            dict[str, int]: user_id -> 所有機体数。0件のuser_idはキーに含まれない
+        """
+        if not user_ids:
+            return {}
+        statement = (
+            select(MobileSuit.user_id, func.count(MobileSuit.id))  # type: ignore[arg-type]
+            .where(MobileSuit.user_id.in_(user_ids))  # type: ignore[union-attr]
+            .group_by(MobileSuit.user_id)  # type: ignore[arg-type]
+        )
+        return dict(session.exec(statement).all())  # type: ignore[arg-type]
+
+    @staticmethod
+    def get_npc_owned_mobile_suits(session: Session, user_id: str) -> list[MobileSuit]:
+        """NPCパイロットが所有する機体一覧を取得する（管理者用）.
+
+        Args:
+            session: データベースセッション
+            user_id: NPC の合成 user_id (npc-{uuid} 形式)
+
+        Returns:
+            list[MobileSuit]: 所有機体のリスト
+        """
+        statement = select(MobileSuit).where(MobileSuit.user_id == user_id)
+        return list(session.exec(statement).all())
+
+    @staticmethod
+    def is_ace_pilot(pilot: Pilot) -> bool:
+        """パイロットがエースパイロット由来かどうかを判定する（名前一致によるbest-effort判定）.
+
+        Args:
+            pilot: 判定対象のパイロット
+
+        Returns:
+            bool: エース由来のNPCの場合 True
+        """
+        return pilot.name in ACE_PILOT_NAMES
+
+    @staticmethod
+    def update_npc_pilot(
+        session: Session, pilot_id: uuid.UUID, update_data: NpcPilotUpdate
+    ) -> Pilot | None:
+        """NPCパイロットのステータスを更新する（管理者用）.
+
+        Args:
+            session: データベースセッション
+            pilot_id: パイロットのUUID
+            update_data: 更新データ
+
+        Returns:
+            Pilot | None: 更新後のパイロット。見つからない場合は None
+        """
+        pilot = PilotService.get_npc_pilot_by_id(session, pilot_id)
+        if pilot is None:
+            return None
+
+        update_dict = update_data.model_dump(exclude_unset=True)
+        for key, value in update_dict.items():
+            setattr(pilot, key, value)
+        pilot.updated_at = datetime.now(UTC)
+
+        session.add(pilot)
+        session.commit()
+        session.refresh(pilot)
+
+        return pilot
 
     def get_or_create_pilot(self, user_id: str, name: str) -> Pilot:
         """パイロットを取得または作成する.
