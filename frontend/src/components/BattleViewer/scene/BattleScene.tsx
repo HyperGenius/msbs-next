@@ -15,6 +15,7 @@ import { ProjectileMesh, isBeamWeapon } from "./ProjectileMesh";
 import { HitEffectMesh } from "./HitEffectMesh";
 import { BattleEventEffect, WarningType } from "../types";
 import { Obstacle } from "@/types/battle";
+import { getEnvironmentColor } from "../utils";
 
 // MobileSuitMesh と同じスケール定数（座標変換の一貫性）
 const POSITION_SCALE = 0.05;
@@ -360,6 +361,9 @@ export function BattleScene({
         >
             {/* モーダルオープン時に自機MSを中心にカメラを初期配置 */}
             <CameraInitializer px={px} py={py} pz={pz} controlsRef={controlsRef} />
+
+            {/* 距離フォグ: 背景色(getEnvironmentColor)と同色にして遠景を自然に馴染ませ、奥行き感を出す */}
+            <fog attach="fog" args={[getEnvironmentColor(environment), 90, 220]} />
 
             <ambientLight intensity={0.5} />
             <pointLight position={[10, 10, 10]} intensity={1.5} />
