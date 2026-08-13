@@ -318,6 +318,7 @@ POST /api/battle/simulate レスポンスの obstacles_info
 - `obstacles_info` が `null` / `undefined` の場合は何も描画しない（既存バトル履歴への後方互換性）
 - バックエンドで障害物が生成されない設定（`obstacle_density: "NONE"` など）では `obstacles_info` は `null` として保存される
 - `/api/battle/simulate` の `BattleResponse` にも `obstacles_info` フィールドが含まれる（バトル実行直後のライブ観戦画面で障害物を描画するために必要）
+- `BattleResult` の生成箇所は `backend/main.py`（即時実行）と `backend/scripts/run_batch.py`（デイリーバトルロイヤル等のバッチ実行）の2箇所あり、`obstacles_info` の設定も両方で必要（片方だけだと `NULL` のままになる）。障害物のシリアライズ処理は `backend/app/engine/battle_utils.py` の `serialize_obstacles()` に共通化されているため、両呼び出し元はこれを呼ぶだけでよい
 
 ---
 
@@ -651,6 +652,7 @@ POST /api/battle/simulate レスポンスの obstacles_info
 - `obstacles_info` が `null` / `undefined` の場合は何も描画しない（既存バトル履歴への後方互換性）
 - バックエンドで障害物が生成されない設定（`obstacle_density: "NONE"` など）では `obstacles_info` は `null` として保存される
 - `/api/battle/simulate` の `BattleResponse` にも `obstacles_info` フィールドが含まれる（バトル実行直後のライブ観戦画面で障害物を描画するために必要）
+- `BattleResult` の生成箇所は `backend/main.py`（即時実行）と `backend/scripts/run_batch.py`（デイリーバトルロイヤル等のバッチ実行）の2箇所あり、`obstacles_info` の設定も両方で必要（片方だけだと `NULL` のままになる）。障害物のシリアライズ処理は `backend/app/engine/battle_utils.py` の `serialize_obstacles()` に共通化されているため、両呼び出し元はこれを呼ぶだけでよい
 
 ---
 
