@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from sqlmodel import Session, select
 
-from app.core.npc_data import ACE_PILOTS, PERSONALITY_TYPES
+from app.core.npc_data import ACE_PILOTS, PERSONALITY_TYPES, generate_npc_pilot_name
 from app.models.models import (
     BattleEntry,
     BattleRoom,
@@ -367,6 +367,7 @@ class MatchingService:
 
         npc = MobileSuit(
             name=name,
+            pilot_name=generate_npc_pilot_name(),
             max_hp=max_hp,
             current_hp=max_hp,
             armor=armor,

@@ -1,5 +1,21 @@
 # NPCデータ管理画面 — 管理者専用エディタ（Issue #441）
 
+## パイロット名について（Issue #444）
+
+通常NPC（非エース）の `Pilot.name` は `app/core/npc_data.py` の `generate_npc_pilot_name()`
+（`NPC_PILOT_FIRST_NAMES` × `NPC_PILOT_LAST_NAMES` からランダムに1件ずつ選び `"名 姓"` を生成、400通り）
+で採番される。`MatchingService._create_npc_mobile_suit()` が生成する `MobileSuit.pilot_name` にこの値を
+設定しており、NPCパイロット作成時（`create_room_matches()` 内の
+`pilot_name = npc_suit.pilot_name or npc_suit.name`）にそのまま使われる。
+
+以前は `MobileSuit.pilot_name` が未設定のままだったため、上記フォールバックにより機体名
+（例: `"Zaku II (NPC)"`）がパイロット名として保存されてしまっていた。既存データはマイグレーション
+`alembic/versions/x7y8z9a0b1c2_backfill_npc_pilot_human_names.py` で一括バックフィル済み
+（エース由来NPCは `ACE_PILOT_NAMES` に含まれる名前のため対象外）。
+
+エースNPCのパイロット名は引き続き `npc_data.py` の `ACE_PILOTS[*]["pilot_name"]`（例: `"Char Aznable"`）
+由来で、本セクションの対象外。
+
 ## 概要
 
 NPC（`Pilot.is_npc=True`）を、通常ユーザと同じ `pilots`/`mobile_suits` テーブルを共用したまま、
