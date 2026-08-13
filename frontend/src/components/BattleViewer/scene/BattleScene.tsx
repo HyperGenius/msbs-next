@@ -118,13 +118,13 @@ function TargetLine({
     const lineObject = useMemo(() => {
         const p1 = new THREE.Vector3(
             playerPos.x * POSITION_SCALE,
-            playerPos.z * POSITION_SCALE,
             playerPos.y * POSITION_SCALE,
+            playerPos.z * POSITION_SCALE,
         );
         const p2 = new THREE.Vector3(
             targetPos.x * POSITION_SCALE,
-            targetPos.z * POSITION_SCALE,
             targetPos.y * POSITION_SCALE,
+            targetPos.z * POSITION_SCALE,
         );
         const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         const material = new THREE.LineDashedMaterial({
@@ -157,13 +157,13 @@ function AttackLine({
     const lineObject = useMemo(() => {
         const p1 = new THREE.Vector3(
             fromPos.x * POSITION_SCALE,
-            fromPos.z * POSITION_SCALE,
             fromPos.y * POSITION_SCALE,
+            fromPos.z * POSITION_SCALE,
         );
         const p2 = new THREE.Vector3(
             toPos.x * POSITION_SCALE,
-            toPos.z * POSITION_SCALE,
             toPos.y * POSITION_SCALE,
+            toPos.z * POSITION_SCALE,
         );
         const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         let material: THREE.LineBasicMaterial | THREE.LineDashedMaterial;
@@ -207,13 +207,13 @@ function LosLine({
     const lineObject = useMemo(() => {
         const p1 = new THREE.Vector3(
             playerPos.x * POSITION_SCALE,
-            playerPos.z * POSITION_SCALE,
             playerPos.y * POSITION_SCALE,
+            playerPos.z * POSITION_SCALE,
         );
         const p2 = new THREE.Vector3(
             enemyPos.x * POSITION_SCALE,
-            enemyPos.z * POSITION_SCALE,
             enemyPos.y * POSITION_SCALE,
+            enemyPos.z * POSITION_SCALE,
         );
         const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         const material = new THREE.LineDashedMaterial({
@@ -252,8 +252,8 @@ export function BattleScene({
     // 自機MS初期Three.js座標をマウント時のみキャプチャ（MobileSuitMesh と同じ軸変換）
     const initialPos = useRef({
         x: playerState.pos.x * POSITION_SCALE,
-        y: playerState.pos.z * POSITION_SCALE, // game.z → Three.js の高さ方向 y
-        z: playerState.pos.y * POSITION_SCALE, // game.y → Three.js の奥行き方向 z
+        y: playerState.pos.y * POSITION_SCALE, // game.y（高度、通常0）→ Three.js の高さ方向 y
+        z: playerState.pos.z * POSITION_SCALE, // game.z（地面平面の第2軸）→ Three.js の奥行き方向 z
     });
     const { x: px, y: py, z: pz } = initialPos.current;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

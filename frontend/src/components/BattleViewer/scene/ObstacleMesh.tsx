@@ -16,15 +16,15 @@ interface ObstacleMeshProps {
 
 export function ObstacleMesh({ obstacle, environment = "SPACE", isBlocking = false }: ObstacleMeshProps) {
     const x = obstacle.position.x * OBSTACLE_SCALE;
-    const y = obstacle.position.z * OBSTACLE_SCALE;
-    const z = obstacle.position.y * OBSTACLE_SCALE;
+    const y = obstacle.position.y * OBSTACLE_SCALE;
+    const z = obstacle.position.z * OBSTACLE_SCALE;
     const r = obstacle.radius * OBSTACLE_SCALE;
     const h = Math.max(obstacle.height * OBSTACLE_SCALE, r * 2);
 
     const normalColor = environment === "GROUND" ? "#4a5a4a" : "#5a4a3a";
     const color = isBlocking ? "#8a3a3a" : normalColor;
-    // 輪郭線: 塗りと同じ色相を明るくした色を使用（isBlocking は既存パレットの赤 #ff4444 を流用）
-    const normalEdgeColor = environment === "GROUND" ? "#8fb88f" : "#b89b78";
+    // 輪郭線: SPACEはグレー(#808080)、GROUNDは塗りと同色相を明るくした色（isBlocking は既存パレットの赤 #ff4444 を流用）
+    const normalEdgeColor = environment === "GROUND" ? "#8fb88f" : "#808080";
     const edgeColor = isBlocking ? "#ff4444" : normalEdgeColor;
 
     return (

@@ -38,8 +38,8 @@ export function HitEffectMesh({
     // ゲーム座標 → Three.js 座標変換
     const center3D = new THREE.Vector3(
         position.x * POSITION_SCALE,
-        position.z * POSITION_SCALE,
         position.y * POSITION_SCALE,
+        position.z * POSITION_SCALE,
     );
 
     // 各パーティクルの初期方向ベクトルを事前計算（球面上にランダム分布）

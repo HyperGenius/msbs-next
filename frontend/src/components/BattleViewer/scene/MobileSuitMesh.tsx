@@ -46,7 +46,8 @@ export function MobileSuitMesh({
     isSelf?: boolean;
 }) {
     const scale = 0.05;
-    const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
+    // ゲーム座標(x,z=地面平面, y=高度)→Three.js座標(x,y=高さ,z=奥行き)は x→x, y→y, z→z でそのまま対応する
+    const vec = new THREE.Vector3(position.x * scale, position.y * scale, position.z * scale);
     const color = getHpColor(currentHp, maxHp);
 
     // ホバリングアニメーション用グループ ref (B-4)
@@ -123,13 +124,11 @@ export function MobileSuitMesh({
     const headingArrow = useMemo(() => {
         if (heading === undefined) return null;
         const headingRad = (heading * Math.PI) / 180;
-        // ゲーム座標→Three.js座標: game.x→X, game.z→Y, game.y(高さ=0)→Z
-        // バックエンド: direction=[cos,0,sin] (XZ平面) → Three.js: (cos, sin, 0) (XY平面)
+        // バックエンド: direction=[cos,0,sin] (game.x,z の地面平面) → Three.js座標もそのまま (cos, 0, sin)
         const dir = new THREE.Vector3(
-            Math.cos(headingRad), Math.sin(headingRad), 0
+            Math.cos(headingRad), 0, Math.sin(headingRad)
         ).normalize();
         return new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), 4, 0x4488ff, 1.5, 1.0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [heading]);
 
     // 撃破されたターンのみ💥を表示（前のターンでHPが残っていた場合のみ）

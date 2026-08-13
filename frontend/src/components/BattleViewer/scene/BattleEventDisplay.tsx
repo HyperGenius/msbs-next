@@ -15,7 +15,7 @@ export function BattleEventDisplay({
     event: BattleEventEffect | null;
 }) {
     const scale = 0.05;
-    const vec = new THREE.Vector3(position.x * scale, position.z * scale, position.y * scale);
+    const vec = new THREE.Vector3(position.x * scale, position.y * scale, position.z * scale);
     
     if (!event) return null;
     // attack_line 型はテキスト表示なし（Three.js ラインのみ描画）

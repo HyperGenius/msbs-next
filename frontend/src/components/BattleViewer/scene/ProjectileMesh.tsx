@@ -38,16 +38,16 @@ export function ProjectileMesh({
     const meshRef = useRef<THREE.Mesh>(null);
     const completedRef = useRef(false);
 
-    // ゲーム座標 → Three.js 座標変換（BattleScene の軸変換と統一: x→X, z→Y, y→Z）
+    // ゲーム座標 → Three.js 座標変換（BattleScene の軸変換と統一: x→X, y→Y, z→Z）
     const from3D = new THREE.Vector3(
         fromPos.x * POSITION_SCALE,
-        fromPos.z * POSITION_SCALE,
         fromPos.y * POSITION_SCALE,
+        fromPos.z * POSITION_SCALE,
     );
     const to3D = new THREE.Vector3(
         toPos.x * POSITION_SCALE,
-        toPos.z * POSITION_SCALE,
         toPos.y * POSITION_SCALE,
+        toPos.z * POSITION_SCALE,
     );
 
     useFrame(() => {
