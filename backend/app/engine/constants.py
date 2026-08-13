@@ -125,6 +125,10 @@ SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR: float = (
     0.5  # 最小間隔緩和係数（試行失敗時に min_dist に乗算）
 )
 
+# スポーン中心の障害物回避定数 (Issue #437: 障害物→スポーンの順に生成変更)
+SPAWN_CENTER_JITTER_RADIUS: float = 300.0  # 障害物回避のためのジッター探索半径 (m)
+SPAWN_CENTER_SEARCH_MAX_TRIES: int = 30  # 障害物回避位置の探索最大試行回数
+
 # フィールドスケーリング定数 (Phase 6-5)
 AREA_PER_UNIT: float = 250_000.0  # 1ユニットあたりの面積 (m²) = 500m × 500m
 MIN_FIELD_SIZE: float = 2000.0  # 最小フィールド辺長 (m)

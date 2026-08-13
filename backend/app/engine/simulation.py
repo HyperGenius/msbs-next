@@ -18,6 +18,8 @@ from app.engine.constants import (
     MIN_FIELD_SIZE,
     MOVE_LOG_MIN_DIST,
     OBSTACLE_GRID_PARAMS,
+    SPAWN_CENTER_JITTER_RADIUS,
+    SPAWN_CENTER_SEARCH_MAX_TRIES,
     SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR,
     SPAWN_ZONE_RADIUS_2TEAM,
     SPAWN_ZONE_RADIUS_3TEAM,
@@ -303,28 +305,10 @@ class BattleSimulator(
             for team_id in team_ids
         }
 
-        # スポーン領域の解決と適用 (Phase 6-3)
+        # 障害物・スポーン領域の解決と適用 (Phase 6-3)
         # battlefield が明示的に渡された場合のみ自動生成・適用する（後方互換性）
         if self._battlefield_explicit:
-            if not self.battlefield.spawn_zones:
-                spawn_zones = self._generate_default_spawn_zones()
-                self.battlefield = BattleField(
-                    obstacles=self.battlefield.obstacles,
-                    spawn_zones=spawn_zones,
-                    obstacle_density=self.battlefield.obstacle_density,
-                )
-            self._apply_spawn_zones()
-
-            # 障害物の自動生成 (Phase 6-3)
-            # obstacles が空かつ obstacle_density != "NONE" のとき自動生成
-            if not self.obstacles and self.battlefield.obstacle_density != "NONE":
-                generated = self._generate_obstacles()
-                self.battlefield = BattleField(
-                    obstacles=generated,
-                    spawn_zones=self.battlefield.spawn_zones,
-                    obstacle_density=self.battlefield.obstacle_density,
-                )
-                self.obstacles = self.battlefield.obstacles
+            self._resolve_obstacles_and_spawn_zones()
 
         # シグモイドダメージ計算キャッシュ: 全ユニット分を一括計算 (Phase E-1)
         self._build_combat_multiplier_cache()
@@ -333,8 +317,50 @@ class BattleSimulator(
     # Phase 6-3: スポーン領域・障害物自動生成メソッド
     # ---------------------------------------------------------------------------
 
+    def _resolve_obstacles_and_spawn_zones(self) -> None:
+        """障害物・スポーン領域を解決し、self.battlefield / self.obstacles に反映する.
+
+        Issue #437: 障害物を先に配置し、スポーン領域はその配置を踏まえて決定する
+        （障害物→スポーンの順）。これにより障害物が実際の交戦エリアに影響を持つ。
+        最終的に、ジッター探索で避けきれなかった障害物や明示的に渡されたスポーン
+        領域と重なる障害物を除去し、ユニットが障害物に埋まって出現しないことを保証する。
+        """
+        # 障害物の自動生成（obstacles が空かつ obstacle_density != "NONE" のとき）
+        if not self.obstacles and self.battlefield.obstacle_density != "NONE":
+            generated = self._generate_obstacles()
+            self.battlefield = BattleField(
+                obstacles=generated,
+                spawn_zones=self.battlefield.spawn_zones,
+                obstacle_density=self.battlefield.obstacle_density,
+            )
+            self.obstacles = self.battlefield.obstacles
+
+        # スポーン領域はこの時点の障害物配置を踏まえて決定する
+        # （デフォルト生成の場合は _generate_default_spawn_zones 内でジッター回避する）
+        spawn_zones = (
+            self.battlefield.spawn_zones or self._generate_default_spawn_zones()
+        )
+
+        cleared_obstacles = (
+            self._remove_obstacles_overlapping_spawn_zones(self.obstacles, spawn_zones)
+            if self.obstacles and spawn_zones
+            else self.obstacles
+        )
+
+        self.battlefield = BattleField(
+            obstacles=cleared_obstacles,
+            spawn_zones=spawn_zones,
+            obstacle_density=self.battlefield.obstacle_density,
+        )
+        self.obstacles = self.battlefield.obstacles
+
+        self._apply_spawn_zones()
+
     def _generate_default_spawn_zones(self) -> list[SpawnZone]:
         """チーム数とマップサイズに応じたデフォルトスポーン領域を生成する (Phase 6-3).
+
+        障害物は本メソッドの実行前に生成済みであるため (#437)、各チームの対称配置
+        候補点が障害物と重なる場合は `_find_clear_spawn_center` で近傍の空き位置を探索する。
 
         Returns:
             生成されたスポーン領域リスト
@@ -389,6 +415,11 @@ class BattleSimulator(
             ]
             radius = SPAWN_ZONE_RADIUS_4TEAM
 
+        rng = np.random.default_rng()
+        centers = [
+            self._find_clear_spawn_center(center, radius, rng) for center in centers
+        ]
+
         return [
             SpawnZone(
                 team_id=team_id,
@@ -397,6 +428,93 @@ class BattleSimulator(
             )
             for team_id, (cx, cz) in zip(team_ids, centers, strict=True)
         ]
+
+    @staticmethod
+    def _remove_obstacles_overlapping_spawn_zones(
+        obstacles: list[Obstacle], spawn_zones: list[SpawnZone]
+    ) -> list[Obstacle]:
+        """スポーン領域と重なる障害物を除去する (#437 の最終保証フォールバック).
+
+        `_find_clear_spawn_center` のジッター探索は障害物密度が高い狭いフィールド
+        では回避に失敗する場合がある（フィールド全体が障害物で埋まっているなど）。
+        本メソッドは最終的な spawn_zones と障害物リストを突き合わせ、重なりが残って
+        いる障害物を取り除くことで、ユニットが障害物に埋まって出現しないことを保証する。
+
+        Args:
+            obstacles: 障害物リスト
+            spawn_zones: 最終的なスポーン領域リスト（自動生成・明示指定いずれも可）
+
+        Returns:
+            スポーン領域と重ならない障害物のみのリスト
+        """
+        return [
+            obs
+            for obs in obstacles
+            if not any(
+                math.sqrt(
+                    (obs.position.x - sz.center.x) ** 2
+                    + (obs.position.z - sz.center.z) ** 2
+                )
+                < sz.radius + obs.radius
+                for sz in spawn_zones
+            )
+        ]
+
+    @staticmethod
+    def _spawn_center_overlaps_obstacles(
+        x: float, z: float, radius: float, obstacles: list[Obstacle]
+    ) -> bool:
+        """スポーン中心候補が、いずれかの障害物と重なるかを判定する (#437)."""
+        for obs in obstacles:
+            dist = math.sqrt((x - obs.position.x) ** 2 + (z - obs.position.z) ** 2)
+            if dist < radius + obs.radius:
+                return True
+        return False
+
+    def _find_clear_spawn_center(
+        self,
+        candidate: tuple[float, float],
+        radius: float,
+        rng: np.random.Generator,
+    ) -> tuple[float, float]:
+        """スポーン中心候補が障害物と重なる場合、近傍で重ならない位置を探索する (#437).
+
+        対称配置（対角・三角形・四隅・円周）の形状を大きく崩さないよう、候補点を
+        中心とした半径 SPAWN_CENTER_JITTER_RADIUS 以内でジッターさせながら再探索する。
+        試行上限に達した場合は候補点をそのまま返す（フィールド全体が障害物で
+        埋め尽くされるような極端なケースでのみ発生しうる）。
+
+        Args:
+            candidate: 対称配置から算出された候補中心座標 (x, z)
+            radius: スポーン領域の半径 (m)
+            rng: 乱数生成器
+
+        Returns:
+            障害物と重ならない中心座標 (x, z)。見つからない場合は candidate をそのまま返す。
+        """
+        cx, cz = candidate
+        if not self.obstacles or not self._spawn_center_overlaps_obstacles(
+            cx, cz, radius, self.obstacles
+        ):
+            return candidate
+
+        map_min, map_max = self.map_bounds
+        for _ in range(SPAWN_CENTER_SEARCH_MAX_TRIES):
+            angle = rng.uniform(0.0, 2.0 * math.pi)
+            dist = rng.uniform(0.0, SPAWN_CENTER_JITTER_RADIUS)
+            x = min(max(cx + dist * math.cos(angle), map_min), map_max)
+            z = min(max(cz + dist * math.sin(angle), map_min), map_max)
+            if not self._spawn_center_overlaps_obstacles(x, z, radius, self.obstacles):
+                return (x, z)
+
+        logger.warning(
+            "スポーン中心候補 (%.1f, %.1f) 付近で障害物を回避できる位置が"
+            "見つかりませんでした (%d 回試行)。候補点をそのまま使用します。",
+            cx,
+            cz,
+            SPAWN_CENTER_SEARCH_MAX_TRIES,
+        )
+        return candidate
 
     @staticmethod
     def _sample_position_in_zone(
@@ -492,7 +610,9 @@ class BattleSimulator(
         """障害物をグリッド分割＋ランダムオフセット方式で自動生成する (Phase 6-3).
 
         フィールドを N×N グリッドに分割し、各セルに確率 p で障害物を配置する。
-        スポーン領域と重複する位置には配置しない。
+        本メソッドはスポーン領域の生成前に実行される (#437)。スポーン領域は
+        `_generate_default_spawn_zones` 側でこの障害物配置を踏まえて決定される
+        ため、ここではスポーン領域との重複回避は行わない。
 
         Returns:
             生成された障害物リスト
@@ -510,7 +630,6 @@ class BattleSimulator(
         map_min, map_max = self.map_bounds
         cell_size = (map_max - map_min) / n
 
-        spawn_zones = self.battlefield.spawn_zones
         obstacles: list[Obstacle] = []
         rng = np.random.default_rng()
         obs_counter = 0
@@ -529,19 +648,6 @@ class BattleSimulator(
                 obs_x = cell_cx + ox
                 obs_z = cell_cz + oz
                 obs_radius = float(rng.uniform(radius_min, radius_max))
-
-                # スポーン領域との重複チェック
-                overlaps_spawn = False
-                for sz in spawn_zones:
-                    dist = math.sqrt(
-                        (obs_x - sz.center.x) ** 2 + (obs_z - sz.center.z) ** 2
-                    )
-                    if dist < sz.radius + obs_radius:
-                        overlaps_spawn = True
-                        break
-
-                if overlaps_spawn:
-                    continue
 
                 obstacles.append(
                     Obstacle(
