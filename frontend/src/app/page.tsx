@@ -86,6 +86,7 @@ export default function Home() {
     playerData,
     enemiesData,
     obstaclesData,
+    mapBounds,
     rewards,
     currentEnvironment,
     startBattle,
@@ -153,6 +154,7 @@ export default function Home() {
               player={playerData}
               enemies={enemiesData}
               obstacles={obstaclesData}
+              mapBounds={mapBounds}
               currentTimestamp={currentTimestamp}
               environment={currentEnvironment}
             />

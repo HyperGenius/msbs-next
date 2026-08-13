@@ -109,6 +109,7 @@ class BattleResponse(BaseModel):
     enemies_info: list[MobileSuit]
     obstacles_info: list[dict] | None = None
     rewards: BattleRewards | None = None
+    map_bounds: tuple[float, float] | None = None
 
 
 # --- API Endpoints ---
@@ -352,6 +353,7 @@ async def simulate_battle(
         enemies_info=[e.model_dump() for e in enemies],
         obstacles_info=obstacles_data,
         ms_snapshot=player.model_dump(),
+        map_bounds=list(sim.map_bounds),
         kills=kills,
         exp_gained=exp_gained,
         credits_gained=credits_gained,
@@ -372,6 +374,7 @@ async def simulate_battle(
         enemies_info=enemies,
         obstacles_info=obstacles_data,
         rewards=rewards,
+        map_bounds=sim.map_bounds,
     )
 
 

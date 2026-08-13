@@ -771,6 +771,11 @@ class BattleResult(SQLModel, table=True):
         sa_column=Column(JSON, nullable=True),
         description="参加時の機体データスナップショット（エントリー時点）",
     )
+    map_bounds: list[float] | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="フィールド範囲 [min, max] (m)。BattleViewerの背景グリッド整列用 (Issue #436)",
+    )
     kills: int = Field(default=0, description="撃墜数")
     exp_gained: int = Field(default=0, description="獲得経験値")
     credits_gained: int = Field(default=0, description="獲得クレジット")
@@ -818,6 +823,7 @@ class BattleResultSummary(SQLModel):
     enemies_info: list[dict] | None = None
     obstacles_info: list[dict] | None = None
     ms_snapshot: dict | None = None
+    map_bounds: list[float] | None = None
     kills: int = 0
     exp_gained: int = 0
     credits_gained: int = 0

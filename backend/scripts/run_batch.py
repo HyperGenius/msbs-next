@@ -335,6 +335,7 @@ def _save_battle_results(
             enemies_info=enemies_info_for_entry,
             obstacles_info=obstacles_data,
             ms_snapshot=entry.mobile_suit_snapshot,
+            map_bounds=list(simulator.map_bounds),
             kills=individual_kills,
             exp_gained=exp_gained,
             credits_gained=credits_gained,

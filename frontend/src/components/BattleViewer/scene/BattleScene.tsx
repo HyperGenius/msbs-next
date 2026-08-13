@@ -20,6 +20,10 @@ import { getEnvironmentColor } from "../utils";
 // MobileSuitMesh と同じスケール定数（座標変換の一貫性）
 const POSITION_SCALE = 0.05;
 
+// map_bounds が未取得（旧バトル履歴等）の場合のフォールバック値。
+// backend/app/engine/constants.py の MAP_BOUNDS デフォルトと合わせる
+const DEFAULT_MAP_BOUNDS: [number, number] = [0, 5000];
+
 // 飛翔体・ヒットエフェクトの上限数と飛翔時間
 const MAX_PROJECTILES = 20;
 const MAX_HIT_EFFECTS = 15;
@@ -99,6 +103,8 @@ interface BattleSceneProps {
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     enemyEvents: Array<{ id: string; event: BattleEventEffect | null }>;
     obstacles?: Obstacle[];
+    /** フィールド範囲 [min, max] (m)。背景グリッドをフィールドに整列させるために使用 (Issue #436) */
+    mapBounds?: [number, number] | null;
     /** LOS 表示が ON のときのみ渡される計算済み LOS 結果 */
     losResults?: LosResult[];
     /** 現在タイムスタンプで攻撃アクション中のユニット ID セット（射撃反動アニメーション用）*/
@@ -245,10 +251,16 @@ export function BattleScene({
     enemyStates,
     enemyEvents,
     obstacles,
+    mapBounds,
     losResults,
     attackingUnitIds,
     currentTimestamp,
 }: BattleSceneProps) {
+    // フィールド中心・全体をカバーするグリッドの位置とフェード距離を算出（Issue #436）
+    const [mapMin, mapMax] = mapBounds ?? DEFAULT_MAP_BOUNDS;
+    const fieldCenter = ((mapMin + mapMax) / 2) * POSITION_SCALE;
+    const fieldSpan = (mapMax - mapMin) * POSITION_SCALE;
+    const gridFadeDistance = Math.max(100, fieldSpan * 1.2);
     // 自機MS初期Three.js座標をマウント時のみキャプチャ（MobileSuitMesh と同じ軸変換）
     const initialPos = useRef({
         x: playerState.pos.x * POSITION_SCALE,
@@ -373,10 +385,11 @@ export function BattleScene({
                 <Stars radius={100} depth={50} count={2000} factor={4} fade speed={1} />
             )}
             <Grid
+                position={[fieldCenter, 0, fieldCenter]}
                 infiniteGrid
                 sectionSize={10}
                 cellSize={1}
-                fadeDistance={100}
+                fadeDistance={gridFadeDistance}
                 sectionColor={environment === "COLONY" ? "#8a8aaa" : "#00ff00"}
                 cellColor={environment === "COLONY" ? "#4a4a6a" : "#003300"}
             />
