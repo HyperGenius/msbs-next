@@ -33,6 +33,7 @@ interface UseBattleSimulationReturn {
   playerData: MobileSuit | null;
   enemiesData: MobileSuit[];
   obstaclesData: Obstacle[];
+  mapBounds: [number, number] | null;
   rewards: BattleRewards | null;
   currentEnvironment: string;
   startBattle: (missionId: number) => Promise<void>;
@@ -59,6 +60,7 @@ export function useBattleSimulation({
   const [playerData, setPlayerData] = useState<MobileSuit | null>(null);
   const [enemiesData, setEnemiesData] = useState<MobileSuit[]>([]);
   const [obstaclesData, setObstaclesData] = useState<Obstacle[]>([]);
+  const [mapBounds, setMapBounds] = useState<[number, number] | null>(null);
   const [rewards, setRewards] = useState<BattleRewards | null>(null);
   const [currentEnvironment, setCurrentEnvironment] =
     useState<string>("SPACE");
@@ -84,6 +86,7 @@ export function useBattleSimulation({
     setCurrentTimestamp(0);
     setRewards(null);
     setObstaclesData([]);
+    setMapBounds(null);
 
     try {
       const token = await getToken();
@@ -133,6 +136,7 @@ export function useBattleSimulation({
       setPlayerData(data.player_info);
       setEnemiesData(data.enemies_info);
       setObstaclesData(data.obstacles_info ?? []);
+      setMapBounds(data.map_bounds ?? null);
 
       if (data.rewards) {
         setRewards(data.rewards);
@@ -165,6 +169,7 @@ export function useBattleSimulation({
     playerData,
     enemiesData,
     obstaclesData,
+    mapBounds,
     rewards,
     currentEnvironment,
     startBattle,

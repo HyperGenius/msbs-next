@@ -17,17 +17,20 @@ interface BattleViewerProps {
     player: MobileSuit;
     enemies: MobileSuit[];
     obstacles?: Obstacle[];
+    /** フィールド範囲 [min, max] (m)。BattleViewerの背景グリッド整列用 (Issue #436) */
+    mapBounds?: [number, number] | null;
     currentTimestamp: number;
     environment?: string;
 }
 
-export default function BattleViewer({ 
-    logs, 
-    player, 
-    enemies, 
+export default function BattleViewer({
+    logs,
+    player,
+    enemies,
     obstacles,
-    currentTimestamp, 
-    environment = "SPACE" 
+    mapBounds,
+    currentTimestamp,
+    environment = "SPACE"
 }: BattleViewerProps) {
     // LOS 表示のトグルステート（デフォルト: OFF）
     const [showLos, setShowLos] = useState(false);
@@ -88,6 +91,7 @@ export default function BattleViewer({
                 enemyStates={visibleEnemyStates}
                 enemyEvents={enemyEvents}
                 obstacles={obstacles}
+                mapBounds={mapBounds}
                 losResults={losResults}
                 attackingUnitIds={attackingUnitIds}
                 currentTimestamp={currentTimestamp}

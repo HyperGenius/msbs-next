@@ -51,6 +51,8 @@ export interface BattleResponse {
     player_info: MobileSuit;
     enemies_info: MobileSuit[];
     rewards?: BattleRewards;
+    /** フィールド範囲 [min, max] (m)。BattleViewerの背景グリッド整列用 (Issue #436) */
+    map_bounds?: [number, number];
 }
 
 /** バトル結果の履歴レコード（ログを含まない軽量版） */
@@ -66,6 +68,8 @@ export interface BattleResult {
     enemies_info?: MobileSuit[];
     obstacles_info?: Obstacle[];
     ms_snapshot?: MobileSuit;
+    /** フィールド範囲 [min, max] (m)。マイグレーション前の既存レコードは null (Issue #436) */
+    map_bounds?: [number, number] | null;
     kills?: number;
     exp_gained?: number;
     credits_gained?: number;

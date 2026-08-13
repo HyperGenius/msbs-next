@@ -326,6 +326,30 @@ POST /api/battle/simulate レスポンスの obstacles_info
 
 ---
 
+## 背景グリッドとバトルフィールドの整列（`map_bounds`）（Issue #436）
+
+### 背景
+
+バトルフィールドは `backend/app/engine/simulation.py` の `BattleSimulator.map_bounds`（`(0.0, side_len)`、`side_len` はユニット数に応じて `MIN_FIELD_SIZE`〜`MAX_FIELD_SIZE`（2000〜8000）で動的算出）で表される、正の象限のみに存在する正方形。一方 `BattleScene.tsx` の `<Grid infiniteGrid>` は `position` 未指定だとThree.jsワールド原点 `(0,0,0)` を基準に描画されるうえ、`fadeDistance`（カメラからの距離でフェードする範囲）が固定値 `100` だったため、フィールドが大きい/カメラから離れているバトルではグリッドが早々にフェードアウトし、フィールドの一部にしかグリッドが重ならない見た目になっていた。
+
+### 対応内容
+
+1. **バックエンド**: `BattleSimulator.map_bounds` を `map_bounds: list[float] | None`（`[min, max]`）として `BattleResult`（DB, `battle_results.map_bounds` カラム）と `/api/battle/simulate` の `BattleResponse` の両方に含める。`BattleResult` の生成箇所は2箇所ある（`backend/main.py` / `backend/scripts/run_batch.py`）ため、障害物情報と同様に両方に設定が必要。マイグレーション前の既存レコードは `null`（バックフィルなし、既存カラムと同じ方針）
+2. **フロントエンド**: `BattleScene.tsx` が `mapBounds` prop（`[number, number] | null | undefined`）を受け取り、フィールド中心 `(min+max)/2 * POSITION_SCALE` を `<Grid position>` に設定。`fadeDistance` もフィールドの一辺長（`(max-min) * POSITION_SCALE`）に応じて動的に拡大する（最低値100は維持）。`mapBounds` が未取得（`null`/`undefined`、マイグレーション前の履歴データ等）の場合は `DEFAULT_MAP_BOUNDS = [0, 5000]`（`backend/app/engine/constants.py` の `MAP_BOUNDS` デフォルトと同値）にフォールバックする
+
+### データフロー
+
+```
+BattleSimulator.map_bounds (backend/app/engine/simulation.py)
+  → BattleResult.map_bounds (DB) / BattleResponse.map_bounds (即時実行レスポンス)
+  → useBattleSimulation フック（mapBounds state）/ BattleResult 型（履歴データ）
+  → page.tsx / BattleDetailModal.tsx (mapBounds を BattleViewer に渡す)
+  → BattleViewer (mapBounds prop)
+  → BattleScene (Grid の position・fadeDistance を算出)
+```
+
+---
+
 ## 攻撃エフェクト（武器・命中結果の可視化）
 
 ### 概要

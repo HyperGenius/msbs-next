@@ -81,6 +81,7 @@ export default function BattleDetailModal({
                     player={battle.player_info as MobileSuit}
                     enemies={battle.enemies_info as MobileSuit[]}
                     obstacles={battle.obstacles_info}
+                    mapBounds={battle.map_bounds}
                     currentTimestamp={currentTimestamp}
                     environment={battle.environment || "SPACE"}
                   />
