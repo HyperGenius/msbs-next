@@ -164,39 +164,9 @@ class MatchingService:
                     )
 
                 # 残りは新規NPCで埋める
-                # MobileSuit.id / Pilot.id は default_factory (uuid4) でPython側で
-                # 即時採番されるため、IDを得るためのflushは不要。パイロット作成も
-                # 1体ごとのcommitを避け、ループ内でadd()を積み上げてから1回のflushにまとめる。
-                pilot_service = PilotService(self.session)
-                for _ in range(new_count):
-                    npc_suit = self._create_npc_mobile_suit()
+                entries.extend(self._fill_with_new_npcs(room, new_count))
 
-                    # 新規NPC用のパイロットレコードを作成（DBアクセスなし）
-                    pilot_name = npc_suit.pilot_name or npc_suit.name
-                    personality = npc_suit.personality or "AGGRESSIVE"
-                    npc_pilot = pilot_service.build_npc_pilot(pilot_name, personality)
-
-                    # 機体を NPC パイロットの user_id に紐付ける
-                    npc_suit.user_id = npc_pilot.user_id
-                    self.session.add(npc_suit)
-                    self.session.add(npc_pilot)
-
-                    _coerce_suit_json_fields(npc_suit)
-                    snapshot = npc_suit.model_dump()
-                    snapshot["npc_pilot_level"] = npc_pilot.level
-
-                    # NPCエントリーを作成
-                    npc_entry = BattleEntry(
-                        user_id=npc_pilot.user_id,
-                        room_id=room.id,
-                        mobile_suit_id=npc_suit.id,
-                        mobile_suit_snapshot=snapshot,
-                        is_npc=True,
-                    )
-                    self.session.add(npc_entry)
-                    entries.append(npc_entry)
-
-                # ここまでの新規 MobileSuit/Pilot/BattleEntry をまとめて1回のflushで送信
+                # ここまでの新規 BattleEntry（および永続化NPC側の更新分）をまとめて送信
                 self.session.flush()
 
             # ルームのステータスを更新
@@ -213,6 +183,64 @@ class MatchingService:
 
         print(f"\nマッチング完了: {len(created_rooms)} ルーム")
         return created_rooms
+
+    def _fill_with_new_npcs(
+        self, room: BattleRoom, new_count: int
+    ) -> list[BattleEntry]:
+        """新規NPC（機体・パイロット）を生成し、ルームのエントリーとして追加する.
+
+        MobileSuit.id / Pilot.id は default_factory (uuid4) でPython側で即時採番される
+        ため、IDを得るためのflushは不要。パイロット作成も1体ごとのcommitを避け、
+        ループ内でadd()を積み上げる。ただし BattleEntry.mobile_suit_id は MobileSuit
+        との relationship() を定義していないため、SQLAlchemyのflushはテーブル間の
+        INSERT順序を保証しない（add()した順序通りにはならない）。MobileSuit/Pilotを
+        先にflushしてDBへ反映してから BattleEntry を作成・addすることで、
+        battle_entries_mobile_suit_id_fkey 違反を防ぐ（Issue #461）。
+
+        Args:
+            room: エントリー先のバトルルーム
+            new_count: 新規生成するNPC数
+
+        Returns:
+            作成された BattleEntry のリスト
+        """
+        pilot_service = PilotService(self.session)
+        new_npcs: list[tuple[MobileSuit, Pilot]] = []
+        for _ in range(new_count):
+            npc_suit = self._create_npc_mobile_suit()
+
+            # 新規NPC用のパイロットレコードを作成（DBアクセスなし）
+            pilot_name = npc_suit.pilot_name or npc_suit.name
+            personality = npc_suit.personality or "AGGRESSIVE"
+            npc_pilot = pilot_service.build_npc_pilot(pilot_name, personality)
+
+            # 機体を NPC パイロットの user_id に紐付ける
+            npc_suit.user_id = npc_pilot.user_id
+            self.session.add(npc_suit)
+            self.session.add(npc_pilot)
+            new_npcs.append((npc_suit, npc_pilot))
+
+        # BattleEntry を作成する前に MobileSuit/Pilot をDBへ反映する
+        if new_npcs:
+            self.session.flush()
+
+        new_entries: list[BattleEntry] = []
+        for npc_suit, npc_pilot in new_npcs:
+            _coerce_suit_json_fields(npc_suit)
+            snapshot = npc_suit.model_dump()
+            snapshot["npc_pilot_level"] = npc_pilot.level
+
+            npc_entry = BattleEntry(
+                user_id=npc_pilot.user_id,
+                room_id=room.id,
+                mobile_suit_id=npc_suit.id,
+                mobile_suit_snapshot=snapshot,
+                is_npc=True,
+            )
+            self.session.add(npc_entry)
+            new_entries.append(npc_entry)
+
+        return new_entries
 
     def select_npcs_for_room(self, count: int) -> list[tuple[MobileSuit, Pilot]]:
         """DBから既存の永続化NPCをランダムに選択する.
