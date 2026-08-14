@@ -222,8 +222,8 @@ FuzzyEngine.from_json(
 `numpy.arange` で一括生成し、各メンバーシップ関数の評価（`MembershipFunction.evaluate_array()`）
 とクリッピング合成も numpy 配列演算で行う。`_select_target_fuzzy()`/`_select_weapon_fuzzy()`
 のように候補ユニットごとに毎回デファジフィケーションを行う経路でこの数値積分がホット
-パスになっており（`room_size=50/100` 規模の `BattleSimulator.step()` の80〜90%を占める。
-`battle-engine-feature.md` 22章参照）、ベクトル化により大幅に高速化した。数値的には
+パスになっており（最適化前は `room_size=50/100` 規模の `BattleSimulator.step()` の80〜90%を占めていた。
+`battle-engine-feature.md` 26章参照）、ベクトル化により大幅に高速化した。数値的には
 Python ループ版と同一の式を評価しているため、出力値そのものは変化しない。
 
 ### 4.4 フォールバック
