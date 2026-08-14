@@ -34,6 +34,7 @@ from app.engine.constants import (
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.movement import MovementMixin
+from app.engine.spatial_grid import PointSpatialGrid
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
 from app.engine.targeting import TargetingMixin
 from app.models.models import (
@@ -617,19 +618,24 @@ class BattleSimulator(
     @staticmethod
     def _sample_position_in_zone(
         zone: SpawnZone,
-        placed_positions: list[np.ndarray],
+        placed_grid: PointSpatialGrid,
         min_dist: float,
         rng: np.random.Generator | None = None,
     ) -> np.ndarray:
-        """スポーン領域内でユニットの配置位置をサンプリングする (Phase 6-3).
+        """スポーン領域内でユニットの配置位置をサンプリングする (Phase 6-3, Issue #447).
 
         円内の一様サンプリング（r = radius * sqrt(U), θ = 2π * V）を使用する。
         既配置ユニットとの最小距離 min_dist が保証されるまでリサンプリングする。
         SPAWN_ZONE_SAMPLE_MAX_TRIES 回試行後も配置できない場合は min_dist を段階的に緩和する。
 
+        既配置位置との距離判定には `placed_grid`（`PointSpatialGrid`）を使い、候補点の
+        近傍セルのみを走査する。`placed_grid` のセルサイズは呼び出し側（`_apply_spawn_zones`）
+        が min_dist（緩和前の最大値）以上に設定している前提のため、緩和後の
+        current_min_dist に対しても近傍セル探索だけで漏れなく判定できる。
+
         Args:
             zone: スポーン領域
-            placed_positions: 既に配置されたユニット位置リスト (np.ndarray [x, y, z])
+            placed_grid: 既に配置されたユニット位置を格納したグリッド
             min_dist: 既配置ユニットとの最小距離 (m)
             rng: 乱数生成器。None の場合は numpy のデフォルト RNG を使用する。
 
@@ -655,11 +661,10 @@ class BattleSimulator(
             z = zone.center.z + r * math.sin(theta)
             pos = np.array([x, zone.center.y, z])
 
-            if not placed_positions:
-                return pos
-
-            dists = [float(np.linalg.norm(pos - p)) for p in placed_positions]
-            if min(dists) >= current_min_dist:
+            neighbor_dists = [
+                float(np.linalg.norm(pos - p)) for p in placed_grid.neighbors(pos)
+            ]
+            if not neighbor_dists or min(neighbor_dists) >= current_min_dist:
                 return pos
 
         # 最終フォールバック: 全試行失敗時は中心座標を返す
@@ -713,15 +718,15 @@ class BattleSimulator(
                 math.atan2(float(unit_direction[2]), float(unit_direction[0]))
             )
 
-            placed: list[np.ndarray] = []
+            placed_grid = PointSpatialGrid(cell_size=ALLY_REPULSION_RADIUS)
             for unit in units:
                 pos = self._sample_position_in_zone(
-                    zone, placed, ALLY_REPULSION_RADIUS, rng
+                    zone, placed_grid, ALLY_REPULSION_RADIUS, rng
                 )
                 unit.position = Vector3(
                     x=float(pos[0]), y=float(pos[1]), z=float(pos[2])
                 )
-                placed.append(pos)
+                placed_grid.insert(pos)
 
                 initial_velocity = (
                     unit_direction * unit.max_speed * SPAWN_INITIAL_SPEED_RATIO

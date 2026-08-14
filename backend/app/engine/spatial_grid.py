@@ -59,3 +59,42 @@ class UnitSpatialGrid:
             cell = self._cells.get((cx + dx, cy + dy, cz + dz))
             if cell:
                 yield from cell
+
+
+class PointSpatialGrid:
+    """逐次追加される座標点（np.ndarray）向けの軽量グリッド分割インデックス（Issue #447）.
+
+    `UnitSpatialGrid` は「全ユニットが揃った状態で一括構築し、以降は読み取り専用」
+    という索敵フェーズの用途に合わせた設計だが、スポーン位置サンプリングでは
+    ユニットを1体ずつ配置しながら「既配置点のうち一定距離以内に別の点がないか」を
+    その都度判定する必要がある。本クラスは `insert()` による逐次追加をサポートし、
+    セルサイズを判定に使う最大距離（呼び出し側が判定に使う可能性のある最大の
+    min_dist）以上に固定することで、`UnitSpatialGrid` と同じ理屈（セル幅 >= 探索半径
+    なら3x3x3近傍セルの走査だけで漏れなく候補を捕捉できる）を維持する。
+    """
+
+    def __init__(self, cell_size: float) -> None:
+        """セルサイズ（判定に使う可能性のある最大距離以上）を指定してグリッドを構築する."""
+        self.cell_size = max(float(cell_size), 1e-6)
+        self._cells: dict[CellKey, list[np.ndarray]] = defaultdict(list)
+
+    def _cell_key(self, x: float, y: float, z: float) -> CellKey:
+        return (
+            int(x // self.cell_size),
+            int(y // self.cell_size),
+            int(z // self.cell_size),
+        )
+
+    def insert(self, pos: np.ndarray) -> None:
+        """座標点をグリッドに追加する."""
+        self._cells[self._cell_key(float(pos[0]), float(pos[1]), float(pos[2]))].append(
+            pos
+        )
+
+    def neighbors(self, pos: np.ndarray) -> Iterator[np.ndarray]:
+        """指定座標を含むセルと近傍26セル（3x3x3）内の全登録点を返す."""
+        cx, cy, cz = self._cell_key(float(pos[0]), float(pos[1]), float(pos[2]))
+        for dx, dy, dz in _NEIGHBOR_OFFSETS:
+            cell = self._cells.get((cx + dx, cy + dy, cz + dz))
+            if cell:
+                yield from cell

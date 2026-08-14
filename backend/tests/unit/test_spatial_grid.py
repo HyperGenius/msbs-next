@@ -1,4 +1,4 @@
-"""Tests for UnitSpatialGrid (Issue #446).
+"""Tests for UnitSpatialGrid (Issue #446) / PointSpatialGrid (Issue #447).
 
 近傍探索（グリッド分割）の境界条件を単体で検証する:
 - セル境界上・負座標での分類
@@ -9,7 +9,7 @@
 
 import numpy as np
 
-from app.engine.spatial_grid import _MIN_CELL_SIZE, UnitSpatialGrid
+from app.engine.spatial_grid import _MIN_CELL_SIZE, PointSpatialGrid, UnitSpatialGrid
 from app.models.models import MobileSuit, Vector3, Weapon
 
 
@@ -102,3 +102,58 @@ def test_neighbors_empty_grid_returns_nothing() -> None:
     """空のユニット群から構築した場合、近傍探索は常に空集合を返すこと."""
     grid = UnitSpatialGrid([], cell_size=500.0)
     assert _neighbor_names(grid, (0.0, 0.0, 0.0)) == set()
+
+
+# ---------------------------------------------------------------------------
+# PointSpatialGrid (Issue #447)
+# ---------------------------------------------------------------------------
+
+
+def _neighbor_coords(
+    grid: PointSpatialGrid, pos: tuple[float, float, float]
+) -> set[tuple[float, float, float]]:
+    return {
+        (float(p[0]), float(p[1]), float(p[2])) for p in grid.neighbors(np.array(pos))
+    }
+
+
+def test_point_grid_empty_returns_nothing() -> None:
+    """挿入前の空グリッドは近傍探索で常に空集合を返すこと."""
+    grid = PointSpatialGrid(cell_size=150.0)
+    assert _neighbor_coords(grid, (0.0, 0.0, 0.0)) == set()
+
+
+def test_point_grid_returns_inserted_point_in_same_cell() -> None:
+    """挿入した点が同一セル内であれば近傍探索で取得できること."""
+    grid = PointSpatialGrid(cell_size=150.0)
+    grid.insert(np.array([10.0, 0.0, 10.0]))
+
+    assert _neighbor_coords(grid, (0.0, 0.0, 0.0)) == {(10.0, 0.0, 10.0)}
+
+
+def test_point_grid_returns_points_in_adjacent_cell() -> None:
+    """セル幅 = 探索半径のとき、隣接セルの点も取得できること."""
+    grid = PointSpatialGrid(cell_size=150.0)
+    grid.insert(np.array([200.0, 0.0, 0.0]))  # 隣接セル(1,0,0)
+
+    assert _neighbor_coords(grid, (0.0, 0.0, 0.0)) == {(200.0, 0.0, 0.0)}
+
+
+def test_point_grid_excludes_points_two_cells_away() -> None:
+    """2セル以上離れた点は近傍探索の対象外であること."""
+    grid = PointSpatialGrid(cell_size=150.0)
+    grid.insert(np.array([500.0, 0.0, 0.0]))  # cell(3,0,0): 2セル以上離れる
+
+    assert _neighbor_coords(grid, (0.0, 0.0, 0.0)) == set()
+
+
+def test_point_grid_incremental_insert_accumulates() -> None:
+    """insert() を繰り返した点が全て近傍探索で取得できること（逐次追加の確認）."""
+    grid = PointSpatialGrid(cell_size=150.0)
+    points = [np.array([float(i) * 10.0, 0.0, 0.0]) for i in range(5)]
+    for p in points:
+        grid.insert(p)
+
+    assert _neighbor_coords(grid, (0.0, 0.0, 0.0)) == {
+        (float(i) * 10.0, 0.0, 0.0) for i in range(5)
+    }
