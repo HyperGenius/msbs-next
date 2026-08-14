@@ -12,6 +12,7 @@ from app.engine.constants import (
     DETECTION_FALLOFF_EXPONENT_MINOVSKY,
     SPECIAL_ENVIRONMENT_EFFECTS,
 )
+from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, Weapon
 
 if TYPE_CHECKING:
@@ -31,9 +32,17 @@ class TargetingMixin:
     team_detected_units: dict[str, set]
     detection_step_map: dict[str, dict[str, int]]
     _step_count: int
+    _units_by_id: dict
+    _unit_order_index: dict
 
     def _detection_phase(self) -> None:
-        """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見."""
+        """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見.
+
+        全ユニット×敵全ユニットの総当たり（O(N^2)）を避けるため、グリッド分割
+        （`UnitSpatialGrid`）で位置的に近い候補のみを新規索敵の対象とする
+        （Issue #446）。ただし既に発見済みの敵は、索敵範囲外へ移動していても
+        LOS 喪失判定のため引き続き距離に関わらず処理する（従来の挙動を維持）。
+        """
         alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]
 
         # ミノフスキー粒子効果: 索敵範囲を半減 + 距離減衰指数を強化
@@ -44,15 +53,38 @@ class TargetingMixin:
             sensor_multiplier = minovsky["sensor_range_multiplier"]
             falloff_exponent = DETECTION_FALLOFF_EXPONENT_MINOVSKY
 
+        # グリッドのセルサイズは実際に索敵に使う最大有効範囲以上に設定する
+        # （セル幅 >= 探索半径であれば、3x3x3近傍セルの走査だけで漏れなく候補を捕捉できる）
+        max_effective_range = max(
+            (u.sensor_range * sensor_multiplier for u in alive_units), default=0.0
+        )
+        grid = UnitSpatialGrid(alive_units, max_effective_range)
+
         for unit in alive_units:
             if unit.team_id is None:
                 continue
-            # 敵対勢力を特定 (team_idが異なるユニットが敵)
-            potential_targets = [t for t in alive_units if t.team_id != unit.team_id]
             pos_unit = unit.position.to_numpy()
             effective_sensor_range = unit.sensor_range * sensor_multiplier
+            team_detected = self.team_detected_units[unit.team_id]  # type: ignore[attr-defined]
 
-            for target in potential_targets:
+            # 1) 既に発見済みの敵: 索敵範囲外に出ていてもLOS喪失チェックのため処理する
+            already_detected_ids = list(team_detected)
+            for target_id in already_detected_ids:
+                target = self._units_by_id.get(target_id)  # type: ignore[attr-defined]
+                if (
+                    target is None
+                    or target.current_hp <= 0
+                    or target.team_id == unit.team_id
+                ):
+                    continue
+                self._process_single_detection(
+                    unit, target, pos_unit, effective_sensor_range, falloff_exponent
+                )
+
+            # 2) 未発見の敵: グリッドで絞り込んだ近傍候補のみ新規索敵判定を行う
+            for target in grid.neighbors(pos_unit):
+                if target.team_id == unit.team_id or target.id in team_detected:
+                    continue
                 self._process_single_detection(
                     unit, target, pos_unit, effective_sensor_range, falloff_exponent
                 )
@@ -229,35 +261,48 @@ class TargetingMixin:
 
         return base_delay
 
+    def _get_detected_targets(self, actor: MobileSuit) -> list[MobileSuit] | None:
+        """actorの所属チームが索敵済みの敵候補を返す（リアクション遅延チェック付き）.
+
+        索敵フェーズ（`_detection_phase`）が絞り込んだ `team_detected_units` を
+        そのまま候補ソースとして再利用し、`self.units` 全体（味方含む）を毎回
+        走査する二重の総当たりを避ける（Issue #446）。候補の並び順は
+        `self.units` 内での出現順（`_unit_order_index`）で揃え、従来の
+        `[u for u in self.units if ...]` 走査順による同点時タイブレークと
+        同じ結果になるようにする。
+
+        Returns:
+            actor.team_id が None の場合は None。候補が0件の場合は空リスト。
+        """
+        if actor.team_id is None:
+            return None
+        detection_steps = self.detection_step_map.get(actor.team_id, {})  # type: ignore[attr-defined]
+        reaction_delay = self._get_reaction_delay(actor)
+        detected_ids = sorted(
+            self.team_detected_units[actor.team_id],  # type: ignore[attr-defined]
+            key=lambda tid: self._unit_order_index.get(tid, -1),  # type: ignore[attr-defined]
+        )
+        detected_targets: list[MobileSuit] = []
+        for target_id in detected_ids:
+            target = self._units_by_id.get(target_id)  # type: ignore[attr-defined]
+            if target is None or target.current_hp <= 0:
+                continue
+            # detection_step_map に未登録（テスト等で手動追加）の場合は即時ターゲット可能とみなす
+            steps_since_detection = self._step_count - detection_steps.get(  # type: ignore[attr-defined]
+                str(target_id),
+                self._step_count - reaction_delay,  # type: ignore[attr-defined]
+            )
+            if steps_since_detection >= reaction_delay:
+                detected_targets.append(target)
+        return detected_targets
+
     def _select_target_legacy(self, actor: MobileSuit) -> MobileSuit | None:
         """ターゲットを選択する（戦術と索敵状態に基づくレガシー実装）.
 
         Note:
             Phase 3以降で廃止予定。フォールバック用として残す。
         """
-        # ターゲット選択: team_idが異なる生存ユニットをリストアップ
-        potential_targets = [
-            u
-            for u in self.units
-            if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
-        ]
-
-        # 索敵済みの敵のみをターゲット候補とする（リアクション遅延チェック付き）
-        if actor.team_id is None:
-            return None
-        detection_steps = self.detection_step_map.get(actor.team_id, {})  # type: ignore[attr-defined]
-        reaction_delay = self._get_reaction_delay(actor)
-        detected_targets = [
-            t
-            for t in potential_targets
-            if t.id in self.team_detected_units[actor.team_id]  # type: ignore[attr-defined]
-            # detection_step_map に未登録（テスト等で手動追加）の場合は即時ターゲット可能とみなす
-            and (
-                self._step_count
-                - detection_steps.get(str(t.id), self._step_count - reaction_delay)
-            )
-            >= reaction_delay  # type: ignore[attr-defined]
-        ]
+        detected_targets = self._get_detected_targets(actor)
 
         # ターゲットが存在しない場合はNoneを返す
         # （呼び出し元の_action_phaseで_search_movementが実行される）
@@ -322,29 +367,7 @@ class TargetingMixin:
         Returns:
             選択されたターゲット。候補が0件の場合は None。
         """
-        # ターゲット選択: team_idが異なる生存ユニットをリストアップ
-        potential_targets = [
-            u
-            for u in self.units
-            if u.current_hp > 0 and u.team_id != actor.team_id  # type: ignore[attr-defined]
-        ]
-
-        # 索敵済みの敵のみをターゲット候補とする（リアクション遅延チェック付き）
-        if actor.team_id is None:
-            return None
-        detection_steps = self.detection_step_map.get(actor.team_id, {})  # type: ignore[attr-defined]
-        reaction_delay = self._get_reaction_delay(actor)
-        detected_targets = [
-            t
-            for t in potential_targets
-            if t.id in self.team_detected_units[actor.team_id]  # type: ignore[attr-defined]
-            # detection_step_map に未登録（テスト等で手動追加）の場合は即時ターゲット可能とみなす
-            and (
-                self._step_count
-                - detection_steps.get(str(t.id), self._step_count - reaction_delay)
-            )
-            >= reaction_delay  # type: ignore[attr-defined]
-        ]
+        detected_targets = self._get_detected_targets(actor)
 
         # ターゲットが存在しない場合はNoneを返す
         if not detected_targets:
