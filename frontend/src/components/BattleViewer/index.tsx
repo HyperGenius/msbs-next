@@ -2,9 +2,9 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { BattleLog, MobileSuit, Obstacle } from "@/types/battle";
-import { getBattleSnapshot, getDetectedUnits } from "./hooks/useBattleSnapshot";
+import { getBattleSnapshot, getDetectedUnits, SnapshotCache } from "./hooks/useBattleSnapshot";
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
@@ -35,14 +35,21 @@ export default function BattleViewer({
     // LOS 表示のトグルステート（デフォルト: OFF）
     const [showLos, setShowLos] = useState(false);
 
+    // getBattleSnapshot の差分更新キャッシュ（Issue #465）。
+    // 再生（100ms毎の再レンダー）中は前回スキャン位置から続きだけを走査するため、
+    // コンポーネントインスタンスを跨いで同じ Map を使い回す必要がある。
+    // "現在時刻" 用と "1ステップ前" 用でキーを分け、両者が独立して単調に進行できるようにする。
+    const snapshotCacheRef = useRef<SnapshotCache>(new Map());
+    const snapshotCache = snapshotCacheRef.current;
+
     // 状態計算（純粋関数として抽出）
-    const playerSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp);
-    const playerPrevSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp - SIMULATION_STEP_S);
+    const playerSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp, snapshotCache);
+    const playerPrevSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp - SIMULATION_STEP_S, snapshotCache, `${player.id}:prev`);
     const playerState = { ...playerSnapshot, prevHp: playerPrevSnapshot.hp };
 
     const enemyStates = enemies.map(enemy => {
-        const snapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp);
-        const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp - SIMULATION_STEP_S);
+        const snapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp, snapshotCache);
+        const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp - SIMULATION_STEP_S, snapshotCache, `${enemy.id}:prev`);
         return { enemy, state: { ...snapshot, prevHp: prevSnapshot.hp } };
     });
 

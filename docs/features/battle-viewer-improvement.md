@@ -347,3 +347,37 @@ Phase 3（ビジュアル強化）
 
 **影響ファイル:**
 - `frontend/src/components/history/BattleDetailModal.tsx`
+
+---
+
+## getBattleSnapshotの差分更新キャッシュ（Issue #465）
+
+`getBattleSnapshot()` は再生タイムスタンプが進むたびに `logs[0]` から現在時刻まで毎回全走査してユニット状態
+（位置・HP・EN・弾薬・ターゲット・クールダウン基準時刻）を再構築していた。呼び出し元（`BattleViewer/index.tsx`）
+は自機×2（現在＋1ステップ前）＋敵ユニット×2×N が100msごとに呼ばれるため、1ティックあたりの計算量が
+「ユニット数 × ログ長」に比例して増加し、バトル終盤・敵ユニットが多いほど再生がスローモーション化していた。
+また、クールダウン判定用の直近ATTACK探索も配列末尾からの逆走査で、`currentTimestamp` より未来のログも
+対象に含めてしまう不具合があった。
+
+**修正:** `getBattleSnapshot()` に任意の `SnapshotCache`（`Map<string, SnapshotCacheEntry>`）を渡せるようにし、
+「前回どこまでログを読んだか（`nextIndex`）＋その時点の状態」をキャッシュエントリとして保持する差分更新方式に
+変更した。再生が進行するだけ（`currentTimestamp` が単調増加するだけ）であれば、前回のスキャン位置から続きの
+ログのみを走査すればよく、O(全ログ長)だった1回あたりの計算量が「前回呼び出しからの経過分のログ数」に減る。
+`currentTimestamp` が巻き戻った場合（シーク操作・巻き戻しボタン等）や `logs` 参照が変わった場合（別バトルの
+表示）は自動的に先頭からの全走査にフォールバックする。クールダウン判定の直近ATTACK基準時刻もこの前方走査中に
+更新するよう変更し、逆走査を廃止すると同時に未来ログを誤って参照していた不具合も解消した。
+
+`cache` を渡さない場合は従来どおり無状態（毎回全走査）で動作するため、API 互換性は維持している。
+
+`BattleViewer/index.tsx` では `useRef` でコンポーネントインスタンスに紐づく `SnapshotCache` を1つ保持し、
+自機・各敵ユニットに渡している。「現在時刻」用と「1ステップ前（`SIMULATION_STEP_S`）」用は再生中どちらも
+時間軸上を単調に前進するが同じキーで混在させると干渉するため、`` `${id}:prev` `` のように別キーを与えて
+独立したキャッシュエントリとして扱っている。
+
+呼び出し元 `BattleViewer/index.tsx` 自体（`useMemo` を使わず毎レンダーで `getBattleSnapshot` を呼んでいる点）
+のメモ化は別Issueで対応予定。今回の修正は `getBattleSnapshot()` 内部のアルゴリズムのみを対象にしている。
+
+**影響ファイル:**
+- `frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts`
+- `frontend/src/components/BattleViewer/index.tsx`
+- `frontend/tests/unit/battleSnapshot.test.ts`
