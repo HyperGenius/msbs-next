@@ -201,6 +201,13 @@ class BattleSimulator(
         # 高脅威敵斥力計算用のグリッド（Issue #453）。セルサイズが上記と異なるため
         # 別キャッシュとして持つ。同様に step() の冒頭で毎ステップリセットされる。
         self._threat_repulsion_grid: UnitSpatialGrid | None = None
+        # _select_target_fuzzy() のステップ内キャッシュ（Issue #454）。
+        # unit_id → (計算時点の _step_count, 選択結果)。ステップが変わるか、
+        # キャッシュ対象のターゲットが撃破された場合は再計算する
+        # （TargetingMixin._select_target_fuzzy 参照）。明示的なリセットは不要
+        # （キー自体に計算時点の _step_count を持たせているため、ステップが
+        # 進めば自然に無効化される）。
+        self._fuzzy_target_cache: dict[str, tuple[int, MobileSuit | None]] = {}
         self.player_skills = player_skills or {}
         self.environment = environment
         self.special_effects: list[str] = special_effects or []

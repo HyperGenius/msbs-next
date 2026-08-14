@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 
 def _file_hash(path: Path) -> str:
     """ファイルの SHA-256 ハッシュを返す.
@@ -55,6 +57,17 @@ class MembershipFunction(ABC):
     def support_range(self) -> tuple[float, float]:
         """メンバーシップ関数が非ゼロになる範囲 [min, max] を返す."""
 
+    @abstractmethod
+    def evaluate_array(self, x: np.ndarray) -> np.ndarray:
+        """`evaluate()` のベクトル化版（重心デファジフィケーションの数値積分用）.
+
+        Args:
+            x: 入力値の配列
+
+        Returns:
+            各要素に対応するメンバーシップ度の配列（0.0〜1.0）
+        """
+
 
 class TriangleMF(MembershipFunction):
     """三角形型メンバーシップ関数.
@@ -86,6 +99,14 @@ class TriangleMF(MembershipFunction):
     def support_range(self) -> tuple[float, float]:
         """メンバーシップ関数が非ゼロになる範囲 [min, max] を返す."""
         return (self.a, self.c)
+
+    def evaluate_array(self, x: np.ndarray) -> np.ndarray:
+        """三角形メンバーシップ関数のベクトル化評価."""
+        a, b, c = self.a, self.b, self.c
+        left = (x - a) / (b - a) if b != a else np.ones_like(x)
+        right = (c - x) / (c - b) if c != b else np.ones_like(x)
+        y = np.where(x <= b, left, right)
+        return np.where((x < a) | (x > c), 0.0, y)
 
 
 class TrapezoidMF(MembershipFunction):
@@ -125,6 +146,14 @@ class TrapezoidMF(MembershipFunction):
     def support_range(self) -> tuple[float, float]:
         """メンバーシップ関数が非ゼロになる範囲 [min, max] を返す."""
         return (self.a, self.d)
+
+    def evaluate_array(self, x: np.ndarray) -> np.ndarray:
+        """台形メンバーシップ関数のベクトル化評価."""
+        a, b, c, d = self.a, self.b, self.c, self.d
+        left = (x - a) / (b - a) if b != a else np.ones_like(x)
+        right = (d - x) / (d - c) if d != c else np.ones_like(x)
+        y = np.where(x < b, left, np.where(x <= c, 1.0, right))
+        return np.where((x < a) | (x > d), 0.0, y)
 
 
 def _build_mf(mf_type: str, params: list[float]) -> MembershipFunction:
@@ -352,7 +381,12 @@ def _centroid_for_variable(
     set_activations: dict[str, float],
     mf_sets: dict[str, MembershipFunction],
 ) -> float | None:
-    """単一出力変数の重心法デファジフィケーション値を返す. 面積ゼロなら None."""
+    """単一出力変数の重心法デファジフィケーション値を返す. 面積ゼロなら None.
+
+    数値積分は `_DEFUZZ_RESOLUTION` 点 × 発火中の集合数のループになり
+    ホットパスであるため（Issue #454）、サンプル点を numpy 配列で一括生成し
+    各集合のクリッピング合成をベクトル演算で行う。
+    """
     range_ = _get_support_range(set_activations, mf_sets)
     if range_ is None:
         return None
@@ -361,30 +395,20 @@ def _centroid_for_variable(
         return x_min
 
     step = (x_max - x_min) / _DEFUZZ_RESOLUTION
-    weighted_sum = 0.0
-    area_sum = 0.0
-    for i in range(_DEFUZZ_RESOLUTION):
-        x = x_min + (i + 0.5) * step
-        mu_combined = _clip_and_combine(x, set_activations, mf_sets)
-        weighted_sum += x * mu_combined
-        area_sum += mu_combined
+    xs = x_min + (np.arange(_DEFUZZ_RESOLUTION) + 0.5) * step
 
-    return weighted_sum / area_sum if area_sum > 0.0 else None
-
-
-def _clip_and_combine(
-    x: float,
-    set_activations: dict[str, float],
-    mf_sets: dict[str, MembershipFunction],
-) -> float:
-    """クリッピング合成: 各集合の MF を発火強度でクリップし最大値を返す."""
-    mu_combined = 0.0
+    mu_combined = np.zeros(_DEFUZZ_RESOLUTION)
     for set_name, activation in set_activations.items():
         if activation <= 0.0 or set_name not in mf_sets:
             continue
-        mu_clipped = min(mf_sets[set_name].evaluate(x), activation)
-        mu_combined = max(mu_combined, mu_clipped)
-    return mu_combined
+        mu_clipped = np.minimum(mf_sets[set_name].evaluate_array(xs), activation)
+        np.maximum(mu_combined, mu_clipped, out=mu_combined)
+
+    area_sum = float(mu_combined.sum())
+    if area_sum <= 0.0:
+        return None
+    weighted_sum = float(np.dot(xs, mu_combined))
+    return weighted_sum / area_sum
 
 
 def _defuzzify_centroid(
