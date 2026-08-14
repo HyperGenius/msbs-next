@@ -1577,3 +1577,83 @@ python scripts/simulation/sim_scale_bench.py --sizes 8,50,100 --steps 50
 `sensor_range` を見直した（実際の索敵回避フロアが支配的にならないよう、
 検証したい観点に応じて `sensor_range` を明示するよう変更）。
 
+## 23. Issue #447: スポーン位置サンプリングの準O(N²)最適化（グリッド分割）
+
+### 23.1 概要
+
+`room_size` を 50〜100 機規模へ拡大した際、スポーン位置サンプリング
+（`_sample_position_in_zone()`）がユニット配置のたびに既配置ユニット全件との
+距離を線形走査していたため、Issue #446 で解消した索敵・ターゲット選定と同様に
+演算量がユニット数の増加に対して急激に増加する問題があった（配置済み1機ごとに
+`SPAWN_ZONE_SAMPLE_MAX_TRIES × 3` 回の距離判定が発生し、これが未配置ユニット
+すべてに対して繰り返されるため準O(N²)）。`_find_clear_spawn_center()`
+（障害物回避のためのゾーン中心探索）は元々チーム数単位のループでボトルネックに
+なりにくいため対象外とし、`_sample_position_in_zone()` のみを対象に最適化した。
+
+### 23.2 `PointSpatialGrid`: 逐次追加可能な点群グリッド
+
+`app/engine/spatial_grid.py` に、Issue #446 の `UnitSpatialGrid` と同じ理屈
+（セル幅 ≥ 探索半径であれば3x3x3近傍セルの走査だけで漏れなく候補を捕捉できる）
+を使う `PointSpatialGrid` を追加した。`UnitSpatialGrid` は「全ユニットが揃った
+状態で一括構築し、以降は読み取り専用」という索敵フェーズの用途に特化していたが、
+スポーン配置ではユニットを1体ずつ配置しながら「既配置点のうち一定距離以内に
+別の点がないか」をその都度判定する必要があるため、`insert()` による逐次追加を
+サポートする別クラスとして実装した（対象も `MobileSuit` ではなく生の
+`np.ndarray` 座標）。
+
+セルサイズは呼び出し側（`_apply_spawn_zones()`）が `ALLY_REPULSION_RADIUS`
+（緩和が起きる前の最大 min_dist）で固定して構築する。`_sample_position_in_zone()`
+内で試行を重ねるたびに `current_min_dist` を段階的に緩和していくが、セルサイズは
+常にその時点の `current_min_dist` 以上であるため、近傍セル探索だけで漏れなく
+判定できるという前提は緩和後も崩れない。
+
+### 23.3 `_apply_spawn_zones()` / `_sample_position_in_zone()` の変更
+
+チームごとに配置ループを回す `_apply_spawn_zones()` は、従来 `list[np.ndarray]`
+に配置済み位置を追記して `_sample_position_in_zone()` へ丸ごと渡していたが、
+チームごとに `PointSpatialGrid(cell_size=ALLY_REPULSION_RADIUS)` を1つ構築し、
+ユニットを配置するたびに `grid.insert(pos)` で追加する方式に変更した。
+`_sample_position_in_zone()` 側も引数を `placed_positions: list[np.ndarray]` から
+`placed_grid: PointSpatialGrid` に変更し、候補点との距離判定は
+`placed_grid.neighbors(pos)`（近傍セルのみ）に対してのみ行う。
+
+円内一様サンプリング・段階的な min_dist 緩和・最終フォールバック（中心座標を返す）
+といったアルゴリズム自体は変更していないため、配置結果の分布・重なり回避の
+挙動は最適化前と同一である。
+
+### 23.4 ベンチマーク
+
+`backend/scripts/simulation/spawn_scale_bench.py` で、DBを使わず合成ユニット
+（8/50/100機、2チーム均等割り）を生成し `BattleSimulator` 初期化
+（障害物生成 + スポーン領域決定 + スポーン配置）1回あたりの平均処理時間を
+計測できる。`--obstacle-density` で障害物密度を切り替え、リトライ回数増加時の
+挙動も確認できる。
+
+```bash
+python scripts/simulation/spawn_scale_bench.py --sizes 8,50,100 --repeats 20
+python scripts/simulation/spawn_scale_bench.py --obstacle-density DENSE
+```
+
+最適化前後の比較（`obstacle_density=MEDIUM`、synthetic 2チーム構成、
+`repeats=10` の平均）:
+
+| room_size | 最適化前 (sec/spawn) | 最適化後 (sec/spawn) |
+|---|---|---|
+| 8   | 0.0033 | 0.0034 |
+| 50  | 0.0267 | 0.0151 |
+| 100 | 0.1468 | 0.0621 |
+| 200 | 0.8838 | 0.3282 |
+
+ユニット数が増えるほど改善幅が拡大しており、準O(N²)構造の解消を確認できる。
+
+### 23.5 テスト
+
+- `backend/tests/unit/test_spatial_grid.py`: `PointSpatialGrid` の
+  挿入・近傍探索（同一セル / 隣接セル / 2セル以上離れた点の除外 / 逐次追加）を
+  `UnitSpatialGrid` と同様の観点で単体検証
+- `backend/tests/unit/test_phase_6_3_field_init.py`:
+  50機・障害物なしでのゾーン内収容 + 間隔保証、100機・障害物ありでの
+  クラッシュなし + ゾーン内収容を追加検証（AC の「50/100機規模」要件に対応）
+- 既存の `tests/unit` 全体（8機・障害物ありのケースを含むスポーン関連テスト）が
+  最適化後もすべてパスすることを確認済み
+

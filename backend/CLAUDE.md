@@ -240,6 +240,30 @@ sensor_range が現状のNPCエース最大値 900m を大きく超える設計�
 薄れる。索敵範囲に大きな幅を持つユニット種別を追加する場合は、範囲帯でグリッドを分ける
 などの見直しを検討すること。
 
+## スポーン位置サンプリングの準O(N²)対策（Issue #447）
+
+`app/engine/simulation.py` の `_sample_position_in_zone()`（ゾーン内でユニット配置位置を
+サンプリングし、既配置ユニットとの `min_dist` を満たすまでリサンプリングする）は、
+配置済みユニットが増えるほど1回のサンプリングあたりの距離判定コストが線形に増える
+準O(N²)構造だった。`UnitSpatialGrid`（Issue #446 のセル分割near-neighborパターン）をそのまま使わず、
+`app/engine/spatial_grid.py` に `PointSpatialGrid` を新設した
+理由は、`UnitSpatialGrid` が「全ユニットが揃った状態で一括構築・以降は読み取り専用」という
+索敵フェーズの前提を持つのに対し、スポーン配置は「1体ずつ配置しながら都度既配置点を
+追加していく」逐次構築が必要なため。**近傍探索を伴う既存構造体を流用できないか検討する際は、
+「一括構築 vs 逐次構築」というアクセスパターンの違いをまず確認すること**（同じ「セル幅 ≥
+探索半径なら3x3x3近傍セル走査で漏れなく捕捉できる」という性質は共通して使えるが、
+クラス自体は別に用意する必要があった）。
+
+`_sample_position_in_zone()` は `current_min_dist` を試行のたびに段階的に緩和する仕様
+（`SPAWN_ZONE_MIN_DIST_RELAXATION_FACTOR`）があるため、`PointSpatialGrid` のセルサイズは
+緩和前の最大値（`ALLY_REPULSION_RADIUS`）で固定して構築している。セルサイズが緩和後の
+`current_min_dist` を常に上回っていれば近傍セル探索の正しさは崩れないため、緩和のたびに
+グリッドを再構築する必要はない。
+
+計測用に `backend/scripts/simulation/spawn_scale_bench.py`（DB不要、合成ユニットで
+`BattleSimulator` 初期化＝スポーン処理の平均処理時間を計測、`--obstacle-density` で
+障害物密度を切り替え可能）を用意した。
+
 ## コーディング規約
 `Agent.md` の `4. コーディング規約`を参照してください。
 

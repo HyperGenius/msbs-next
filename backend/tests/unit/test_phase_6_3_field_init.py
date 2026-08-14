@@ -14,8 +14,11 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pytest
 
+from app.engine import simulation
 from app.engine.constants import (
+    ALLY_REPULSION_RADIUS,
     MAP_BOUNDS,
     SPAWN_ZONE_RADIUS_2TEAM,
     SPAWN_ZONE_RADIUS_3TEAM,
@@ -315,6 +318,61 @@ def test_apply_spawn_zones_ally_min_dist() -> None:
             dist = float(np.linalg.norm(positions[i] - positions[j]))
             # 緩和が起きる場合があるため、完全ゼロでないことを確認
             assert dist >= 0.0  # クラッシュせず配置されること
+
+
+def test_apply_spawn_zones_scale_50_units_stays_in_zone_and_spaced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """50機規模でも全ユニットがゾーン内に収まり、間隔保証が機能すること (Issue #447).
+
+    `_apply_spawn_zones` はサンプリングに `np.random.default_rng()`（シード無し）を
+    使うため、RNG を固定して ALLY_REPULSION_RADIUS の厳密保証アサートが
+    まれに失敗する（min_dist 緩和が発生する）ことがないようにする。
+    """
+    n = 50
+    p = _make_unit("P0", "PLAYER", "PT")
+    allies = [_make_unit(f"P{i}", "PLAYER", "PT") for i in range(1, n)]
+    e = _make_unit("E", "ENEMY", "ET")
+    sz_p = SpawnZone(team_id="PT", center=Vector3(x=1000, y=0, z=1000), radius=2000.0)
+    sz_e = SpawnZone(team_id="ET", center=Vector3(x=4500, y=0, z=4500), radius=200.0)
+    bf = BattleField(spawn_zones=[sz_p, sz_e], obstacle_density="NONE")
+
+    fixed_rng = np.random.default_rng(42)
+    monkeypatch.setattr(simulation.np.random, "default_rng", lambda: fixed_rng)
+    sim = BattleSimulator(p, [*allies, e], battlefield=bf)
+
+    pt_units = [u for u in sim.units if u.team_id == "PT"]
+    assert len(pt_units) == n
+
+    for unit in pt_units:
+        dx = unit.position.x - sz_p.center.x
+        dz = unit.position.z - sz_p.center.z
+        assert math.sqrt(dx * dx + dz * dz) <= sz_p.radius + 1e-6
+
+    positions = [np.array([u.position.x, u.position.z]) for u in pt_units]
+    for i in range(len(positions)):
+        for j in range(i + 1, len(positions)):
+            dist = float(np.linalg.norm(positions[i] - positions[j]))
+            # 十分広いゾーンなので緩和なしで ALLY_REPULSION_RADIUS を満たせるはず
+            assert dist >= ALLY_REPULSION_RADIUS - 1e-6
+
+
+def test_apply_spawn_zones_scale_100_units_with_obstacles() -> None:
+    """100機・障害物ありでもクラッシュせず、ゾーン内配置が保証されること (Issue #447)."""
+    n = 100
+    p = _make_unit("P0", "PLAYER", "PT")
+    allies = [_make_unit(f"P{i}", "PLAYER", "PT") for i in range(1, n)]
+    e = _make_unit("E", "ENEMY", "ET")
+    sim = BattleSimulator(
+        p, [*allies, e], battlefield=BattleField(obstacle_density="DENSE")
+    )
+
+    zone_map = {sz.team_id: sz for sz in sim.battlefield.spawn_zones}
+    for unit in sim.units:
+        zone = zone_map[unit.team_id]
+        dx = unit.position.x - zone.center.x
+        dz = unit.position.z - zone.center.z
+        assert math.sqrt(dx * dx + dz * dz) <= zone.radius + 1e-6
 
 
 # ---------------------------------------------------------------------------
