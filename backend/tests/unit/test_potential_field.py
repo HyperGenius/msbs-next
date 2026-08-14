@@ -11,6 +11,9 @@ from app.engine.constants import (
     BOUNDARY_MARGIN,
     HIGH_THREAT_THRESHOLD,
     MAP_BOUNDS,
+    THREAT_ENEMY_REPULSION_COEFF,
+    THREAT_REPULSION_CUTOFF_RADIUS,
+    THREAT_REPULSION_DECAY_SCALE,
 )
 from app.engine.simulation import MOVE_LOG_MIN_DIST, BattleSimulator
 from app.models.models import MobileSuit, RetreatPoint, Vector3, Weapon
@@ -373,6 +376,120 @@ def test_potential_field_high_threat_enemy_repulsion() -> None:
     # 高脅威敵の場合は +x 引力が抑制される（斥力が加算される）
     assert direction_high_threat[0] < direction_low_threat[0], (
         "高脅威敵の斥力により x 成分が低脅威時より小さくなること"
+    )
+
+
+def test_threat_enemy_repulsion_no_decay_within_scale() -> None:
+    """THREAT_REPULSION_DECAY_SCALE 以内は距離によらず一定の斥力になること (#453)."""
+    player = _make_unit(
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        max_hp=100.0,
+        weapon_range=50.0,
+    )
+    near_enemy = _make_unit(
+        "Near",
+        "ENEMY",
+        "ET1",
+        Vector3(x=100, y=0, z=0),
+        max_hp=100.0,
+        weapon_power=200.0,
+        wid="near",
+    )
+    far_enemy = _make_unit(
+        "Far",
+        "ENEMY",
+        "ET2",
+        Vector3(x=THREAT_REPULSION_DECAY_SCALE, y=0, z=0),
+        max_hp=100.0,
+        weapon_power=200.0,
+        wid="far",
+    )
+    sim_near = BattleSimulator(player, [near_enemy])
+    sim_far = BattleSimulator(player, [far_enemy])
+
+    force_near = sim_near._threat_enemy_repulsion(
+        player, player.position.to_numpy(), weapon_range=50.0
+    )
+    force_far = sim_far._threat_enemy_repulsion(
+        player, player.position.to_numpy(), weapon_range=50.0
+    )
+
+    assert np.isclose(
+        float(np.linalg.norm(force_near)), THREAT_ENEMY_REPULSION_COEFF
+    ), (
+        f"DECAY_SCALE未満({near_enemy.position.x}m)では基準係数どおりの"
+        "一定斥力になること"
+    )
+    assert np.isclose(float(np.linalg.norm(force_far)), THREAT_ENEMY_REPULSION_COEFF), (
+        f"DECAY_SCALEちょうど({THREAT_REPULSION_DECAY_SCALE}m)でも"
+        "基準係数どおりの一定斥力になること"
+    )
+
+
+def test_threat_enemy_repulsion_decays_beyond_scale() -> None:
+    """THREAT_REPULSION_DECAY_SCALE を超えると距離の2乗に反比例して減衰すること (#453)."""
+    player = _make_unit(
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        max_hp=100.0,
+        weapon_range=50.0,
+    )
+    dist = THREAT_REPULSION_DECAY_SCALE * 2
+    enemy = _make_unit(
+        "Enemy",
+        "ENEMY",
+        "ET",
+        Vector3(x=dist, y=0, z=0),
+        max_hp=100.0,
+        weapon_power=200.0,
+        wid="e",
+    )
+    sim = BattleSimulator(player, [enemy])
+
+    force = sim._threat_enemy_repulsion(
+        player, player.position.to_numpy(), weapon_range=50.0
+    )
+
+    expected_magnitude = (
+        THREAT_ENEMY_REPULSION_COEFF * (THREAT_REPULSION_DECAY_SCALE / dist) ** 2
+    )
+    assert np.isclose(float(np.linalg.norm(force)), expected_magnitude), (
+        "DECAY_SCALE の2倍の距離では 1/dist^2 で減衰した大きさになること"
+    )
+
+
+def test_threat_enemy_repulsion_cutoff_beyond_radius() -> None:
+    """THREAT_REPULSION_CUTOFF_RADIUS を超えた高脅威敵からは斥力が働かないこと (#453)."""
+    player = _make_unit(
+        "Player",
+        "PLAYER",
+        "PT",
+        Vector3(x=0, y=0, z=0),
+        max_hp=100.0,
+        weapon_range=50.0,
+    )
+    far_enemy = _make_unit(
+        "Far",
+        "ENEMY",
+        "ET",
+        Vector3(x=THREAT_REPULSION_CUTOFF_RADIUS + 1.0, y=0, z=0),
+        max_hp=100.0,
+        weapon_power=200.0,
+        wid="far",
+    )
+    sim = BattleSimulator(player, [far_enemy])
+
+    force = sim._threat_enemy_repulsion(
+        player, player.position.to_numpy(), weapon_range=50.0
+    )
+
+    assert np.allclose(force, np.zeros(3)), (
+        "早期打ち切り半径を超えた高脅威敵からは斥力が働かないこと"
     )
 
 

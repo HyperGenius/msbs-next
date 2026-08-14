@@ -1694,7 +1694,7 @@ MOVE行動時の「最も近い敵」はグローバルな最近傍である必�
 大きさになる、つまり実質的に距離減衰がない設計になっている。近傍セルへの絞り込みや
 早期打ち切りは遠方の高脅威敵からの斥力を消してしまい挙動を変えるため、`_ally_repulsion`/
 `_closest_enemy_attraction` と異なり本Issueのスコープ外とした。挙動変更を許容した上での
-対応は Issue #453 に切り出した。
+対応は Issue #453 に切り出した（→ 25章）。
 
 ### 24.5 グリッドの構築タイミング: 1ステップに1回だけキャッシュ
 
@@ -1751,3 +1751,136 @@ Issue #446 のPR #449と同一手法）で実施した:
   厳密一致）
 - 既存の `tests/unit` 全体（`test_potential_field.py` を含む）が最適化後もすべてパス
   することを確認済み
+
+## 25. Issue #453: 高脅威敵斥力の距離減衰導入とO(N²)対策
+
+### 25.1 概要
+
+24章（Issue #450）でスコープ外とした `_threat_enemy_repulsion()`（高脅威敵・自機射程外
+への斥力）に、挙動変更を許容した上で距離減衰を導入し、`UnitSpatialGrid` によるグリッド化
+（早期打ち切り）を行った。
+
+### 25.2 距離減衰式
+
+旧式 `1.5 * (-vec_to_enemy) / max(dist, 1.0)` は `vec_to_enemy` の大きさが `dist` に
+等しいため、`dist >= 1.0` の範囲で距離によらずほぼ一定の大きさ（正規化ベクトル）になる、
+実質的に距離減衰のない設計だった。新式では `THREAT_REPULSION_DECAY_SCALE`
+（既定300m、`app/engine/constants.py`。典型的な武器射程の下限帯に合わせた基準値）を
+導入し:
+
+```
+decay = (THREAT_REPULSION_DECAY_SCALE / max(dist, THREAT_REPULSION_DECAY_SCALE)) ** 2
+force += THREAT_ENEMY_REPULSION_COEFF * decay * (-vec_to_enemy) / max(dist, 1.0)
+```
+
+- `dist <= THREAT_REPULSION_DECAY_SCALE`: `decay = 1` となり旧式と同じ一定の斥力
+  （`THREAT_ENEMY_REPULSION_COEFF = 1.5`）を維持する
+- `dist > THREAT_REPULSION_DECAY_SCALE`: `decay = (THREAT_REPULSION_DECAY_SCALE / dist) ** 2`
+  となり、大きさが `THREAT_ENEMY_REPULSION_COEFF * (THREAT_REPULSION_DECAY_SCALE / dist) ** 2`
+  （1/dist^2 に比例）で減衰する
+
+`max(dist, 1.0)` のクランプは維持しており、近距離での発散は起きない。減衰指数を
+1乗ではなく2乗にしている理由は25.3節参照。
+
+### 25.3 早期打ち切り半径とグリッド化
+
+早期打ち切り半径 `THREAT_REPULSION_CUTOFF_RADIUS`（既定 `300 * sqrt(20)` ≈ 1342m）は、
+斥力の大きさが基準係数 `THREAT_ENEMY_REPULSION_COEFF` の5%未満まで減衰する距離を
+基準に設定した。
+
+**この半径での近傍探索には、セルサイズを `THREAT_REPULSION_DECAY_SCALE`（300m）に
+固定した専用の `UnitSpatialGrid`（`MovementMixin._get_threat_repulsion_grid()`）と、
+`UnitSpatialGrid.radius_neighbors(pos, radius)`（本Issueで新設、`nearest()` と同じ
+殻走査 `_shell_offsets()` を使い、走査半径だけをセル単位で動的に広げる）を組み合わせて
+使う。** 24章の `_get_movement_grid()`（セルサイズ=`ALLY_REPULSION_RADIUS`=150m）とは
+セルサイズ・カットオフ半径の前提が異なるため、共有せず別グリッドとして保持している
+（`_movement_grid` と同様、`step()` の冒頭で毎ステップ `self._threat_repulsion_grid = None`
+にリセットされ、次のステップで最新位置から再構築）。
+
+#### 初期実装の罠: セルサイズ=カットオフ半径にすると絞り込みが効かない（PR #456 の Copilot レビュー指摘）
+
+初期実装では、減衰指数を1乗（1/dist）のまま `THREAT_REPULSION_CUTOFF_RADIUS` を計算し
+（同じ5%基準で `20 * 300m = 6000m`）、この6000mを**そのまま `UnitSpatialGrid` のセルサイズ**
+として使い、既存の `neighbors()`（3x3x3固定走査）で候補を絞り込んでいた。しかし
+`MAX_FIELD_SIZE=8000m` に対してセルサイズ6000mは大きすぎ、フィールド全体がわずか
+1〜2セルに収まってしまうため、3x3x3走査が実質的に全ユニットを返す退化が起きていた
+（見た目はグリッド化されているが、実態は各ユニットごとに全ユニットを走査するのと
+ほぼ同じでO(N²)のままだった）。
+
+この点はPR #456 のCopilotレビューで指摘され、以下のように修正した:
+
+1. 減衰指数を1乗→2乗にして、同じ「基準係数の5%未満」という打ち切り基準でも
+   カットオフ半径を6000m→約1342mへ大幅に縮小
+2. `UnitSpatialGrid.radius_neighbors()` を新設し、セルサイズは
+   `THREAT_REPULSION_DECAY_SCALE`（300m）という小さい値に固定したまま、殻走査で
+   カットオフ半径まで動的に走査範囲を広げる方式に変更
+
+**教訓: グリッド系の近傍探索を新規実装する際、「セルサイズを探索したい最大距離に
+合わせる」という直感的なアプローチは、その距離がフィールドサイズに対して大きい場合に
+容易に退化する。** セルサイズは索敵グリッド（Issue #446）や `ALLY_REPULSION_RADIUS`
+グリッド（Issue #450）のように「実際に細かく分割できる小さな値」に固定し、探索したい
+半径が大きい場合は `nearest()`/`radius_neighbors()` のような殻走査で対応するのが
+正しいパターン。
+
+### 25.4 ゲームバランスへの影響（`sim_bench.BenchRunner` 実測）
+
+8機（4vs4）バトルを2つの乱数シードで実行し、導入前後を比較した（数値は2乗減衰への
+修正後の最終版）:
+
+| seed | ラウンド数 | 導入前 win_counts | 導入後 win_counts | 導入前 平均戦闘時間 | 導入後 平均戦闘時間 |
+|---|---|---|---|---|---|
+| 453 | 50 | PLAYER 1 / ENEMY 49 / DRAW 0 | PLAYER 18 / ENEMY 30 / DRAW 2 | 54.98s | 25.01s |
+| 123 | 20 | PLAYER 0 / ENEMY 20 / DRAW 0 | PLAYER 0 / ENEMY 20 / DRAW 0 | 15.14s | 14.80s |
+
+seed=123 はユニット性能差自体で一方的な結果になる組み合わせで、斥力式変更による差は
+ほぼ無かった。一方 seed=453 では、導入前は劣勢側が「射程外の高脅威敵から無限遠まで
+一定の力で逃げ続ける」ため戦闘に参加できず一方的に負け続けていたが、導入後は逃げの
+強制力が現実的な距離帯（数百m）に収まり、勝率の偏りが大幅に緩和され（1-49→18-30-2）、
+平均戦闘時間もほぼ半減した（55s→25s）。この変更は最適化に留まらず、旧実装の
+「非減衰・無限遠まで一定」という設計自体が組み合わせ次第で一方的な不均衡を生む
+要因になっていたことを示す結果となった（1乗減衰版では25-23-2とさらに互角に近かったが、
+Copilotレビュー対応でカットオフ半径を現実的な大きさに縮めるため2乗減衰に変更した結果、
+遠距離での減衰がやや強まり分布はやや偏りが戻った。それでも導入前の1-49と比べれば
+明確な改善）。
+
+### 25.5 パフォーマンスへの影響（`sim_scale_bench.py` 実測）
+
+`sim_scale_bench.py --sizes 8,50,100 --steps 50` の結果（導入前 → 導入後）:
+
+| room_size | 導入前 (sec/step) | 導入後 (sec/step) |
+|---|---|---|
+| 8   | 0.0160 | 0.0239 |
+| 50  | 0.1982 | 0.2220 |
+| 100 | 1.3269 | 1.4487 |
+
+絶対値としてはやや増加している。`radius_neighbors()` の殻走査はセルサイズを小さく
+保つ代償として、実際の候補数が少ない場合でも走査半径分のセルを律儀に辿るための
+固定オーバーヘッドを持つため（本ベンチのユニット配置は均一分散でカットオフ半径内の
+密度が低く、真の絞り込み効果が体感しにくいケース）。ただし `_select_target_fuzzy()`
+のファジィ推論コストが `room_size=50/100` の80〜90%を占めるという既知の支配的
+ボトルネック（24章参照）を踏まえると、この増分（10〜20%程度）はステップ全体で見れば
+無視できる範囲であり、本Issueの主目的（無限遠まで一定という非現実的な挙動の解消と、
+ユニット密度が高い場面で発生しうる真のO(N²)の解消）は達成できている。
+
+### 25.6 テスト
+
+`backend/tests/unit/test_potential_field.py` に以下を追加した:
+
+- `test_threat_enemy_repulsion_no_decay_within_scale`: `THREAT_REPULSION_DECAY_SCALE`
+  以内では距離によらず基準係数どおりの一定斥力になること
+- `test_threat_enemy_repulsion_decays_beyond_scale`: `THREAT_REPULSION_DECAY_SCALE` を
+  超えると 1/dist^2 で減衰すること
+- `test_threat_enemy_repulsion_cutoff_beyond_radius`: `THREAT_REPULSION_CUTOFF_RADIUS`
+  を超えた高脅威敵からは斥力が働かないこと
+
+`backend/tests/unit/test_spatial_grid.py` に `UnitSpatialGrid.radius_neighbors()` の
+テストを追加した:
+
+- `test_radius_neighbors_empty_grid_returns_nothing`: 空グリッドでは常に空を返すこと
+- `test_radius_neighbors_finds_unit_far_beyond_single_cell`: セルサイズより大きい
+  半径でも、セルサイズを固定したまま半径内の候補を拾えること
+- `test_radius_neighbors_matches_brute_force_over_random_layout`: ランダム配置において、
+  半径内の集合がO(N)総当たりの結果を過不足なく含むこと（セル単位の過剰検出はありうる
+  前提で、厳密な距離判定は呼び出し側の責務とする設計を検証）
+
+既存の `tests/unit` 全体（750件）が変更後もすべてパスすることを確認済み。

@@ -211,6 +211,63 @@ def test_nearest_matches_brute_force_over_random_layout() -> None:
 
 
 # ---------------------------------------------------------------------------
+# radius_neighbors (Issue #453)
+# ---------------------------------------------------------------------------
+
+
+def test_radius_neighbors_empty_grid_returns_nothing() -> None:
+    """空グリッドでは radius_neighbors() が常に空を返すこと."""
+    grid = UnitSpatialGrid([], cell_size=100.0)
+    assert list(grid.radius_neighbors(np.array([0.0, 0.0, 0.0]), radius=1000.0)) == []
+
+
+def test_radius_neighbors_finds_unit_far_beyond_single_cell() -> None:
+    """半径がセルサイズより大きくても、セルサイズを固定したまま半径内の候補を拾えること.
+
+    セルサイズをカットオフ半径そのものにする実装だとフィールド全体が数セルに
+    収まって絞り込みが効かなくなるため（PR #456 の Copilot レビューで指摘）、
+    セルサイズは小さく保ったまま殻走査で任意半径に対応できることを検証する。
+    """
+    near = _make_unit("near", 50.0, 0.0, 0.0)
+    far_in_range = _make_unit("far_in_range", 900.0, 0.0, 0.0)
+    far_out_of_range = _make_unit("far_out_of_range", 5000.0, 0.0, 0.0)
+    grid = UnitSpatialGrid([near, far_in_range, far_out_of_range], cell_size=100.0)
+
+    names = {
+        u.name for u in grid.radius_neighbors(np.array([0.0, 0.0, 0.0]), radius=1000.0)
+    }
+    assert names == {"near", "far_in_range"}
+
+
+def test_radius_neighbors_matches_brute_force_over_random_layout() -> None:
+    """ランダム配置において、radius_neighbors() がO(N)総当たりの半径内集合を過不足なく含むこと."""
+    rng = np.random.RandomState(453)  # noqa: NPY002 テスト再現性のため固定シード
+    units = [
+        _make_unit(f"u{i}", *rng.uniform(-2000.0, 2000.0, size=3).tolist())
+        for i in range(60)
+    ]
+    # セルサイズをカットオフ半径よりかなり小さくして殻走査を発生させる
+    grid = UnitSpatialGrid(units, cell_size=100.0)
+    radius = 600.0
+
+    for _ in range(20):
+        query = rng.uniform(-2000.0, 2000.0, size=3)
+        expected = {
+            u.name
+            for u in units
+            if float(np.linalg.norm(u.position.to_numpy() - query)) <= radius
+        }
+        result_candidates = list(grid.radius_neighbors(query, radius=radius))
+        # セル単位の過剰検出はありうるため、期待集合が結果に漏れなく含まれることを検証する
+        result_within_radius = {
+            u.name
+            for u in result_candidates
+            if float(np.linalg.norm(u.position.to_numpy() - query)) <= radius
+        }
+        assert result_within_radius == expected
+
+
+# ---------------------------------------------------------------------------
 # PointSpatialGrid (Issue #447)
 # ---------------------------------------------------------------------------
 

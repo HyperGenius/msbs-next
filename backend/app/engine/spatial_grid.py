@@ -154,6 +154,52 @@ class UnitSpatialGrid:
                 return best
             radius += 1
 
+    def radius_neighbors(self, pos: np.ndarray, radius: float) -> Iterator[MobileSuit]:
+        """指定座標から半径 `radius` 以内にいる可能性のある全ユニットを返す（Issue #453）.
+
+        `neighbors()` は固定 3x3x3 走査のため、`radius` がセルサイズより大きい
+        カットオフ距離（例: 高脅威敵斥力の早期打ち切り半径）に対しては候補を
+        取りこぼす。逆に `radius` に合わせてセルサイズ自体を大きくすると
+        （= セルサイズ ≒ 探索したい最大距離）、フィールド全体がわずか数セルに
+        収まってしまい 3x3x3 走査が実質的に全ユニットを返す退化が起きる
+        （PR #456 の Copilot レビューで指摘）。本メソッドは `nearest()` と同じ
+        殻走査（`_shell_offsets()`）を使い、セルサイズを固定したまま
+        `radius` に応じて走査半径（セル単位）だけを動的に広げることで、
+        小さいセルサイズによる細かい空間分割と、任意の探索半径への対応を両立する。
+
+        候補はセル単位で列挙するため、`radius` ぎりぎりの境界では実際の距離が
+        `radius` をわずかに超える候補が含まれうる（過剰検出）。呼び出し側で
+        厳密な距離判定を行うこと（`nearest()` と異なり最小距離での早期確定は
+        行わないため、`radius` 以内のセルを漏れなく列挙し終えるまで走査する）。
+
+        Args:
+            pos: 探索基準座標
+            radius: 探索半径 (m)
+
+        Returns:
+            半径内にいる可能性のあるユニットのイテレータ（重複なし、距離順は保証しない）
+        """
+        if not self._cells:
+            return
+
+        cx, cy, cz = self._cell_key(float(pos[0]), float(pos[1]), float(pos[2]))
+        grid_max_radius = max(
+            abs(cx - self._min_cell[0]),
+            abs(cx - self._max_cell[0]),
+            abs(cy - self._min_cell[1]),
+            abs(cy - self._max_cell[1]),
+            abs(cz - self._min_cell[2]),
+            abs(cz - self._max_cell[2]),
+        )
+        # 殻 r の最小距離は (r-1)*cell_size なので、それが radius を超えるまで走査すればよい
+        max_radius = min(grid_max_radius, int(radius // self.cell_size) + 1)
+
+        for r in range(max_radius + 1):
+            for dx, dy, dz in _shell_offsets(r):
+                cell = self._cells.get((cx + dx, cy + dy, cz + dz))
+                if cell:
+                    yield from cell
+
 
 class PointSpatialGrid:
     """逐次追加される座標点（np.ndarray）向けの軽量グリッド分割インデックス（Issue #447）.

@@ -27,6 +27,9 @@ from app.engine.constants import (
     STRAFE_ATTRACTION_COEFF,
     STRAFE_MIN_RANGE_RATIO,
     TERRAIN_ADAPTABILITY_MODIFIERS,
+    THREAT_ENEMY_REPULSION_COEFF,
+    THREAT_REPULSION_CUTOFF_RADIUS,
+    THREAT_REPULSION_DECAY_SCALE,
 )
 from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
@@ -38,6 +41,7 @@ class MovementMixin:
     # BattleSimulator が提供するインスタンス属性 (mypy 向け型宣言のみ; 実体は simulation.py)
     units: list[MobileSuit]
     _movement_grid: UnitSpatialGrid | None
+    _threat_repulsion_grid: UnitSpatialGrid | None
 
     def _get_movement_grid(self) -> UnitSpatialGrid:
         """ポテンシャルフィールド計算用のグリッドを取得する（1ステップに1回だけ構築. Issue #450）.
@@ -59,39 +63,70 @@ class MovementMixin:
             self._movement_grid = UnitSpatialGrid(alive_units, ALLY_REPULSION_RADIUS)
         return self._movement_grid
 
+    def _get_threat_repulsion_grid(self) -> UnitSpatialGrid:
+        """高脅威敵斥力計算用のグリッドを取得する（1ステップに1回だけ構築. Issue #453）.
+
+        セルサイズは早期打ち切り半径 `THREAT_REPULSION_CUTOFF_RADIUS` ではなく
+        `THREAT_REPULSION_DECAY_SCALE`（既定300m）を使う。カットオフ半径を
+        セルサイズにすると、フィールドがわずか数セルに収まってしまい
+        `neighbors()`（3x3x3固定走査）が実質的に全ユニットを返す退化が起きる
+        （PR #456 の Copilot レビューで指摘）。本グリッドは `neighbors()` では
+        なく `radius_neighbors()`（殻走査による可変半径探索）で使うため、
+        セルサイズを小さく保ったまま任意の半径まで絞り込みができる。
+        `_get_movement_grid()`（セルサイズ=`ALLY_REPULSION_RADIUS`=150m）とは
+        セルサイズの前提が異なるため共有せず別グリッドとして保持する
+        （`_get_movement_grid()` と同様、`step()` の冒頭で毎ステップ破棄される）。
+        """
+        if self._threat_repulsion_grid is None:
+            alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]
+            self._threat_repulsion_grid = UnitSpatialGrid(
+                alive_units, THREAT_REPULSION_DECAY_SCALE
+            )
+        return self._threat_repulsion_grid
+
     def _threat_enemy_repulsion(
         self,
         unit: MobileSuit,
         pos_unit: np.ndarray,
         weapon_range: float,
     ) -> np.ndarray:
-        """高脅威敵（自機射程外）への斥力ベクトルを返す.
+        """高脅威敵（自機射程外）への斥力ベクトルを返す（距離減衰付き. Issue #453）.
 
-        Issue #450 のスコープ外（本メソッドは本Issueでは最適化しない）:
-        下の `force +=` 式は `(-vec_to_enemy) / max(dist, 1.0)` であり
-        `vec_to_enemy` の大きさが `dist` に等しいため、`dist >= 1.0` の範囲では
-        距離によらずほぼ一定の大きさ（正規化ベクトル）の斥力になる。つまり
-        「減衰しつつも」ではなく実質的に**距離減衰がない**設計であり、近傍セルの
-        みに絞り込む・遠方を早期打ち切りするいずれの最適化も、遠方の高脅威敵から
-        の斥力を消してしまい挙動を変えてしまう。挙動変更を伴わずに済む
-        `_ally_repulsion` / `_closest_enemy_attraction` とは異なり安全に置き換え
-        られないため、本Issueでは対象外とし、挙動変更を許容したうえでの最適化は
-        フォローアップIssue（#453）で扱う。
+        Issue #450 時点の実装は `(-vec_to_enemy) / max(dist, 1.0)` であり、
+        `vec_to_enemy` の大きさが `dist` に等しいため `dist >= 1.0` の範囲では
+        距離によらずほぼ一定の大きさ（正規化ベクトル）になる、実質的に
+        距離減衰のない設計だった。本Issueでは
+        `THREAT_REPULSION_DECAY_SCALE`（既定300m、典型的な武器射程の下限帯）
+        以内は従来どおり一定の斥力を維持し、それより遠いと 1/dist^2 で減衰する
+        よう変更した上で、`UnitSpatialGrid.radius_neighbors()`（早期打ち切り半径
+        `THREAT_REPULSION_CUTOFF_RADIUS` 以内を殻走査で絞り込む）を使い候補を
+        絞り込む。2乗減衰にしている理由・カットオフ半径の根拠は
+        `constants.py` 参照（1乗減衰だと打ち切り半径がフィールドサイズと
+        同スケールになり、グリッドによる絞り込みが実質的に効かなくなるため）。
         """
         force = np.zeros(3)
-        all_enemies = [
-            u
-            for u in self.units
-            if u.current_hp > 0 and u.team_id != unit.team_id  # type: ignore[attr-defined]
-        ]
-        for enemy in all_enemies:
+        grid = self._get_threat_repulsion_grid()  # type: ignore[attr-defined]
+        for enemy in grid.radius_neighbors(pos_unit, THREAT_REPULSION_CUTOFF_RADIUS):
+            if enemy.current_hp <= 0 or enemy.team_id == unit.team_id:
+                continue
             vec_to_enemy = enemy.position.to_numpy() - pos_unit
             dist = float(np.linalg.norm(vec_to_enemy))
+            if dist > THREAT_REPULSION_CUTOFF_RADIUS:
+                continue
             threat_score = self._calculate_attack_power(enemy) / max(  # type: ignore[attr-defined]
                 1.0, float(unit.max_hp)
             )
             if threat_score > HIGH_THREAT_THRESHOLD and dist > weapon_range:
-                force += 1.5 * (-vec_to_enemy) / max(dist, 1.0)
+                decay = (
+                    THREAT_REPULSION_DECAY_SCALE
+                    / max(dist, THREAT_REPULSION_DECAY_SCALE)
+                ) ** 2
+                force += (
+                    THREAT_ENEMY_REPULSION_COEFF
+                    * decay
+                    * (-vec_to_enemy)
+                    / max(dist, 1.0)
+                )
         return force
 
     def _ally_repulsion(self, unit: MobileSuit, pos_unit: np.ndarray) -> np.ndarray:
