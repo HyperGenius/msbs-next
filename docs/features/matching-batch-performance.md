@@ -27,7 +27,7 @@ NPC補充処理は、`room_size` を増やすとNeon（チーム共有のリモ�
 
 ## 計測用ベンチマーク（`backend/scripts/matching_scale_bench.py`）
 
-DBを使わないシミュレーションベンチ（`sim_scale_bench.py`、Issue #446）とは別に、
+DBを使わないシミュレーションベンチ（`backend/scripts/simulation/sim_scale_bench.py`、Issue #446）とは別に、
 in-memory SQLiteでマッチングフェーズのSQL発行回数・処理時間を計測するスクリプトを用意した。
 Neonへの実レイテンシは再現できないが、「ルームサイズに対してクエリ発行回数が線形に増えていないか」は確認できる。
 

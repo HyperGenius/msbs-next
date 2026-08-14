@@ -166,7 +166,7 @@ class MatchingService:
                 # 残りは新規NPCで埋める
                 # MobileSuit.id / Pilot.id は default_factory (uuid4) でPython側で
                 # 即時採番されるため、IDを得るためのflushは不要。パイロット作成も
-                # 1体ごとのcommitを避け、add_all() + 1回のflushにまとめる。
+                # 1体ごとのcommitを避け、ループ内でadd()を積み上げてから1回のflushにまとめる。
                 pilot_service = PilotService(self.session)
                 for _ in range(new_count):
                     npc_suit = self._create_npc_mobile_suit()
