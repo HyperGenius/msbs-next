@@ -154,23 +154,27 @@ def test_nearest_expands_beyond_neighbor_cells_when_candidate_is_far() -> None:
 
 
 def test_nearest_picks_true_global_closest_not_first_populated_cell() -> None:
-    """最初に見つかったセルの候補ではなく、真にグローバルな最近傍を選ぶこと.
+    """最初に見つかった（=クエリと同じセル）候補ではなく、真にグローバルな最近傍を選ぶこと.
 
-    近傍セルに1体だけ候補がいるが、その少し外側のセルにさらに近い候補が
-    いる配置を作り、後者が正しく選ばれることを確認する
-    （単純な「最初に見つかったセルで打ち切り」実装だと誤って前者を返す）。
+    クエリと同一セル（探索半径0で見つかる）内に対角線方向で遠い候補を、
+    隣接セル（探索半径1で見つかる）内にセル境界のすぐ外側の近い候補を配置する。
+    「最初に非空セルが見つかった時点で打ち切る」誤実装だと同一セル側の遠い候補を
+    誤って返してしまうため、この配置でなければ回帰を検出できない
+    （半径0のセルに候補がいるだけの配置では両実装が同じ結果を返してしまう）。
     """
-    # 隣接セル(1,0,0)内、距離200m
-    near_cell_candidate = _make_unit("near_cell", 200.0, 0.0, 0.0)
-    # 隣接セルより遠いセルにいるが、直線距離としては近い候補（斜め方向）
-    # cell_size=150 のとき、(140, 0, 140) は距離約198mでセル(0,0,0)からは
-    # 隣接セル(0,0,0)自身に含まれるため、代わりにより明確な配置を使う。
-    closer_diagonal = _make_unit("closer", 60.0, 0.0, 60.0)  # 距離 ≒84.9m
-    grid = UnitSpatialGrid([near_cell_candidate, closer_diagonal], cell_size=150.0)
+    cell_size = 150.0
+    query = np.array([149.0, 0.0, 0.0])  # セル(0,0,0)に属する
 
-    result = grid.nearest(np.array([0.0, 0.0, 0.0]), lambda u: True)
+    # 同一セル(0,0,0)内だが対角線方向で遠い候補（距離 = 149*sqrt(3) ≒ 258m）
+    far_same_cell = _make_unit("far_same_cell", 0.0, 149.0, 149.0)
+    # 隣接セル(1,0,0)内だがセル境界のすぐ外側で近い候補（距離 = 1m）
+    near_adjacent_cell = _make_unit("near_adjacent_cell", 150.0, 0.0, 0.0)
+
+    grid = UnitSpatialGrid([far_same_cell, near_adjacent_cell], cell_size=cell_size)
+
+    result = grid.nearest(query, lambda u: True)
     assert result is not None
-    assert result.name == "closer"
+    assert result.name == "near_adjacent_cell"
 
 
 def test_nearest_respects_predicate_filter() -> None:

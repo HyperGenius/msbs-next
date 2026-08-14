@@ -126,8 +126,10 @@ class UnitSpatialGrid:
             abs(cz - self._max_cell[2]),
         )
 
+        # 比較・打ち切り判定にしか使わないため、候補ごとの sqrt（np.linalg.norm）を
+        # 避けて二乗距離のまま扱う（環状探索は候補評価回数が増えやすいため sqrt 回避が効く）
         best: MobileSuit | None = None
-        best_dist = float("inf")
+        best_dist_sq = float("inf")
         radius = 0
         while True:
             for dx, dy, dz in _shell_offsets(radius):
@@ -137,12 +139,16 @@ class UnitSpatialGrid:
                 for candidate in cell:
                     if not predicate(candidate):
                         continue
-                    dist = float(np.linalg.norm(candidate.position.to_numpy() - pos))
-                    if dist < best_dist:
-                        best_dist = dist
+                    diff = candidate.position.to_numpy() - pos
+                    dist_sq = float(
+                        diff[0] * diff[0] + diff[1] * diff[1] + diff[2] * diff[2]
+                    )
+                    if dist_sq < best_dist_sq:
+                        best_dist_sq = dist_sq
                         best = candidate
 
-            if best is not None and best_dist <= radius * self.cell_size:
+            safe_dist = radius * self.cell_size
+            if best is not None and best_dist_sq <= safe_dist * safe_dist:
                 return best
             if radius >= max_radius:
                 return best
