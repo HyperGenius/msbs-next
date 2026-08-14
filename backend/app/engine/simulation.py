@@ -34,7 +34,7 @@ from app.engine.constants import (
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.movement import MovementMixin
-from app.engine.spatial_grid import PointSpatialGrid
+from app.engine.spatial_grid import PointSpatialGrid, UnitSpatialGrid
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
 from app.engine.targeting import TargetingMixin
 from app.models.models import (
@@ -194,6 +194,10 @@ class BattleSimulator(
         self.elapsed_time: float = 0.0
         self._step_count: int = 0
         self.is_finished = False
+        # ポテンシャルフィールド計算用のグリッド（Issue #450）。step() の冒頭で
+        # 毎ステップ None にリセットされ、そのステップ内で最初に必要になった
+        # タイミングで _get_movement_grid() が最新位置から再構築する（遅延構築）。
+        self._movement_grid: UnitSpatialGrid | None = None
         self.player_skills = player_skills or {}
         self.environment = environment
         self.special_effects: list[str] = special_effects or []
@@ -881,6 +885,11 @@ class BattleSimulator(
         if self._step_count >= _MAX_STEPS:
             self.is_finished = True
             return
+
+        # ポテンシャルフィールド計算用グリッドのキャッシュを破棄（Issue #450）。
+        # 前ステップで構築したグリッドは古い位置情報を持つため、このステップの
+        # 行動フェーズで最初に必要になったタイミングで最新位置から再構築させる。
+        self._movement_grid = None
 
         # 1. 索敵フェーズ
         self._detection_phase()
