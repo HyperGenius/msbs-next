@@ -1892,8 +1892,8 @@ Copilotレビュー対応でカットオフ半径を現実的な大きさに縮�
 22章（Issue #446）〜25章（Issue #453）の一連の対応で候補列挙（索敵・ターゲット選定・
 ポテンシャルフィールド計算）のO(N²)構造は解消したが、`room_size=50/100` 規模で
 `cProfile` により再計測したところ、依然として `BattleSimulator.step()` の80〜90%を
-`FuzzyEngine` の推論処理（`infer_with_debug()` / `_centroid_for_variable()` /
-`_clip_and_combine()`）が占めていた。本Issueはこの真のボトルネックに直接対応する。
+`FuzzyEngine` の推論処理（`infer_with_debug()` / `_centroid_for_variable()` を含む重心デファジィフィケーション）が占めていた。
+本Issueはこの真のボトルネックに直接対応する。
 
 原因は2つある:
 
