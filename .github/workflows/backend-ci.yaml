@@ -33,6 +33,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check for engine changes
+        uses: dorny/paths-filter@v3
+        id: engine-diff
+        with:
+          filters: |
+            engine:
+              - 'backend/app/engine/**'
+
       - name: Setup python 3.11
         uses: actions/setup-python@v5
         with:
@@ -56,6 +64,10 @@ jobs:
 
       - name: Run tests (pytest)
         run: pytest
+
+      - name: Engine simulation smoke test
+        if: steps.engine-diff.outputs.engine == 'true'
+        run: python scripts/simulation/engine_ci_smoke.py
 
   deploy:
     needs: test
