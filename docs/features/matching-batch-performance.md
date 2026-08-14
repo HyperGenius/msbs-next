@@ -56,3 +56,30 @@ NPC数に比例してクエリ数が増加していた。
 `backend/scripts/run_batch.py` の `_save_battle_results`（デイリーバトルロイヤル用バッチ、
 `.github/workflows/scheduled-battle.yaml` から定期実行）は `MatchingService(session)` とデフォルト引数で
 呼んでいるため、本番の定員はこの変更により実際に50機へ引き上がる。
+
+## `relationship()` 未定義によるINSERT順序の不定性（Issue #461）
+
+上記の「新規NPC生成ループのバルク化」で、新規 `MobileSuit`/`Pilot`/`BattleEntry` を1回の
+`session.flush()` にまとめた際、`BattleEntry.mobile_suit_id` が参照する `MobileSuit` より
+先に `BattleEntry` がINSERTされ `battle_entries_mobile_suit_id_fkey` 違反になる不具合が
+本番で発生した（room_sizeを8→50へ引き上げた直後に顕在化）。
+
+`backend/app/models/models.py` では `MobileSuit`/`Pilot`/`BattleEntry` 間に SQLModel/SQLAlchemy の
+`relationship()` を一切定義しておらず、`Field(foreign_key=...)` によるスキーマレベルのFK制約しか
+持たない。**`relationship()` が無い場合、SQLAlchemyのflushは複数テーブルへのINSERT順序を
+`session.add()` した順序や実際のFK依存関係に基づいては決定しない**（同一クラスのオブジェクトを
+まとめてバルクINSERTする際のテーブル間の順序は事実上不定）。add()した順に親→子で並べていても
+子テーブルのINSERTが先に発行されるケースを再現テスト（`sqlite3` + `PRAGMA foreign_keys=ON`）で
+確認済み。本ベンチスクリプト（in-memory SQLite、既定でFK制約を有効化していない）はSQL発行回数の
+計測が目的で、この順序不定性を検出できていなかった。
+
+対策として、新規NPC生成ループを「`MobileSuit`/`Pilot` の生成・add・flush」→「その結果を使った
+`BattleEntry` の生成・add」の2段階に分割し、`BattleEntry` がINSERTされる前に参照先の
+`MobileSuit` が確実にDBへ反映されるようにした。ラウンドトリップは1回増える（NPC生成が発生する
+ルームにつき2回のflush）が、`room_size` に比例して増えるものではないため、Issue #448 で狙った
+「NPC数に依存しないラウンドトリップ数」という性質自体は維持している。
+
+**今後 `MobileSuit`/`Pilot`/`BattleEntry` のような「新規作成した親を新規作成した子が同一flush内で
+参照する」パターンを書く際は、`relationship()` を定義しない限りテーブル間のINSERT順序を
+SQLAlchemyに委ねてはいけない**。親をflushしてIDをDBへ確定させてから子を作成するか、
+`relationship()` を定義してORMに依存関係を教えるかのいずれかが必要。
