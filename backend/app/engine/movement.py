@@ -66,15 +66,21 @@ class MovementMixin:
     def _get_threat_repulsion_grid(self) -> UnitSpatialGrid:
         """高脅威敵斥力計算用のグリッドを取得する（1ステップに1回だけ構築. Issue #453）.
 
-        `_threat_enemy_repulsion()` の早期打ち切り半径 `THREAT_REPULSION_CUTOFF_RADIUS`
-        （既定 6000m）は `_get_movement_grid()` のセルサイズ（`ALLY_REPULSION_RADIUS`
-        =150m）と前提が大きく異なるため共有せず、別グリッドとして保持する
+        セルサイズは早期打ち切り半径 `THREAT_REPULSION_CUTOFF_RADIUS` ではなく
+        `THREAT_REPULSION_DECAY_SCALE`（既定300m）を使う。カットオフ半径を
+        セルサイズにすると、フィールドがわずか数セルに収まってしまい
+        `neighbors()`（3x3x3固定走査）が実質的に全ユニットを返す退化が起きる
+        （PR #456 の Copilot レビューで指摘）。本グリッドは `neighbors()` では
+        なく `radius_neighbors()`（殻走査による可変半径探索）で使うため、
+        セルサイズを小さく保ったまま任意の半径まで絞り込みができる。
+        `_get_movement_grid()`（セルサイズ=`ALLY_REPULSION_RADIUS`=150m）とは
+        セルサイズの前提が異なるため共有せず別グリッドとして保持する
         （`_get_movement_grid()` と同様、`step()` の冒頭で毎ステップ破棄される）。
         """
         if self._threat_repulsion_grid is None:
             alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]
             self._threat_repulsion_grid = UnitSpatialGrid(
-                alive_units, THREAT_REPULSION_CUTOFF_RADIUS
+                alive_units, THREAT_REPULSION_DECAY_SCALE
             )
         return self._threat_repulsion_grid
 
@@ -91,16 +97,16 @@ class MovementMixin:
         距離によらずほぼ一定の大きさ（正規化ベクトル）になる、実質的に
         距離減衰のない設計だった。本Issueでは
         `THREAT_REPULSION_DECAY_SCALE`（既定300m、典型的な武器射程の下限帯）
-        以内は従来どおり一定の斥力を維持し、それより遠いと 1/dist で減衰する
-        よう変更した上で、`UnitSpatialGrid`（セルサイズ=早期打ち切り半径
-        `THREAT_REPULSION_CUTOFF_RADIUS`）を使い候補を近傍セルに絞り込む。
-        `THREAT_REPULSION_CUTOFF_RADIUS` は斥力の大きさが基準係数
-        `THREAT_ENEMY_REPULSION_COEFF` の5%未満まで減衰する距離を基準に
-        設定している（根拠は `constants.py` 参照）。
+        以内は従来どおり一定の斥力を維持し、それより遠いと 1/dist^2 で減衰する
+        よう変更した上で、`UnitSpatialGrid.radius_neighbors()`（早期打ち切り半径
+        `THREAT_REPULSION_CUTOFF_RADIUS` 以内を殻走査で絞り込む）を使い候補を
+        絞り込む。2乗減衰にしている理由・カットオフ半径の根拠は
+        `constants.py` 参照（1乗減衰だと打ち切り半径がフィールドサイズと
+        同スケールになり、グリッドによる絞り込みが実質的に効かなくなるため）。
         """
         force = np.zeros(3)
         grid = self._get_threat_repulsion_grid()  # type: ignore[attr-defined]
-        for enemy in grid.neighbors(pos_unit):
+        for enemy in grid.radius_neighbors(pos_unit, THREAT_REPULSION_CUTOFF_RADIUS):
             if enemy.current_hp <= 0 or enemy.team_id == unit.team_id:
                 continue
             vec_to_enemy = enemy.position.to_numpy() - pos_unit
@@ -111,9 +117,10 @@ class MovementMixin:
                 1.0, float(unit.max_hp)
             )
             if threat_score > HIGH_THREAT_THRESHOLD and dist > weapon_range:
-                decay = THREAT_REPULSION_DECAY_SCALE / max(
-                    dist, THREAT_REPULSION_DECAY_SCALE
-                )
+                decay = (
+                    THREAT_REPULSION_DECAY_SCALE
+                    / max(dist, THREAT_REPULSION_DECAY_SCALE)
+                ) ** 2
                 force += (
                     THREAT_ENEMY_REPULSION_COEFF
                     * decay

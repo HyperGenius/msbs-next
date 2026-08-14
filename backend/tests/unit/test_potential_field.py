@@ -419,14 +419,18 @@ def test_threat_enemy_repulsion_no_decay_within_scale() -> None:
 
     assert np.isclose(
         float(np.linalg.norm(force_near)), THREAT_ENEMY_REPULSION_COEFF
-    ), "DECAY_SCALE 以内(100m)では基準係数どおりの一定斥力になること"
+    ), (
+        f"DECAY_SCALE未満({near_enemy.position.x}m)では基準係数どおりの"
+        "一定斥力になること"
+    )
     assert np.isclose(float(np.linalg.norm(force_far)), THREAT_ENEMY_REPULSION_COEFF), (
-        "DECAY_SCALE ちょうど(300m)でも基準係数どおりの一定斥力になること"
+        f"DECAY_SCALEちょうど({THREAT_REPULSION_DECAY_SCALE}m)でも"
+        "基準係数どおりの一定斥力になること"
     )
 
 
 def test_threat_enemy_repulsion_decays_beyond_scale() -> None:
-    """THREAT_REPULSION_DECAY_SCALE を超えると距離に反比例して減衰すること (#453)."""
+    """THREAT_REPULSION_DECAY_SCALE を超えると距離の2乗に反比例して減衰すること (#453)."""
     player = _make_unit(
         "Player",
         "PLAYER",
@@ -452,10 +456,10 @@ def test_threat_enemy_repulsion_decays_beyond_scale() -> None:
     )
 
     expected_magnitude = (
-        THREAT_ENEMY_REPULSION_COEFF * THREAT_REPULSION_DECAY_SCALE / dist
+        THREAT_ENEMY_REPULSION_COEFF * (THREAT_REPULSION_DECAY_SCALE / dist) ** 2
     )
     assert np.isclose(float(np.linalg.norm(force)), expected_magnitude), (
-        "DECAY_SCALE の2倍の距離では 1/dist で減衰した大きさになること"
+        "DECAY_SCALE の2倍の距離では 1/dist^2 で減衰した大きさになること"
     )
 
 
