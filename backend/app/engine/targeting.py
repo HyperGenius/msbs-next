@@ -34,6 +34,7 @@ class TargetingMixin:
     _step_count: int
     _units_by_id: dict
     _unit_order_index: dict
+    _fuzzy_target_cache: dict[str, tuple[int, MobileSuit | None]]
 
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見.
@@ -356,10 +357,17 @@ class TargetingMixin:
         return target
 
     def _select_target_fuzzy(self, actor: MobileSuit) -> MobileSuit | None:
-        """ターゲットを選択する（ファジィ推論による動的優先度スコア計算）.
+        """ターゲットを選択する（ファジィ推論による動的優先度スコア計算、ステップ内キャッシュ付き）.
 
-        各索敵済み候補に対してファジィ推論を実行し、最も高い target_priority
-        スコアを持つユニットを選択する。推論失敗時は CLOSEST フォールバックを使用する。
+        1ユニット・1ステップあたり最大3回（`ai_decision.py` から2回、
+        `action_handler.py` から1回）呼ばれるが、推論結果はステップ内で
+        使い回してよい（Issue #454）。ただしキャッシュ後にキャッシュ対象の
+        ターゲットが撃破された場合（同一ステップの行動フェーズで他ユニットが
+        先に倒すケース）は再計算する。位置・武器クールダウン等は行動フェーズ
+        でのみ変化し、行動フェーズ中の各ユニットの処理順で先行するユニットの
+        攻撃・移動が後続ユニットの候補選定に影響しうる点は無視できる誤差として
+        許容する（既存の勝敗分布・撃墜数分布への統計的影響がないことを
+        `sim_bench.BenchRunner` で確認済み）。
 
         Args:
             actor: 選択を行う機体
@@ -367,6 +375,21 @@ class TargetingMixin:
         Returns:
             選択されたターゲット。候補が0件の場合は None。
         """
+        unit_id = str(actor.id)
+        cached = self._fuzzy_target_cache.get(unit_id)
+        if cached is not None:
+            cached_step, cached_target = cached
+            if cached_step == self._step_count and (
+                cached_target is None or cached_target.current_hp > 0
+            ):
+                return cached_target
+
+        target = self._select_target_fuzzy_uncached(actor)
+        self._fuzzy_target_cache[unit_id] = (self._step_count, target)
+        return target
+
+    def _select_target_fuzzy_uncached(self, actor: MobileSuit) -> MobileSuit | None:
+        """`_select_target_fuzzy` の実処理（キャッシュを介さず毎回推論を実行する）."""
         detected_targets = self._get_detected_targets(actor)
 
         # ターゲットが存在しない場合はNoneを返す

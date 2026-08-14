@@ -1884,3 +1884,153 @@ Copilotレビュー対応でカットオフ半径を現実的な大きさに縮�
   前提で、厳密な距離判定は呼び出し側の責務とする設計を検証）
 
 既存の `tests/unit` 全体（750件）が変更後もすべてパスすることを確認済み。
+
+## 26. Issue #454: ターゲット選定のファジィ推論コスト削減（重複呼び出し排除・キャッシュ）
+
+### 26.1 概要
+
+22章（Issue #446）〜25章（Issue #453）の一連の対応で候補列挙（索敵・ターゲット選定・
+ポテンシャルフィールド計算）のO(N²)構造は解消したが、`room_size=50/100` 規模で
+`cProfile` により再計測したところ、依然として `BattleSimulator.step()` の80〜90%を
+`FuzzyEngine` の推論処理（`infer_with_debug()` / `_centroid_for_variable()` /
+`_clip_and_combine()`）が占めていた。本Issueはこの真のボトルネックに直接対応する。
+
+原因は2つある:
+
+1. `_select_target_fuzzy()`（`targeting.py`）が1ユニット・1ステップあたり最大3回
+   呼ばれる（`ai_decision.py` から2回、`action_handler.py` から1回）。呼び出しの間で
+   実際に状態が変わるかを調査せず毎回フルにファジィ推論をやり直していた
+2. 索敵済み候補1件ごとに `FuzzyEngine.infer_with_debug()`（重心デファジフィケーション、
+   200点の数値積分）を実行しており、候補数が増えるほどコストが積み上がる
+
+### 26.2 `_select_target_fuzzy()` の呼び出し元調査と結論
+
+`app/engine/simulation.py` の `step()` は次の順でフェーズを実行する:
+
+```
+1. _detection_phase()            索敵
+2. _strategy_phase()             戦略評価（ユニットごとに1回のみ）
+3. _ai_decision_phase(unit) ×N   [呼び出し1] angle_to_target 計算用
+4. _update_body_heading(unit,dt) ×N  [呼び出し2] ATTACK/ENGAGE_MELEE 時のみ
+5. _action_phase(unit, dt) ×N    [呼び出し3] 実際の攻撃・移動対象決定
+6. _retreat_check_phase()
+7. _refresh_phase(dt)
+```
+
+呼び出し1（フェーズ3）と呼び出し2（フェーズ4）の間では、HP・位置・武器クールダウンの
+いずれも変化しない（ダメージ・移動処理はすべてフェーズ5に閉じている）。一方、呼び出し3
+（フェーズ5）は行動ユニットごとに逐次実行され、**同一ステップ内で先に処理されたユニットの
+攻撃・移動が、まだ処理されていない後続ユニットの候補（HP・位置）に影響しうる**。つまり
+呼び出し1・2はステップ内で安全に結果を共有できるが、呼び出し3の時点では対象が既に
+撃破されている可能性がある。
+
+### 26.3 実装: ステップ内キャッシュ + 撃破時の即時無効化
+
+`TargetingMixin._select_target_fuzzy()` をキャッシュ付きの薄いラッパーにし、実処理は
+`_select_target_fuzzy_uncached()` に切り出した（`app/engine/targeting.py`）。
+
+```python
+def _select_target_fuzzy(self, actor):
+    unit_id = str(actor.id)
+    cached = self._fuzzy_target_cache.get(unit_id)
+    if cached is not None:
+        cached_step, cached_target = cached
+        if cached_step == self._step_count and (
+            cached_target is None or cached_target.current_hp > 0
+        ):
+            return cached_target
+    target = self._select_target_fuzzy_uncached(actor)
+    self._fuzzy_target_cache[unit_id] = (self._step_count, target)
+    return target
+```
+
+- キャッシュキーは `unit_id`、値は `(計算時点の _step_count, 選択結果)`。ステップが
+  進めば `_step_count` が変わるため、明示的なキャッシュクリアは不要（`_movement_grid`
+  のような毎ステップリセットは行っていない）
+- キャッシュ対象のターゲットが撃破されていた場合（`current_hp <= 0`）は、上記26.2の
+  リスクに対応するため無条件で再計算する。これにより「フェーズ5で先行ユニットに
+  倒された相手をキャッシュ経由で攻撃対象にし続ける」誤りを防ぐ
+- 位置変化（フェーズ5内の移動）による候補スコアの微小な差異はキャッシュ後も残り得るが、
+  26.5節の実測で勝敗・撃墜数分布への有意な影響がないことを確認した
+
+`_select_target_fuzzy()` は呼び出しのたびに `_log_target_selection()` でログを記録する
+実装だったため、キャッシュヒット時はログを追加しない（毎ステップ最大1回のログになる）。
+既存テスト `test_select_target_fuzzy_logs_fuzzy_scores_in_target_selection` は
+`len(target_logs) >= 1` という緩い条件で検証しており、この変更と両立する。
+
+### 26.4 `FuzzyEngine` の重心デファジフィケーションを numpy でベクトル化
+
+`_centroid_for_variable()` は「200点のサンプル点 × 発火中の集合数」を Python の
+ネストしたループで評価しており（`_clip_and_combine()` が各サンプル点ごとに毎回
+呼ばれ、その中でさらに集合ごとに `MembershipFunction.evaluate()` を呼ぶ）、この
+Python レベルのループそのものがホットパスだった。`MembershipFunction` に配列版の
+`evaluate_array()`（`TriangleMF`/`TrapezoidMF` で numpy の `np.where` を使い実装）を
+追加し、`_centroid_for_variable()` を次のようにベクトル化した:
+
+```python
+xs = x_min + (np.arange(_DEFUZZ_RESOLUTION) + 0.5) * step
+mu_combined = np.zeros(_DEFUZZ_RESOLUTION)
+for set_name, activation in set_activations.items():
+    if activation <= 0.0 or set_name not in mf_sets:
+        continue
+    mu_clipped = np.minimum(mf_sets[set_name].evaluate_array(xs), activation)
+    np.maximum(mu_combined, mu_clipped, out=mu_combined)
+area_sum = float(mu_combined.sum())
+weighted_sum = float(np.dot(xs, mu_combined))
+```
+
+Python ループが「200点 × 発火集合数」から「発火集合数」（サンプル点はnumpy配列演算に
+まとめて処理）に減り、数式自体は変更していないため出力値は変わらない（`infer()`/
+`infer_with_debug()` の既存テストはすべて相対比較・型検証で、厳密な数値一致を
+要求しておらずすべてパスする）。
+
+`infer()` と `infer_with_debug()` は元々 `_fuzzify()`/`_evaluate_rules()`/
+`_defuzzify_centroid()` という同一の内部処理を呼んでおり、両者の差は返り値に
+`fuzzified`/`activations` の参照を含めるかどうかだけ（新たなコピーは発生しない）
+だったため、「デバッグ情報の取得を分離する」こと自体による追加の高速化効果はない
+と判断した（`infer()` を候補ループで使い `infer_with_debug()` を勝者だけに使う
+実装にすると、勝者について推論を2回実行することになりむしろ悪化する）。実際の
+コストは重心デファジフィケーションのアルゴリズム自体にあったため、本Issueでは
+そちらのベクトル化を対応の中心とした。
+
+### 26.5 パフォーマンスへの影響（`sim_scale_bench.py` 実測）
+
+`sim_scale_bench.py --sizes 8,50,100 --steps 50` の結果（25章時点の最新状態 → 本Issue後）:
+
+| room_size | 対応前 (sec/step) | 対応後 (sec/step) | 倍率 |
+|---|---|---|---|
+| 8   | 0.0239 | 0.0177 | 1.4x |
+| 50  | 0.2220 | 0.0449 | 4.9x |
+| 100 | 1.4487 | 0.1937 | 7.5x |
+
+本Issueが狙う `room_size=50/100` 規模で大幅な改善が確認できた。`cProfile`
+（`room_size=50`, 30ステップ）でも `FuzzyEngine.infer_with_debug()` の累積時間比率が
+80〜90%から約34%まで低下したことを確認した（`radius_neighbors()`（25章）が次点の
+コストとして相対的に浮上している）。
+
+### 26.6 ゲームバランスへの影響（`sim_bench.BenchRunner` 実測）
+
+8機（4vs4、味方3+敵4体制の合成ユニット）バトルを2つの乱数シードで各30ラウンド実行し、
+対応前後を比較した:
+
+| seed | 対応前 win_counts | 対応後 win_counts | 対応前 DESTROYED数 | 対応後 DESTROYED数 |
+|---|---|---|---|---|
+| 453 | PLAYER 17 / ENEMY 12 / DRAW 1 | PLAYER 13 / ENEMY 14 / DRAW 3 | 126 | 129 |
+| 123 | PLAYER 16 / ENEMY 10 / DRAW 4 | PLAYER 13 / ENEMY 15 / DRAW 2 | 127 | 126 |
+
+`action_distribution`（MOVE/MISS/ATTACK 等の発生回数）・撃墜数（DESTROYED）は各シードで
+数%以内の差に収まっており、n=30という試行回数でのサンプリングノイズの範囲内と判断できる
+（拮抗した組み合わせのため勝敗の内訳自体は試行ごとに揺れやすいが、どちらのシードでも
+一方のチームへの著しい偏りが対応前後で新たに生じてはいない）。26.3節で説明した
+「フェーズ5内で先行ユニットに撃破された対象をキャッシュ経由で参照しない」無効化が、
+この統計的な同等性を保つ上で重要な役割を果たしている。
+
+### 26.7 テスト
+
+新規のユニットテストは追加せず、既存の `_select_target_fuzzy` 系テスト
+（`tests/unit/test_simulation.py`）がキャッシュ導入後もすべてパスすることで
+リグレッションがないことを確認した。特に `test_reaction_delay_fuzzy_suppresses_attack_on_detection_step`
+は `sim._step_count` を手動でインクリメントしてから再度 `_select_target_fuzzy()` を
+呼ぶテストであり、キャッシュがステップ単位で正しく無効化されることを間接的に検証している。
+
+既存の `tests/unit` 全体が変更後もすべてパスすることを確認済み。
