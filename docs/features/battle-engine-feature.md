@@ -1694,7 +1694,7 @@ MOVE行動時の「最も近い敵」はグローバルな最近傍である必�
 大きさになる、つまり実質的に距離減衰がない設計になっている。近傍セルへの絞り込みや
 早期打ち切りは遠方の高脅威敵からの斥力を消してしまい挙動を変えるため、`_ally_repulsion`/
 `_closest_enemy_attraction` と異なり本Issueのスコープ外とした。挙動変更を許容した上での
-対応は Issue #453 に切り出した。
+対応は Issue #453 に切り出した（→ 25章）。
 
 ### 24.5 グリッドの構築タイミング: 1ステップに1回だけキャッシュ
 
@@ -1751,3 +1751,88 @@ Issue #446 のPR #449と同一手法）で実施した:
   厳密一致）
 - 既存の `tests/unit` 全体（`test_potential_field.py` を含む）が最適化後もすべてパス
   することを確認済み
+
+## 25. Issue #453: 高脅威敵斥力の距離減衰導入とO(N²)対策
+
+### 25.1 概要
+
+24章（Issue #450）でスコープ外とした `_threat_enemy_repulsion()`（高脅威敵・自機射程外
+への斥力）に、挙動変更を許容した上で距離減衰を導入し、`UnitSpatialGrid` によるグリッド化
+（早期打ち切り）を行った。
+
+### 25.2 距離減衰式
+
+旧式 `1.5 * (-vec_to_enemy) / max(dist, 1.0)` は `vec_to_enemy` の大きさが `dist` に
+等しいため、`dist >= 1.0` の範囲で距離によらずほぼ一定の大きさ（正規化ベクトル）になる、
+実質的に距離減衰のない設計だった。新式では `THREAT_REPULSION_DECAY_SCALE`
+（既定300m、`app/engine/constants.py`。典型的な武器射程の下限帯に合わせた基準値）を
+導入し:
+
+```
+decay = THREAT_REPULSION_DECAY_SCALE / max(dist, THREAT_REPULSION_DECAY_SCALE)
+force += THREAT_ENEMY_REPULSION_COEFF * decay * (-vec_to_enemy) / max(dist, 1.0)
+```
+
+- `dist <= THREAT_REPULSION_DECAY_SCALE`: `decay = 1` となり旧式と同じ一定の斥力
+  （`THREAT_ENEMY_REPULSION_COEFF = 1.5`）を維持する
+- `dist > THREAT_REPULSION_DECAY_SCALE`: `decay = THREAT_REPULSION_DECAY_SCALE / dist`
+  となり、大きさが `THREAT_ENEMY_REPULSION_COEFF * THREAT_REPULSION_DECAY_SCALE / dist`
+  （1/dist に比例）で減衰する
+
+`max(dist, 1.0)` のクランプは維持しており、近距離での発散は起きない。
+
+### 25.3 早期打ち切り半径とグリッド化
+
+早期打ち切り半径 `THREAT_REPULSION_CUTOFF_RADIUS`（既定6000m）は、斥力の大きさが
+基準係数 `THREAT_ENEMY_REPULSION_COEFF` の5%未満まで減衰する距離
+（= `20 * THREAT_REPULSION_DECAY_SCALE`）を基準に設定した。この半径をセルサイズとする
+専用の `UnitSpatialGrid`（`MovementMixin._get_threat_repulsion_grid()`）を新設し、
+`neighbors()`（3x3x3近傍走査）で候補を絞り込んだ上で、`dist > THREAT_REPULSION_CUTOFF_RADIUS`
+の候補は明示的にスキップする。24章の `_get_movement_grid()`（セルサイズ=
+`ALLY_REPULSION_RADIUS`=150m）とはカットオフ半径の前提が大きく異なるため、共有せず
+別グリッドとして保持している（`_movement_grid` と同様、`step()` の冒頭で毎ステップ
+`self._threat_repulsion_grid = None` にリセットされ、次のステップで最新位置から再構築）。
+
+### 25.4 ゲームバランスへの影響（`sim_bench.BenchRunner` 実測）
+
+8機（4vs4）バトルを2つの乱数シードで実行し、導入前後を比較した:
+
+| seed | ラウンド数 | 導入前 win_counts | 導入後 win_counts | 導入前 平均戦闘時間 | 導入後 平均戦闘時間 |
+|---|---|---|---|---|---|
+| 453 | 50 | PLAYER 1 / ENEMY 49 / DRAW 0 | PLAYER 25 / ENEMY 23 / DRAW 2 | 54.98s | 24.93s |
+| 123 | 20 | PLAYER 0 / ENEMY 20 / DRAW 0 | PLAYER 0 / ENEMY 20 / DRAW 0 | 15.14s | 15.15s |
+
+seed=123 はユニット性能差自体で一方的な結果になる組み合わせで、斥力式変更による差は
+ほぼ無かった。一方 seed=453 では、導入前は劣勢側が「射程外の高脅威敵から無限遠まで
+一定の力で逃げ続ける」ため戦闘に参加できず一方的に負け続けていたが、導入後は逃げの
+強制力が現実的な距離帯（数百m）に収まり、勝率がほぼ互角（25-23-2）まで是正され、
+平均戦闘時間もほぼ半減した（55s→25s）。この変更は最適化に留まらず、旧実装の
+「非減衰・無限遠まで一定」という設計自体が組み合わせ次第で一方的な不均衡を生む
+要因になっていたことを示す結果となった。
+
+### 25.5 パフォーマンスへの影響（`sim_scale_bench.py` 実測）
+
+`sim_scale_bench.py --sizes 8,50,100 --steps 50` の結果（導入前 → 導入後）:
+
+| room_size | 導入前 (sec/step) | 導入後 (sec/step) |
+|---|---|---|
+| 8   | 0.0160 | 0.0172 |
+| 50  | 0.1982 | 0.1984 |
+| 100 | 1.3269 | 1.3472 |
+
+24章と同様、`room_size=50/100` ではノイズの範囲内で横ばい。`_select_target_fuzzy()`
+のファジィ推論コストが依然として支配的であるため、本Issueの最適化もこのスケールでは
+補助的な位置づけとなる。
+
+### 25.6 テスト
+
+`backend/tests/unit/test_potential_field.py` に以下を追加した:
+
+- `test_threat_enemy_repulsion_no_decay_within_scale`: `THREAT_REPULSION_DECAY_SCALE`
+  以内では距離によらず基準係数どおりの一定斥力になること
+- `test_threat_enemy_repulsion_decays_beyond_scale`: `THREAT_REPULSION_DECAY_SCALE` を
+  超えると 1/dist で減衰すること
+- `test_threat_enemy_repulsion_cutoff_beyond_radius`: `THREAT_REPULSION_CUTOFF_RADIUS`
+  を超えた高脅威敵からは斥力が働かないこと
+
+既存の `tests/unit` 全体が変更後もすべてパスすることを確認済み。

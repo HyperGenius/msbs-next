@@ -198,6 +198,9 @@ class BattleSimulator(
         # 毎ステップ None にリセットされ、そのステップ内で最初に必要になった
         # タイミングで _get_movement_grid() が最新位置から再構築する（遅延構築）。
         self._movement_grid: UnitSpatialGrid | None = None
+        # 高脅威敵斥力計算用のグリッド（Issue #453）。セルサイズが上記と異なるため
+        # 別キャッシュとして持つ。同様に step() の冒頭で毎ステップリセットされる。
+        self._threat_repulsion_grid: UnitSpatialGrid | None = None
         self.player_skills = player_skills or {}
         self.environment = environment
         self.special_effects: list[str] = special_effects or []
@@ -886,10 +889,11 @@ class BattleSimulator(
             self.is_finished = True
             return
 
-        # ポテンシャルフィールド計算用グリッドのキャッシュを破棄（Issue #450）。
+        # ポテンシャルフィールド計算用グリッドのキャッシュを破棄（Issue #450/#453）。
         # 前ステップで構築したグリッドは古い位置情報を持つため、このステップの
         # 行動フェーズで最初に必要になったタイミングで最新位置から再構築させる。
         self._movement_grid = None
+        self._threat_repulsion_grid = None
 
         # 1. 索敵フェーズ
         self._detection_phase()

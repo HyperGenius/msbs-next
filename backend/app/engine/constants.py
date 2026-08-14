@@ -87,6 +87,24 @@ MOVE_LOG_MIN_DIST: float = (
     100.0  # MOVE ログを出力する最小残距離 (m) — これ未満では MOVE ログを抑制する
 )
 
+# 高脅威敵斥力の距離減衰設定 (Issue #453)
+# `_threat_enemy_repulsion()` は元々 `dist >= 1.0` の範囲で距離によらずほぼ一定
+# （正規化ベクトル）の斥力になる非減衰設計だった。この定数導入後は、
+# THREAT_ENEMY_REPULSION_COEFF * THREAT_REPULSION_DECAY_SCALE / max(dist, THREAT_REPULSION_DECAY_SCALE)
+# を係数として掛けることで、THREAT_REPULSION_DECAY_SCALE 以内は元の一定斥力を
+# 維持し、それより遠いと 1/dist で減衰する（典型的な武器射程・索敵範囲での
+# 挙動変化を抑えつつ、無限遠まで一定という非現実的な挙動を解消する）。
+THREAT_ENEMY_REPULSION_COEFF: float = 1.5  # 高脅威敵斥力の基準係数
+THREAT_REPULSION_DECAY_SCALE: float = (
+    300.0  # この距離 (m) 以内は減衰させない基準スケール（典型的な武器射程の下限帯）
+)
+THREAT_REPULSION_CUTOFF_RADIUS: float = (
+    # 早期打ち切り半径 (m)。斥力の大きさが THREAT_ENEMY_REPULSION_COEFF の 5%
+    # （= THREAT_ENEMY_REPULSION_COEFF * THREAT_REPULSION_DECAY_SCALE / dist）
+    # 未満まで減衰する距離 = 20 * THREAT_REPULSION_DECAY_SCALE を基準に設定。
+    20.0 * THREAT_REPULSION_DECAY_SCALE
+)
+
 # 撤退ポイント引力係数 (Phase 3-3)
 RETREAT_ATTRACTION_COEFF: float = 5.0  # 撤退ポイントへの強引力係数
 
