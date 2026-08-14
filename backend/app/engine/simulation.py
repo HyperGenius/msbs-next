@@ -179,6 +179,16 @@ class BattleSimulator(
         self.player = player
         self.enemies = enemies
         self.units: list[MobileSuit] = [player] + enemies
+        # ユニット ID → ユニット の対応表（索敵・ターゲット選定処理でのO(1)引き当て用。Issue #446）
+        # self.units の要素構成（リスト自体）はバトル中不変のため、生成時に一度だけ構築すればよい
+        self._units_by_id: dict[uuid.UUID, MobileSuit] = {
+            unit.id: unit for unit in self.units
+        }
+        # ユニット ID → self.units 内での出現順序（ターゲット選定の候補ソートで
+        # 従来の走査順（self.units 順）による同点時タイブレークを再現するために使用。Issue #446）
+        self._unit_order_index: dict[uuid.UUID, int] = {
+            unit.id: i for i, unit in enumerate(self.units)
+        }
         self.logs: list[BattleLog] = []
         self.elapsed_time: float = 0.0
         self._step_count: int = 0
