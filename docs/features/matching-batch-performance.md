@@ -49,3 +49,10 @@ python scripts/matching_scale_bench.py
 `room_size` を8→100に引き上げてもSQL発行回数は一定（10クエリ）のまま。最適化前の実装では
 NPC1体ごとに「一括取得できない個別クエリ」「機体flush」「NPCパイロットの個別commit」が発生していたため、
 NPC数に比例してクエリ数が増加していた。
+
+## デフォルト定員の引き上げ
+
+上記の検証結果を踏まえ、`MatchingService.room_size` のデフォルト値を8機から50機へ引き上げた。
+`backend/scripts/run_batch.py` の `_save_battle_results`（デイリーバトルロイヤル用バッチ、
+`.github/workflows/scheduled-battle.yaml` から定期実行）は `MatchingService(session)` とデフォルト引数で
+呼んでいるため、本番の定員はこの変更により実際に50機へ引き上がる。
