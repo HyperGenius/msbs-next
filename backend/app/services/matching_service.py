@@ -145,7 +145,6 @@ class MatchingService:
                     )
                     npc_suit.current_hp = npc_suit.max_hp
                     self.session.add(npc_suit)
-                    self.session.flush()
 
                     _coerce_suit_json_fields(npc_suit)
                     snapshot = npc_suit.model_dump()
@@ -165,21 +164,22 @@ class MatchingService:
                     )
 
                 # 残りは新規NPCで埋める
+                # MobileSuit.id / Pilot.id は default_factory (uuid4) でPython側で
+                # 即時採番されるため、IDを得るためのflushは不要。パイロット作成も
+                # 1体ごとのcommitを避け、ループ内でadd()を積み上げてから1回のflushにまとめる。
                 pilot_service = PilotService(self.session)
                 for _ in range(new_count):
                     npc_suit = self._create_npc_mobile_suit()
-                    self.session.add(npc_suit)
-                    self.session.flush()  # IDを取得するためにflush
 
-                    # 新規NPC用のパイロットレコードを作成
+                    # 新規NPC用のパイロットレコードを作成（DBアクセスなし）
                     pilot_name = npc_suit.pilot_name or npc_suit.name
                     personality = npc_suit.personality or "AGGRESSIVE"
-                    npc_pilot = pilot_service.create_npc_pilot(pilot_name, personality)
+                    npc_pilot = pilot_service.build_npc_pilot(pilot_name, personality)
 
                     # 機体を NPC パイロットの user_id に紐付ける
                     npc_suit.user_id = npc_pilot.user_id
                     self.session.add(npc_suit)
-                    self.session.flush()
+                    self.session.add(npc_pilot)
 
                     _coerce_suit_json_fields(npc_suit)
                     snapshot = npc_suit.model_dump()
@@ -195,6 +195,9 @@ class MatchingService:
                     )
                     self.session.add(npc_entry)
                     entries.append(npc_entry)
+
+                # ここまでの新規 MobileSuit/Pilot/BattleEntry をまとめて1回のflushで送信
+                self.session.flush()
 
             # ルームのステータスを更新
             room.status = "WAITING"
@@ -233,17 +236,26 @@ class MatchingService:
         # ランダムにシャッフルして必要数を選択
         selected_pilots = random.sample(npc_pilots, min(count, len(npc_pilots)))
 
-        result = []
+        # 選択したパイロット全員分の機体を1回のクエリで一括取得（N+1解消）
+        user_ids = [pilot.user_id for pilot in selected_pilots]
+        suit_statement = (
+            select(MobileSuit)
+            .where(MobileSuit.user_id.in_(user_ids))  # type: ignore[union-attr]
+            .where(MobileSuit.side == "ENEMY")
+        )
+        suits = list(self.session.exec(suit_statement).all())
+
+        # user_id ごとに最初の1体を対応付ける（従来の .first() と同じ選定結果）
+        suit_by_user_id: dict[str | None, MobileSuit] = {}
+        for suit in suits:
+            if suit.user_id not in suit_by_user_id:
+                suit_by_user_id[suit.user_id] = suit
+
+        result: list[tuple[MobileSuit, Pilot]] = []
         for pilot in selected_pilots:
-            # このパイロットの user_id に紐づく機体を取得
-            suit_statement = (
-                select(MobileSuit)
-                .where(MobileSuit.user_id == pilot.user_id)
-                .where(MobileSuit.side == "ENEMY")
-            )
-            suit = self.session.exec(suit_statement).first()
-            if suit:
-                result.append((suit, pilot))
+            found_suit = suit_by_user_id.get(pilot.user_id)
+            if found_suit:
+                result.append((found_suit, pilot))
 
         return result
 

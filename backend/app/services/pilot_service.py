@@ -44,18 +44,22 @@ class PilotService:
         """
         return level * 100
 
-    def create_npc_pilot(self, name: str, personality: str) -> Pilot:
-        """NPC パイロットを新規作成する.
+    def build_npc_pilot(self, name: str, personality: str) -> Pilot:
+        """NPC パイロットのレコードをメモリ上に構築する（DBアクセスなし）.
+
+        `Pilot.id`/`user_id` はここで確定するため、呼び出し側で複数体を
+        `add_all()` してから1回の `flush()`/`commit()` にまとめられる
+        （大量生成時の DB ラウンドトリップ削減）。
 
         Args:
             name: NPC パイロット名
             personality: NPC の性格 (AGGRESSIVE/CAUTIOUS/SNIPER)
 
         Returns:
-            Pilot: 作成された NPC パイロット
+            Pilot: セッションにはまだ追加されていない NPC パイロット
         """
         npc_user_id = f"npc-{uuid.uuid4().hex}"
-        pilot = Pilot(
+        return Pilot(
             user_id=npc_user_id,
             name=name,
             is_npc=True,
@@ -64,6 +68,18 @@ class PilotService:
             exp=0,
             credits=0,
         )
+
+    def create_npc_pilot(self, name: str, personality: str) -> Pilot:
+        """NPC パイロットを新規作成し、即座にDBへ永続化する.
+
+        Args:
+            name: NPC パイロット名
+            personality: NPC の性格 (AGGRESSIVE/CAUTIOUS/SNIPER)
+
+        Returns:
+            Pilot: 作成された NPC パイロット
+        """
+        pilot = self.build_npc_pilot(name, personality)
         self.session.add(pilot)
         self.session.commit()
         self.session.refresh(pilot)
