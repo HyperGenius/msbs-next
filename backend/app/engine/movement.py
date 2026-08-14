@@ -28,6 +28,7 @@ from app.engine.constants import (
     STRAFE_MIN_RANGE_RATIO,
     TERRAIN_ADAPTABILITY_MODIFIERS,
 )
+from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
 
 
@@ -36,6 +37,27 @@ class MovementMixin:
 
     # BattleSimulator が提供するインスタンス属性 (mypy 向け型宣言のみ; 実体は simulation.py)
     units: list[MobileSuit]
+    _movement_grid: UnitSpatialGrid | None
+
+    def _get_movement_grid(self) -> UnitSpatialGrid:
+        """ポテンシャルフィールド計算用のグリッドを取得する（1ステップに1回だけ構築. Issue #450）.
+
+        `_ally_repulsion()` / `_closest_enemy_attraction()` は行動ユニットごとに
+        呼ばれるため、グリッド自体は最初の呼び出し時に一度だけ構築してキャッシュし、
+        以降の同一ステップ内の呼び出しでは使い回す。キャッシュは `step()` の冒頭
+        （`app/engine/simulation.py`）で毎ステップ確実に破棄されるため、次のステップでは
+        その時点の最新位置で再構築される。
+
+        セルサイズは `ALLY_REPULSION_RADIUS` を使う（`_ally_repulsion()` の固定半径
+        カットオフに対して3x3x3近傍走査が漏れなく候補を捕捉できる最小サイズ）。
+        `_closest_enemy_attraction()` 側は `UnitSpatialGrid.nearest()` の環状探索を
+        使うため、セルサイズがこれより大きくても正しさには影響しない
+        （探索対象は近傍セルに限定されず自動的に拡張される）。
+        """
+        if self._movement_grid is None:
+            alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]
+            self._movement_grid = UnitSpatialGrid(alive_units, ALLY_REPULSION_RADIUS)
+        return self._movement_grid
 
     def _threat_enemy_repulsion(
         self,
@@ -43,7 +65,19 @@ class MovementMixin:
         pos_unit: np.ndarray,
         weapon_range: float,
     ) -> np.ndarray:
-        """高脅威敵（自機射程外）への斥力ベクトルを返す."""
+        """高脅威敵（自機射程外）への斥力ベクトルを返す.
+
+        Issue #450 のスコープ外（本メソッドは本Issueでは最適化しない）:
+        下の `force +=` 式は `(-vec_to_enemy) / max(dist, 1.0)` であり
+        `vec_to_enemy` の大きさが `dist` に等しいため、`dist >= 1.0` の範囲では
+        距離によらずほぼ一定の大きさ（正規化ベクトル）の斥力になる。つまり
+        「減衰しつつも」ではなく実質的に**距離減衰がない**設計であり、近傍セルの
+        みに絞り込む・遠方を早期打ち切りするいずれの最適化も、遠方の高脅威敵から
+        の斥力を消してしまい挙動を変えてしまう。挙動変更を伴わずに済む
+        `_ally_repulsion` / `_closest_enemy_attraction` とは異なり安全に置き換え
+        られないため、本Issueでは対象外とし、挙動変更を許容したうえでの最適化は
+        フォローアップIssue（#453）で扱う。
+        """
         force = np.zeros(3)
         all_enemies = [
             u
@@ -61,14 +95,21 @@ class MovementMixin:
         return force
 
     def _ally_repulsion(self, unit: MobileSuit, pos_unit: np.ndarray) -> np.ndarray:
-        """味方ユニットへの弱い斥力ベクトルを返す（密集防止）."""
+        """味方ユニットへの弱い斥力ベクトルを返す（密集防止）.
+
+        `ALLY_REPULSION_RADIUS` 固定のカットオフ半径を持つため、`UnitSpatialGrid`
+        （セルサイズ = `ALLY_REPULSION_RADIUS`）の3x3x3近傍走査だけで、半径内に
+        いる可能性のある味方を漏れなく捕捉できる（Issue #450）。
+        """
         force = np.zeros(3)
-        allies = [
-            u
-            for u in self.units  # type: ignore[attr-defined]
-            if u.current_hp > 0 and u.team_id == unit.team_id and u.id != unit.id
-        ]
-        for ally in allies:
+        grid = self._get_movement_grid()  # type: ignore[attr-defined]
+        for ally in grid.neighbors(pos_unit):
+            if (
+                ally.current_hp <= 0
+                or ally.team_id != unit.team_id
+                or ally.id == unit.id
+            ):
+                continue
             vec_to_ally = ally.position.to_numpy() - pos_unit
             dist = float(np.linalg.norm(vec_to_ally))
             if 0 < dist <= ALLY_REPULSION_RADIUS:
@@ -104,18 +145,19 @@ class MovementMixin:
     def _closest_enemy_attraction(
         self, unit: MobileSuit, pos_unit: np.ndarray
     ) -> np.ndarray:
-        """最近敵への引力ベクトルを返す（MOVE行動時）."""
+        """最近敵への引力ベクトルを返す（MOVE行動時）.
+
+        `UnitSpatialGrid.nearest()` の環状探索を使い、近傍セルに候補がいない場合は
+        探索範囲を自動的に拡張することで、単純な近傍セル限定探索とは異なり常に
+        真のグローバル最近敵を選択する（Issue #450）。
+        """
         force = np.zeros(3)
-        enemies = [
-            u
-            for u in self.units
-            if u.current_hp > 0 and u.team_id != unit.team_id  # type: ignore[attr-defined]
-        ]
-        if enemies:
-            closest_enemy = min(
-                enemies,
-                key=lambda e: float(np.linalg.norm(e.position.to_numpy() - pos_unit)),
-            )
+        grid = self._get_movement_grid()  # type: ignore[attr-defined]
+        closest_enemy = grid.nearest(
+            pos_unit,
+            lambda u: u.current_hp > 0 and u.team_id != unit.team_id,
+        )
+        if closest_enemy is not None:
             vec = closest_enemy.position.to_numpy() - pos_unit
             dist = float(np.linalg.norm(vec))
             if dist > 0:

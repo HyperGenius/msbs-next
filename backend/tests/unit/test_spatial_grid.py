@@ -105,6 +105,112 @@ def test_neighbors_empty_grid_returns_nothing() -> None:
 
 
 # ---------------------------------------------------------------------------
+# UnitSpatialGrid.nearest() (Issue #450)
+# ---------------------------------------------------------------------------
+
+
+def test_nearest_finds_unit_in_same_cell() -> None:
+    """同一セル内の候補が最近傍として返ること."""
+    near = _make_unit("near", 10.0, 0.0, 10.0)
+    grid = UnitSpatialGrid([near], cell_size=150.0)
+
+    result = grid.nearest(np.array([0.0, 0.0, 0.0]), lambda u: True)
+    assert result is not None
+    assert result.name == "near"
+
+
+def test_nearest_returns_none_on_empty_grid() -> None:
+    """空グリッドでは None を返すこと."""
+    grid = UnitSpatialGrid([], cell_size=150.0)
+    assert grid.nearest(np.array([0.0, 0.0, 0.0]), lambda u: True) is None
+
+
+def test_nearest_returns_none_when_predicate_never_matches() -> None:
+    """述語を満たす候補が一つも存在しない場合は None を返すこと（無限ループしないこと）."""
+    a = _make_unit("a", 10.0, 0.0, 10.0)
+    b = _make_unit("b", 2000.0, 0.0, 2000.0)
+    grid = UnitSpatialGrid([a, b], cell_size=150.0)
+
+    result = grid.nearest(np.array([0.0, 0.0, 0.0]), lambda u: False)
+    assert result is None
+
+
+def test_nearest_expands_beyond_neighbor_cells_when_candidate_is_far() -> None:
+    """近傍セル（3x3x3）に候補がいなくても、遠方セルの真の最近傍を捕捉すること.
+
+    `neighbors()`（固定3x3x3走査）では取りこぼす配置を意図的に作り、
+    `nearest()` の環状探索が正しく候補を見つけられることを確認する。
+    """
+    # cell_size=150 のとき、原点から2000m離れた位置は3x3x3近傍の範囲外
+    far_only_candidate = _make_unit("far", 2000.0, 0.0, 0.0)
+    grid = UnitSpatialGrid([far_only_candidate], cell_size=150.0)
+
+    # neighbors() では見つからないことを確認（前提条件）
+    assert _neighbor_names(grid, (0.0, 0.0, 0.0)) == set()
+
+    result = grid.nearest(np.array([0.0, 0.0, 0.0]), lambda u: True)
+    assert result is not None
+    assert result.name == "far"
+
+
+def test_nearest_picks_true_global_closest_not_first_populated_cell() -> None:
+    """最初に見つかった（=クエリと同じセル）候補ではなく、真にグローバルな最近傍を選ぶこと.
+
+    クエリと同一セル（探索半径0で見つかる）内に対角線方向で遠い候補を、
+    隣接セル（探索半径1で見つかる）内にセル境界のすぐ外側の近い候補を配置する。
+    「最初に非空セルが見つかった時点で打ち切る」誤実装だと同一セル側の遠い候補を
+    誤って返してしまうため、この配置でなければ回帰を検出できない
+    （半径0のセルに候補がいるだけの配置では両実装が同じ結果を返してしまう）。
+    """
+    cell_size = 150.0
+    query = np.array([149.0, 0.0, 0.0])  # セル(0,0,0)に属する
+
+    # 同一セル(0,0,0)内だが対角線方向で遠い候補（距離 = 149*sqrt(3) ≒ 258m）
+    far_same_cell = _make_unit("far_same_cell", 0.0, 149.0, 149.0)
+    # 隣接セル(1,0,0)内だがセル境界のすぐ外側で近い候補（距離 = 1m）
+    near_adjacent_cell = _make_unit("near_adjacent_cell", 150.0, 0.0, 0.0)
+
+    grid = UnitSpatialGrid([far_same_cell, near_adjacent_cell], cell_size=cell_size)
+
+    result = grid.nearest(query, lambda u: True)
+    assert result is not None
+    assert result.name == "near_adjacent_cell"
+
+
+def test_nearest_respects_predicate_filter() -> None:
+    """述語に一致しない候補は除外されること（例: 敵チーム限定）."""
+    ally = _make_unit("ally", 10.0, 0.0, 10.0)
+    enemy = _make_unit("enemy", 500.0, 0.0, 0.0)
+    grid = UnitSpatialGrid([ally, enemy], cell_size=150.0)
+
+    result = grid.nearest(np.array([0.0, 0.0, 0.0]), lambda u: u.name == "enemy")
+    assert result is not None
+    assert result.name == "enemy"
+
+
+def test_nearest_matches_brute_force_over_random_layout() -> None:
+    """ランダム配置において、nearest() の結果がO(N)総当たりの最近傍と一致すること."""
+    rng = np.random.RandomState(12345)  # noqa: NPY002 テスト再現性のため固定シード
+    units = [
+        _make_unit(f"u{i}", *rng.uniform(-2000.0, 2000.0, size=3).tolist())
+        for i in range(60)
+    ]
+    grid = UnitSpatialGrid(units, cell_size=150.0)
+
+    for _ in range(20):
+        query = rng.uniform(-2000.0, 2000.0, size=3)
+        expected = min(
+            units, key=lambda u: float(np.linalg.norm(u.position.to_numpy() - query))
+        )
+        result = grid.nearest(query, lambda u: True)
+        assert result is not None
+        expected_dist = float(np.linalg.norm(expected.position.to_numpy() - query))
+        result_dist = float(np.linalg.norm(result.position.to_numpy() - query))
+        # 同一距離の候補が複数存在しうるため、距離の一致で判定する
+        assert abs(result_dist - expected_dist) < 1e-6
+
+
+# ---------------------------------------------------------------------------
 # PointSpatialGrid (Issue #447)
 # ---------------------------------------------------------------------------
 
