@@ -38,7 +38,7 @@ class MatchingService:
     def __init__(
         self,
         session: Session,
-        room_size: int = 8,
+        room_size: int = 50,
         ace_spawn_rate: float = 0.05,
         npc_persistence_rate: float = 0.5,
     ):
@@ -46,7 +46,7 @@ class MatchingService:
 
         Args:
             session: データベースセッション
-            room_size: 1ルームあたりの定員（デフォルト: 8機）
+            room_size: 1ルームあたりの定員（デフォルト: 50機）
             ace_spawn_rate: エースパイロットの出現確率（デフォルト: 5%）
             npc_persistence_rate: 既存の永続化NPCを再利用する割合（デフォルト: 50%）
         """
