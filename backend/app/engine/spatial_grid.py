@@ -73,9 +73,12 @@ class PointSpatialGrid:
     なら3x3x3近傍セルの走査だけで漏れなく候補を捕捉できる）を維持する。
     """
 
+    # セルサイズの下限（cell_size に0以下が渡された場合のゼロ除算・縮退防止）
+    _MIN_CELL_SIZE: float = 1e-6
+
     def __init__(self, cell_size: float) -> None:
         """セルサイズ（判定に使う可能性のある最大距離以上）を指定してグリッドを構築する."""
-        self.cell_size = max(float(cell_size), 1e-6)
+        self.cell_size = max(float(cell_size), self._MIN_CELL_SIZE)
         self._cells: dict[CellKey, list[np.ndarray]] = defaultdict(list)
 
     def _cell_key(self, x: float, y: float, z: float) -> CellKey:

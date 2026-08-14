@@ -661,10 +661,11 @@ class BattleSimulator(
             z = zone.center.z + r * math.sin(theta)
             pos = np.array([x, zone.center.y, z])
 
-            neighbor_dists = [
-                float(np.linalg.norm(pos - p)) for p in placed_grid.neighbors(pos)
-            ]
-            if not neighbor_dists or min(neighbor_dists) >= current_min_dist:
+            nearest_dist = min(
+                (float(np.linalg.norm(pos - p)) for p in placed_grid.neighbors(pos)),
+                default=math.inf,
+            )
+            if nearest_dist >= current_min_dist:
                 return pos
 
         # 最終フォールバック: 全試行失敗時は中心座標を返す
