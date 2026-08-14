@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import random
 import sys
@@ -50,12 +51,21 @@ def _make_unit(index: int, team_id: str, side: str, x: float, z: float) -> Mobil
 
 
 def _build_units(room_size: int) -> tuple[MobileSuit, list[MobileSuit]]:
-    """room_size 機（2チーム均等割り）のユニット群を生成する.
+    """room_size 機（2チームへできる限り均等割り）のユニット群を生成する.
 
-    ユニットはフィールド全体にランダム分散させ、極端に狭いクラスタで
-    密集し過ぎない現実的な配置にする。
+    room_size が奇数の場合は PLAYER_TEAM 側に1機多く割り当て、生成される
+    総ユニット数が常に room_size と一致するようにする。ユニットはフィールド
+    全体にランダム分散させ、極端に狭いクラスタで密集し過ぎない現実的な配置
+    にする。
+
+    Raises:
+        ValueError: room_size が2未満の場合（両チーム最低1機ずつ必要なため）
     """
-    per_team = max(1, room_size // 2)
+    if room_size < 2:
+        raise ValueError(f"room_size は2以上である必要があります: {room_size}")
+
+    player_team_size = math.ceil(room_size / 2)
+    enemy_team_size = room_size - player_team_size
     rng = random.Random(42)
     field_extent = 3000.0
 
@@ -67,7 +77,7 @@ def _build_units(room_size: int) -> tuple[MobileSuit, list[MobileSuit]]:
             rng.uniform(-field_extent, field_extent),
             rng.uniform(-field_extent, field_extent),
         )
-        for i in range(per_team)
+        for i in range(player_team_size)
     ]
     enemy_units = [
         _make_unit(
@@ -77,7 +87,7 @@ def _build_units(room_size: int) -> tuple[MobileSuit, list[MobileSuit]]:
             rng.uniform(-field_extent, field_extent),
             rng.uniform(-field_extent, field_extent),
         )
-        for i in range(per_team)
+        for i in range(enemy_team_size)
     ]
 
     player = player_units[0]
@@ -85,9 +95,10 @@ def _build_units(room_size: int) -> tuple[MobileSuit, list[MobileSuit]]:
     return player, enemies
 
 
-def bench_room_size(room_size: int, steps: int) -> float:
-    """指定ユニット数でのシミュレーションを実行し、1ステップあたりの平均秒数を返す."""
+def bench_room_size(room_size: int, steps: int) -> tuple[float, int]:
+    """指定ユニット数でのシミュレーションを実行し、(1ステップあたりの平均秒数, 総ユニット数) を返す."""
     player, enemies = _build_units(room_size)
+    total_units = 1 + len(enemies)
     sim = BattleSimulator(player, enemies)
 
     start = time.perf_counter()
@@ -99,7 +110,8 @@ def bench_room_size(room_size: int, steps: int) -> float:
         executed += 1
     elapsed = time.perf_counter() - start
 
-    return elapsed / executed if executed else float("nan")
+    avg_sec = elapsed / executed if executed else float("nan")
+    return avg_sec, total_units
 
 
 def main() -> None:
@@ -116,13 +128,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    sizes = [int(s) for s in args.sizes.split(",")]
+    sizes = [int(s.strip()) for s in args.sizes.split(",") if s.strip()]
 
     print(f"{'room_size':>10} | {'avg sec/step':>14} | {'units':>6}")
     print("-" * 38)
     for size in sizes:
-        avg_sec = bench_room_size(size, args.steps)
-        print(f"{size:>10} | {avg_sec:>14.6f} | {size:>6}")
+        avg_sec, total_units = bench_room_size(size, args.steps)
+        print(f"{size:>10} | {avg_sec:>14.6f} | {total_units:>6}")
 
 
 if __name__ == "__main__":
