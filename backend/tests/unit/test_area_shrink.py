@@ -188,16 +188,24 @@ def test_shrink_pauses_when_team_depleted_from_larger_start() -> None:
     （そうしないとソロミッションで収縮が一切発動しなくなるため）。
     ここでは開始時3機だったチームが2機撃破され1機まで消耗した状況を
     直接構築し、消耗によるチームのみが停止判定の対象になることを確認する。
+
+    `_count_initial_team_alive` は「開始時点で生存していたユニット数」のみを
+    数えるため（Copilotレビュー指摘への対応）、味方2機は生存状態で
+    `BattleSimulator` を構築した後に current_hp を 0 へ遷移させ、
+    「開始時は3機生存 → その後2機撃破」という状況を正しく再現する。
     """
     player = _make_unit("P", "PLAYER", "PT", current_hp=1_000_000, max_hp=1_000_000)
-    fallen_ally_1 = _make_unit("A1", "PLAYER", "PT", current_hp=0)
-    fallen_ally_2 = _make_unit("A2", "PLAYER", "PT", current_hp=0)
+    fallen_ally_1 = _make_unit("A1", "PLAYER", "PT", current_hp=100)
+    fallen_ally_2 = _make_unit("A2", "PLAYER", "PT", current_hp=100)
     enemy = _make_unit("E", "ENEMY", "ET", current_hp=1_000_000, max_hp=1_000_000)
     sim = BattleSimulator(
         player,
         [fallen_ally_1, fallen_ally_2, enemy],
         battlefield=BattleField(obstacle_density="NONE"),
     )
+    # 構築後に撃破状態へ遷移させる（構築時点では3機とも生存していた扱いにする）
+    fallen_ally_1.current_hp = 0
+    fallen_ally_2.current_hp = 0
     original_bounds = sim.map_bounds
 
     for _ in range(SHRINK_START_STEP + SHRINK_INTERVAL_STEPS * 3):
@@ -250,14 +258,17 @@ def test_area_shrink_event_logged() -> None:
 def test_area_shrink_pause_logged_once() -> None:
     """収縮停止イベントが重複せず一度だけ記録されること."""
     player = _make_unit("P", "PLAYER", "PT", current_hp=1_000_000, max_hp=1_000_000)
-    fallen_ally_1 = _make_unit("A1", "PLAYER", "PT", current_hp=0)
-    fallen_ally_2 = _make_unit("A2", "PLAYER", "PT", current_hp=0)
+    fallen_ally_1 = _make_unit("A1", "PLAYER", "PT", current_hp=100)
+    fallen_ally_2 = _make_unit("A2", "PLAYER", "PT", current_hp=100)
     enemy = _make_unit("E", "ENEMY", "ET", current_hp=1_000_000, max_hp=1_000_000)
     sim = BattleSimulator(
         player,
         [fallen_ally_1, fallen_ally_2, enemy],
         battlefield=BattleField(obstacle_density="NONE"),
     )
+    # 構築後に撃破状態へ遷移させる（構築時点では3機とも生存していた扱いにする）
+    fallen_ally_1.current_hp = 0
+    fallen_ally_2.current_hp = 0
 
     for _ in range(SHRINK_START_STEP + SHRINK_INTERVAL_STEPS * 3):
         if sim.is_finished:

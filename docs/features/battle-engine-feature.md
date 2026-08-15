@@ -2081,7 +2081,7 @@ Python ループが「200点 × 発火集合数」から「発火集合数」（
 を超えていたチームに限る）。1vs1ソロミッションのように開始時点からチーム人数が
 1のケースをこの判定に含めてしまうと、最も頻度の高いバトル形式である1vs1で収縮が
 一切発動しなくなってしまう（実装中にテストで実際にこの不具合を発見し修正した。
-`tests/unit/test_area_shrink.py` の `test_shrink_not_paused_for_1v1_from_start` /
+`backend/tests/unit/test_area_shrink.py` の `test_shrink_not_paused_for_1v1_from_start` /
 `test_shrink_pauses_when_team_depleted_from_larger_start` で両ケースを区別して検証している）。
 
 **ログ方式**: 収縮判定はチーム生存数という状態に依存するため、毎ステップのスナップショット
@@ -2104,12 +2104,12 @@ Python ループが「200点 × 発火集合数」から「発火集合数」（
 - **境界外に取り残されたユニットへの追加ペナルティ**: `_boundary_repulsion()` の
   押し戻し力を強化する、あるいはダメージを与える等の追加対応は行っていない。既存の
   斥力式（`3.0 * direction / max(dist, 1.0)`）が収縮後の境界でも機能することを
-  `tests/unit/test_area_shrink.py` で確認済みだが、極端な収縮直後にユニットが
+  `backend/tests/unit/test_area_shrink.py` で確認済みだが、極端な収縮直後にユニットが
   大きく境界外に取り残されるケースの挙動チューニングは今後の課題とする。
 
 ### 27.4 テスト
 
-`tests/unit/test_area_shrink.py` で以下を検証:
+`backend/tests/unit/test_area_shrink.py` で以下を検証:
 
 1. `SHRINK_START_STEP` に到達するまでは `map_bounds` が変化しないこと
 2. `SHRINK_START_STEP` 以降、`SHRINK_INTERVAL_STEPS` ごとに `SHRINK_RATIO` を乗算した
@@ -2123,7 +2123,7 @@ Python ループが「200点 × 発火集合数」から「発火集合数」（
 
 いずれのテストも、ステップ経過中にバトルが決着してしまうと収縮ロジックを検証できない
 ため、テスト用ユニットの HP を大きく確保している（`_make_large_sim()` 参照）。
-既存の `tests/unit/test_field_scaling.py`・`test_phase_6_3_field_init.py`・
+既存の `backend/tests/unit/test_field_scaling.py`・`test_phase_6_3_field_init.py`・
 `test_spawn_detection_avoidance.py`・`test_potential_field.py`・`test_simulation.py`
 がすべて変更なくパスすることを確認し、初期化時の `map_bounds` 計算（16章）や
 スポーン領域生成にリグレッションがないことを確認した。

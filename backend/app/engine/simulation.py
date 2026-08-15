@@ -70,14 +70,16 @@ __all__ = [
 
 
 def _count_initial_team_alive(units: "list[MobileSuit]") -> dict[str, int]:
-    """開始時点のチームごとのユニット数を集計する (Issue #474).
+    """開始時点のチームごとの生存ユニット数を集計する (Issue #474).
 
     エリア収縮の停止判定で「消耗して少なくなった」チームのみを対象にするため、
-    バトル開始時点のチーム人数を基準値として保持する。
+    バトル開始時点のチーム生存人数を基準値として保持する。開始時点で既に
+    current_hp<=0 のユニット（渡されたリストに破壊済みユニットが含まれる場合）は
+    「開始時点から生存していた人数」に含めない（Copilotレビュー指摘への対応）。
     """
     counts: dict[str, int] = {}
     for unit in units:
-        if unit.team_id is not None:
+        if unit.team_id is not None and unit.current_hp > 0:
             counts[unit.team_id] = counts.get(unit.team_id, 0) + 1
     return counts
 
