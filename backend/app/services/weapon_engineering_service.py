@@ -6,7 +6,8 @@ from typing import NamedTuple
 from sqlalchemy.orm import attributes
 from sqlmodel import Session
 
-from app.models.models import Pilot, PlayerWeapon, WeaponCustomStats
+from app.models.models import MobileSuit, Pilot, PlayerWeapon, WeaponCustomStats
+from app.services.weapon_service import WeaponService
 
 
 class _WeaponStatConfig(NamedTuple):
@@ -208,6 +209,13 @@ class WeaponEngineeringService:
 
         self.session.add(player_weapon)
         self.session.add(pilot)
+
+        if player_weapon.equipped_ms_id is not None:
+            mobile_suit = self.session.get(MobileSuit, player_weapon.equipped_ms_id)
+            if mobile_suit is not None:
+                WeaponService.resync_mobile_suit_weapons(self.session, mobile_suit)
+                self.session.add(mobile_suit)
+
         self.session.commit()
         self.session.refresh(player_weapon)
         self.session.refresh(pilot)

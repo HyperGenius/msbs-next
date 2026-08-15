@@ -332,3 +332,60 @@ def test_entry_creation_resyncs_equipped_weapon_upgrades(client, session, pilot:
 
     session.refresh(mobile_suit)
     assert mobile_suit.weapons[0]["power"] == 110  # 100 + 5*2
+
+
+def test_upgrade_stat_resyncs_equipped_mobile_suit_weapons(
+    session: Session, pilot: Pilot
+) -> None:
+    """装備中の武器を改造した直後に MobileSuit.weapons へ反映されることを確認.
+
+    ロードアウト画面(MobileSuit.weapons由来)と武器改造モーダル(PlayerWeapon由来)の
+    ランク表示が乖離するバグの回帰テスト。エントリー登録を待たず、改造APIの
+    呼び出し時点で即座に MobileSuit.weapons が最新の実効値になっている必要がある。
+    """
+    mobile_suit = MobileSuit(
+        user_id=pilot.user_id,
+        name="Test Zaku",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[
+            {
+                "id": "zaku_mg",
+                "name": "Zaku Machine Gun",
+                "power": 100,
+                "range": 400,
+                "accuracy": 60,
+            }
+        ],
+        side="PLAYER",
+    )
+    session.add(mobile_suit)
+    session.commit()
+    session.refresh(mobile_suit)
+
+    player_weapon = PlayerWeapon(
+        user_id=pilot.user_id,
+        master_weapon_id="zaku_mg",
+        base_snapshot={
+            "id": "zaku_mg",
+            "name": "Zaku Machine Gun",
+            "power": 100,
+            "range": 400,
+            "accuracy": 60,
+            "type": "PHYSICAL",
+        },
+        custom_stats={},
+        equipped_ms_id=mobile_suit.id,
+        equipped_slot=0,
+    )
+    session.add(player_weapon)
+    session.commit()
+    session.refresh(player_weapon)
+
+    service = WeaponEngineeringService(session)
+    service.upgrade_stat(str(player_weapon.id), "power_bonus", pilot, steps=2)
+
+    session.refresh(mobile_suit)
+    assert mobile_suit.weapons[0]["power"] == 110  # 100 + 5*2
