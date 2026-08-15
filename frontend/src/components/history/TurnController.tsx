@@ -44,10 +44,11 @@ export default function TurnController({ currentTimestamp, maxTimestamp, onTimes
       elapsedSinceLastStep += (frameTime - lastFrameTime) / 1000;
       lastFrameTime = frameTime;
 
-      // 100msごとの再生ステップに相当する経過時間が溜まったら、その分だけまとめて進める
-      if (elapsedSinceLastStep >= 0.1) {
-        const stepsToAdvance = Math.floor(elapsedSinceLastStep / 0.1);
-        elapsedSinceLastStep -= stepsToAdvance * 0.1;
+      // stepごとの再生ステップに相当する経過時間が溜まったら、その分だけまとめて進める
+      // （閾値を step 自体から算出することで、step を変更した場合も再生クロックと整合する）
+      if (elapsedSinceLastStep >= step) {
+        const stepsToAdvance = Math.floor(elapsedSinceLastStep / step);
+        elapsedSinceLastStep -= stepsToAdvance * step;
 
         const next = Math.round((currentTimestampRef.current + step * stepsToAdvance) * 10) / 10;
         if (next >= maxTimestamp) {
