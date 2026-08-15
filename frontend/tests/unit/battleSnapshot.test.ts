@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { getBattleSnapshot } from "@/components/BattleViewer/hooks/useBattleSnapshot";
+import { getBattleSnapshot, SnapshotCache } from "@/components/BattleViewer/hooks/useBattleSnapshot";
 import { BattleLog } from "@/types/battle";
 import { MobileSuit } from "@/types/mobileSuit";
+import { Weapon } from "@/types/weapon";
 
 /** テスト用の最小構成MS */
 const baseMs: MobileSuit = {
@@ -52,5 +53,71 @@ describe("getBattleSnapshot: velocity外挿のdt上限", () => {
         const snapshot = getBattleSnapshot("unit-1", baseMs, logs, 55.0);
         expect(snapshot.pos.x).toBe(10);
         expect(snapshot.pos.z).toBe(10);
+    });
+});
+
+describe("getBattleSnapshot: 差分更新キャッシュ（Issue #465）", () => {
+    const weapon: Weapon = {
+        id: "w1",
+        name: "Test Weapon",
+        power: 10,
+        range: 100,
+        accuracy: 80,
+        max_ammo: 5,
+        en_cost: 10,
+        cool_down_turn: 3,
+    };
+    const msWithWeapon: MobileSuit = { ...baseMs, weapons: [weapon], max_en: 100 };
+
+    /** 位置・HP・EN・弾薬・向き・ターゲットが変化する一連のログ */
+    const logs: BattleLog[] = [
+        { timestamp: 1.0, actor_id: "unit-1", action_type: "MOVE", message: "m", position_snapshot: { x: 1, y: 0, z: 0 }, velocity_snapshot: { x: 1, y: 0, z: 0 }, heading: 10 },
+        { timestamp: 2.0, actor_id: "unit-1", action_type: "TARGET_SELECTION", message: "t", position_snapshot: { x: 1, y: 0, z: 0 }, target_id: "enemy-1" },
+        { timestamp: 3.0, actor_id: "unit-1", action_type: "ATTACK", message: "a", position_snapshot: { x: 1, y: 0, z: 0 }, target_id: "enemy-1", weapon_id: "w1" },
+        { timestamp: 4.0, actor_id: "enemy-1", action_type: "ATTACK", message: "a2", position_snapshot: { x: 0, y: 0, z: 0 }, target_id: "unit-1", damage: 50 },
+        { timestamp: 5.0, actor_id: "unit-1", action_type: "MOVE", message: "m2", position_snapshot: { x: 5, y: 0, z: 0 }, velocity_snapshot: { x: 0, y: 0, z: 0 }, heading: 90 },
+        { timestamp: 6.0, actor_id: "unit-1", action_type: "ATTACK", message: "a3", position_snapshot: { x: 5, y: 0, z: 0 }, target_id: "enemy-1", weapon_id: "w1" },
+    ];
+
+    it("キャッシュを使って時系列順に進めた結果は、毎回全走査した結果と一致する", () => {
+        const cache: SnapshotCache = new Map();
+        const timestamps = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5];
+        for (const ts of timestamps) {
+            const cached = getBattleSnapshot("unit-1", msWithWeapon, logs, ts, cache);
+            const fresh = getBattleSnapshot("unit-1", msWithWeapon, logs, ts);
+            expect(cached).toEqual(fresh);
+        }
+    });
+
+    it("シーク（巻き戻し）が発生してもキャッシュなしの結果と一致する", () => {
+        const cache: SnapshotCache = new Map();
+        const timestamps = [6.5, 5.5, 1.0, 4.5, 0.0, 6.5];
+        for (const ts of timestamps) {
+            const cached = getBattleSnapshot("unit-1", msWithWeapon, logs, ts, cache);
+            const fresh = getBattleSnapshot("unit-1", msWithWeapon, logs, ts);
+            expect(cached).toEqual(fresh);
+        }
+    });
+
+    it("キーが異なれば同一ユニットでも独立したキャッシュとして扱われる（currentTimestamp / prevTimestamp の並走に対応）", () => {
+        const cache: SnapshotCache = new Map();
+        const current = getBattleSnapshot("unit-1", msWithWeapon, logs, 3.5, cache, "unit-1");
+        const prev = getBattleSnapshot("unit-1", msWithWeapon, logs, 2.5, cache, "unit-1:prev");
+        expect(current).toEqual(getBattleSnapshot("unit-1", msWithWeapon, logs, 3.5));
+        expect(prev).toEqual(getBattleSnapshot("unit-1", msWithWeapon, logs, 2.5));
+    });
+
+    it("まだ一度も攻撃していない戦闘開始直後はクールダウン警告を誤って出さない", () => {
+        // cool_down_turn=3（0.3秒）に対し、ATTACKログが1件も無い状態で currentTimestamp=0.1 を計算する。
+        // lastAttackTimestamp の初期値を 0 のままにすると 0.1 - 0 = 0.1 < 0.3 となり誤検知してしまう。
+        const noAttackLogs: BattleLog[] = [
+            { timestamp: 0.05, actor_id: "unit-1", action_type: "MOVE", message: "m", position_snapshot: { x: 0, y: 0, z: 0 }, velocity_snapshot: { x: 0, y: 0, z: 0 } },
+        ];
+        const cache: SnapshotCache = new Map();
+        const cached = getBattleSnapshot("unit-1", msWithWeapon, noAttackLogs, 0.1, cache);
+        const fresh = getBattleSnapshot("unit-1", msWithWeapon, noAttackLogs, 0.1);
+        expect(cached.warnings).not.toContain("cooldown");
+        expect(fresh.warnings).not.toContain("cooldown");
+        expect(cached).toEqual(fresh);
     });
 });
