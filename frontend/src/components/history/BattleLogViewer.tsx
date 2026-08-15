@@ -1,7 +1,7 @@
 /* frontend/src/components/history/BattleLogViewer.tsx */
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { BattleLog } from "@/types/battle";
 import { formatBattleLog } from "@/utils/logFormatter";
 import { IS_PRODUCTION } from "@/constants";
@@ -44,7 +44,9 @@ export default function BattleLogViewer({
     }
   }, [currentTimestamp]);
 
-  const displayedLogs = filterRelevantLogs(logs);
+  // filterRelevantLogs 自体は useCallback 化されているが、呼び出し側でメモ化しないと
+  // currentTimestamp が変わるたび（=再生中は100msごと）にログ全体を毎回フィルタし直してしまう（Issue #467）
+  const displayedLogs = useMemo(() => filterRelevantLogs(logs), [filterRelevantLogs, logs]);
   const seenTimestamps = new Set<number>();
 
   return (

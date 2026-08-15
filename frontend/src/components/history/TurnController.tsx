@@ -26,17 +26,44 @@ export default function TurnController({ currentTimestamp, maxTimestamp, onTimes
   useEffect(() => {
     if (!isPlaying) return;
 
-    const interval = setInterval(() => {
-      const next = Math.round((currentTimestampRef.current + step) * 10) / 10;
-      if (next >= maxTimestamp) {
-        onTimestampChangeRef.current(maxTimestamp);
-        setIsPlaying(false);
-      } else {
+    // requestAnimationFrame + 経過時間ベースで駆動する。setInterval(固定100ms)は
+    // 処理落ちがあっても遅延を自動補正しないため、負荷が高い環境では再生が実時間から
+    // 乖離し続けていた（Issue #467）。rAFのタイムスタンプ差分から経過秒数を積算することで、
+    // 1フレームが遅れても次フレームでまとめて追いつける。
+    let rafId: number;
+    let lastFrameTime: number | null = null;
+    let elapsedSinceLastStep = 0;
+
+    const tick = (frameTime: number) => {
+      if (lastFrameTime === null) {
+        lastFrameTime = frameTime;
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+
+      elapsedSinceLastStep += (frameTime - lastFrameTime) / 1000;
+      lastFrameTime = frameTime;
+
+      // 100msごとの再生ステップに相当する経過時間が溜まったら、その分だけまとめて進める
+      if (elapsedSinceLastStep >= 0.1) {
+        const stepsToAdvance = Math.floor(elapsedSinceLastStep / 0.1);
+        elapsedSinceLastStep -= stepsToAdvance * 0.1;
+
+        const next = Math.round((currentTimestampRef.current + step * stepsToAdvance) * 10) / 10;
+        if (next >= maxTimestamp) {
+          onTimestampChangeRef.current(maxTimestamp);
+          setIsPlaying(false);
+          return;
+        }
         onTimestampChangeRef.current(next);
       }
-    }, 100);
 
-    return () => clearInterval(interval);
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(rafId);
   }, [isPlaying, maxTimestamp]);
 
   const handlePlayPause = () => {
