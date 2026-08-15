@@ -113,6 +113,8 @@ return Weapon(**merged)
 
 装備時の dual-write（`equip_weapon`）だけでは、装備中の武器を後から改造しても `MobileSuit.weapons` に反映されない。これを解消するため `WeaponService.resync_mobile_suit_weapons(session, mobile_suit)` を新設し、バトルエントリー登録時（`app/routers/entries.py` の `create_entry`、機体スナップショットを保存する直前）に呼び出すことで、**再装備しなくてもバトル開始前に改造差分が反映される**。
 
+**Issue #476 追記**: 上記のバトルエントリー時resyncだけでは、装備換装（Loadout）画面の威力/命中ランク表示（`MobileSuit.weapons[slot]` を参照）が改造直後に更新されず、次のバトルエントリーまで古いランクのまま表示され続ける不具合があった。武器改造モーダル（`PlayerWeapon.base_snapshot + custom_stats` を都度計算する実効値を参照）とのランク表示乖離として顕在化した。これを解消するため、`WeaponEngineeringService.upgrade_stat()` 内でも改造対象の `PlayerWeapon.equipped_ms_id` が設定されている場合（＝装備中）は `WeaponService.resync_mobile_suit_weapons()` を呼び出し、改造完了と同時に `MobileSuit.weapons` を再同期するようにした。バトルエントリー時のresyncは引き続き保持している（安全のための二重呼び出しだが、`resync_mobile_suit_weapons` は冪等な全量再計算のため無害）。
+
 ### フロントエンド
 
 - `frontend/src/types/shop.ts`: `WeaponUpgradeRequest` / `WeaponUpgradeResponse` / `WeaponUpgradePreview` 型を追加
