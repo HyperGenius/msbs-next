@@ -443,3 +443,34 @@ Issue #465/#466 対応後も残っていた、優先度の低い追加の非効�
 - `frontend/src/components/BattleViewer/ui/BattleOverlay.tsx`
 - `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts`
 - `frontend/src/components/BattleViewer/index.tsx`
+
+---
+
+## 初期表示位置がバトル終了時の最終位置になっていた不具合（Issue #478）
+
+BattleViewerを起動した直後（再生開始前、`currentTimestamp = 0`）、MSがフィールド・地形グリッド・
+障害物メッシュの範囲外に配置されて表示される不具合があった。
+
+**原因:** `backend/main.py` の `simulate_battle` エンドポイントでは、`player`/`enemies`
+オブジェクトが `sim.step()`（最大50ステップ）によってバトル中に直接（同一オブジェクト参照のまま）
+書き換えられる。レスポンスとして返す `BattleResponse.player_info`/`enemies_info` および
+`BattleResult.player_info`/`enemies_info`/`ms_snapshot` を構築する時点では、これらのオブジェクトの
+`position` フィールドに**バトル終了時点の最終位置**が入ってしまっていた。
+
+`useBattleSnapshot.ts` の `createInitialEntry()`（`pos: initialMs.position`）は、再生開始前の
+初期表示位置としてこの `position` をそのまま使用する。再生ログの走査でその後 `position_snapshot`
+を持つログに遭遇するまでは、このバトル終了時点の最終位置（＝スポーン領域やフィールド範囲と無関係な
+場所）がそのまま表示され続けるため、MSがメッシュ外に配置されて見える不具合になっていた。
+
+なお、対象ユニットが一度も行動せず・撃破もされないまま戦闘が終わった場合、そのユニットの
+`actor_id` を持つログが1件も生成されないケースもあり（調査で確認済み）、その場合は再生を通じて
+一度も `position` が上書きされない。
+
+**修正:** `BattleSimulator` 初期化直後（`_apply_spawn_zones()` 適用済み・戦闘ループ開始前）の
+`position` をスポーン位置として退避しておき、`sim.step()` ループ終了後、レスポンス用オブジェクトの
+`position` をこのスポーン位置へ戻すようにした。`current_hp` など位置以外のフィールドは引き続き
+バトル終了時点の最終値のまま返す（デジェスト計算・フロントエンド他画面のいずれも `position` を
+参照していないことを事前に確認済み）。
+
+**影響ファイル:**
+- `backend/main.py`
