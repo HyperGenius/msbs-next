@@ -57,7 +57,7 @@ interface SnapshotCacheEntry {
     lastVelocity?: { x: number; y: number; z: number };
     lastVelocityPos?: { x: number; y: number; z: number };
     lastVelocityTs?: number;
-    /** 直近（currentTimestamp以下）の自ユニットのATTACK発生時刻。クールダウン判定用 */
+    /** 直近（currentTimestamp以下）の自ユニットのATTACK発生時刻。クールダウン判定用（未攻撃時は -Infinity） */
     lastAttackTimestamp: number;
 }
 
@@ -79,7 +79,10 @@ function createInitialEntry(initialMs: MobileSuit, logs: BattleLog[]): SnapshotC
         hp: initialMs.max_hp, // 戦闘開始時は満タンと仮定
         en: initialMs.max_en || DEFAULT_MAX_EN,
         ammo,
-        lastAttackTimestamp: 0,
+        // 未攻撃時に 0 を使うと、戦闘開始直後（currentTimestamp が小さい）でも
+        // 「直近0秒に攻撃した」とみなされクールダウン警告が誤表示されるため、
+        // 「まだ攻撃していない」ことを表す -Infinity で初期化する
+        lastAttackTimestamp: -Infinity,
     };
 }
 

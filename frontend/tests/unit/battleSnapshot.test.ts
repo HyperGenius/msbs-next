@@ -106,4 +106,18 @@ describe("getBattleSnapshot: 差分更新キャッシュ（Issue #465）", () =>
         expect(current).toEqual(getBattleSnapshot("unit-1", msWithWeapon, logs, 3.5));
         expect(prev).toEqual(getBattleSnapshot("unit-1", msWithWeapon, logs, 2.5));
     });
+
+    it("まだ一度も攻撃していない戦闘開始直後はクールダウン警告を誤って出さない", () => {
+        // cool_down_turn=3（0.3秒）に対し、ATTACKログが1件も無い状態で currentTimestamp=0.1 を計算する。
+        // lastAttackTimestamp の初期値を 0 のままにすると 0.1 - 0 = 0.1 < 0.3 となり誤検知してしまう。
+        const noAttackLogs: BattleLog[] = [
+            { timestamp: 0.05, actor_id: "unit-1", action_type: "MOVE", message: "m", position_snapshot: { x: 0, y: 0, z: 0 }, velocity_snapshot: { x: 0, y: 0, z: 0 } },
+        ];
+        const cache: SnapshotCache = new Map();
+        const cached = getBattleSnapshot("unit-1", msWithWeapon, noAttackLogs, 0.1, cache);
+        const fresh = getBattleSnapshot("unit-1", msWithWeapon, noAttackLogs, 0.1);
+        expect(cached.warnings).not.toContain("cooldown");
+        expect(fresh.warnings).not.toContain("cooldown");
+        expect(cached).toEqual(fresh);
+    });
 });

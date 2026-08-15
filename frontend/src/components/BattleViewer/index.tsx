@@ -40,6 +40,14 @@ export default function BattleViewer({
     // コンポーネントインスタンスを跨いで同じ Map を使い回す必要がある。
     // "現在時刻" 用と "1ステップ前" 用でキーを分け、両者が独立して単調に進行できるようにする。
     const snapshotCacheRef = useRef<SnapshotCache>(new Map());
+    // BattleDetailModal 等はコンポーネントを再マウントせずに別バトルの logs を渡す場合があるため、
+    // logs 参照が変わったらキャッシュを丸ごと作り直し、旧バトル分のエントリがMapに残り続けて
+    // メモリが増え続けるのを防ぐ
+    const lastLogsRef = useRef<BattleLog[] | null>(null);
+    if (lastLogsRef.current !== logs) {
+        snapshotCacheRef.current = new Map();
+        lastLogsRef.current = logs;
+    }
     const snapshotCache = snapshotCacheRef.current;
 
     // 状態計算（純粋関数として抽出）
