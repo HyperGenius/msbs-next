@@ -299,11 +299,6 @@ async def simulate_battle(
         sim.step()
         steps_used += 1
 
-    # player_info/enemies_info/ms_snapshot にはバトル後の最終位置ではなくスポーン位置を
-    # 反映する（BattleViewerが再生開始前=t=0時点でこの位置を初期表示に使うため。
-    # 最終位置のままだとフィールド外にMSが表示されるバグになる）
-    _restore_spawn_positions(player, enemies, spawn_positions)
-
     # 6. 勝者判定と撃墜数カウント
     winner_id = None
     win_loss = "DRAW"
@@ -376,6 +371,13 @@ async def simulate_battle(
         steps_used=steps_used,
         max_steps=max_steps,
     )
+
+    # player_info/enemies_info/ms_snapshot にはバトル後の最終位置ではなくスポーン位置を
+    # 反映する（BattleViewerが再生開始前=t=0時点でこの位置を初期表示に使うため。
+    # 最終位置のままだとフィールド外にMSが表示されるバグになる）。勝敗判定・報酬計算・
+    # ダイジェスト集計（compute_battle_digest_fields）はバトル後の最終状態を前提とする
+    # ため、これらの集計処理より後、レスポンス構築の直前でのみ位置を戻す。
+    _restore_spawn_positions(player, enemies, spawn_positions)
 
     # 10. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
     obstacles_data = serialize_obstacles(sim.obstacles)
