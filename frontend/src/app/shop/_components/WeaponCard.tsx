@@ -53,15 +53,15 @@ export default function WeaponCard({
         <div className="flex items-center gap-3 mb-1 text-xs font-mono">
           <span>
             <span className="text-[#00ff41]/50">{WEAPON_LABELS.power} </span>
-            <span className={`font-bold ${getRankColor(powerRank)}`}>[{powerRank}]</span>
+            <span className={`font-bold ${getRankColor(powerRank)}`}>{powerRank}</span>
           </span>
           <span>
             <span className="text-[#00ff41]/50">{WEAPON_LABELS.range} </span>
-            <span className={`font-bold ${getRankColor(rangeRank)}`}>[{rangeRank}]</span>
+            <span className={`font-bold ${getRankColor(rangeRank)}`}>{rangeRank}</span>
           </span>
           <span>
             <span className="text-[#00ff41]/50">{WEAPON_LABELS.accuracy} </span>
-            <span className={`font-bold ${getRankColor(accuracyRank)}`}>[{accuracyRank}]</span>
+            <span className={`font-bold ${getRankColor(accuracyRank)}`}>{accuracyRank}</span>
           </span>
         </div>
 

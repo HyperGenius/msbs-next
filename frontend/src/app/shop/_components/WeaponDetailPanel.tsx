@@ -69,7 +69,7 @@ export default function WeaponDetailPanel({
         ].map(({ label, rank }) => (
           <div key={label}>
             <div className="text-[#00ff41]/60 mb-1">{label}</div>
-            <div className={`font-bold text-lg ${getRankColor(rank)}`}>[{rank}]</div>
+            <div className={`font-bold text-lg ${getRankColor(rank)}`}>{rank}</div>
           </div>
         ))}
       </div>
