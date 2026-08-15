@@ -9,6 +9,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from app.db import json_serializer
 from app.models.models import (
     BattleEntry,
+    BattleLog,
     BattleResult,
     BattleRoom,
     MobileSuit,
@@ -113,11 +114,32 @@ def test_save_battle_results_sets_detail_fields(in_memory_session):
     alive_unit.current_hp = 500
     alive_unit.team_id = snapshot["team_id"]
 
-    simulator = _make_simulator_mock([alive_unit])
-
     player_unit = _convert_snapshot_to_mobile_suit(dict(snapshot))
     player_unit.side = "PLAYER"
     player_unit.team_id = snapshot["team_id"]
+
+    # player_unit が撃破した敵1機ぶんのログ（ATTACK直後にDESTROYEDが続く場合、
+    # DESTROYEDログのactor_idは被撃破ユニット自身のため、直前のATTACKログの
+    # actor_idが撃破者とみなされる）
+    destroyed_enemy_id = uuid4()
+    logs = [
+        BattleLog(
+            timestamp=0.0,
+            actor_id=player_unit.id,
+            action_type="ATTACK",
+            target_id=destroyed_enemy_id,
+            message="attack",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+        ),
+        BattleLog(
+            timestamp=0.0,
+            actor_id=destroyed_enemy_id,
+            action_type="DESTROYED",
+            message="destroyed",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+        ),
+    ]
+    simulator = _make_simulator_mock([alive_unit], logs=logs)
 
     _save_battle_results(
         session=session,
@@ -126,7 +148,6 @@ def test_save_battle_results_sets_detail_fields(in_memory_session):
         npc_entries=[],
         simulator=simulator,
         primary_player_win=True,
-        kills=1,
         player_unit=player_unit,
         enemy_units=[],
     )
@@ -190,7 +211,6 @@ def test_save_battle_results_lose(in_memory_session):
         npc_entries=[],
         simulator=simulator,
         primary_player_win=False,
-        kills=0,
         player_unit=player_unit,
         enemy_units=[other_unit],
     )
@@ -237,7 +257,6 @@ def test_save_battle_results_snapshot_immutability(in_memory_session):
         npc_entries=[],
         simulator=simulator,
         primary_player_win=True,
-        kills=0,
         player_unit=player_unit,
         enemy_units=[],
     )
@@ -292,7 +311,6 @@ def test_save_battle_results_sets_digest_fields(in_memory_session):
         npc_entries=[],
         simulator=simulator,
         primary_player_win=True,
-        kills=1,
         player_unit=player_unit,
         enemy_units=[],
         steps_used=5,
@@ -311,3 +329,95 @@ def test_save_battle_results_sets_digest_fields(in_memory_session):
     assert result.min_hp_percent == 10
     assert result.player_survived is True
     assert result.pilot_ms_name == "Digest Gundam"
+
+
+def test_save_battle_results_kills_are_per_unit_not_team_wide(in_memory_session):
+    """勝利チームの各プレイヤーには自分が撃破した数だけが記録されること.
+
+    以前は _run_simulation が敵陣営全体の撃破数を1つだけ計算し、勝利した
+    プレイヤー全員に同じ値がコピーされていた（フィールド全体の撃破数）。
+    この回帰テストは、同じ勝利チームの2人のプレイヤーがそれぞれ異なる数の
+    敵を撃破した場合に、各自の BattleResult.kills が自分の撃破数のみを
+    反映することを確認する。
+    """
+    from sqlmodel import select
+
+    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+
+    session = in_memory_session
+    room = _make_room(session)
+
+    team_id = str(uuid4())
+
+    snapshot_a = _make_snapshot("Ace Gundam")
+    snapshot_a["team_id"] = team_id
+    entry_a = _make_entry(session, room, "user_ace", snapshot_a)
+
+    snapshot_b = _make_snapshot("Support Gundam")
+    snapshot_b["team_id"] = team_id
+    entry_b = _make_entry(session, room, "user_support", snapshot_b)
+
+    player_unit_a = _convert_snapshot_to_mobile_suit(dict(snapshot_a))
+    player_unit_a.side = "PLAYER"
+    player_unit_a.team_id = team_id
+
+    player_unit_b = _convert_snapshot_to_mobile_suit(dict(snapshot_b))
+    player_unit_b.side = "PLAYER"
+    player_unit_b.team_id = team_id
+
+    # A が2機、B が0機撃破。両者とも勝利チームに属する。
+    enemy_id_1 = uuid4()
+    enemy_id_2 = uuid4()
+    logs = [
+        BattleLog(
+            timestamp=0.0,
+            actor_id=player_unit_a.id,
+            action_type="ATTACK",
+            target_id=enemy_id_1,
+            message="attack1",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+        ),
+        BattleLog(
+            timestamp=0.1,
+            actor_id=enemy_id_1,
+            action_type="DESTROYED",
+            message="destroyed1",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+        ),
+        BattleLog(
+            timestamp=0.2,
+            actor_id=player_unit_a.id,
+            action_type="ATTACK",
+            target_id=enemy_id_2,
+            message="attack2",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+        ),
+        BattleLog(
+            timestamp=0.3,
+            actor_id=enemy_id_2,
+            action_type="DESTROYED",
+            message="destroyed2",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+        ),
+    ]
+    simulator = _make_simulator_mock([player_unit_a, player_unit_b], logs=logs)
+
+    _save_battle_results(
+        session=session,
+        room=room,
+        player_entries=[entry_a, entry_b],
+        npc_entries=[],
+        simulator=simulator,
+        primary_player_win=True,
+        player_unit=player_unit_a,
+        enemy_units=[player_unit_b],
+    )
+
+    results = {
+        r.user_id: r
+        for r in session.exec(
+            select(BattleResult).where(BattleResult.room_id == room.id)
+        ).all()
+    }
+    assert results["user_ace"].kills == 2
+    assert results["user_support"].kills == 0

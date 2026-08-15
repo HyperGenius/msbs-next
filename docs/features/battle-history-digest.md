@@ -31,6 +31,25 @@ HPは回復要素がない（`simulation.py`/`combat.py` に repair 処理なし
 
 ---
 
+## `kills`（撃破数）は自機が撃破した数（Issue #471）
+
+`BattleResult.kills` は「自機（そのプレイヤーのユニット）が撃破した敵機の数」であり、フィールド全体
+（勝利チーム全体）の撃破数ではない。`backend/scripts/run_batch.py` のバッチ実行（デイリーバトルロイヤル等、
+複数プレイヤーが同時に参加するルーム戦）では、以前は敵陣営全体の撃破数を1つだけ計算し、勝利したプレイヤー
+全員に同じ値をコピーしていたため、実際には1機も撃破していない勝者にもチームメイトの戦果込みの数が表示される
+不具合があった。
+
+`app/engine/battle_digest.py` の `compute_unit_kills(logs, unit_id)` が、`sim.logs`/`simulator.logs` から
+指定ユニット自身の撃破数を集計する共通ヘルパー。`DESTROYED` ログの `actor_id` は被撃破ユニット自身であり
+撃破者の情報を持たないため、`_process_destruction`（`combat.py`）が撃破に至った `ATTACK`/`MELEE_COMBO` ログを
+追加した直後に呼ばれる実装上の性質を利用し、「`DESTROYED` ログの直前のログが同一対象への
+`ATTACK`/`MELEE_COMBO` であれば、そのログの `actor_id` を撃破者とみなす」というロジックで撃破者を特定している。
+
+`main.py`（ソロミッション）・`run_batch.py`（バッチ、プレイヤーごとに個別集計）の両方の `BattleResult`
+生成箇所がこの `compute_unit_kills()` を経由する。
+
+---
+
 ## BattleResult の追加カラム
 
 いずれも nullable。マイグレーション前の既存レコードは全カラム `NULL` のままで、バックフィルは行わない
