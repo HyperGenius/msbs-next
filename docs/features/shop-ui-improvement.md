@@ -412,3 +412,14 @@ interface MobileSuitDetailPanelProps {
 | `frontend/src/types/shop.ts` | `WeaponListing.flavor_text` を追加 |
 | `frontend/src/app/shop/_components/WeaponCard.tsx` | 表示項目整理、購入可バッジ削除、グレーアウト強化 |
 | `frontend/src/app/shop/_components/WeaponDetailPanel.tsx` | 表示項目整理（ランクバッジのみ、生数値・スペックバー削除） |
+
+### 10.6 詳細モーダルのスペックレーダーチャート化（Issue #480 追加対応）
+
+ランクバッジ表示（威力/射程/命中率の3項目、S〜Eバッジ）をさらに一歩進め、`admin-tool` の `WeaponRadarChart`（バランス比較チャート）と同様の五角形レーダーチャートに置き換えた（`frontend/src/app/shop/_components/WeaponStatRadar.tsx`）。
+
+- 軸: 威力・射程・命中率・最大射程（`optimal_range`）・減衰率の5軸
+- `admin-tool` 版と異なり「全武器平均」は表示しない（購入画面は単体武器の魅力を伝える場であり、比較用途ではないため）。そのため正規化の基準も「表示中の全武器の最大値」ではなく、`frontend/src/utils/weaponChartCaps.ts` に定数として切り出した固定上限値（威力1000・射程1000・命中率120・最大射程1000・減衰率0.01）を使う
+- 減衰率は値が小さいほど高性能なため、他の4軸と逆に正規化後の値を反転させてチャートに乗せる（`admin-tool` 版と同じ設計）
+- 生のスペック数値（`power`, `range` 等）はチャート上にもツールチップにも出さない方針を踏襲
+
+あわせて武器種別（`weapon_type`）・属性（`type`）・要求ビームジェネレータLv（`required_beam_generator_lv` が1以上の場合のみ表示）を追加した。
