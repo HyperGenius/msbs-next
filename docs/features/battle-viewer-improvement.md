@@ -381,3 +381,20 @@ Phase 3（ビジュアル強化）
 - `frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts`
 - `frontend/src/components/BattleViewer/index.tsx`
 - `frontend/tests/unit/battleSnapshot.test.ts`
+
+---
+
+## BattleViewer呼び出し側のuseMemo化（Issue #466）
+
+上記Issue #465で言及した「呼び出し元のメモ化漏れ」に対応。`BattleViewer/index.tsx` 内の `playerState` /
+`enemyStates` / `detectedIds` / `visibleEnemyStates` の計算が `useBattleEvents`（`useMemo` 使用済み）とは異なり
+素の関数呼び出しのまま書かれており、`currentTimestamp` が再生クロックにより100msごとに更新されるたびに
+`logs` や `player`/`enemies` が変化していなくても無条件で再計算されていた。
+
+**修正:** `playerState` / `enemyStates` / `detectedIds` / `visibleEnemyStates` をそれぞれ `useMemo` でラップし、
+実際に参照している値（`player`/`enemies`/`logs`/`currentTimestamp`/`snapshotCache` など）のみを依存配列に指定した。
+`getBattleSnapshot()` 自体の内部実装（O(n)全走査問題）はIssue #465で対応済みのため、本Issueは呼び出し側の
+メモ化のみを対象にしている。
+
+**影響ファイル:**
+- `frontend/src/components/BattleViewer/index.tsx`

@@ -50,20 +50,29 @@ export default function BattleViewer({
     }
     const snapshotCache = snapshotCacheRef.current;
 
-    // 状態計算（純粋関数として抽出）
-    const playerSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp, snapshotCache);
-    const playerPrevSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp - SIMULATION_STEP_S, snapshotCache, `${player.id}:prev`);
-    const playerState = { ...playerSnapshot, prevHp: playerPrevSnapshot.hp };
+    // 状態計算（純粋関数として抽出）。currentTimestamp は再生クロックにより100msごとに更新されるため、
+    // 実際に必要な依存値が変化していない限り再計算しないよう useMemo でメモ化する（Issue #466）
+    const playerState = useMemo(() => {
+        const snapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp, snapshotCache);
+        const prevSnapshot = getBattleSnapshot(player.id, player, logs, currentTimestamp - SIMULATION_STEP_S, snapshotCache, `${player.id}:prev`);
+        return { ...snapshot, prevHp: prevSnapshot.hp };
+    }, [player, logs, currentTimestamp, snapshotCache]);
 
-    const enemyStates = enemies.map(enemy => {
+    const enemyStates = useMemo(() => enemies.map(enemy => {
         const snapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp, snapshotCache);
         const prevSnapshot = getBattleSnapshot(enemy.id, enemy, logs, currentTimestamp - SIMULATION_STEP_S, snapshotCache, `${enemy.id}:prev`);
         return { enemy, state: { ...snapshot, prevHp: prevSnapshot.hp } };
-    });
+    }), [enemies, logs, currentTimestamp, snapshotCache]);
 
     // 索敵済み敵MSのみ表示
-    const detectedIds = getDetectedUnits(player.id, logs, currentTimestamp);
-    const visibleEnemyStates = enemyStates.filter(({ enemy }) => detectedIds.has(enemy.id));
+    const detectedIds = useMemo(
+        () => getDetectedUnits(player.id, logs, currentTimestamp),
+        [player.id, logs, currentTimestamp]
+    );
+    const visibleEnemyStates = useMemo(
+        () => enemyStates.filter(({ enemy }) => detectedIds.has(enemy.id)),
+        [enemyStates, detectedIds]
+    );
     
     // バトルイベントの取得（攻撃中ユニット ID セットを含む）(Issue #365)
     const { events: battleEventMap, attackingUnitIds } = useBattleEvents(logs, currentTimestamp);
