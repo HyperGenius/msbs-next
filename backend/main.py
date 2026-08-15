@@ -179,6 +179,33 @@ def _build_enemies_from_config(enemy_configs: list[dict]) -> list[MobileSuit]:
     return enemies
 
 
+def _snapshot_spawn_positions(
+    player: MobileSuit, enemies: list[MobileSuit]
+) -> tuple[Vector3, dict[uuid.UUID, Vector3]]:
+    """スポーン領域適用直後（戦闘開始前）の位置を退避する.
+
+    `sim.step()` はplayer/enemiesオブジェクトを直接書き換えるため、戦闘ループ後には
+    バトル終了時点の最終位置になってしまう。BattleViewerのt=0初期表示にはスポーン位置が
+    必要なため、レスポンス構築前に元へ戻せるようここで退避しておく。
+    """
+    return (
+        player.position.model_copy(),
+        {enemy.id: enemy.position.model_copy() for enemy in enemies},
+    )
+
+
+def _restore_spawn_positions(
+    player: MobileSuit,
+    enemies: list[MobileSuit],
+    spawn_positions: tuple[Vector3, dict[uuid.UUID, Vector3]],
+) -> None:
+    """player_info/enemies_info/ms_snapshotに反映する位置をスポーン位置へ戻す."""
+    player_spawn_position, enemy_spawn_positions = spawn_positions
+    player.position = player_spawn_position
+    for enemy in enemies:
+        enemy.position = enemy_spawn_positions[enemy.id]
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     """ヘルスチェック."""
@@ -262,6 +289,8 @@ async def simulate_battle(
         npc_pilot_stats=npc_pilot_stats,
         battlefield=BattleField(),
     )
+    spawn_positions = _snapshot_spawn_positions(player, enemies)
+
     max_steps = 50
     steps_used = 0
     for _ in range(max_steps):
@@ -269,6 +298,11 @@ async def simulate_battle(
             break
         sim.step()
         steps_used += 1
+
+    # player_info/enemies_info/ms_snapshot にはバトル後の最終位置ではなくスポーン位置を
+    # 反映する（BattleViewerが再生開始前=t=0時点でこの位置を初期表示に使うため。
+    # 最終位置のままだとフィールド外にMSが表示されるバグになる）
+    _restore_spawn_positions(player, enemies, spawn_positions)
 
     # 6. 勝者判定と撃墜数カウント
     winner_id = None
