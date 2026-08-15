@@ -263,8 +263,11 @@ def _save_battle_results(
         entry_unit = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
         entry_team_id = _resolve_team_id(entry_unit)
         individual_win_loss = "WIN" if entry_team_id in alive_team_ids else "LOSE"
-        entry_kills = compute_unit_kills(simulator.logs, entry_unit.id)
-        individual_kills = entry_kills if individual_win_loss == "WIN" else 0
+        # 勝敗に関わらず自機の撃破数をそのまま使う（main.py のソロミッション経路と
+        # 揃える）。敗北時に0へ丸めると、LOSE時のダイジェストタグ判定
+        # （kills>=1 なら「力戦及ばず」）が常に「完敗」にしかならず、報酬の
+        # 撃墜ボーナスも失われてしまう（Copilotレビュー指摘、PR #472）。
+        individual_kills = compute_unit_kills(simulator.logs, entry_unit.id)
 
         # 報酬の計算と付与（BattleResult作成前にlevel_beforeを確定）
         exp_gained = 0

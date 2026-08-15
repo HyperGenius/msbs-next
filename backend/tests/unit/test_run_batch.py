@@ -174,7 +174,7 @@ def test_save_battle_results_sets_detail_fields(in_memory_session):
 
 
 def test_save_battle_results_lose(in_memory_session):
-    """敗北時は kills=0、報酬が少ないこと."""
+    """敗北時は撃破ログが無ければ kills=0、報酬が少ないこと."""
     from sqlmodel import select
 
     from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
@@ -225,6 +225,85 @@ def test_save_battle_results_lose(in_memory_session):
     assert result.kills == 0
     assert result.is_read is False
     assert result.ms_snapshot["name"] == "Loser Zaku"
+
+
+def test_save_battle_results_lose_with_kills_are_preserved(in_memory_session):
+    """敗北しても自機が撃破した数はkillsに残ること（撃墜ボーナス・ダイジェスト用）.
+
+    以前は LOSE 時に個別撃破数を一律0へ丸めていたため、報酬の撃墜ボーナスが
+    失われるだけでなく、LOSE時のダイジェストタグ判定（kills>=1で「力戦及ばず」、
+    kills==0で「完敗」）が常に「完敗」にしかならない不具合があった（PR #472
+    Copilotレビュー指摘）。
+    """
+    from sqlmodel import select
+
+    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+
+    session = in_memory_session
+    room = _make_room(session)
+
+    snapshot = _make_snapshot("Doomed Zaku")
+    snapshot["team_id"] = str(uuid4())  # 生存チームに含まれないID
+
+    entry = _make_entry(session, room, "user_doomed", snapshot)
+
+    player_unit = _convert_snapshot_to_mobile_suit(dict(snapshot))
+    player_unit.side = "PLAYER"
+    player_unit.team_id = snapshot["team_id"]
+    player_unit.current_hp = 0  # 敗北（撃破された）
+
+    # 生存ユニットに entry のチームIDを含めない（敗北）が、道連れに1機撃破している
+    other_unit = MobileSuit(
+        name="Other",
+        max_hp=1000,
+        current_hp=500,
+        armor=50,
+        mobility=1.0,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[Weapon(id="w2", name="Rifle", power=50, range=300, accuracy=70)],
+    )
+    other_unit.team_id = str(uuid4())
+
+    destroyed_enemy_id = uuid4()
+    logs = [
+        BattleLog(
+            timestamp=0.0,
+            actor_id=player_unit.id,
+            action_type="ATTACK",
+            target_id=destroyed_enemy_id,
+            message="attack",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+        ),
+        BattleLog(
+            timestamp=0.1,
+            actor_id=destroyed_enemy_id,
+            action_type="DESTROYED",
+            message="destroyed",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+        ),
+    ]
+    simulator = _make_simulator_mock([other_unit], logs=logs)
+
+    _save_battle_results(
+        session=session,
+        room=room,
+        player_entries=[entry],
+        npc_entries=[],
+        simulator=simulator,
+        primary_player_win=False,
+        player_unit=player_unit,
+        enemy_units=[other_unit],
+    )
+
+    results = list(
+        session.exec(select(BattleResult).where(BattleResult.room_id == room.id)).all()
+    )
+    assert len(results) == 1
+    result = results[0]
+
+    assert result.win_loss == "LOSE"
+    assert result.kills == 1
+    assert result.digest_tag == "力戦及ばず"
 
 
 def test_save_battle_results_snapshot_immutability(in_memory_session):
