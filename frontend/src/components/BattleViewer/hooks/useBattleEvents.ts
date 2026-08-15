@@ -13,12 +13,14 @@ export interface BattleEventsResult {
     attackingUnitIds: Set<string>;
 }
 
+/**
+ * @param timestampLogs 現在タイムスタンプ分にフィルタ済みのログ（呼び出し元で計算し、他コンポーネントと共有する。Issue #467）
+ */
 export function useBattleEvents(
-    logs: BattleLog[],
-    currentTimestamp: number
+    timestampLogs: BattleLog[]
 ): BattleEventsResult {
     return useMemo(() => {
-        const currentTimestampLogs = logs.filter(log => Math.abs(log.timestamp - currentTimestamp) < 1e-9);
+        const currentTimestampLogs = timestampLogs;
         const battleEventMap = new Map<string, BattleEventEffect | null>();
 
         // Pass 1: ユニットの位置マップを構築（攻撃ライン描画のターゲット座標取得用）
@@ -159,5 +161,5 @@ export function useBattleEvents(
         }
 
         return { events: battleEventMap, attackingUnitIds };
-    }, [logs, currentTimestamp]);
+    }, [timestampLogs]);
 }

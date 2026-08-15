@@ -20,7 +20,8 @@ interface BattleOverlayProps {
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     environment: string;
     currentTimestamp: number;
-    logs: BattleLog[];
+    /** 現在タイムスタンプ分にフィルタ済みのログ（呼び出し元で計算済み。Issue #467） */
+    timestampLogs: BattleLog[];
     /** LOS 表示の現在の状態 */
     showLos: boolean;
     /** LOS 表示トグルのコールバック */
@@ -33,7 +34,7 @@ export function BattleOverlay({
     enemyStates,
     environment,
     currentTimestamp,
-    logs,
+    timestampLogs,
     showLos,
     onToggleLos,
 }: BattleOverlayProps) {
@@ -52,7 +53,7 @@ export function BattleOverlay({
                         colorFunc={getHpBarColor}
                         currentTimestamp={currentTimestamp}
                         unitId={player.id}
-                        logs={logs}
+                        timestampLogs={timestampLogs}
                     />
                     
                     {/* EN Display */}
@@ -89,7 +90,7 @@ export function BattleOverlay({
                             colorFunc={getEnemyHpBarColor}
                             currentTimestamp={currentTimestamp}
                             unitId={enemy.id}
-                            logs={logs}
+                            timestampLogs={timestampLogs}
                         />
                     </div>
                 ))}

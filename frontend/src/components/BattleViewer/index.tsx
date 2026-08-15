@@ -74,8 +74,15 @@ export default function BattleViewer({
         [enemyStates, detectedIds]
     );
     
+    // 現在タイムスタンプ分のログ。useBattleEvents と BattleOverlay(HpBar) の両方が同じ
+    // フィルタ結果を必要とするため、ここで一度だけ計算して共有する（Issue #467）
+    const timestampLogs = useMemo(
+        () => logs.filter(log => Math.abs(log.timestamp - currentTimestamp) < 1e-9),
+        [logs, currentTimestamp]
+    );
+
     // バトルイベントの取得（攻撃中ユニット ID セットを含む）(Issue #365)
-    const { events: battleEventMap, attackingUnitIds } = useBattleEvents(logs, currentTimestamp);
+    const { events: battleEventMap, attackingUnitIds } = useBattleEvents(timestampLogs);
 
     const playerEvent = battleEventMap.get(player.id) || null;
     const enemyEvents = enemies.map(enemy => ({
@@ -127,7 +134,7 @@ export default function BattleViewer({
                 enemyStates={visibleEnemyStates}
                 environment={environment}
                 currentTimestamp={currentTimestamp}
-                logs={logs}
+                timestampLogs={timestampLogs}
                 showLos={showLos}
                 onToggleLos={() => setShowLos(v => !v)}
             />

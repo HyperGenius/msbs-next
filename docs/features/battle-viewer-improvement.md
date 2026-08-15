@@ -399,3 +399,47 @@ Phase 3（ビジュアル強化）
 
 **影響ファイル:**
 - `frontend/src/components/BattleViewer/index.tsx`
+
+---
+
+## 再生クロックのrAF化・重複ログフィルタの解消（Issue #467）
+
+Issue #465/#466 対応後も残っていた、優先度の低い追加の非効率箇所3件に対応。
+
+### 1. TurnController — 再生クロックをrequestAnimationFrameベースに変更
+
+`TurnController.tsx` の再生クロックは `setInterval(..., 100)` で固定100msごとにシム時間を+0.1s進める実装
+だった。`setInterval` はタイマー精度の遅延を自動補正しないため、負荷が高い環境ではコールバックの発火間隔が
+100msより伸び、再生が実時間から遅れて乖離し続ける可能性があった。
+
+**修正:** `requestAnimationFrame` + フレーム間の経過時間を積算する方式に変更した。前フレームからの経過秒数
+を `elapsedSinceLastStep` に積算し、0.1s分溜まるごとに（複数ステップ分たまっていればまとめて）シム時間を
+進める。1フレームが遅延しても、次フレームで経過時間を正しく積算し直すため、遅延分を自動的に取り戻せる。
+
+### 2. HpBar — 同種の全ログフィルタの重複実行を解消
+
+`HpBar.tsx` はダメージフラッシュ判定のために `logs.filter(log => Math.abs(log.timestamp - currentTimestamp) < 1e-9)`
+をユニットごと（自機+敵の数だけ）に重複実行していた。`useBattleEvents.ts` 側でも同種のタイムスタンプフィルタを
+既に計算済みだったため、二重計算になっていた。
+
+**修正:** `BattleViewer/index.tsx` で現在タイムスタンプ分のログフィルタ（`timestampLogs`）を `useMemo` で
+一度だけ計算し、`useBattleEvents`（フィルタ済み配列を受け取る形に変更）と `BattleOverlay`→`HpBar` の両方に
+共有して渡すよう統一した。`HpBar` の `logs` propは `timestampLogs`（フィルタ済み配列）に置き換え、コンポーネント
+内部でのフィルタ処理を削除した。
+
+### 3. BattleLogViewer — 全ログフィルタをuseMemo化
+
+`BattleLogViewer.tsx` は `filterRelevantLogs(logs)`（`useBattleLogic.ts` で `useCallback` 化済み）の呼び出し
+結果を `useMemo` していなかったため、`currentTimestamp` が変わるたび（再生中は100msごと）にログ全体を毎回
+`filter` し直していた。`filterRelevantLogs` 自体は `currentTimestamp` に依存しないため、本来は再計算不要だった。
+
+**修正:** `displayedLogs = filterRelevantLogs(logs)` を `useMemo(() => filterRelevantLogs(logs), [filterRelevantLogs, logs])`
+でラップした。
+
+**影響ファイル:**
+- `frontend/src/components/history/TurnController.tsx`
+- `frontend/src/components/history/BattleLogViewer.tsx`
+- `frontend/src/components/BattleViewer/ui/HpBar.tsx`
+- `frontend/src/components/BattleViewer/ui/BattleOverlay.tsx`
+- `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts`
+- `frontend/src/components/BattleViewer/index.tsx`
