@@ -161,9 +161,17 @@ export default function WeaponEditForm({
   const sectionTitle =
     "text-xs font-bold text-[#ffb000] uppercase tracking-wider mb-2 border-b border-[#ffb000]/20 pb-1";
 
+  // 未入力（空文字）は DB 上「未設定」を表す null に正規化してから送信する
+  function handleFormSubmit(values: WeaponFormValues) {
+    return onSubmit({
+      ...values,
+      flavor_text: values.flavor_text?.trim() ? values.flavor_text : null,
+    });
+  }
+
   return (
     <form
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={handleSubmit(handleFormSubmit)}
       className="space-y-4 text-[#00ff41] font-mono"
     >
       {/* 基本情報 */}
