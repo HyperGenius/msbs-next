@@ -16,8 +16,13 @@ from app.engine.constants import (
     FUZZY_RULES_DIR,
     MAX_FIELD_SIZE,
     MIN_FIELD_SIZE,
+    MIN_SHRUNK_FIELD_SIZE,
     MOVE_LOG_MIN_DIST,
     OBSTACLE_GRID_PARAMS,
+    SHRINK_INTERVAL_STEPS,
+    SHRINK_PAUSE_ALIVE_THRESHOLD,
+    SHRINK_RATIO,
+    SHRINK_START_STEP,
     SPAWN_CENTER_JITTER_RADIUS,
     SPAWN_CENTER_SEARCH_MAX_TRIES,
     SPAWN_DETECTION_SAFETY_MARGIN,
@@ -62,6 +67,19 @@ __all__ = [
     "_has_los",
     "MOVE_LOG_MIN_DIST",
 ]
+
+
+def _count_initial_team_alive(units: "list[MobileSuit]") -> dict[str, int]:
+    """開始時点のチームごとのユニット数を集計する (Issue #474).
+
+    エリア収縮の停止判定で「消耗して少なくなった」チームのみを対象にするため、
+    バトル開始時点のチーム人数を基準値として保持する。
+    """
+    counts: dict[str, int] = {}
+    for unit in units:
+        if unit.team_id is not None:
+            counts[unit.team_id] = counts.get(unit.team_id, 0) + 1
+    return counts
 
 
 def _personality_pilot_stats(personality: str | None) -> PilotStats:
@@ -269,6 +287,18 @@ class BattleSimulator(
             side_len = max(side_len, min(MAX_FIELD_SIZE, required_field_size))
 
         self.map_bounds: tuple[float, float] = (0.0, side_len)
+        # エリア収縮の基準中心（固定・以後変化しない。Issue #474）
+        self._map_center: float = side_len / 2.0
+        # いずれかのチームの生存数が SHRINK_PAUSE_ALIVE_THRESHOLD 以下になり
+        # 収縮を停止した状態を一度だけログに記録するためのフラグ
+        self._shrink_paused: bool = False
+        # 収縮の停止判定基準となる初期チーム人数 (Issue #474)。
+        # 1vs1ソロミッション等、開始時点でチーム人数が SHRINK_PAUSE_ALIVE_THRESHOLD
+        # 以下のチームは「消耗して少なくなった」わけではないため停止判定の対象外とする
+        # （そうしないと1vs1では収縮が最初から一切発動しなくなってしまう）。
+        self._initial_team_alive_counts: dict[str, int] = _count_initial_team_alive(
+            self.units
+        )
 
         # battlefield パラメータの解決 (Phase 6-3)
         # 明示的な obstacles 引数が渡された場合は後方互換性のためそれを優先する
@@ -902,39 +932,131 @@ class BattleSimulator(
         self._movement_grid = None
         self._threat_repulsion_grid = None
 
-        # 1. 索敵フェーズ
+        # 1. エリア収縮フェーズ（Issue #474）: 索敵・移動より前に map_bounds を
+        # 更新することで、このステップの索敵・移動が新しい境界を反映する
+        self._area_shrink_phase()
+
+        # 2. 索敵フェーズ
         self._detection_phase()
 
-        # 2. 戦略評価フェーズ (Phase 4-2)
+        # 3. 戦略評価フェーズ (Phase 4-2)
         self._strategy_phase()
 
-        # 3. AI意思決定フェーズ（中階層ファジィ推論）
+        # 4. AI意思決定フェーズ（中階層ファジィ推論）
         alive_units = [u for u in self.units if u.current_hp > 0]
         for unit in alive_units:
             self._ai_decision_phase(unit)
 
-        # 4. 胴体向き更新フェーズ (Phase 6-1)
+        # 5. 胴体向き更新フェーズ (Phase 6-1)
         alive_units = [u for u in self.units if u.current_hp > 0]
         for unit in alive_units:
             self._update_body_heading(unit, dt)
 
-        # 5. 行動フェーズ（全ユニットを同一ステップで並列処理）
+        # 6. 行動フェーズ（全ユニットを同一ステップで並列処理）
         alive_units = [u for u in self.units if u.current_hp > 0]
         for unit in alive_units:
             if self.is_finished:
                 break
             self._action_phase(unit, dt)
 
-        # 6. 撤退離脱判定フェーズ (Phase 3-3)
+        # 7. 撤退離脱判定フェーズ (Phase 3-3)
         if self.retreat_points:
             self._retreat_check_phase()
 
-        # 7. リソース更新フェーズ（EN回復・クールダウン減少）
+        # 8. リソース更新フェーズ（EN回復・クールダウン減少）
         self._refresh_phase(dt)
 
-        # 8. 時間を進める
+        # 9. 時間を進める
         self.elapsed_time += dt
         self._step_count += 1
+
+    def _area_shrink_phase(self) -> None:
+        """時間経過に応じて map_bounds を段階的に収縮させる (Issue #474).
+
+        SHRINK_START_STEP 以降、SHRINK_INTERVAL_STEPS ごとに辺長へ SHRINK_RATIO を
+        乗算し、固定中心（初期化時のマップ中心、self._map_center）を基準に対称へ
+        縮小する。MIN_SHRUNK_FIELD_SIZE を下回らせない。いずれかのチームの生存数が
+        SHRINK_PAUSE_ALIVE_THRESHOLD 以下の場合は収縮を停止する（決着直前の
+        不自然な圧縮を避けるため）。
+        """
+        if self._step_count < SHRINK_START_STEP:
+            return
+        if (self._step_count - SHRINK_START_STEP) % SHRINK_INTERVAL_STEPS != 0:
+            return
+
+        map_min, map_max = self.map_bounds
+        current_side_len = map_max - map_min
+        if current_side_len <= MIN_SHRUNK_FIELD_SIZE:
+            return  # 既に下限まで収縮済み
+
+        alive_counts_by_team: dict[str, int] = {}
+        for unit in self.units:
+            if unit.current_hp > 0 and unit.team_id is not None:
+                alive_counts_by_team[unit.team_id] = (
+                    alive_counts_by_team.get(unit.team_id, 0) + 1
+                )
+
+        # 「消耗して少なくなった」チームのみを停止判定の対象にする（1vs1等、
+        # 開始時点から人数が少ないチームは対象外）
+        any_team_depleted = any(
+            alive_counts_by_team.get(team_id, 0) <= SHRINK_PAUSE_ALIVE_THRESHOLD
+            for team_id, initial_count in self._initial_team_alive_counts.items()
+            if initial_count > SHRINK_PAUSE_ALIVE_THRESHOLD
+        )
+
+        if any_team_depleted:
+            if not self._shrink_paused:
+                self._shrink_paused = True
+                self._log_area_shrink_event(
+                    map_min, map_max, map_min, map_max, reason="paused_low_survivors"
+                )
+            return
+
+        new_side_len = max(MIN_SHRUNK_FIELD_SIZE, current_side_len * SHRINK_RATIO)
+        new_min = self._map_center - new_side_len / 2.0
+        new_max = self._map_center + new_side_len / 2.0
+        self.map_bounds = (new_min, new_max)
+        self._log_area_shrink_event(
+            map_min, map_max, new_min, new_max, reason="scheduled_shrink"
+        )
+
+    def _log_area_shrink_event(
+        self,
+        old_min: float,
+        old_max: float,
+        new_min: float,
+        new_max: float,
+        reason: str,
+    ) -> None:
+        """エリア収縮イベントを BattleLog に記録する (Issue #474).
+
+        毎ステップのスナップショットではなく、収縮の発生（または低生存数による
+        停止）イベント時のみ記録する。リプレイ再構成側は直近イベント値を保持する
+        形で map_bounds の推移を再現する想定。
+        """
+        if reason == "scheduled_shrink":
+            message = (
+                f"エリアが収縮した（{old_max - old_min:.0f}m → "
+                f"{new_max - new_min:.0f}m）。"
+            )
+        else:
+            message = "残存ユニット数が少ないためエリア収縮を停止した。"
+
+        self.logs.append(
+            BattleLog(
+                timestamp=float(self.elapsed_time),
+                actor_id=self._team_event_actor_id,
+                action_type="AREA_SHRINK",
+                message=message,
+                position_snapshot=Vector3(),
+                details={
+                    "step": self._step_count,
+                    "old_bounds": [old_min, old_max],
+                    "new_bounds": [new_min, new_max],
+                    "reason": reason,
+                },
+            )
+        )
 
     def _collect_team_metrics(self, team_id: str) -> TeamMetrics:
         """チームのバトルメトリクスを収集する (Phase 4-2).

@@ -2033,4 +2033,99 @@ Python ループが「200点 × 発火集合数」から「発火集合数」（
 は `sim._step_count` を手動でインクリメントしてから再度 `_select_target_fuzzy()` を
 呼ぶテストであり、キャッシュがステップ単位で正しく無効化されることを間接的に検証している。
 
+## 27. Issue #474: エリア収縮メカニクス
+
+### 27.1 課題
+
+バトルロワイヤル方式（および1vs1ソロミッションを含む全対戦形式）では、`map_bounds`
+（Phase 6-5 フィールドスケーリング、16章）がバトル開始時に一度決まった後は変化せず、
+境界には `_boundary_repulsion()`（`movement.py`）によるソフトな斥力があるのみで
+リングアウト等の強制収束メカニクスが存在しなかった。そのため初回の接敵・交戦後、
+生存ユニットが広いマップ（最大 `MAX_FIELD_SIZE=8000m` 四方）に散らばると再接近を
+促す力学的インセンティブが乏しく、以降ほとんど接敵が発生しないままバトルが間延びし、
+最悪の場合 `_MAX_STEPS=5000` 到達で引き分け終了してしまうことがあった。
+
+### 27.2 設計
+
+`BattleSimulator.step()` に「エリア収縮フェーズ」（`_area_shrink_phase()`）を新設し、
+索敵フェーズより前に `self.map_bounds` を更新することで、そのステップの索敵・移動が
+新しい境界を反映するようにした。
+
+**収縮スケジュール**: `SHRINK_START_STEP`（既定300ステップ、dt=0.1sで約30秒）以降、
+`SHRINK_INTERVAL_STEPS`（既定300ステップ）ごとに辺長へ `SHRINK_RATIO`（既定0.85）を
+乗算する。`MIN_SHRUNK_FIELD_SIZE` を下回らせない（既定は `MIN_FIELD_SIZE` と同値の
+2000m。理由は後述）。いずれの定数も `constants.py` にチューニング可能な値として定義した。
+
+**収縮の基準点は固定中心**: 生存ユニットの重心に追従させる方式は、「移動→重心移動→
+反発方向変化」という循環でオシレーションを起こすリスクがあり、`_boundary_repulsion()`
+側の中心座標も毎ステップ再計算が必要になる。そのため `BattleSimulator.__init__()` で
+一度だけ計算した固定中心（`self._map_center = side_len / 2.0`。初期の `map_bounds` の
+中央で、スポーン領域が使う `SPAWN_ZONE_MAP_OFFSET` の基準点と同一）を採用し、収縮のたびに
+`new_min = center - new_side_len/2, new_max = center + new_side_len/2` という対称な
+再計算のみを行う。`_boundary_repulsion()`（`movement.py`）は元々 `self.map_bounds` を
+毎回読み直す実装だったため、中心座標自体を変更する必要はなく、`map_bounds` の値のみ
+更新すれば自動的に新しい境界に追従する。
+
+**`MIN_SHRUNK_FIELD_SIZE` と `BOUNDARY_MARGIN` の関係**: `BOUNDARY_MARGIN`（200m、
+`movement.py` の斥力発生距離）は既存の `MIN_FIELD_SIZE=2000m` と共存しており、これは
+「マージンがフィールド辺長の10%」という現行アーキテクチャで動作実績のある比率である。
+この実績比率を踏襲し、`MIN_SHRUNK_FIELD_SIZE = MIN_FIELD_SIZE` として、収縮後も
+この下限を下回らせないことで、margin/field_size比が10%を超えて `_boundary_repulsion`
+の効きが破綻する領域には踏み込まないようにした。
+
+**残存ユニット数が少ない場合の停止**: いずれかのチームの生存数が
+`SHRINK_PAUSE_ALIVE_THRESHOLD`（既定1）以下になった場合、そのチームを巡る決着直前の
+不自然な圧縮を避けるため収縮を停止する。ただし**この判定は「消耗して少なくなった」
+チームのみを対象とする**（`BattleSimulator.__init__()` で記録する
+`self._initial_team_alive_counts`（開始時点のチーム人数）が `SHRINK_PAUSE_ALIVE_THRESHOLD`
+を超えていたチームに限る）。1vs1ソロミッションのように開始時点からチーム人数が
+1のケースをこの判定に含めてしまうと、最も頻度の高いバトル形式である1vs1で収縮が
+一切発動しなくなってしまう（実装中にテストで実際にこの不具合を発見し修正した。
+`tests/unit/test_area_shrink.py` の `test_shrink_not_paused_for_1v1_from_start` /
+`test_shrink_pauses_when_team_depleted_from_larger_start` で両ケースを区別して検証している）。
+
+**ログ方式**: 収縮判定はチーム生存数という状態に依存するため、毎ステップのスナップショット
+ではなく、`map_bounds` の値が実際に変化した（または低生存数により変化がスキップされた）
+イベント発生時のみ `BattleLog` に記録する（`action_type="AREA_SHRINK"`, `details`に
+`{step, old_bounds, new_bounds, reason}`。`reason` は `"scheduled_shrink"` /
+`"paused_low_survivors"`）。5000ステップ全量を出すとリプレイログが肥大化する一方、
+収縮は `SHRINK_INTERVAL_STEPS` ごとの離散イベントであり、ビューア側は直近イベント値を
+保持する形で `map_bounds` の推移を再構成できる。停止イベントは状態が変わらない限り
+重複記録しないよう `self._shrink_paused` フラグで一度だけに制限している
+（`STRATEGY_CHANGED` ログ（4章）が状態遷移時のみ記録するパターンを踏襲）。
+
+### 27.3 今回スコープ外とした事項
+
+- **生存ユニット重心への追従方式**: 27.2節の理由により固定中心をMVPとして採用した。
+  再接触率の改善効果が不十分な場合、Phase2として別Issueで検討する。
+- **フロントエンド（BattleViewer）でのフィールド境界収縮の可視化**: バックエンドの
+  ログ設計（イベント単位の`AREA_SHRINK`ログ）は将来の対応を見据えているが、実際の
+  描画対応は別Issueとする。
+- **境界外に取り残されたユニットへの追加ペナルティ**: `_boundary_repulsion()` の
+  押し戻し力を強化する、あるいはダメージを与える等の追加対応は行っていない。既存の
+  斥力式（`3.0 * direction / max(dist, 1.0)`）が収縮後の境界でも機能することを
+  `tests/unit/test_area_shrink.py` で確認済みだが、極端な収縮直後にユニットが
+  大きく境界外に取り残されるケースの挙動チューニングは今後の課題とする。
+
+### 27.4 テスト
+
+`tests/unit/test_area_shrink.py` で以下を検証:
+
+1. `SHRINK_START_STEP` に到達するまでは `map_bounds` が変化しないこと
+2. `SHRINK_START_STEP` 以降、`SHRINK_INTERVAL_STEPS` ごとに `SHRINK_RATIO` を乗算した
+   辺長へ段階的に収縮すること（2回分の収縮を検証）
+3. 収縮が固定中心（`self._map_center`）を基準に対称であること
+4. `MIN_SHRUNK_FIELD_SIZE` を下回らないこと（多数の収縮間隔を経過させて検証）
+5. 開始時3機だったチームが1機まで消耗した場合は収縮が停止すること、および
+   1vs1ソロミッションでは開始時点から人数が少なくても収縮が正常に発動すること
+6. `AREA_SHRINK` ログがイベント単位（毎ステップではなく）で記録されること、
+   停止イベントも一度だけ記録されること
+
+いずれのテストも、ステップ経過中にバトルが決着してしまうと収縮ロジックを検証できない
+ため、テスト用ユニットの HP を大きく確保している（`_make_large_sim()` 参照）。
+既存の `tests/unit/test_field_scaling.py`・`test_phase_6_3_field_init.py`・
+`test_spawn_detection_avoidance.py`・`test_potential_field.py`・`test_simulation.py`
+がすべて変更なくパスすることを確認し、初期化時の `map_bounds` 計算（16章）や
+スポーン領域生成にリグレッションがないことを確認した。
+
 既存の `tests/unit` 全体が変更後もすべてパスすることを確認済み。
