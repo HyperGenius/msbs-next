@@ -14,6 +14,7 @@ from sqlmodel import Session, desc, select
 # DB関連
 from app.core.auth import get_current_user, get_current_user_optional
 from app.db import get_session
+from app.engine.battle_digest import compute_unit_kills
 from app.engine.battle_utils import serialize_obstacles, strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -272,7 +273,7 @@ async def simulate_battle(
     # 6. 勝者判定と撃墜数カウント
     winner_id = None
     win_loss = "DRAW"
-    kills = sum(1 for e in enemies if e.current_hp <= 0)
+    kills = compute_unit_kills(sim.logs, player.id)
 
     if player.current_hp > 0 and all(e.current_hp <= 0 for e in enemies):
         # プレイヤー勝利

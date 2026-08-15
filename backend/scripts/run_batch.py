@@ -19,6 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from sqlmodel import Session, select
 
 from app.db import engine
+from app.engine.battle_digest import compute_unit_kills
 from app.engine.battle_utils import serialize_obstacles, strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -193,7 +194,7 @@ def _run_simulation(
         enemy_units: 敵ユニットリスト
 
     Returns:
-        (シミュレーター, 勝利フラグ, 撃墜数, 消費ステップ数)
+        (シミュレーター, 勝利フラグ, プレイヤー自身の撃墜数, 消費ステップ数)
     """
     simulator = BattleSimulator(player_unit, enemy_units, battlefield=BattleField())
 
@@ -209,7 +210,7 @@ def _run_simulation(
     # 勝敗判定 (team_idベース: プレイヤーのteam_idが生存していれば勝利)
     alive_team_ids = {u.team_id for u in simulator.units if u.current_hp > 0}
     primary_player_win = player_unit.team_id in alive_team_ids
-    kills = sum(1 for e in enemy_units if e.current_hp <= 0)
+    kills = compute_unit_kills(simulator.logs, player_unit.id)
 
     return simulator, primary_player_win, kills, steps_used
 
@@ -221,7 +222,6 @@ def _save_battle_results(
     npc_entries: list[BattleEntry],
     simulator: BattleSimulator,
     primary_player_win: bool,
-    kills: int,
     player_unit: MobileSuit,
     enemy_units: list[MobileSuit],
     steps_used: int = 0,
@@ -235,7 +235,6 @@ def _save_battle_results(
         npc_entries: NPCエントリーリスト
         simulator: シミュレーター
         primary_player_win: 勝利フラグ
-        kills: 撃墜数
         player_unit: プレイヤーユニット（スナップショット保存用。実バトルでは
             シミュレーションによって current_hp 等が最終状態まで更新済み）
         enemy_units: 敵ユニットリスト（スナップショット保存用。同上）
@@ -264,7 +263,11 @@ def _save_battle_results(
         entry_unit = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
         entry_team_id = _resolve_team_id(entry_unit)
         individual_win_loss = "WIN" if entry_team_id in alive_team_ids else "LOSE"
-        individual_kills = kills if individual_win_loss == "WIN" else 0
+        # 勝敗に関わらず自機の撃破数をそのまま使う（main.py のソロミッション経路と
+        # 揃える）。敗北時に0へ丸めると、LOSE時のダイジェストタグ判定
+        # （kills>=1 なら「力戦及ばず」）が常に「完敗」にしかならず、報酬の
+        # 撃墜ボーナスも失われてしまう（Copilotレビュー指摘、PR #472）。
+        individual_kills = compute_unit_kills(simulator.logs, entry_unit.id)
 
         # 報酬の計算と付与（BattleResult作成前にlevel_beforeを確定）
         exp_gained = 0
@@ -425,7 +428,6 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         npc_entries,
         simulator,
         primary_player_win,
-        kills,
         player_unit,
         enemy_units,
         steps_used,
