@@ -3,8 +3,8 @@
 
 import { SciFiPanel, SciFiHeading } from "@/components/ui";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
+import WeaponStatRadar from "./WeaponStatRadar";
 import { WeaponListing } from "@/types/battle";
-import { getWeaponRank, getRankColor } from "@/utils/rankUtils";
 import { WEAPON_LABELS } from "@/utils/displayUtils";
 
 interface WeaponDetailPanelProps {
@@ -31,9 +31,7 @@ export default function WeaponDetailPanel({
   const remaining = credits - listing.price;
 
   const w = listing.weapon;
-  const powerRank = w.power_rank ?? getWeaponRank("weapon_power", w.power);
-  const rangeRank = w.range_rank ?? getWeaponRank("weapon_range", w.range);
-  const accuracyRank = w.accuracy_rank ?? getWeaponRank("weapon_accuracy", w.accuracy);
+  const requiredBeamGeneratorLv = w.required_beam_generator_lv ?? 0;
 
   const content = (
     <div className="flex flex-col h-full">
@@ -60,18 +58,29 @@ export default function WeaponDetailPanel({
         </p>
       )}
 
-      {/* ランクバッジ */}
-      <div className="mb-4 flex gap-4 text-xs font-mono">
-        {[
-          { label: WEAPON_LABELS.power, rank: powerRank },
-          { label: WEAPON_LABELS.range, rank: rangeRank },
-          { label: WEAPON_LABELS.accuracy, rank: accuracyRank },
-        ].map(({ label, rank }) => (
-          <div key={label}>
-            <div className="text-[#00ff41]/60 mb-1">{label}</div>
-            <div className={`font-bold text-lg ${getRankColor(rank)}`}>{rank}</div>
+      {/* スペックレーダーチャート */}
+      <div className="mb-4">
+        <WeaponStatRadar weapon={w} />
+      </div>
+
+      {/* 武器種別・属性・要求ビームジェネレータLv */}
+      <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono">
+        <div>
+          <span className="text-[#00ff41]/50">{WEAPON_LABELS.weapon_type}: </span>
+          <span className="font-bold text-[#00ff41]">{w.weapon_type ?? "RANGED"}</span>
+        </div>
+        <div>
+          <span className="text-[#00ff41]/50">{WEAPON_LABELS.type}: </span>
+          <span className={`font-bold ${w.type === "BEAM" ? "text-[#00f0ff]" : "text-[#ffb000]"}`}>
+            {w.type ?? "PHYSICAL"}
+          </span>
+        </div>
+        {requiredBeamGeneratorLv >= 1 && (
+          <div>
+            <span className="text-[#00ff41]/50">{WEAPON_LABELS.required_beam_generator_lv}: </span>
+            <span className="font-bold text-[#00f0ff]">{requiredBeamGeneratorLv}</span>
           </div>
-        ))}
+        )}
       </div>
 
       {/* 価格サマリー */}
