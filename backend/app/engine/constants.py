@@ -185,6 +185,22 @@ AREA_PER_UNIT: float = 250_000.0  # 1ユニットあたりの面積 (m²) = 500m
 MIN_FIELD_SIZE: float = 2000.0  # 最小フィールド辺長 (m)
 MAX_FIELD_SIZE: float = 8000.0  # 最大フィールド辺長 (m)
 
+# エリア収縮メカニクス定数 (Issue #474)
+# 経過ステップ数に応じてマップ境界（self.map_bounds）を段階的に縮小し、初回接敵後の
+# 間延び（生存ユニットが広いマップに散らばり再接近しなくなる）を解消する。
+# 収縮は初期化時に固定した中心点（マップ辺長/2）を基準に対称に行う（追従方式は非採用。
+# 詳細は docs/features/battle-engine-feature.md 参照）。
+SHRINK_START_STEP: int = 300  # 収縮を開始するステップ数（dt=0.1s換算で約30秒経過後）
+SHRINK_INTERVAL_STEPS: int = 300  # 収縮間隔（ステップ数）
+SHRINK_RATIO: float = 0.85  # 1回の収縮で辺長に乗算する係数（15%ずつ縮小）
+# 収縮後の最小フィールド辺長。既存の BOUNDARY_MARGIN(200m) との比率（10%）が
+# _boundary_repulsion の効きを破綻させないよう、既存実績のある MIN_FIELD_SIZE と
+# 同値に固定する（これより小さくは収縮させない）
+MIN_SHRUNK_FIELD_SIZE: float = MIN_FIELD_SIZE
+# いずれかのチームの生存ユニット数がこの値以下になったら収縮を停止する
+# （決着直前の不自然な圧縮を避けるため）
+SHRINK_PAUSE_ALIVE_THRESHOLD: int = 1
+
 # ブーストダッシュシステム定数 (Phase B)
 MELEE_RANGE: float = 50.0  # 近接攻撃有効距離 (m)
 MELEE_BOOST_ARRIVAL_RANGE: float = (
