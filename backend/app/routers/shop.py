@@ -47,6 +47,7 @@ class WeaponListingResponse(BaseModel):
     name: str
     price: int
     description: str
+    flavor_text: str | None = None
     weapon: dict
 
 
@@ -204,6 +205,7 @@ async def get_weapon_listings() -> list[WeaponListingResponse]:
                 name=cast(str, item["name"]),
                 price=cast(int, item["price"]),
                 description=cast(str, item["description"]),
+                flavor_text=cast(str | None, item.get("flavor_text")),
                 weapon=weapon.model_dump(),
             )
         )

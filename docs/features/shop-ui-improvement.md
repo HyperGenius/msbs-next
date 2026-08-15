@@ -1,9 +1,9 @@
 # ショップ UI 抜本改善提案
 
-**バージョン**: 1.1.0  
+**バージョン**: 1.2.0  
 **作成日**: 2026-06-01  
-**最終更新**: 2026-06-01  
-**ステータス**: Phase 1 + Phase 2 + Phase 3 実装済み（Issue #377）  
+**最終更新**: 2026-08-15  
+**ステータス**: Phase 1 + Phase 2 + Phase 3 実装済み（Issue #377）、武器カード刷新（Issue #480）  
 **対象ファイル**: `frontend/src/app/shop/page.tsx`
 
 ---
@@ -371,3 +371,44 @@ interface MobileSuitDetailPanelProps {
 - [docs/features/parameter-tuning-ui-improvement.md](parameter-tuning-ui-improvement.md) — パラメータチューニングUIの改善事例（設計思想の参考）
 - [docs/ui-design/ui-guidelines.md](../ui-design/ui-guidelines.md) — UIデザインガイドライン（モバイルファースト原則）
 - [docs/ui-design/sf-ui-components-guide.md](../ui-design/sf-ui-components-guide.md) — SF-UI コンポーネント一覧
+
+---
+
+## 10. 武器購入画面のフレーバーテキスト対応（Issue #480, 2026-08-15）
+
+### 10.1 背景
+
+武器カード・詳細モーダルがランクバッジと数値の羅列のみで「Wikiの数値表」に近い見た目になっていた問題を解消するため、武器ごとに1〜2行のフレーバーテキスト（設定・入手時のセリフ・搭乗適性コメントなど）を表示できるようにした。
+
+### 10.2 データモデル変更
+
+`master_weapons` テーブルに `flavor_text: str | None`（nullable）カラムを追加（`backend/alembic/versions/y8z9a0b1c2d3_add_flavor_text_to_master_weapons.py`）。既存武器は `NULL` のまま許容し、未設定時はフロントエンドで非表示にする。`MasterWeapon` / `MasterWeaponEntry` / `MasterWeaponCreate` / `MasterWeaponUpdate`（`backend/app/models/models.py`）、`GET /api/shop/weapons` の `WeaponListingResponse`（`backend/app/routers/shop.py`）、Admin API（`backend/app/routers/admin.py`, `backend/app/services/weapon_service.py`）を通じて一貫して読み書きできる。
+
+### 10.3 表示項目の整理
+
+`WeaponCard.tsx`（一覧）・`WeaponDetailPanel.tsx`（詳細）の表示項目を以下の4点に整理した:
+
+- 武器名
+- ランク表記（攻撃力 `[power_rank]` / 射程 `[range_rank]` / 命中率 `[accuracy_rank]`）
+- 購入クレジット数
+- フレーバーテキスト（`flavor_text`。未設定時は非表示）
+
+属性（BEAM/PHYSICAL）・適正距離・減衰率・弾数/EN消費などの補助情報、およびスペックの生数値表示（`SciFiProgress` バー）は削除した。これらは「今この武器を買う理由」を素早く伝える上でノイズになっていたため、本ドキュメントの設計思想「数字を確認する画面 → ビルドを選ぶ画面」をさらに一歩進める形で削減している。
+
+### 10.4 購入可否の表現変更
+
+「購入可」バッジ（購入可能な場合にのみ表示していた常時表示バッジ）を削除した。「不足額のみ赤字表示、それ以外は購入可能」という表現の方が非対称な情報量として自然なため。購入不可（所持クレジット不足）の武器は `opacity-50 grayscale cursor-not-allowed` でグレーアウトし、カードのクリック（詳細選択）も無効化した（従来は `opacity-60` のみでクリックは有効だった）。
+
+### 10.5 影響範囲
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `backend/app/models/models.py` | `MasterWeapon`系モデルに `flavor_text` 追加 |
+| `backend/alembic/versions/y8z9a0b1c2d3_*.py` | `master_weapons.flavor_text` カラム追加（新規マイグレーション） |
+| `backend/app/core/gamedata.py` | `flavor_text` の読み書きを追加 |
+| `backend/app/services/weapon_service.py` | Admin CRUD に `flavor_text` を追加 |
+| `backend/app/routers/admin.py` | `_raw_weapon_to_entry` に `flavor_text` を追加 |
+| `backend/app/routers/shop.py` | `WeaponListingResponse` に `flavor_text` を追加 |
+| `frontend/src/types/shop.ts` | `WeaponListing.flavor_text` を追加 |
+| `frontend/src/app/shop/_components/WeaponCard.tsx` | 表示項目整理、購入可バッジ削除、グレーアウト強化 |
+| `frontend/src/app/shop/_components/WeaponDetailPanel.tsx` | 表示項目整理（ランクバッジのみ、生数値・スペックバー削除） |

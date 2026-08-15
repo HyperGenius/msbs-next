@@ -4,6 +4,7 @@
     "name": "Zaku Machine Gun",
     "price": 200,
     "description": "ザク用マシンガン。連射性能に優れた実弾兵器。",
+    "flavor_text": "「弾はケチるな、当てて何ぼだ」——ジオン軍下士官兵に叩き込まれる基本装備。",
     "weapon": {
       "power": 100,
       "range": 400,
@@ -19,6 +20,7 @@
     "name": "Giant Bazooka",
     "price": 400,
     "description": "高火力バズーカ。装甲貫通力に優れる。",
+    "flavor_text": "一撃で装甲を捲る威力と引き換えに、構えの遅さは覚悟しておけ。",
     "weapon": {
       "power": 180,
       "range": 450,
@@ -34,6 +36,7 @@
     "name": "Heat Rod",
     "price": 350,
     "description": "ヒートロッド。近距離戦闘に特化した武器。",
+    "flavor_text": "熱線を纏った鞭は、格闘適性の高いパイロットほど牙を剥く。",
     "weapon": {
       "power": 140,
       "range": 300,
@@ -49,6 +52,7 @@
     "name": "Beam Rifle",
     "price": 800,
     "description": "ガンダム用ビームライフル。高威力・高精度のビーム兵器。",
+    "flavor_text": "連邦軍が制式採用した汎用ビーム火器。宇宙世紀を通じ最も生産数の多いMS用武装の一つ。",
     "weapon": {
       "power": 300,
       "range": 600,
@@ -64,6 +68,7 @@
     "name": "Beam Rifle (Gelgoog)",
     "price": 700,
     "description": "ゲルググ用ビームライフル。バランスの取れたビーム兵器。",
+    "flavor_text": "ジオン公国の技術の粋を集めた一挺。連邦製に劣らぬ性能を誇る。",
     "weapon": {
       "power": 280,
       "range": 580,
@@ -79,6 +84,7 @@
     "name": "Hyper Bazooka",
     "price": 600,
     "description": "超高火力バズーカ。単発威力に優れる重武装。",
+    "flavor_text": "命中さえすれば戦局を変える一撃。弾数は少ない、外すな。",
     "weapon": {
       "power": 250,
       "range": 500,
@@ -96,6 +102,7 @@
     "name": "Beam Saber",
     "price": 450,
     "description": "ビームサーベル。近接戦闘用の高出力ビーム兵器。",
+    "flavor_text": "接近を許した時点で勝負あり。斬れ味に射程の不利を補わせろ。",
     "weapon": {
       "power": 200,
       "range": 150,
