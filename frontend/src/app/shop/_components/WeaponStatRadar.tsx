@@ -27,7 +27,7 @@ const AXES: AxisConfig[] = [
   { key: "power", label: "威力" },
   { key: "range", label: "射程" },
   { key: "accuracy", label: "命中率" },
-  { key: "optimal_range", label: "最大射程" },
+  { key: "optimal_range", label: "最適射程" },
   { key: "decay_rate", label: "減衰率" },
 ];
 

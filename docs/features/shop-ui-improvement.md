@@ -417,8 +417,9 @@ interface MobileSuitDetailPanelProps {
 
 ランクバッジ表示（威力/射程/命中率の3項目、S〜Eバッジ）をさらに一歩進め、`admin-tool` の `WeaponRadarChart`（バランス比較チャート）と同様の五角形レーダーチャートに置き換えた（`frontend/src/app/shop/_components/WeaponStatRadar.tsx`）。
 
-- 軸: 威力・射程・命中率・最大射程（`optimal_range`）・減衰率の5軸
-- `admin-tool` 版と異なり「全武器平均」は表示しない（購入画面は単体武器の魅力を伝える場であり、比較用途ではないため）。そのため正規化の基準も「表示中の全武器の最大値」ではなく、`frontend/src/utils/weaponChartCaps.ts` に定数として切り出した固定上限値（威力1000・射程1000・命中率120・最大射程1000・減衰率0.01）を使う
+- 軸: 威力・射程・命中率・最適射程（`optimal_range`）・減衰率の5軸
+- `admin-tool` 版と異なり「全武器平均」は表示しない（購入画面は単体武器の魅力を伝える場であり、比較用途ではないため）。そのため正規化の基準も「表示中の全武器の最大値」ではなく、`frontend/src/utils/weaponChartCaps.ts` に定数として切り出した固定値を使う。威力・射程・命中率・最適射程は上限比（`WEAPON_CHART_CAPS`）、減衰率は best/worst の線形補間（`DECAY_RATE_CHART_RANGE`）で正規化する（値は同ファイル参照）
+- レーダーチャートの目盛りラベル（`PolarRadiusAxis` の数値）は非表示にしている（`tick={false}`）
 - 減衰率は値が小さいほど高性能なため、他の4軸と逆に正規化後の値を反転させてチャートに乗せる（`admin-tool` 版と同じ設計）
 - 生のスペック数値（`power`, `range` 等）はチャート上にもツールチップにも出さない方針を踏襲
 
