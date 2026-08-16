@@ -215,6 +215,7 @@ def _load_weapons_from_db() -> list[dict]:
                 "name": record.name,
                 "price": record.price,
                 "description": record.description,
+                "flavor_text": record.flavor_text,
                 "weapon": weapon,
             }
         )
@@ -355,6 +356,7 @@ def get_master_weapons(session: Session) -> list[dict]:
             "name": r.name,
             "price": r.price,
             "description": r.description,
+            "flavor_text": r.flavor_text,
             "weapon": r.weapon,
         }
         for r in records
@@ -390,6 +392,7 @@ def save_master_weapons(session: Session, data: list[dict]) -> None:
             record.name = item["name"]
             record.price = item["price"]
             record.description = item["description"]
+            record.flavor_text = item.get("flavor_text")
             record.weapon = weapon_data
             record.updated_at = datetime.now(UTC)
             session.add(record)
@@ -399,6 +402,7 @@ def save_master_weapons(session: Session, data: list[dict]) -> None:
                 name=item["name"],
                 price=item["price"],
                 description=item["description"],
+                flavor_text=item.get("flavor_text"),
                 weapon=weapon_data,
             )
             session.add(record)

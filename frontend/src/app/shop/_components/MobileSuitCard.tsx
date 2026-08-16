@@ -57,15 +57,15 @@ export default function MobileSuitCard({
         <div className="flex items-center gap-3 mb-1 text-xs font-mono">
           <span>
             <span className="text-[#00ff41]/50">{STATUS_LABELS.max_hp} </span>
-            <span className={`font-bold ${getRankColor(hpRank)}`}>[{hpRank}]</span>
+            <span className={`font-bold ${getRankColor(hpRank)}`}>{hpRank}</span>
           </span>
           <span>
             <span className="text-[#00ff41]/50">{STATUS_LABELS.armor} </span>
-            <span className={`font-bold ${getRankColor(armorRank)}`}>[{armorRank}]</span>
+            <span className={`font-bold ${getRankColor(armorRank)}`}>{armorRank}</span>
           </span>
           <span>
             <span className="text-[#00ff41]/50">{STATUS_LABELS.mobility} </span>
-            <span className={`font-bold ${getRankColor(mobilityRank)}`}>[{mobilityRank}]</span>
+            <span className={`font-bold ${getRankColor(mobilityRank)}`}>{mobilityRank}</span>
           </span>
         </div>
 

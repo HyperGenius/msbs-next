@@ -23,6 +23,7 @@ export const STATUS_LABELS = {
 /** 武器のステータス項目名 */
 export const WEAPON_LABELS = {
   type: "属性",
+  weapon_type: "武器種別",
   power: "攻撃力",
   range: "射程",
   accuracy: "命中率",
@@ -31,6 +32,7 @@ export const WEAPON_LABELS = {
   max_ammo: "弾数",
   en_cost: "EN消費",
   cool_down_turn: "クールダウン",
+  required_beam_generator_lv: "要求ビームジェネレータLv",
 } as const;
 
 /** パイロットのステータス項目名 */

@@ -80,7 +80,7 @@ export default function MobileSuitDetailPanel({
               <span className="text-[#00ff41]/60">{label}</span>
               <div className="flex items-center gap-2">
                 <span className="text-[#00ff41]/80">{value}</span>
-                <span className={`font-bold text-sm ${getRankColor(rank)}`}>[{rank}]</span>
+                <span className={`font-bold text-sm ${getRankColor(rank)}`}>{rank}</span>
               </div>
             </div>
             <SciFiProgress value={normalize(value)} />

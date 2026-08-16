@@ -58,6 +58,8 @@ export interface MasterWeapon {
     name: string;
     price: number;
     description: string;
+    /** 購入画面用フレーバーテキスト（1〜2行程度）。未設定の場合は null */
+    flavor_text: string | null;
     weapon: WeaponSpec;
 }
 
@@ -69,6 +71,7 @@ export interface MasterWeaponUpdate {
     name?: string;
     price?: number;
     description?: string;
+    flavor_text?: string | null;
     weapon?: WeaponSpec;
 }
 

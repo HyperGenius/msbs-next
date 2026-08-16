@@ -462,6 +462,7 @@ class MasterWeaponEntry(SQLModel):
     name: str
     price: int
     description: str
+    flavor_text: str | None = None
     weapon: MasterWeaponSpec
 
 
@@ -472,6 +473,7 @@ class MasterWeaponCreate(SQLModel):
     name: str
     price: int
     description: str
+    flavor_text: str | None = None
     weapon: MasterWeaponSpec
 
 
@@ -481,6 +483,7 @@ class MasterWeaponUpdate(SQLModel):
     name: str | None = None
     price: int | None = None
     description: str | None = None
+    flavor_text: str | None = None
     weapon: MasterWeaponSpec | None = None
 
 
@@ -585,6 +588,9 @@ class MasterWeapon(SQLModel, table=True):
     name: str = Field(description="武器名")
     price: int = Field(description="購入価格")
     description: str = Field(description="武器説明文")
+    flavor_text: str | None = Field(
+        default=None, description="購入画面用フレーバーテキスト（1〜2行程度）"
+    )
     weapon: dict = Field(
         sa_column=Column(JSON),
         description="武器スペック (Weapon モデルの全フィールド)",

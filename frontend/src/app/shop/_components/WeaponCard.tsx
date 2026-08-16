@@ -3,7 +3,7 @@
 
 import { SciFiCard } from "@/components/ui";
 import { WeaponListing } from "@/types/battle";
-import { getWeaponRank, getRankColor, getOptimalRangeLabel } from "@/utils/rankUtils";
+import { getWeaponRank, getRankColor } from "@/utils/rankUtils";
 import { WEAPON_LABELS } from "@/utils/displayUtils";
 
 interface WeaponCardProps {
@@ -26,69 +26,51 @@ export default function WeaponCard({
   const rangeRank = listing.weapon.range_rank ?? getWeaponRank("weapon_range", listing.weapon.range);
   const accuracyRank = listing.weapon.accuracy_rank ?? getWeaponRank("weapon_accuracy", listing.weapon.accuracy);
 
-  const optRange = listing.weapon.optimal_range !== undefined
-    ? getOptimalRangeLabel(listing.weapon.optimal_range)
-    : null;
-
-  const hasEnCost = listing.weapon.en_cost !== undefined && listing.weapon.en_cost > 0;
-  const hasAmmo = listing.weapon.max_ammo !== null && listing.weapon.max_ammo !== undefined;
-
   return (
     <SciFiCard
       variant={isSelected ? "accent" : affordable ? "secondary" : "primary"}
-      interactive
-      onClick={() => onSelect(listing.id)}
-      className={`${affordable ? "" : "opacity-60"} cursor-pointer`}
+      interactive={affordable}
+      onClick={affordable ? () => onSelect(listing.id) : undefined}
+      className={
+        affordable
+          ? "cursor-pointer"
+          : "opacity-50 grayscale cursor-not-allowed"
+      }
     >
       <div className="py-1">
-        {/* 行1: 武器名 + 購入可/不足額バッジ */}
+        {/* 行1: 武器名 + 購入クレジット数 */}
         <div className="flex items-center justify-between mb-1">
           <span className="font-bold text-[#ffb000] text-sm truncate mr-2">
             {listing.name}
           </span>
-          {affordable ? (
-            <span className="text-xs font-bold text-[#00ff41] border border-[#00ff41]/50 px-1.5 py-0.5 shrink-0">
-              購入可
-            </span>
-          ) : (
-            <span className="text-xs font-bold text-red-400 shrink-0">
-              -{shortage.toLocaleString()} C
-            </span>
-          )}
+          <span className={`font-bold text-xs shrink-0 ${affordable ? "text-[#ffb000]" : "text-red-400"}`}>
+            {listing.price.toLocaleString()} C
+            {!affordable && ` (-${shortage.toLocaleString()})`}
+          </span>
         </div>
 
         {/* 行2: ランクバッジ */}
         <div className="flex items-center gap-3 mb-1 text-xs font-mono">
           <span>
             <span className="text-[#00ff41]/50">{WEAPON_LABELS.power} </span>
-            <span className={`font-bold ${getRankColor(powerRank)}`}>[{powerRank}]</span>
+            <span className={`font-bold ${getRankColor(powerRank)}`}>{powerRank}</span>
           </span>
           <span>
             <span className="text-[#00ff41]/50">{WEAPON_LABELS.range} </span>
-            <span className={`font-bold ${getRankColor(rangeRank)}`}>[{rangeRank}]</span>
+            <span className={`font-bold ${getRankColor(rangeRank)}`}>{rangeRank}</span>
           </span>
           <span>
             <span className="text-[#00ff41]/50">{WEAPON_LABELS.accuracy} </span>
-            <span className={`font-bold ${getRankColor(accuracyRank)}`}>[{accuracyRank}]</span>
+            <span className={`font-bold ${getRankColor(accuracyRank)}`}>{accuracyRank}</span>
           </span>
         </div>
 
-        {/* 行3: 属性・適正距離・フラグ + 価格 */}
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-[#00ff41]/50 flex items-center gap-1.5 truncate mr-2">
-            <span className={listing.weapon.type === "BEAM" ? "text-[#00f0ff]" : "text-[#ffb000]"}>
-              {listing.weapon.type ?? "PHYSICAL"}
-            </span>
-            {optRange && (
-              <span className={optRange.colorClass}>{optRange.label}</span>
-            )}
-            {hasAmmo && <span className="text-orange-400">弾数有</span>}
-            {hasEnCost && <span className="text-cyan-400">EN有</span>}
-          </span>
-          <span className="font-bold text-[#ffb000] shrink-0">
-            {listing.price.toLocaleString()} C →
-          </span>
-        </div>
+        {/* 行3: フレーバーテキスト */}
+        {listing.flavor_text && (
+          <p className="text-xs text-[#00ff41]/50 italic line-clamp-2">
+            {listing.flavor_text}
+          </p>
+        )}
       </div>
     </SciFiCard>
   );

@@ -391,6 +391,7 @@ class WeaponService:
             name=data.name,
             price=data.price,
             description=data.description,
+            flavor_text=data.flavor_text,
             weapon=weapon_dict,
         )
         session.add(record)
@@ -405,6 +406,7 @@ class WeaponService:
             "name": data.name,
             "price": data.price,
             "description": data.description,
+            "flavor_text": data.flavor_text,
             "weapon": weapon_dict,
         }
 
@@ -453,6 +455,7 @@ class WeaponService:
             "name": record.name,
             "price": record.price,
             "description": record.description,
+            "flavor_text": record.flavor_text,
             "weapon": record.weapon,
         }
 

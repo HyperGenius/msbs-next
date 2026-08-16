@@ -19,6 +19,7 @@ export const masterWeaponSchema = z.object({
   name: z.string().min(1, "Name is required"),
   price: z.number({ message: "Must be a number" }).int().nonnegative("Must be ≥ 0"),
   description: z.string(),
+  flavor_text: z.string().nullable().optional(),
   weapon: z.object({
     power: z.number({ message: "Must be a number" }).int().positive("Must be > 0"),
     range: z.number({ message: "Must be a number" }).positive("Must be > 0"),
@@ -57,6 +58,7 @@ const defaultValues: WeaponFormValues = {
   name: "",
   price: 300,
   description: "",
+  flavor_text: "",
   weapon: {
     power: 150,
     range: 400,
@@ -80,6 +82,7 @@ function toFormValues(w: MasterWeapon): WeaponFormValues {
     name: w.name,
     price: w.price,
     description: w.description,
+    flavor_text: w.flavor_text ?? "",
     weapon: {
       power: w.weapon.power,
       range: w.weapon.range,
@@ -158,9 +161,17 @@ export default function WeaponEditForm({
   const sectionTitle =
     "text-xs font-bold text-[#ffb000] uppercase tracking-wider mb-2 border-b border-[#ffb000]/20 pb-1";
 
+  // 未入力（空文字）は DB 上「未設定」を表す null に正規化してから送信する
+  function handleFormSubmit(values: WeaponFormValues) {
+    return onSubmit({
+      ...values,
+      flavor_text: values.flavor_text?.trim() ? values.flavor_text : null,
+    });
+  }
+
   return (
     <form
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={handleSubmit(handleFormSubmit)}
       className="space-y-4 text-[#00ff41] font-mono"
     >
       {/* 基本情報 */}
@@ -193,6 +204,16 @@ export default function WeaponEditForm({
               className={`${inputCls} resize-none`}
             />
             <FieldError msg={errors.description?.message} />
+          </div>
+          <div className="col-span-2">
+            <Label>フレーバーテキスト（購入画面表示用、1〜2行推奨）</Label>
+            <textarea
+              {...register("flavor_text")}
+              rows={2}
+              placeholder="設定・入手時のセリフ・搭乗適性コメントなど"
+              className={`${inputCls} resize-none`}
+            />
+            <FieldError msg={errors.flavor_text?.message} />
           </div>
         </div>
       </div>

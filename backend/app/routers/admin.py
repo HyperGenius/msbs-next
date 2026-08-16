@@ -190,6 +190,7 @@ def _raw_weapon_to_entry(raw: dict) -> MasterWeaponEntry:
         name=raw["name"],
         price=raw["price"],
         description=raw["description"],
+        flavor_text=raw.get("flavor_text"),
         weapon=weapon,
     )
 

@@ -23,6 +23,7 @@
     "name": "Beam Rifle",
     "price": 800,
     "description": "ガンダム用ビームライフル。高威力・高精度のビーム兵器。",
+    "flavor_text": "連邦軍が制式採用した汎用ビーム火器。宇宙世紀を通じ最も生産数の多いMS用武装の一つ。",
     "weapon": {
       "power": 300,
       "range": 600,
@@ -45,8 +46,9 @@
 
 新規マスター武器を追加する。
 
-**リクエスト:** `MasterWeaponCreate` オブジェクト（`id`, `name`, `price`, `description`, `weapon` を含む）
+**リクエスト:** `MasterWeaponCreate` オブジェクト（`id`, `name`, `price`, `description`, `flavor_text`, `weapon` を含む）
 - `weapon`(`MasterWeaponSpec`) は `id`/`name` を含まない。武器の `id`/`name` は `master_weapons` テーブルのカラム（トップレベルの `id`/`name`）を正とする（Issue #400）
+- `flavor_text`（購入画面用フレーバーテキスト、1〜2行程度）は nullable。省略・`null` の場合、購入画面では非表示になる（Issue #480）
 
 **バリデーション:**
 - `id` はスネークケース英数字のみ許可（`^[a-z0-9_]+$`）
@@ -59,7 +61,7 @@
 既存マスター武器を更新する。
 
 **リクエスト:** `MasterWeaponUpdate` オブジェクト（全フィールド Optional）
-- `name`, `price`, `description`, `weapon` を部分的に更新可能
+- `name`, `price`, `description`, `flavor_text`, `weapon` を部分的に更新可能
 
 **レスポンス:**
 - `200 OK` + 更新された `MasterWeaponEntry`
@@ -99,6 +101,7 @@ CREATE TABLE master_weapons (
     name        TEXT NOT NULL,
     price       INTEGER NOT NULL,
     description TEXT NOT NULL,
+    flavor_text TEXT,                   -- 購入画面用フレーバーテキスト（1〜2行程度、nullable。Issue #480）
     weapon      JSONB NOT NULL,         -- MasterWeaponSpec の全フィールド (id/nameは含まない。テーブルのid/nameが正)
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
