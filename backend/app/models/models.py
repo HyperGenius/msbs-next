@@ -420,6 +420,7 @@ class MasterMobileSuitEntry(SQLModel):
     description: str
     weapon_slot_count: int = 1
     beam_generator_lv: int = 0
+    flavor_text: str | None = None
     specs: MasterMobileSuitSpec
 
 
@@ -435,6 +436,7 @@ class MasterMobileSuitCreate(SQLModel):
     description: str
     weapon_slot_count: int = Field(default=1, ge=1)
     beam_generator_lv: int = Field(default=0, ge=0)
+    flavor_text: str | None = None
     specs: MasterMobileSuitSpec
 
 
@@ -449,6 +451,7 @@ class MasterMobileSuitUpdate(SQLModel):
     description: str | None = None
     weapon_slot_count: int | None = Field(default=None, ge=1)
     beam_generator_lv: int | None = Field(default=None, ge=0)
+    flavor_text: str | None = None
     specs: MasterMobileSuitSpec | None = None
 
 
@@ -564,6 +567,9 @@ class MasterMobileSuit(SQLModel, table=True):
     weapon_slot_count: int = Field(default=1, description="武器スロット数 (1以上)")
     beam_generator_lv: int = Field(
         default=0, description="ビームジェネレータLv (0以上)"
+    )
+    flavor_text: str | None = Field(
+        default=None, description="購入画面用フレーバーテキスト（1〜2行程度）"
     )
     specs: dict = Field(
         sa_column=Column(JSON),

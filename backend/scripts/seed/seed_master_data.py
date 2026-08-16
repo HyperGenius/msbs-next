@@ -89,6 +89,7 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
                     existing.price = item["price"]
                     existing.faction = item.get("faction", "")
                     existing.description = item["description"]
+                    existing.flavor_text = item.get("flavor_text")
                     existing.specs = specs
                     existing.updated_at = datetime.now(UTC)
                     session.add(existing)
@@ -99,6 +100,7 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
                         price=item["price"],
                         faction=item.get("faction", ""),
                         description=item["description"],
+                        flavor_text=item.get("flavor_text"),
                         specs=specs,
                     )
                     session.add(record)

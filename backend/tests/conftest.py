@@ -56,6 +56,7 @@ def _seed_master_data(session: Session) -> None:
             price=item["price"],
             faction=item.get("faction", ""),
             description=item["description"],
+            flavor_text=item.get("flavor_text"),
             specs=specs,
         )
         session.add(record)

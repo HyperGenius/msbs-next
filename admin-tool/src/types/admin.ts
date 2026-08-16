@@ -32,6 +32,8 @@ export interface MasterMobileSuit {
     weapon_slot_count: number;
     /** ビームジェネレータLv (0以上) */
     beam_generator_lv: number;
+    /** 購入画面用フレーバーテキスト（1〜2行程度）。未設定の場合は null */
+    flavor_text: string | null;
     specs: MasterMobileSuitSpec;
 }
 
@@ -48,6 +50,7 @@ export interface MasterMobileSuitUpdate {
     description?: string;
     weapon_slot_count?: number;
     beam_generator_lv?: number;
+    flavor_text?: string | null;
     specs?: MasterMobileSuitSpec;
 }
 

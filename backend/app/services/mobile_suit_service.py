@@ -130,6 +130,7 @@ class MobileSuitService:
             description=data.description,
             weapon_slot_count=data.weapon_slot_count,
             beam_generator_lv=data.beam_generator_lv,
+            flavor_text=data.flavor_text,
             specs=specs_dict,
         )
         session.add(record)
@@ -149,6 +150,7 @@ class MobileSuitService:
             "description": data.description,
             "weapon_slot_count": data.weapon_slot_count,
             "beam_generator_lv": data.beam_generator_lv,
+            "flavor_text": data.flavor_text,
             "specs": specs_dict,
         }
 
@@ -261,6 +263,7 @@ class MobileSuitService:
             "description": record.description,
             "weapon_slot_count": record.weapon_slot_count,
             "beam_generator_lv": record.beam_generator_lv,
+            "flavor_text": record.flavor_text,
             "specs": record.specs,
         }
 

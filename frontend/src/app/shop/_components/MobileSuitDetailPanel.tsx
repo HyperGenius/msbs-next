@@ -2,11 +2,10 @@
 "use client";
 
 import { SciFiPanel, SciFiHeading } from "@/components/ui";
-import SciFiProgress from "@/components/ui/SciFiProgress";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
+import MobileSuitStatRadar from "./MobileSuitStatRadar";
 import { ShopListing } from "@/types/battle";
-import { getRank, getRankColor, getOptimalRangeLabel } from "@/utils/rankUtils";
-import { STATUS_LABELS, WEAPON_LABELS } from "@/utils/displayUtils";
+import { getMobileSuitShopLabel } from "@/utils/displayUtils";
 
 interface MobileSuitDetailPanelProps {
   listing: ShopListing;
@@ -17,14 +16,6 @@ interface MobileSuitDetailPanelProps {
   onClose?: () => void;
   isModal?: boolean;
 }
-
-/** スペック値を 0〜100 の進捗率に正規化する */
-const normalizeSpec = {
-  hp: (v: number) => Math.min((v / 2000) * 100, 100),
-  armor: (v: number) => Math.min(v, 100),
-  mobility: (v: number) => Math.min((v / 2.0) * 100, 100),
-  sensor_range: (v: number) => Math.min((v / 600) * 100, 100),
-};
 
 export default function MobileSuitDetailPanel({
   listing,
@@ -38,14 +29,14 @@ export default function MobileSuitDetailPanel({
   const affordable = credits >= listing.price;
   const shortage = listing.price - credits;
   const remaining = credits - listing.price;
-  const mainWeapon = listing.specs.weapons?.[0];
+  const label = getMobileSuitShopLabel(listing);
 
   const content = (
     <div className="flex flex-col h-full">
       {/* ヘッダー */}
       <div className="flex items-start justify-between mb-4">
         <SciFiHeading level={3} variant="secondary" className="text-lg">
-          {listing.name}
+          {label}
         </SciFiHeading>
         {isModal && onClose && (
           <button
@@ -58,67 +49,29 @@ export default function MobileSuitDetailPanel({
         )}
       </div>
 
-      {/* 説明文 */}
-      {listing.description && (
-        <p className="text-sm text-[#00ff41]/60 mb-4 border-b border-[#00ff41]/20 pb-3">
-          {listing.description}
+      {/* フレーバーテキスト */}
+      {listing.flavor_text && (
+        <p className="text-sm text-[#00ff41]/60 italic mb-4 border-b border-[#00ff41]/20 pb-3">
+          {listing.flavor_text}
         </p>
       )}
 
-      {/* スペックバー */}
-      <div className="mb-4 space-y-3">
-        {[
-          { label: STATUS_LABELS.max_hp, value: listing.specs.max_hp, rank: getRank("hp", listing.specs.max_hp), normalize: normalizeSpec.hp },
-          { label: STATUS_LABELS.armor, value: listing.specs.armor, rank: getRank("armor", listing.specs.armor), normalize: normalizeSpec.armor },
-          { label: STATUS_LABELS.mobility, value: listing.specs.mobility, rank: getRank("mobility", listing.specs.mobility), normalize: normalizeSpec.mobility },
-          ...(listing.specs.sensor_range !== undefined
-            ? [{ label: STATUS_LABELS.sensor_range, value: listing.specs.sensor_range, rank: getRank("hp", listing.specs.sensor_range), normalize: normalizeSpec.sensor_range }]
-            : []),
-        ].map(({ label, value, rank, normalize }) => (
-          <div key={label}>
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-[#00ff41]/60">{label}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-[#00ff41]/80">{value}</span>
-                <span className={`font-bold text-sm ${getRankColor(rank)}`}>{rank}</span>
-              </div>
-            </div>
-            <SciFiProgress value={normalize(value)} />
-          </div>
-        ))}
+      {/* スペックレーダーチャート */}
+      <div className="mb-4">
+        <MobileSuitStatRadar specs={listing.specs} name={label} />
       </div>
 
-      {/* 搭載武器 */}
-      {mainWeapon && (
-        <div className="mb-4 p-3 bg-[#0a0a0a] border border-[#ffb000]/30">
-          <div className="text-xs font-bold text-[#ffb000] mb-2">MAIN WEAPON</div>
-          <div className="text-sm font-bold text-[#00ff41] mb-2">{mainWeapon.name}</div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            <div>
-              <span className="text-[#00ff41]/50">{WEAPON_LABELS.type}: </span>
-              <span className={`font-bold ${mainWeapon.type === "BEAM" ? "text-[#00f0ff]" : "text-[#ffb000]"}`}>
-                {mainWeapon.type ?? "PHYSICAL"}
-              </span>
-            </div>
-            {mainWeapon.optimal_range !== undefined && (
-              <div>
-                <span className="text-[#00ff41]/50">{WEAPON_LABELS.optimal_range}: </span>
-                <span className={`font-bold ${getOptimalRangeLabel(mainWeapon.optimal_range).colorClass}`}>
-                  {getOptimalRangeLabel(mainWeapon.optimal_range).label}
-                </span>
-              </div>
-            )}
-            <div>
-              <span className="text-[#00ff41]/50">{WEAPON_LABELS.power}: </span>
-              <span className="font-bold text-[#00ff41]">{mainWeapon.power}</span>
-            </div>
-            <div>
-              <span className="text-[#00ff41]/50">{WEAPON_LABELS.accuracy}: </span>
-              <span className="font-bold text-[#00ff41]">{mainWeapon.accuracy}%</span>
-            </div>
-          </div>
+      {/* ビームジェネレータLv・武器スロット数 */}
+      <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs font-mono">
+        <div>
+          <span className="text-[#00ff41]/50">ビームジェネレータLv: </span>
+          <span className="font-bold text-[#00f0ff]">{listing.beam_generator_lv}</span>
         </div>
-      )}
+        <div>
+          <span className="text-[#00ff41]/50">武器スロット数: </span>
+          <span className="font-bold text-[#00ff41]">{listing.weapon_slot_count}</span>
+        </div>
+      </div>
 
       {/* 価格サマリー */}
       <div className="mb-4 p-3 bg-[#0a0a0a] border border-[#00ff41]/20 text-sm font-mono space-y-1">

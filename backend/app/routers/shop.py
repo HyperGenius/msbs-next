@@ -27,8 +27,13 @@ class ShopListingResponse(BaseModel):
 
     id: str
     name: str
+    name_ja: str = ""
+    model_number: str = ""
     price: int
     description: str
+    weapon_slot_count: int = 1
+    beam_generator_lv: int = 0
+    flavor_text: str | None = None
     specs: dict
 
 
@@ -93,8 +98,13 @@ async def get_shop_listings(
             ShopListingResponse(
                 id=cast(str, item["id"]),
                 name=cast(str, item["name"]),
+                name_ja=cast(str, item.get("name_ja", "")),
+                model_number=cast(str, item.get("model_number", "")),
                 price=cast(int, item["price"]),
                 description=cast(str, item["description"]),
+                weapon_slot_count=cast(int, item.get("weapon_slot_count", 1)),
+                beam_generator_lv=cast(int, item.get("beam_generator_lv", 0)),
+                flavor_text=cast(str | None, item.get("flavor_text")),
                 specs=specs,
             )
         )
