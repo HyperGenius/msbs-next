@@ -230,11 +230,12 @@ export default function MobileSuitEditForm({
   const inputCls = "w-full bg-[#0a0a0a] border border-[#00ff41]/30 text-[#00ff41] px-2 py-1 text-sm font-mono focus:outline-none focus:border-[#00ff41]";
   const sectionTitle = "text-xs font-bold text-[#ffb000] uppercase tracking-wider mb-2 border-b border-[#ffb000]/20 pb-1";
 
-  // 未入力（空文字）は DB 上「未設定」を表す null に正規化してから送信する
+  // 未入力（空文字・前後空白のみ）は DB 上「未設定」を表す null に正規化してから送信する
   function handleFormSubmit(values: MobileSuitFormValues) {
+    const trimmedFlavorText = values.flavor_text?.trim();
     return onSubmit({
       ...values,
-      flavor_text: values.flavor_text?.trim() ? values.flavor_text : null,
+      flavor_text: trimmedFlavorText ? trimmedFlavorText : null,
     });
   }
 
