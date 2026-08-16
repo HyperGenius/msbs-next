@@ -37,8 +37,13 @@ def test_get_shop_listings(client, session):
         first_item = listings[0]
         assert "id" in first_item
         assert "name" in first_item
+        assert "name_ja" in first_item
+        assert "model_number" in first_item
         assert "price" in first_item
         assert "description" in first_item
+        assert "weapon_slot_count" in first_item
+        assert "beam_generator_lv" in first_item
+        assert "flavor_text" in first_item
         assert "specs" in first_item
 
         # specsの構造をチェック
@@ -47,6 +52,35 @@ def test_get_shop_listings(client, session):
         assert "armor" in specs
         assert "mobility" in specs
         assert "weapons" in specs
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_get_shop_listings_includes_flavor_text(client, session):
+    """シードデータに設定したフレーバーテキストがレスポンスに含まれることをテスト."""
+    test_user_id = "test_user_flavor_text"
+    pilot = Pilot(
+        user_id=test_user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=1000,
+        faction="",
+    )
+    session.add(pilot)
+    session.commit()
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        response = client.get("/api/shop/listings")
+        assert response.status_code == status.HTTP_200_OK
+
+        listings = {item["id"]: item for item in response.json()}
+        assert listings["zaku_ii"]["flavor_text"] == (
+            "「まずはこいつで慣れておけ」"
+            "——量産機ながら、あらゆる戦場に順応してきた実績が語る信頼性。"
+        )
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 

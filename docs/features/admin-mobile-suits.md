@@ -81,6 +81,7 @@ Content-Type: application/json
   "description": "宇宙世紀を代表する機体。",
   "weapon_slot_count": 2,
   "beam_generator_lv": 1,
+  "flavor_text": "「連邦にもいい機体があったんだな」——一年戦争の象徴となった一機。",
   "specs": {
     "max_hp": 1000,
     "armor": 80,
@@ -113,7 +114,8 @@ Content-Type: application/json
 ```
 
 > `name_ja` / `model_number` / `weapon_slot_count` / `beam_generator_lv` を省略した場合、それぞれ既定値
-> (`""` / `""` / `1` / `0`) が使われる（Issue #383）。
+> (`""` / `""` / `1` / `0`) が使われる（Issue #383）。`flavor_text`（購入画面用フレーバーテキスト、
+> 1〜2行程度）は nullable。省略・`null` の場合、購入画面では非表示になる（Issue #483）。
 
 #### PUT — 既存機体の部分更新
 
@@ -223,6 +225,7 @@ CREATE TABLE master_mobile_suits (
     description        TEXT NOT NULL,
     weapon_slot_count  INTEGER NOT NULL DEFAULT 1,  -- 武器スロット数、1以上（Issue #383）
     beam_generator_lv  INTEGER NOT NULL DEFAULT 0,  -- ビームジェネレータLv、0以上（Issue #383）
+    flavor_text        TEXT,                   -- 購入画面用フレーバーテキスト（1〜2行程度、nullable。Issue #483）
     specs              JSONB NOT NULL,         -- MasterMobileSuitSpec の全フィールド
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -342,6 +345,7 @@ admin-tool/src/
 
 - `react-hook-form` + `zod` によるバリデーション
 - 全スペック・武装パラメータを編集可能（型番・日本語名・武器スロット数・ビームジェネレータLvを含む、Issue #383）
+- 購入画面用フレーバーテキスト（`flavor_text`、1〜2行推奨）入力欄を追加（`WeaponEditForm` と同様、未入力は `null` に正規化して送信、Issue #483）
 - フィールド横にインラインエラーメッセージ表示
 - 武装リストの動的追加・削除
 - 武器数が武器スロット数を超える場合、およびBEAM武器の要求ビームジェネレータLvが機体のビームジェネレータLvを超える場合はクライアント側 (`zod.superRefine`) でもエラー表示（Issue #383）

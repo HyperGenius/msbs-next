@@ -424,3 +424,57 @@ interface MobileSuitDetailPanelProps {
 - 生のスペック数値（`power`, `range` 等）はチャート上にもツールチップにも出さない方針を踏襲
 
 あわせて武器種別（`weapon_type`）・属性（`type`）・要求ビームジェネレータLv（`required_beam_generator_lv` が1以上の場合のみ表示）を追加した。
+
+---
+
+## 11. MS購入画面のフレーバーテキスト・レーダーチャート対応（Issue #483, 2026-08-16）
+
+### 11.1 背景
+
+10章の武器購入画面フレーバーテキスト対応（Issue #480）に続き、MS購入画面（`/shop` のMSタブ）にも同様の改善を行った。加えて、MS詳細モーダルは元々スペックバー（`SciFiProgress`）による数値表示のみだったため、10.6のレーダーチャート対応も合わせて踏襲した。
+
+### 11.2 データモデル変更
+
+`master_mobile_suits` テーブルに `flavor_text: str | None`（nullable）カラムを追加（`backend/alembic/versions/z9a0b1c2d3e4_add_flavor_text_to_master_mobile_suits.py`）。既存機体は `NULL` のまま許容し、未設定時はフロントエンドで非表示にする（`master_weapons.flavor_text` と同じ方針）。`MasterMobileSuit` / `MasterMobileSuitEntry` / `MasterMobileSuitCreate` / `MasterMobileSuitUpdate`（`backend/app/models/models.py`）、`GET /api/shop/listings` の `ShopListingResponse`（`backend/app/routers/shop.py`）、Admin API（`backend/app/routers/admin.py`, `backend/app/services/mobile_suit_service.py`）を通じて一貫して読み書きできる。
+
+`ShopListingResponse` にはこれまで `name_ja` / `model_number` / `weapon_slot_count` / `beam_generator_lv` が含まれていなかった（`MasterMobileSuitEntry` 等の管理者用モデルには既に存在していたが、ショップAPI側の生データロード処理 `_load_mobile_suits_from_db`（`backend/app/core/gamedata.py`）が返す辞書に含まれていなかった）ため、これらも本Issueで併せて追加した。
+
+### 11.3 表示項目の整理
+
+`MobileSuitCard.tsx`（一覧）の表示項目を以下の4点に整理した（`WeaponCard.tsx` と同じレイアウト方針）:
+
+- ラベル（`"{model_number} {name_ja}"`。`model_number`/`name_ja` が未設定の場合は英語名 `name` にフォールバックする `getMobileSuitShopLabel`（`frontend/src/utils/displayUtils.ts`）を使用）
+- ランク表記（最大耐久 `[hp]` / 装甲 `[armor]` / 機動性 `[mobility]`。既存の `getRank()` をそのまま使用）
+- 購入クレジット数
+- フレーバーテキスト（`flavor_text`。未設定時は非表示）
+
+従来カードの3行目にあった搭載武器プレビュー（武器名・属性・適正距離）は削除した。
+
+### 11.4 購入詳細モーダルのレーダーチャート化
+
+`MobileSuitDetailPanel.tsx` のスペックバー（`SciFiProgress` による最大耐久・装甲・機動性・索敵範囲の数値表示）を、`WeaponStatRadar.tsx` と同様の五角形レーダーチャート（`frontend/src/app/shop/_components/MobileSuitStatRadar.tsx`）に置き換えた。
+
+- 軸: 最大耐久・装甲・機動性・射撃適正・格闘適正の5軸
+- 正規化の基準は `frontend/src/utils/msChartCaps.ts` の固定値を使用する。最大耐久(MAX=1500)・装甲(MAX=150)・機動性(MAX=2.0)は上限比（`MS_CHART_CAPS`）で正規化する。射撃適正・格闘適正はMIN=0.5を下限とするステータスのため、単純な上限比ではなくMIN(0.5)〜MAX(1.5)の線形補間（`APTITUDE_CHART_RANGE`）で正規化する（`WeaponStatRadar.tsx` の減衰率正規化と同じ考え方）
+- レーダーチャートに加えて、ビームジェネレータLv（`beam_generator_lv`）・武器スロット数（`weapon_slot_count`）を表示する
+- 従来表示していた説明文（`description`）・搭載武器（MAIN WEAPON）ブロックは、フレーバーテキスト・レーダーチャートに置き換える形で削除した
+
+### 11.5 影響範囲
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `backend/app/models/models.py` | `MasterMobileSuit`系モデルに `flavor_text` 追加 |
+| `backend/alembic/versions/z9a0b1c2d3e4_*.py` | `master_mobile_suits.flavor_text` カラム追加（新規マイグレーション） |
+| `backend/app/core/gamedata.py` | `flavor_text`/`name_ja`/`model_number`/`weapon_slot_count`/`beam_generator_lv` の読み書きを追加 |
+| `backend/app/services/mobile_suit_service.py` | Admin CRUD に `flavor_text` を追加 |
+| `backend/app/routers/admin.py` | `_raw_to_entry` に `flavor_text` を追加 |
+| `backend/app/routers/shop.py` | `ShopListingResponse` に `name_ja`/`model_number`/`weapon_slot_count`/`beam_generator_lv`/`flavor_text` を追加 |
+| `backend/scripts/seed/seed_master_data.py` | mobile_suits シード時に `flavor_text` を読み書き |
+| `backend/data/master/mobile_suits.json` | 開発用シードデータに6機分のフレーバーテキストを追加 |
+| `frontend/src/types/shop.ts` | `ShopListing` に `name_ja`/`model_number`/`weapon_slot_count`/`beam_generator_lv`/`flavor_text` を追加 |
+| `frontend/src/utils/displayUtils.ts` | `getMobileSuitShopLabel()` を追加 |
+| `frontend/src/utils/msChartCaps.ts`（新規） | レーダーチャート正規化用の固定上限・適正値レンジ |
+| `frontend/src/app/shop/_components/MobileSuitStatRadar.tsx`（新規） | MS用スペックレーダーチャート |
+| `frontend/src/app/shop/_components/MobileSuitCard.tsx` | 表示項目整理（ラベル/ランク/フレーバー/価格の4点） |
+| `frontend/src/app/shop/_components/MobileSuitDetailPanel.tsx` | スペックバー→レーダーチャート化、ビームジェネレータLv/武器スロット数表示追加 |
+| `admin-tool/src/types/admin.ts`, `admin-tool/src/components/admin/MobileSuitEditForm.tsx` | 管理画面に `flavor_text` 入力欄を追加 |

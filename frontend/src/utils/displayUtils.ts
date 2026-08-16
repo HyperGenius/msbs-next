@@ -1,5 +1,18 @@
 /* frontend/src/utils/displayUtils.ts */
 
+/**
+ * ショップ表示用のMSラベルを組み立てる（"{model_number} {name_ja}"）。
+ * model_number/name_ja が未設定（空文字）の場合は英語名にフォールバックする。
+ */
+export function getMobileSuitShopLabel(listing: {
+  name: string;
+  name_ja: string;
+  model_number: string;
+}): string {
+  const namePart = listing.name_ja || listing.name;
+  return listing.model_number ? `${listing.model_number} ${namePart}` : namePart;
+}
+
 /** モビルスーツのステータス項目名 */
 export const STATUS_LABELS = {
   max_hp: "最大耐久",

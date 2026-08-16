@@ -22,8 +22,18 @@ export interface ShopItemSpecs {
 export interface ShopListing {
     id: string;
     name: string;
+    /** 日本語表示名（未設定の場合は空文字） */
+    name_ja: string;
+    /** 型番 (例: RGM-79)。未設定の場合は空文字 */
+    model_number: string;
     price: number;
     description: string;
+    /** 武器スロット数 */
+    weapon_slot_count: number;
+    /** ビームジェネレータLv */
+    beam_generator_lv: number;
+    /** 購入画面用フレーバーテキスト（1〜2行程度）。未設定の場合は null */
+    flavor_text: string | null;
     specs: ShopItemSpecs;
 }
 

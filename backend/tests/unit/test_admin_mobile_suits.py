@@ -336,6 +336,42 @@ def test_create_defaults_for_new_fields(client_admin):
     assert data["beam_generator_lv"] == 0
 
 
+def test_create_with_flavor_text(client_admin):
+    """POST で flavor_text を保存できること（Issue #483）."""
+    payload = {
+        **SAMPLE_MS,
+        "flavor_text": "「見た目より頼れる相棒だ」",
+    }
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["flavor_text"] == "「見た目より頼れる相棒だ」"
+
+
+def test_create_default_flavor_text_is_none(client_admin):
+    """flavor_text を指定しない場合、既定値 None が使われること."""
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["flavor_text"] is None
+
+
+def test_update_flavor_text(client_admin):
+    """PUT で flavor_text を更新できること."""
+    client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"flavor_text": "更新後のフレーバーテキスト"},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["flavor_text"] == "更新後のフレーバーテキスト"
+
+
 def test_create_weapon_count_exceeds_slot_returns_422(client_admin):
     """武器数が weapon_slot_count を超える場合は 422 が返ること."""
     payload = json.loads(json.dumps(SAMPLE_MS))

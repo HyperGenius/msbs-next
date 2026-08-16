@@ -184,9 +184,14 @@ def _load_mobile_suits_from_db() -> list[dict]:
             {
                 "id": record.id,
                 "name": record.name,
+                "name_ja": record.name_ja,
+                "model_number": record.model_number,
                 "price": record.price,
                 "faction": record.faction,
                 "description": record.description,
+                "weapon_slot_count": record.weapon_slot_count,
+                "beam_generator_lv": record.beam_generator_lv,
+                "flavor_text": record.flavor_text,
                 "specs": specs_copy,
             }
         )
@@ -263,6 +268,7 @@ def get_master_mobile_suits(session: Session) -> list[dict]:
             "description": r.description,
             "weapon_slot_count": r.weapon_slot_count,
             "beam_generator_lv": r.beam_generator_lv,
+            "flavor_text": r.flavor_text,
             "specs": r.specs,
         }
         for r in records
@@ -308,6 +314,7 @@ def save_master_mobile_suits(session: Session, data: list[dict]) -> None:
             record.description = item["description"]
             record.weapon_slot_count = item.get("weapon_slot_count", 1)
             record.beam_generator_lv = item.get("beam_generator_lv", 0)
+            record.flavor_text = item.get("flavor_text")
             record.specs = specs
             record.updated_at = datetime.now(UTC)
             session.add(record)
@@ -322,6 +329,7 @@ def save_master_mobile_suits(session: Session, data: list[dict]) -> None:
                 description=item["description"],
                 weapon_slot_count=item.get("weapon_slot_count", 1),
                 beam_generator_lv=item.get("beam_generator_lv", 0),
+                flavor_text=item.get("flavor_text"),
                 specs=specs,
             )
             session.add(record)

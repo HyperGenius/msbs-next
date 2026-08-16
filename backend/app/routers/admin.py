@@ -91,6 +91,7 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
         description=raw["description"],
         weapon_slot_count=raw.get("weapon_slot_count", 1),
         beam_generator_lv=raw.get("beam_generator_lv", 0),
+        flavor_text=raw.get("flavor_text"),
         specs=specs,
     )
 
