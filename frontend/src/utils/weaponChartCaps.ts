@@ -5,7 +5,7 @@
  * 購入画面では単体武器のみを表示するため、代わりにこの固定上限を基準にする。
  */
 export const WEAPON_CHART_CAPS = {
-  power: 500,
+  power: 400,
   range: 750,
   accuracy: 120,
   optimal_range: 500,
