@@ -7,6 +7,7 @@ resource "google_project_service" "required_apis" {
     "secretmanager.googleapis.com",
     "run.googleapis.com",
     "orgpolicy.googleapis.com",
+    "storage.googleapis.com",
   ])
 
   project                    = var.project_id

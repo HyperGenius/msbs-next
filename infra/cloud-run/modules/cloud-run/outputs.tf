@@ -20,3 +20,8 @@ output "batch_job_name" {
   description = "Cloud Run Jobs のジョブ名（バッチ実行用）"
   value       = google_cloud_run_v2_job.msbs_batch.name
 }
+
+output "battle_logs_bucket_name" {
+  description = "バトルログオフロード先GCSバケット名（Issue #493）"
+  value       = google_storage_bucket.battle_logs.name
+}

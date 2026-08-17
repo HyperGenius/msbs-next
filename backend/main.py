@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 
 if TYPE_CHECKING:
     from app.engine.calculator import PilotStats
@@ -46,6 +46,10 @@ from app.routers import (
     teams,
 )
 from app.services.battle_digest_service import compute_battle_digest_fields
+from app.services.battle_log_storage_service import (
+    offload_battle_log_to_gcs,
+    stream_battle_log_chunks,
+)
 
 app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 
@@ -229,6 +233,7 @@ async def reload_master() -> dict:
 
 @app.post("/api/battle/simulate", response_model=BattleResponse)
 async def simulate_battle(
+    background_tasks: BackgroundTasks,
     mission_id: int = 1,
     session: Session = Depends(get_session),
     user_id: str | None = Depends(get_current_user_optional),
@@ -356,9 +361,10 @@ async def simulate_battle(
         )
 
     # 8. バトルログをDBに保存（battle_logsテーブル）
+    stripped_logs = strip_debug_fields(sim.logs)
     battle_log_record = BattleLogRecord(
         mission_id=mission_id,
-        logs=strip_debug_fields(sim.logs),
+        logs=stripped_logs,
         created_at=datetime.now(UTC),
     )
     session.add(battle_log_record)
@@ -410,6 +416,15 @@ async def simulate_battle(
     )
     session.add(battle_result)
     session.commit()
+
+    # 11. バトルログをCloud Storageへオフロード（Issue #493、Neon Network Transfer対策）。
+    #     BackgroundTasksはレスポンス送出後に実行されるため、コミット済みの
+    #     battle_log_record.id を安全に参照できる。失敗してもレスポンスには影響せず
+    #     （gcs_pathがNULLのままNeonのlogsへフォールバックする）、バックフィルジョブが
+    #     後から再試行する。
+    background_tasks.add_task(
+        offload_battle_log_to_gcs, battle_log_record.id, stripped_logs
+    )
 
     return BattleResponse(
         winner_id=winner_id,
@@ -557,6 +572,11 @@ async def get_battle_logs(
     `application/json` の配列レスポンスとして表示されクライアント実装を誤誘導する
     ため、代わりに `responses` で実際のcontent-typeを明示している。レスポンスの
     型・形式を変更する場合は `responses` の記述も合わせて更新すること。
+
+    `BattleLogRecord.gcs_path` が設定済みの場合はNeonの`logs`列を経由せず、Cloud
+    Storageへオフロード済みのNDJSONオブジェクトをストリーム中継する（Issue #493、
+    Neon Network Transfer対策）。未設定（オフロード未完了・失敗）の場合は従来通り
+    `logs`列から配信する。
     """
     try:
         battle_uuid = uuid.UUID(battle_id)
@@ -573,6 +593,14 @@ async def get_battle_logs(
     log_record = session.get(BattleLogRecord, battle.battle_log_id)
     if not log_record:
         return StreamingResponse(_ndjson_lines([]), media_type="application/x-ndjson")
+
+    if log_record.gcs_path:
+        # オフロード済み（Issue #493）: GCSオブジェクトは保存時点で既にNDJSONテキストの
+        # ため、dictへ再パースせずバイト列のままストリーム中継する。
+        return StreamingResponse(
+            stream_battle_log_chunks(log_record.gcs_path),
+            media_type="application/x-ndjson",
+        )
 
     return StreamingResponse(
         _ndjson_lines(log_record.logs), media_type="application/x-ndjson"

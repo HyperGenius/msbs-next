@@ -248,6 +248,13 @@ def _save_battle_results(
     obstacles_data = serialize_obstacles(simulator.obstacles)
 
     # バトルログをルーム単位で1件保存（全参加者で共有）
+    #
+    # GCSへのオフロード（Issue #493）はここでは行わない。この時点ではまだ
+    # session.commit()前で行がコミットされておらず、offload_battle_log_to_gcs()
+    # が開く別セッションからのUPDATEがこの行のロック解放待ちでブロックされる
+    # ため。バッチ実行のリプレイは実行直後に閲覧されるものでもないため、
+    # `scripts/maintenance/offload_battle_logs_to_gcs.py` の定期実行による
+    # 非同期オフロード（新規作成分・失敗再試行分の両方を兼ねる）に任せる。
     battle_log_record = BattleLogRecord(
         room_id=room.id,
         logs=strip_debug_fields(simulator.logs),

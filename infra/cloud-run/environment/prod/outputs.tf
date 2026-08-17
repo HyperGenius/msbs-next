@@ -13,3 +13,8 @@ output "artifact_registry_repository_url" {
   description = "Artifact Registry repository URL"
   value       = module.base.repository_url
 }
+
+output "battle_logs_bucket_name" {
+  description = "バトルログオフロード先GCSバケット名（Issue #493）"
+  value       = module.cloud_run.battle_logs_bucket_name
+}

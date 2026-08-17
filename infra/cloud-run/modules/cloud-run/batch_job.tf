@@ -58,6 +58,11 @@ resource "google_cloud_run_v2_job" "msbs_batch" {
           name  = "MAX_SIMULATION_STEPS"
           value = tostring(var.max_simulation_steps)
         }
+
+        env {
+          name  = "BATTLE_LOG_GCS_BUCKET"
+          value = google_storage_bucket.battle_logs.name
+        }
       }
     }
   }

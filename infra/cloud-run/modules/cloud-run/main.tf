@@ -80,6 +80,11 @@ resource "google_cloud_run_v2_service" "main" {
         value = var.allowed_origins
       }
 
+      env {
+        name  = "BATTLE_LOG_GCS_BUCKET"
+        value = google_storage_bucket.battle_logs.name
+      }
+
       startup_probe {
         http_get {
           path = "/health"
