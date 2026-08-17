@@ -34,7 +34,7 @@ Note:
 
     GINインデックス（`CREATE INDEX ... USING GIN (logs)`）はIssue本文で「任意」とされていたが、
     Neon実DBで作成してみたところインデックスサイズが約20MBとテーブル本体とほぼ同じになった
-    （ログ内の全キー・全階層をインデックス化するため）。現時点で具体的な検索ユースケードが
+    （ログ内の全キー・全階層をインデックス化するため）。現時点で具体的な検索ユースケースが
     未定な一方でストレージ削減が目的の一つであるため、本Issueでは作成しない方針とした
     （将来actor/action_type等の検索要件が具体化した時点で別途追加を検討する）。
 
@@ -84,11 +84,22 @@ def _archive_and_delete_oversized_battle_logs(bind: sa.Connection) -> None:
     if not rows:
         return
 
-    _BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        _BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(
+            f"バックアップ出力先ディレクトリの作成に失敗しました: {_BACKUP_DIR}"
+        ) from exc
+
     manifest = []
     for log_id, room_id, mission_id, created_at, logs_text, logs_size in rows:
         backup_path = _BACKUP_DIR / f"{log_id}.json"
-        backup_path.write_text(logs_text, encoding="utf-8")
+        try:
+            backup_path.write_text(logs_text, encoding="utf-8")
+        except OSError as exc:
+            raise RuntimeError(
+                f"バックアップファイルの書き込みに失敗しました: {backup_path}"
+            ) from exc
         manifest.append(
             {
                 "id": str(log_id),
@@ -108,9 +119,14 @@ def _archive_and_delete_oversized_battle_logs(bind: sa.Connection) -> None:
         bind.execute(sa.text("DELETE FROM battle_logs WHERE id = :id"), {"id": log_id})
 
     manifest_path = _BACKUP_DIR / "manifest.json"
-    manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    try:
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except OSError as exc:
+        raise RuntimeError(
+            f"バックアップmanifestの書き込みに失敗しました: {manifest_path}"
+        ) from exc
 
 
 def upgrade() -> None:

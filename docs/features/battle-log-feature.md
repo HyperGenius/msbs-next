@@ -223,7 +223,7 @@ dictを直接返す経路は約66MBで済んだ（実測、`resource.getrusage()
 `JSONB`（バイナリ格納）として扱われ、テストで使うSQLiteなど`JSONB`を持たない方言では
 従来通り `JSON` として扱われる（`with_variant` は方言ごとに実際の型を切り替える仕組みで、
 テストDB構成を変えずに済む）。マイグレーション
-（`alembic/versions/a5b6c7d8e9f0_migrate_battle_logs_logs_to_jsonb.py`）は
+（`backend/alembic/versions/a5b6c7d8e9f0_migrate_battle_logs_logs_to_jsonb.py`）は
 `ALTER COLUMN logs TYPE JSONB USING logs::JSONB` をPostgreSQL接続時のみ実行する。
 `JSONB` はキー順序を保証しないが、バトルログはキー順序に依存した処理をしていないため
 問題ない。
