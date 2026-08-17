@@ -713,7 +713,16 @@ class BattleLogRecord(SQLModel, table=True):
     logs: list[dict] = Field(
         default_factory=list,
         sa_column=Column(JSON().with_variant(JSONB, "postgresql")),
-        description="バトルログ全件",
+        description="バトルログ全件（gcs_path設定後は空リストになる。Issue #493）",
+    )
+    gcs_path: str | None = Field(
+        default=None,
+        description=(
+            "オフロード済みログのCloud Storageオブジェクトパス（バケット内相対パス、"
+            "gs://は含まない）。設定済みの場合、配信は logs 列ではなくこちらを優先する"
+            "（Issue #493、Neon Network Transfer対策）。オフロード未完了・失敗時はNULLの"
+            "ままとなり、その間は logs 列からの配信にフォールバックする"
+        ),
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
