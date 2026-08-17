@@ -137,6 +137,16 @@
                 "group": "terraform",
                 "panel": "dedicated"
             }
+        },
+        {
+            "label": "Delete Merged Branches",
+            "type": "shell",
+            "command": "git branch --merged | grep -v '\\*\\|main\\|master\\|develop' | xargs git branch -d",
+            "problemMatcher": [],
+            "presentation": {
+                "group": "git-helpers",
+                "panel": "dedicated"
+            }
         }
     ]
 }
