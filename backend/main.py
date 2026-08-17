@@ -8,6 +8,8 @@ from fastapi import Depends, FastAPI, HTTPException
 if TYPE_CHECKING:
     from app.engine.calculator import PilotStats
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlmodel import Session, desc, select
 
@@ -69,6 +71,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Routerの登録
 app.include_router(mobile_suits.router)
@@ -509,8 +512,15 @@ async def get_battle_detail(
 async def get_battle_logs(
     battle_id: str,
     session: Session = Depends(get_session),
-) -> list[BattleLog]:
-    """バトルリプレイ用ログを取得する（遅延ロード）."""
+) -> JSONResponse:
+    """バトルリプレイ用ログを取得する（遅延ロード）.
+
+    大規模バトル（room_size=50/100等）ではログが数万〜十数万件に及び、
+    DBのdictをBattleLogオブジェクト化→response_modelで再バリデーション、
+    という経路だとオブジェクト生成のオーバーヘッドでOOMする（Issue #486）。
+    保存時点で既にBattleLog相当のJSON互換dictとして検証済みのため、
+    ここではオブジェクト化を挟まずそのままJSONResponseで返す。
+    """
     try:
         battle_uuid = uuid.UUID(battle_id)
     except ValueError as e:
@@ -521,10 +531,10 @@ async def get_battle_logs(
         raise HTTPException(status_code=404, detail="Battle not found")
 
     if battle.battle_log_id is None:
-        return []
+        return JSONResponse([])
 
     log_record = session.get(BattleLogRecord, battle.battle_log_id)
     if not log_record:
-        return []
+        return JSONResponse([])
 
-    return [BattleLog(**entry) for entry in log_record.logs]
+    return JSONResponse(log_record.logs)

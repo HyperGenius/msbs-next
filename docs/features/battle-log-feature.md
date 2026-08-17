@@ -167,3 +167,33 @@ export function useBattleLogic(
 ### `formatBattleLogs(logs, isProduction, playerId): DisplayLog[]`
 
 `BattleLog[]` を `DisplayLog[]` に変換する。本番モード時はデバッグログ除外と自機フォーカスフィルタを適用する。
+
+---
+
+## バックエンド: `GET /api/battles/{battle_id}/logs`（遅延ロード配信）
+
+バトルログは `battle_results` とは別テーブル `battle_logs`（`BattleLogRecord`, `backend/app/models/models.py`）に
+バトルセッション単位で1レコード保存されており、`GET /api/battles/{battle_id}/logs` がリプレイ表示時にのみ
+`battle_results.battle_log_id` 経由で遅延ロードする（一覧表示の `GET /api/battles` には含まれない）。
+
+### レスポンス生成はDBの検証済みdictをそのまま返す（Pydanticオブジェクト化しない）
+
+`backend/main.py` の `get_battle_logs` は、DBから取得した `list[dict]` を `BattleLog(**entry)` で
+Pydanticオブジェクト化せず、`JSONResponse(log_record.logs)` でそのまま返す。保存時点で
+`strip_debug_fields`（`app/engine/battle_utils.py`）により既にBattleLog相当のJSON互換dictとして
+確定しているため、配信時に再度オブジェクト化・再バリデーションする意味がない。
+
+`room_size=50/100` 規模のバトルはログが10万件を超えることがあり、
+「DBのdict → `BattleLog`オブジェクト → `response_model`再バリデーション → JSON」という
+従来の経路ではオブジェクト生成のオーバーヘッドでCloud Run（メモリ上限1GiB）がOOMする
+不具合が実際に発生した（Issue #486）。本番の実データ（110,648件のログ、TOAST圧縮後12.67MB）で
+比較した結果、オブジェクト化を挟む従来経路はレスポンス生成だけで約560MBの追加メモリを要したのに対し、
+dictを直接返す経路は約66MBで済んだ（実測、`resource.getrusage().ru_maxrss` ベース）。
+
+新たにこのエンドポイントのレスポンス生成ロジックを変更する場合、`BattleLog(**entry)` のような
+オブジェクト化を経由するdiffは大規模バトルでのメモリ悪化に直結するため避けること。
+
+### GZip圧縮
+
+`main.py` に `GZipMiddleware`（`minimum_size=1000`）を追加済み。上記110,648件のレスポンスは
+86MB→約4.9MBまで圧縮される（転送量対策であり、上記メモリ問題そのものの対策ではない）。
