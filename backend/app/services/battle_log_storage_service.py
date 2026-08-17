@@ -54,7 +54,7 @@ def object_path_for(battle_log_id: uuid.UUID) -> str:
 def _client():  # type: ignore[no-untyped-def]
     # モジュールトップレベルでimportすると、GCSを使わない開発環境・テスト環境でも
     # google-cloud-storageのインストールが必須になってしまうため遅延importする。
-    from google.cloud import storage
+    from google.cloud import storage  # type: ignore[attr-defined]
 
     return storage.Client()
 
@@ -69,14 +69,20 @@ def logs_to_ndjson_text(logs: list[dict]) -> str:
 def upload_battle_log(battle_log_id: uuid.UUID, logs: list[dict]) -> str:
     """バトルログをGCSへNDJSONテキストとしてアップロードする.
 
+    `upload_from_string()`で全件を1個の文字列に組み立ててから渡すと、元の`logs`
+    リストに加えて同サイズの文字列がもう1つメモリに乗る（実測86MB級のログでは
+    ピークメモリが倍増する）。`blob.open("w")`のストリーミング書き込みで1行ずつ
+    書き出すことでこれを避ける（Copilotレビュー指摘、PR #495）。
+
     Returns:
         アップロード先のGCSオブジェクトパス（バケット内相対パス）。
     """
     path = object_path_for(battle_log_id)
-    body = logs_to_ndjson_text(logs)
     bucket = _client().bucket(_bucket_name())
     blob = bucket.blob(path)
-    blob.upload_from_string(body, content_type="application/x-ndjson")
+    with blob.open("w", content_type="application/x-ndjson") as f:
+        for entry in logs:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     return path
 
 
@@ -100,15 +106,26 @@ def iter_battle_log_chunks(gcs_path: str) -> Iterator[bytes]:
     呼び出し側（`stream_battle_log_chunks`）がスレッドプール経由で呼ぶことを
     前提とした同期I/O実装。GCSクライアントライブラリ自体が非同期I/Oに
     対応していないため。
+
+    バケットのライフサイクルルールによる削除等でオブジェクトが既に存在しない
+    場合、`google.cloud.exceptions.NotFound`を送出せず空（0チャンク）として扱う。
+    呼び出し元の`get_battle_logs`はこれを空のNDJSONとして返すため、500ではなく
+    通常のレスポンス（空リプレイ扱い）になる（Copilotレビュー指摘、PR #495）。
     """
+    from google.cloud.exceptions import NotFound
+
     bucket = _client().bucket(_bucket_name())
     blob = bucket.blob(gcs_path)
-    with blob.open("rb") as f:
-        while True:
-            chunk = f.read(_STREAM_CHUNK_SIZE)
-            if not chunk:
-                break
-            yield chunk
+    try:
+        with blob.open("rb") as f:
+            while True:
+                chunk = f.read(_STREAM_CHUNK_SIZE)
+                if not chunk:
+                    break
+                yield chunk
+    except NotFound:
+        logger.warning("GCS object not found for battle log stream: %s", gcs_path)
+        return
 
 
 async def stream_battle_log_chunks(gcs_path: str) -> AsyncIterator[bytes]:
@@ -129,7 +146,7 @@ async def stream_battle_log_chunks(gcs_path: str) -> AsyncIterator[bytes]:
 
 
 def offload_battle_log_to_gcs(battle_log_id: uuid.UUID, logs: list[dict]) -> bool:
-    """1件のバトルログをGCSへアップロードし、成功時のみ`gcs_path`を設定してNeon側の`logs`をNULL化する.
+    """1件のバトルログをGCSへアップロードし、成功時のみ`gcs_path`を設定してNeon側の`logs`を空リストにする.
 
     バトル終了時の同期書き込み経路（`battle_logs.logs`への保存、既存の信頼性を
     維持する）とは切り離したベストエフォートの後処理として呼ぶ。GCSアップロード・

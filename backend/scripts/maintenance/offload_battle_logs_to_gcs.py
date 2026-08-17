@@ -24,6 +24,8 @@ import argparse
 import json
 import os
 import sys
+import uuid
+from datetime import datetime
 from pathlib import Path
 
 # パスを通す
@@ -37,6 +39,12 @@ from app.services.battle_log_storage_service import (  # noqa: E402
     offload_battle_log_to_gcs,
     upload_ndjson_text,
 )
+
+# 1回のDB往復で取得するIDの件数。ID自体は軽量だが、対応するlogs列は最大で
+# 数十MB/行になり得る（#489の記録ではテキスト換算86MB）ため、IDだけを
+# ページング取得し、logs本体は1行ずつロードして処理する（Copilotレビュー指摘、
+# PR #495）。まとめて`.all()`すると全行分のlogsが同時にメモリへ乗ってしまう。
+_ID_PAGE_SIZE = 100
 
 _BACKUP_DIR = (
     Path(__file__).resolve().parents[2]
@@ -87,14 +95,19 @@ def parse_args() -> argparse.Namespace:
             "復元してGCSへアップロードするモードに切り替える。BattleLogRecord行は"
             "元のIDで再作成するが、battle_results.battle_log_id の再リンクは行わない"
             "（退避時に参照元のbattle_results.idを記録していないため、どの行が"
-            "参照していたか機械的には特定できない。mission_id/created_atが近い"
-            "candidateを表示するので手動で確認・更新すること）"
+            "参照していたか機械的には特定できない。mission_idまたはroom_idが"
+            "一致するcandidateを表示するので手動で確認・更新すること）"
         ),
     )
     return parser.parse_args()
 
 
-def _run_backfill(dry_run: bool, limit: int | None, skip_confirm: bool) -> None:
+def _confirm_backfill(dry_run: bool, limit: int | None, skip_confirm: bool) -> bool:
+    """対象件数の表示・dry-run判定・確認プロンプトを行う.
+
+    Returns:
+        実際にオフロード処理へ進んでよい場合True。
+    """
     with Session(engine) as session:
         count_stmt = (
             select(func.count())
@@ -105,48 +118,74 @@ def _run_backfill(dry_run: bool, limit: int | None, skip_confirm: bool) -> None:
         )
         target_count = session.exec(count_stmt).one()
 
-        print("=" * 60)
-        print("バトルログ Cloud Storage オフロードスクリプト")
-        print("=" * 60)
-        print(f"未オフロード件数: {target_count} 件")
-        if limit is not None:
-            print(f"今回処理する上限: {limit} 件")
+    print("=" * 60)
+    print("バトルログ Cloud Storage オフロードスクリプト")
+    print("=" * 60)
+    print(f"未オフロード件数: {target_count} 件")
+    if limit is not None:
+        print(f"今回処理する上限: {limit} 件")
 
-        if target_count == 0:
-            print("\n対象がありません。終了します。")
-            return
+    if target_count == 0:
+        print("\n対象がありません。終了します。")
+        return False
 
-        if dry_run:
-            print("\n[DRY RUN] 実際のアップロードは行いません。")
-            return
+    if dry_run:
+        print("\n[DRY RUN] 実際のアップロードは行いません。")
+        return False
 
-        if not skip_confirm:
-            answer = (
-                input(
-                    f"\n{target_count} 件をGCSへオフロードします。続行しますか？ [y/N]: "
-                )
-                .strip()
-                .lower()
-            )
-            if answer not in ("y", "yes"):
-                print("キャンセルしました。")
-                return
+    if skip_confirm:
+        return True
 
-        stmt = select(BattleLogRecord.id, BattleLogRecord.logs).where(
-            BattleLogRecord.gcs_path.is_(None)  # type: ignore[union-attr]
-        )
-        if limit is not None:
-            stmt = stmt.limit(limit)
-        rows = session.exec(stmt).all()
+    answer = (
+        input(f"\n{target_count} 件をGCSへオフロードします。続行しますか？ [y/N]: ")
+        .strip()
+        .lower()
+    )
+    if answer not in ("y", "yes"):
+        print("キャンセルしました。")
+        return False
+    return True
+
+
+def _run_backfill(dry_run: bool, limit: int | None, skip_confirm: bool) -> None:
+    if not _confirm_backfill(dry_run, limit, skip_confirm):
+        return
 
     succeeded = 0
     failed = 0
-    for log_id, logs in rows:
-        if offload_battle_log_to_gcs(log_id, logs):
-            succeeded += 1
-        else:
-            failed += 1
-            print(f"  ✗ 失敗: {log_id}（次回実行で再試行されます）")
+    processed = 0
+    while limit is None or processed < limit:
+        page_size = (
+            _ID_PAGE_SIZE if limit is None else min(_ID_PAGE_SIZE, limit - processed)
+        )
+        with Session(engine) as session:
+            id_stmt = (
+                select(BattleLogRecord.id)
+                .where(BattleLogRecord.gcs_path.is_(None))  # type: ignore[union-attr]
+                .limit(page_size)
+            )
+            ids = session.exec(id_stmt).all()
+
+        if not ids:
+            break
+
+        for log_id in ids:
+            # logs本体はこの1行分だけをロードする（ページ全体をまとめて
+            # ロードしない）。offload_battle_log_to_gcs()内部でも別途
+            # セッションを開くため往復は増えるが、大規模行でのOOMを避ける
+            # ことを優先する。
+            with Session(engine) as session:
+                record = session.get(BattleLogRecord, log_id)
+            if record is None:
+                continue
+
+            if offload_battle_log_to_gcs(log_id, record.logs):
+                succeeded += 1
+            else:
+                failed += 1
+                print(f"  ✗ 失敗: {log_id}（次回実行で再試行されます）")
+
+        processed += len(ids)
 
     print(f"\n完了: 成功 {succeeded} 件 / 失敗 {failed} 件")
 
@@ -193,11 +232,21 @@ def _run_restore_archived(dry_run: bool, skip_confirm: bool) -> None:
 def _restore_one_archived_entry(session: Session, entry: dict) -> None:
     """バックアップmanifestの1件分を復元し、GCSへアップロードする.
 
+    manifest（JSON）から読んだ `id`/`room_id`/`created_at` は文字列のため、
+    `BattleLogRecord`のフィールド型（UUID/datetime）へ明示的に変換してから使う
+    （Copilotレビュー指摘、PR #495）。再実行時に同じIDの行が既に復元済みの場合は
+    安全にスキップする（INSERTの主キー重複エラーを避けるため）。
+
     `battle_results.battle_log_id` の再リンクは行わない（誤った行を書き換える
     リスクの方が、リプレイ不能のまま残るリスクより大きいため）。代わりに
     条件が一致する候補を参考表示するのみに留める。
     """
-    log_id = entry["id"]
+    log_id = uuid.UUID(entry["id"])
+
+    if session.get(BattleLogRecord, log_id) is not None:
+        print(f"  - スキップ（復元済み）: {log_id}")
+        return
+
     backup_file = _BACKUP_DIR / entry["backup_file"]
     if not backup_file.exists():
         print(f"  ✗ バックアップファイルが見つかりません: {backup_file}")
@@ -215,9 +264,9 @@ def _restore_one_archived_entry(session: Session, entry: dict) -> None:
 
     record = BattleLogRecord(
         id=log_id,
-        room_id=entry["room_id"],
+        room_id=uuid.UUID(entry["room_id"]) if entry.get("room_id") else None,
         mission_id=entry["mission_id"],
-        created_at=entry["created_at"],
+        created_at=datetime.fromisoformat(entry["created_at"]),
         logs=[],
         gcs_path=gcs_path,
     )
@@ -241,7 +290,7 @@ def _find_relink_candidates(session: Session, entry: dict) -> list:
     if entry.get("mission_id") is not None:
         stmt = stmt.where(BattleResult.mission_id == entry["mission_id"])
     elif entry.get("room_id") is not None:
-        stmt = stmt.where(BattleResult.room_id == entry["room_id"])
+        stmt = stmt.where(BattleResult.room_id == uuid.UUID(entry["room_id"]))
     return list(session.exec(stmt).all())
 
 
