@@ -520,6 +520,12 @@ async def get_battle_logs(
     という経路だとオブジェクト生成のオーバーヘッドでOOMする（Issue #486）。
     保存時点で既にBattleLog相当のJSON互換dictとして検証済みのため、
     ここではオブジェクト化を挟まずそのままJSONResponseで返す。
+
+    注意: デコレータの `response_model=list[BattleLog]` はOpenAPIドキュメント上の
+    型情報を示すためだけに残しており、実行時のバリデーション/シリアライズには
+    使われない（Response インスタンスを直接返す場合、FastAPIはresponse_modelを
+    スキップするため）。レスポンスの型を変更する場合は、実データとこの
+    アノテーションの両方を必ず一致させて更新すること。
     """
     try:
         battle_uuid = uuid.UUID(battle_id)
