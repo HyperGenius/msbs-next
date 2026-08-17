@@ -88,11 +88,66 @@ export function useBattleDetail(battleId: string | null) {
   };
 }
 
+/**
+ * NDJSON（1行1エントリのJSON）レスポンスを1行ずつパースしてBattleLog配列にする。
+ * バックエンドは大規模バトル（ログ10万件超）でもレスポンス全体を1個のJSON文字列に
+ * 組み立てずチャンク送出するため（Issue #488）、フロント側も`res.json()`で全量の
+ * 生テキストをまとめて保持せず、ReadableStreamから読めた分から逐次パースする。
+ */
+export async function fetchBattleLogsNdjson(url: string): Promise<BattleLog[]> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const error = new Error(`Failed to fetch data from ${url}: ${res.status} ${res.statusText}`) as Error & { status: number };
+    error.status = res.status;
+    throw error;
+  }
+
+  const logs: BattleLog[] = [];
+
+  // ReadableStreamが使えない環境（一部のテスト用Response実装等）向けのフォールバック
+  if (!res.body) {
+    const text = await res.text();
+    for (const line of text.split("\n")) {
+      if (line.trim().length > 0) {
+        logs.push(JSON.parse(line));
+      }
+    }
+    return logs;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex !== -1) {
+      const line = buffer.slice(0, newlineIndex);
+      buffer = buffer.slice(newlineIndex + 1);
+      if (line.trim().length > 0) {
+        logs.push(JSON.parse(line));
+      }
+      newlineIndex = buffer.indexOf("\n");
+    }
+  }
+
+  // 末尾に改行なしで残った分（通常は末尾も改行区切りだが念のため）
+  if (buffer.trim().length > 0) {
+    logs.push(JSON.parse(buffer));
+  }
+
+  return logs;
+}
+
 /** バトルリプレイ用ログを取得するSWRフック。battleResultIdがnullの場合はフェッチしない */
 export function useBattleLogs(battleResultId: string | null) {
   const { data, error, isLoading } = useSWR<BattleLog[]>(
     battleResultId ? `${API_BASE_URL}/api/battles/${battleResultId}/logs` : null,
-    fetcher
+    fetchBattleLogsNdjson
   );
 
   return {

@@ -179,9 +179,9 @@ export function useBattleLogic(
 ### レスポンス生成はDBの検証済みdictをそのまま返す（Pydanticオブジェクト化しない）
 
 `backend/main.py` の `get_battle_logs` は、DBから取得した `list[dict]` を `BattleLog(**entry)` で
-Pydanticオブジェクト化せず、`JSONResponse(log_record.logs)` でそのまま返す。保存時点で
-`strip_debug_fields`（`app/engine/battle_utils.py`）により既にBattleLog相当のJSON互換dictとして
-確定しているため、配信時に再度オブジェクト化・再バリデーションする意味がない。
+Pydanticオブジェクト化しない。保存時点で `strip_debug_fields`（`app/engine/battle_utils.py`）により
+既にBattleLog相当のJSON互換dictとして確定しているため、配信時に再度オブジェクト化・再バリデーション
+する意味がない。
 
 `room_size=50/100` 規模のバトルはログが10万件を超えることがあり、
 「DBのdict → `BattleLog`オブジェクト → `response_model`再バリデーション → JSON」という
@@ -193,7 +193,25 @@ dictを直接返す経路は約66MBで済んだ（実測、`resource.getrusage()
 新たにこのエンドポイントのレスポンス生成ロジックを変更する場合、`BattleLog(**entry)` のような
 オブジェクト化を経由するdiffは大規模バトルでのメモリ悪化に直結するため避けること。
 
+### レスポンスはNDJSONでチャンク送出する（バックエンド・フロント双方）
+
+`get_battle_logs` は `list[dict]` を1個のJSON文字列に組み立てて `JSONResponse` で返すのではなく、
+`_ndjson_lines()`（`main.py`）が1エントリずつ `json.dumps` してyieldする `StreamingResponse`
+（`media_type="application/x-ndjson"`, 1行1エントリのJSON）で返す（Issue #488）。前段の
+「dictを直接返す」対応（Issue #486）でオブジェクト化のコストは解消したが、`JSONResponse` は
+それでもレスポンス全体を1個の巨大な文字列としてメモリに組み立ててから返すため、その文字列自体の
+サイズがバトル規模にそのまま比例する構造は残っていた。NDJSONで1行ずつ送出することで、ASGIサーバーが
+送出済みのチャンクを解放でき、ピークメモリをレスポンス全体のサイズに比例させずに済む。
+
+フロントエンド側（`frontend/src/services/battle.ts` の `fetchBattleLogsNdjson`）も
+`res.json()` で全量を一括バッファする実装から、`res.body.getReader()` + `TextDecoder` による
+行単位の逐次パースに変更した。**バックエンドだけをストリーミング化してもフロントが `res.json()` の
+ままではフロント側のピークメモリは変わらない**ため、必ずセットで扱うこと（#486の議論で判明した
+落とし穴）。`res.body` が使えない環境（テスト用のResponseモック等）向けに `res.text()` への
+フォールバックも用意している。
+
 ### GZip圧縮
 
-`main.py` に `GZipMiddleware`（`minimum_size=1000`）を追加済み。上記110,648件のレスポンスは
-86MB→約4.9MBまで圧縮される（転送量対策であり、上記メモリ問題そのものの対策ではない）。
+`main.py` に `GZipMiddleware`（`minimum_size=1000`）を追加済み。StreamingResponseに対しても
+チャンクごとに圧縮される。110,648件のレスポンスは86MB→約4.9MBまで圧縮される（転送量対策であり、
+上記メモリ問題そのものの対策ではない）。
