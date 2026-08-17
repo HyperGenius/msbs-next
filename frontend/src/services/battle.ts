@@ -135,6 +135,13 @@ export async function fetchBattleLogsNdjson(url: string): Promise<BattleLog[]> {
     }
   }
 
+  // ループ終了後にdecode()を引数なしで呼びデコーダーを終端する。
+  // 通常のチャンク分割ではTextDecoderが未完成のマルチバイト列を内部で
+  // 正しく繰り越して復元するため実害は出ないが、ストリームが本当に
+  // マルチバイト文字の途中で打ち切られた場合（接続断など）にその分を
+  // 静かに読み捨てず、置換文字として表面化させるための終端処理
+  buffer += decoder.decode();
+
   // 末尾に改行なしで残った分（通常は末尾も改行区切りだが念のため）
   if (buffer.trim().length > 0) {
     logs.push(JSON.parse(buffer));

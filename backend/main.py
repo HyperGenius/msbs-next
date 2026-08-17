@@ -524,7 +524,18 @@ async def _ndjson_lines(entries: list[dict]) -> AsyncIterator[bytes]:
         yield (json.dumps(entry, ensure_ascii=False) + "\n").encode("utf-8")
 
 
-@app.get("/api/battles/{battle_id}/logs", response_model=list[BattleLog])
+@app.get(
+    "/api/battles/{battle_id}/logs",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"application/x-ndjson": {}},
+            "description": (
+                "NDJSON形式のバトルログ（1行1エントリ、各行はBattleLog相当のJSON）"
+            ),
+        }
+    },
+)
 async def get_battle_logs(
     battle_id: str,
     session: Session = Depends(get_session),
@@ -541,11 +552,11 @@ async def get_battle_logs(
     保存時点で既にBattleLog相当のJSON互換dictとして検証済みのため、ここでは
     オブジェクト化を挟まずそのままNDJSON化して返す。
 
-    注意: デコレータの `response_model=list[BattleLog]` はOpenAPIドキュメント上の
-    型情報を示すためだけに残しており、実行時のバリデーション/シリアライズには
-    使われない（Response インスタンスを直接返す場合、FastAPIはresponse_modelを
-    スキップするため）。レスポンスの型を変更する場合は、実データとこの
-    アノテーションの両方を必ず一致させて更新すること。
+    注意: 実体は `application/x-ndjson`（改行区切りJSON）であり、単一のJSON配列
+    ではない。`response_model=list[BattleLog]` を付けるとOpenAPI上
+    `application/json` の配列レスポンスとして表示されクライアント実装を誤誘導する
+    ため、代わりに `responses` で実際のcontent-typeを明示している。レスポンスの
+    型・形式を変更する場合は `responses` の記述も合わせて更新すること。
     """
     try:
         battle_uuid = uuid.UUID(battle_id)

@@ -125,6 +125,20 @@ describe("fetchBattleLogsNdjson", () => {
     expect(logs[0].message).toBe("no trailing newline");
   });
 
+  it("末尾のマルチバイト文字が1バイトずつのチャンクに分割されても正しくデコードされる", async () => {
+    // 末尾のメッセージを日本語（UTF-8で3バイト/文字）にし、1バイト単位のチャンクで
+    // 配信させる（改行なし）。TextDecoderのstream:trueは未完成のマルチバイト列を
+    // 呼び出しをまたいで正しく繰り越すため、この分割自体で文字化けは起きないが、
+    // 末尾のdecoder.decode()終端処理を含めても結果が変わらないことを確認する。
+    const ndjson = '{"timestamp":0,"actor_id":"a","action_type":"WAIT","message":"戦闘終了","position_snapshot":{"x":0,"y":0,"z":0}}';
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson, 1));
+
+    const logs = await fetchBattleLogsNdjson("http://example.com/logs");
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0].message).toBe("戦闘終了");
+  });
+
   it("空のレスポンス（ログ無し）で空配列を返す", async () => {
     vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(""));
 
