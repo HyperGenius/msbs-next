@@ -25,6 +25,7 @@ on:
 env:
   REGION: asia-northeast1
   MIN_INSTANCES: 0
+  MEMORY: 1Gi
   REPOSITORY: msbs-next
   IMAGE_NAME: msbs-next-api
   CLOUD_RUN_SERVICE: msbs-next-api-prod
@@ -71,6 +72,7 @@ jobs:
         run: |
           gcloud run deploy ${{ env.CLOUD_RUN_SERVICE }} \
             --min-instances=${{ env.MIN_INSTANCES }} \
+            --memory=${{ env.MEMORY }} \
             --image=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --region=${{ env.REGION }} \
             --project=${{ secrets.GCP_PROJECT_ID }} \

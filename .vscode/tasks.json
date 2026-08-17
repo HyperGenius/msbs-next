@@ -129,9 +129,9 @@
             }
         },
         {
-            "label": "GCloud Auth Application Default Login",
+            "label": "GCloud Auth Application Login MSBS Project",
             "type": "shell",
-            "command": "gcloud auth application-default login",
+            "command": "source ${workspaceFolder}/backend/.env && gcloud auth application-default login --project=${MSBS_GCP_PROJECT_ID}",
             "problemMatcher": [],
             "presentation": {
                 "group": "terraform",
