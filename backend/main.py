@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 from datetime import UTC, datetime
@@ -7,9 +8,11 @@ from fastapi import Depends, FastAPI, HTTPException
 
 if TYPE_CHECKING:
     from app.engine.calculator import PilotStats
+from collections.abc import AsyncIterator
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlmodel import Session, desc, select
 
@@ -508,24 +511,52 @@ async def get_battle_detail(
     return battle
 
 
-@app.get("/api/battles/{battle_id}/logs", response_model=list[BattleLog])
+async def _ndjson_lines(entries: list[dict]) -> AsyncIterator[bytes]:
+    """バトルログdictの列をNDJSON（1行1エントリ）のバイト列として逐次生成する.
+
+    `JSONResponse(entries)` は送出前にリスト全体を1個の巨大なJSON文字列へ
+    シリアライズしてからまとめて返すため、その文字列自体がプロセスメモリに
+    乗る（Issue #488）。1件ずつシリアライズしてyieldすることで、ASGIサーバーが
+    チャンクを送出し終えた分から解放でき、ピークメモリをレスポンス全体のサイズに
+    比例させずに済む。
+    """
+    for entry in entries:
+        yield (json.dumps(entry, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+@app.get(
+    "/api/battles/{battle_id}/logs",
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"application/x-ndjson": {}},
+            "description": (
+                "NDJSON形式のバトルログ（1行1エントリ、各行はBattleLog相当のJSON）"
+            ),
+        }
+    },
+)
 async def get_battle_logs(
     battle_id: str,
     session: Session = Depends(get_session),
-) -> JSONResponse:
+) -> StreamingResponse:
     """バトルリプレイ用ログを取得する（遅延ロード）.
 
-    大規模バトル（room_size=50/100等）ではログが数万〜十数万件に及び、
-    DBのdictをBattleLogオブジェクト化→response_modelで再バリデーション、
-    という経路だとオブジェクト生成のオーバーヘッドでOOMする（Issue #486）。
-    保存時点で既にBattleLog相当のJSON互換dictとして検証済みのため、
-    ここではオブジェクト化を挟まずそのままJSONResponseで返す。
+    大規模バトル（room_size=50/100等）ではログが数万〜十数万件に及ぶ。
+    DBのdictをBattleLogオブジェクト化→response_modelで再バリデーション、という
+    経路はオブジェクト生成のオーバーヘッドでOOMする（Issue #486、対応済み）。
+    さらにレスポンス全体を1個のJSON文字列として組み立てる経路も、その文字列自体が
+    レスポンスサイズに比例したメモリを消費するため、NDJSON（`application/x-ndjson`,
+    1行1エントリのJSON）でチャンク単位に逐次送出する（Issue #488）。
 
-    注意: デコレータの `response_model=list[BattleLog]` はOpenAPIドキュメント上の
-    型情報を示すためだけに残しており、実行時のバリデーション/シリアライズには
-    使われない（Response インスタンスを直接返す場合、FastAPIはresponse_modelを
-    スキップするため）。レスポンスの型を変更する場合は、実データとこの
-    アノテーションの両方を必ず一致させて更新すること。
+    保存時点で既にBattleLog相当のJSON互換dictとして検証済みのため、ここでは
+    オブジェクト化を挟まずそのままNDJSON化して返す。
+
+    注意: 実体は `application/x-ndjson`（改行区切りJSON）であり、単一のJSON配列
+    ではない。`response_model=list[BattleLog]` を付けるとOpenAPI上
+    `application/json` の配列レスポンスとして表示されクライアント実装を誤誘導する
+    ため、代わりに `responses` で実際のcontent-typeを明示している。レスポンスの
+    型・形式を変更する場合は `responses` の記述も合わせて更新すること。
     """
     try:
         battle_uuid = uuid.UUID(battle_id)
@@ -537,10 +568,12 @@ async def get_battle_logs(
         raise HTTPException(status_code=404, detail="Battle not found")
 
     if battle.battle_log_id is None:
-        return JSONResponse([])
+        return StreamingResponse(_ndjson_lines([]), media_type="application/x-ndjson")
 
     log_record = session.get(BattleLogRecord, battle.battle_log_id)
     if not log_record:
-        return JSONResponse([])
+        return StreamingResponse(_ndjson_lines([]), media_type="application/x-ndjson")
 
-    return JSONResponse(log_record.logs)
+    return StreamingResponse(
+        _ndjson_lines(log_record.logs), media_type="application/x-ndjson"
+    )
