@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 from pydantic import field_validator
 from sqlalchemy import JSON, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, SQLModel
 
 # --- Component Models (JSONとしてDBに保存される部品) ---
@@ -710,7 +711,9 @@ class BattleLogRecord(SQLModel, table=True):
         description="ソロミッション用ミッションID",
     )
     logs: list[dict] = Field(
-        default_factory=list, sa_column=Column(JSON), description="バトルログ全件"
+        default_factory=list,
+        sa_column=Column(JSON().with_variant(JSONB, "postgresql")),
+        description="バトルログ全件",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"

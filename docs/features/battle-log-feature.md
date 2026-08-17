@@ -215,3 +215,36 @@ dictを直接返す経路は約66MBで済んだ（実測、`resource.getrusage()
 `main.py` に `GZipMiddleware`（`minimum_size=1000`）を追加済み。StreamingResponseに対しても
 チャンクごとに圧縮される。110,648件のレスポンスは86MB→約4.9MBまで圧縮される（転送量対策であり、
 上記メモリ問題そのものの対策ではない）。
+
+### `battle_logs.logs` のDB列型はPostgreSQLでは `JSONB`（Issue #489）
+
+`BattleLogRecord.logs`（`backend/app/models/models.py`）の `sa_column` は
+`Column(JSON().with_variant(JSONB, "postgresql"))` として定義している。PostgreSQL接続時のみ
+`JSONB`（バイナリ格納）として扱われ、テストで使うSQLiteなど`JSONB`を持たない方言では
+従来通り `JSON` として扱われる（`with_variant` は方言ごとに実際の型を切り替える仕組みで、
+テストDB構成を変えずに済む）。マイグレーション
+（`alembic/versions/a5b6c7d8e9f0_migrate_battle_logs_logs_to_jsonb.py`）は
+`ALTER COLUMN logs TYPE JSONB USING logs::JSONB` をPostgreSQL接続時のみ実行する。
+`JSONB` はキー順序を保証しないが、バトルログはキー順序に依存した処理をしていないため
+問題ない。
+
+GINインデックス（`USING GIN (logs)`）はIssue #489の本文で「任意」とされていたが、Neon実DBで
+試作したところインデックスサイズが約20MBとテーブル本体とほぼ同じになった（ログ内の
+全キー・全階層をインデックス化するため）。ストレージ削減が目的の一つである本Issueでは
+作成を見送った。将来actor/action_type等の具体的な検索要件が固まった時点で、部分インデックス
+（特定キーのみを対象にする等）を含めて別途検討すること。
+
+### 巨大行（数十MB級）はALTER COLUMN TYPE実行前に退避・削除する
+
+`ALTER TABLE ... ALTER COLUMN ... TYPE` はテーブル全体を書き換える単一トランザクション・
+ACCESS EXCLUSIVEロックの操作であり、バッチ分割ができない。Neonの実データには1行で
+テキスト換算約86MB（`pg_column_size`約12.67MB）に達するログが複数件存在し、これを含んだ
+まま `logs::JSONB` キャストを実行すると、`maintenance_work_mem` を64MB→512MBへ引き上げても
+`OutOfMemory` になった（Neonのコンピュートサイズ自体が小さいことが原因）。そのため
+マイグレーション内の `_archive_and_delete_oversized_battle_logs()` が `pg_column_size(logs)`
+が2MBを超える行を、生JSONテキストのまま
+`backend/scripts/verify/output/battle_logs_jsonb_migration_backup/`（`.gitignore`対象）へ
+バックアップした上で削除してから、残りの行に対してキャストを実行する。`battle_results`
+側は集計値が既に非正規化カラムとして保存済みのため、削除対象行を参照する
+`battle_results.battle_log_id` をNULLに更新するだけで一覧表示への影響はない
+（詳細はマイグレーションファイル自体のdocstringを参照）。
