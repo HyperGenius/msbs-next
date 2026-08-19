@@ -190,8 +190,20 @@ export function useBattleLogs(battleResultId: string | null) {
     key,
     (fetchUrl: string) =>
       fetchBattleLogsNdjson(fetchUrl, (partialLogs) => {
-        globalMutate(fetchUrl, partialLogs, { revalidate: false });
-      })
+        // 既存データより件数が少ない更新は無視し、単調増加のみ許可する。
+        // バトルログは不変データなので通常は起き得ないが、フォーカス復帰等の
+        // 再検証（revalidateOnFocus等）と競合した場合に、後勝ちでlogsが「縮んで」
+        // maxTimestampが巻き戻り再生位置が不安定になるのを防ぐ保険
+        globalMutate<BattleLog[]>(
+          fetchUrl,
+          (current) => (current && current.length > partialLogs.length ? current : partialLogs),
+          { revalidate: false }
+        );
+      }),
+    // バトルログは不変データのため、フォーカス復帰・再接続時の自動再検証は不要。
+    // 有効にしていると、ストリーミング完了後にタブ切り替え等で巨大ログの再取得が
+    // 走ってしまう
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
   );
 
   return {

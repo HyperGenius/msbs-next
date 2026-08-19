@@ -177,7 +177,7 @@ describe("fetchBattleLogsNdjson", () => {
   // onProgress — 全件パース完了を待たない段階的な反映（Issue #494）
   // ─────────────────────────────────────────────
 
-  it("onProgressに1000行ごとにその時点までのログ配列を通知する", async () => {
+  it("onProgressに500行ごとにその時点までのログ配列を通知する", async () => {
     const lineCount = 1200;
     const ndjson = Array.from({ length: lineCount }, (_, i) =>
       `{"timestamp":${i},"actor_id":"a","action_type":"MOVE","message":"m${i}","position_snapshot":{"x":0,"y":0,"z":0}}`
