@@ -6,14 +6,18 @@ import { useState, useEffect, useRef } from "react";
 interface TurnControllerProps {
   currentTimestamp: number;
   maxTimestamp: number;
+  /** ログがまだ裏で読み込み中かどうか（Issue #494）。trueの間はmaxTimestampに
+   * 追いついても「再生終了」扱いにせず、続きのログが届くのを待って再生を続ける */
+  isStreaming?: boolean;
   onTimestampChange: (timestamp: number) => void;
 }
 
-export default function TurnController({ currentTimestamp, maxTimestamp, onTimestampChange }: TurnControllerProps) {
+export default function TurnController({ currentTimestamp, maxTimestamp, isStreaming = false, onTimestampChange }: TurnControllerProps) {
   const step = 0.1;
   const [isPlaying, setIsPlaying] = useState(false);
   const currentTimestampRef = useRef(currentTimestamp);
   const onTimestampChangeRef = useRef(onTimestampChange);
+  const isStreamingRef = useRef(isStreaming);
 
   useEffect(() => {
     currentTimestampRef.current = currentTimestamp;
@@ -22,6 +26,10 @@ export default function TurnController({ currentTimestamp, maxTimestamp, onTimes
   useEffect(() => {
     onTimestampChangeRef.current = onTimestampChange;
   }, [onTimestampChange]);
+
+  useEffect(() => {
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -52,8 +60,14 @@ export default function TurnController({ currentTimestamp, maxTimestamp, onTimes
 
         const next = Math.round((currentTimestampRef.current + step * stepsToAdvance) * 10) / 10;
         if (next >= maxTimestamp) {
-          onTimestampChangeRef.current(maxTimestamp);
-          setIsPlaying(false);
+          if (currentTimestampRef.current < maxTimestamp) {
+            onTimestampChangeRef.current(maxTimestamp);
+          }
+          // 読み込み中に到着済みログの末尾へ追いついた場合は「再生終了」ではなく、
+          // 続きのログが届くのを待つ（maxTimestampが伸びればeffectが再実行され自動的に再開する）
+          if (!isStreamingRef.current) {
+            setIsPlaying(false);
+          }
           return;
         }
         onTimestampChangeRef.current(next);
@@ -68,7 +82,9 @@ export default function TurnController({ currentTimestamp, maxTimestamp, onTimes
   }, [isPlaying, maxTimestamp]);
 
   const handlePlayPause = () => {
-    if (currentTimestamp >= maxTimestamp) {
+    // 読み込み中に到着済み分の末尾で一時停止した場合は「最初から」ではなく、
+    // そのまま続きのログを待つ形で再開する
+    if (currentTimestamp >= maxTimestamp && !isStreaming) {
       onTimestampChange(0);
     }
     setIsPlaying((prev) => !prev);

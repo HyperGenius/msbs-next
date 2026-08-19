@@ -29,8 +29,10 @@ export default function BattleDetailModal({
   // 開発環境専用: 本番ログの抽象化をプレビューするトグル
   const [isProductionPreview, setIsProductionPreview] = useState(false);
 
-  // バトルログを遅延ロード（リプレイ用）
-  const { logs: fetchedLogs, isLoading: logsLoading } = useBattleLogs(battle.id);
+  // バトルログを遅延ロード（リプレイ用）。全件ダウンロード完了を待たず、
+  // 届いた分から段階的に反映する（Issue #494）。isLoadingは初回データ到達まで、
+  // isStreamingは全件パース完了までtrueになる
+  const { logs: fetchedLogs, isLoading: logsLoading, isStreaming: logsStreaming } = useBattleLogs(battle.id);
   const logs = fetchedLogs ?? [];
 
   const { ownedMobileSuitIds, playerId, filterRelevantLogs } = useBattleLogic(
@@ -85,9 +87,18 @@ export default function BattleDetailModal({
                     currentTimestamp={currentTimestamp}
                     environment={battle.environment || "SPACE"}
                   />
+                  {/* ログを裏で読み込み中でも再生をブロックしない。読み込み継続中であることだけ
+                      控えめに示す（全件到着まで待たされないUX、Issue #494） */}
+                  {logsStreaming && (
+                    <div className="mb-2 flex items-center gap-2 text-xs text-green-600/70" role="status">
+                      <span className="inline-block w-3 h-3 border-2 border-green-600/40 border-t-green-400 rounded-full animate-spin" />
+                      <span>続きのログを読み込み中... （{logs.length.toLocaleString()}件到着済み）</span>
+                    </div>
+                  )}
                   <TurnController
                     currentTimestamp={currentTimestamp}
                     maxTimestamp={maxTimestamp}
+                    isStreaming={logsStreaming}
                     onTimestampChange={setCurrentTimestamp}
                   />
                 </>
@@ -101,7 +112,8 @@ export default function BattleDetailModal({
             )}
           </div>
 
-          {/* 下部スクロール: ログ一覧 */}
+          {/* 下部スクロール: ログ一覧。初回データ到着後は、残りが裏で読み込み中でも
+              到着済みの分から表示する（全件到着まで待たせない、Issue #494） */}
           {logsLoading ? (
             <div className="flex-1 flex items-center justify-center p-4">
               <p className="text-gray-400 text-sm">ログを読み込み中...</p>

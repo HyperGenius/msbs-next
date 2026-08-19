@@ -1,7 +1,14 @@
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 import { useAuth } from "@clerk/nextjs";
 import { Mission, BattleResult, BattleLog } from "@/types/battle";
 import { API_BASE_URL, getAuthToken, fetcher, useAuthFetcher, authKey } from "./auth";
+
+/**
+ * 逐次パース結果をUIへ反映する間隔（行数）。
+ * 1行ごとにコールバックすると大規模バトル（ログ10万件超）でSWRの再レンダーが
+ * 高頻度に走りすぎるため、ある程度まとめて（バッチで）反映する（Issue #494）。
+ */
+const PROGRESSIVE_UPDATE_BATCH_SIZE = 500;
 
 /** ミッション一覧を取得するSWRフック（認証不要・パブリック） */
 export function useMissions() {
@@ -93,8 +100,15 @@ export function useBattleDetail(battleId: string | null) {
  * バックエンドは大規模バトル（ログ10万件超）でもレスポンス全体を1個のJSON文字列に
  * 組み立てずチャンク送出するため（Issue #488）、フロント側も`res.json()`で全量の
  * 生テキストをまとめて保持せず、ReadableStreamから読めた分から逐次パースする。
+ *
+ * `onProgress` を渡すと、`PROGRESSIVE_UPDATE_BATCH_SIZE` 行パースするたびに
+ * その時点までの配列（コピー）を通知する。全件パース完了を待たずに呼び出し元
+ * （UI）へ段階的に反映するための仕組み（Issue #494）。
  */
-export async function fetchBattleLogsNdjson(url: string): Promise<BattleLog[]> {
+export async function fetchBattleLogsNdjson(
+  url: string,
+  onProgress?: (logs: BattleLog[]) => void
+): Promise<BattleLog[]> {
   const res = await fetch(url);
   if (!res.ok) {
     const error = new Error(`Failed to fetch data from ${url}: ${res.status} ${res.statusText}`) as Error & { status: number };
@@ -103,13 +117,23 @@ export async function fetchBattleLogsNdjson(url: string): Promise<BattleLog[]> {
   }
 
   const logs: BattleLog[] = [];
+  let sinceLastProgress = 0;
+
+  const pushLog = (line: string) => {
+    logs.push(JSON.parse(line));
+    sinceLastProgress++;
+    if (onProgress && sinceLastProgress >= PROGRESSIVE_UPDATE_BATCH_SIZE) {
+      sinceLastProgress = 0;
+      onProgress([...logs]);
+    }
+  };
 
   // ReadableStreamが使えない環境（一部のテスト用Response実装等）向けのフォールバック
   if (!res.body) {
     const text = await res.text();
     for (const line of text.split("\n")) {
       if (line.trim().length > 0) {
-        logs.push(JSON.parse(line));
+        pushLog(line);
       }
     }
     return logs;
@@ -129,7 +153,7 @@ export async function fetchBattleLogsNdjson(url: string): Promise<BattleLog[]> {
       const line = buffer.slice(0, newlineIndex);
       buffer = buffer.slice(newlineIndex + 1);
       if (line.trim().length > 0) {
-        logs.push(JSON.parse(line));
+        pushLog(line);
       }
       newlineIndex = buffer.indexOf("\n");
     }
@@ -144,22 +168,48 @@ export async function fetchBattleLogsNdjson(url: string): Promise<BattleLog[]> {
 
   // 末尾に改行なしで残った分（通常は末尾も改行区切りだが念のため）
   if (buffer.trim().length > 0) {
-    logs.push(JSON.parse(buffer));
+    pushLog(buffer);
   }
 
   return logs;
 }
 
-/** バトルリプレイ用ログを取得するSWRフック。battleResultIdがnullの場合はフェッチしない */
+/**
+ * バトルリプレイ用ログを取得するSWRフック。battleResultIdがnullの場合はフェッチしない。
+ *
+ * `fetchBattleLogsNdjson` の `onProgress` からSWRのグローバルキャッシュを直接
+ * `mutate`することで、全件パース完了（Promise解決）を待たずに`logs`を段階的に
+ * 更新する（Issue #494）。`isLoading`（`isValidating && !data`相当）は最初の
+ * バッチが届いた時点でfalseになるため、呼び出し側は「初回データが届いたか」を
+ * `isLoading`、「まだバックグラウンドで読み込み中か」を`isStreaming`で判別できる。
+ */
 export function useBattleLogs(battleResultId: string | null) {
-  const { data, error, isLoading } = useSWR<BattleLog[]>(
-    battleResultId ? `${API_BASE_URL}/api/battles/${battleResultId}/logs` : null,
-    fetchBattleLogsNdjson
+  const key = battleResultId ? `${API_BASE_URL}/api/battles/${battleResultId}/logs` : null;
+
+  const { data, error, isLoading, isValidating } = useSWR<BattleLog[]>(
+    key,
+    (fetchUrl: string) =>
+      fetchBattleLogsNdjson(fetchUrl, (partialLogs) => {
+        // 既存データより件数が少ない更新は無視し、単調増加のみ許可する。
+        // バトルログは不変データなので通常は起き得ないが、フォーカス復帰等の
+        // 再検証（revalidateOnFocus等）と競合した場合に、後勝ちでlogsが「縮んで」
+        // maxTimestampが巻き戻り再生位置が不安定になるのを防ぐ保険
+        globalMutate<BattleLog[]>(
+          fetchUrl,
+          (current) => (current && current.length > partialLogs.length ? current : partialLogs),
+          { revalidate: false }
+        );
+      }),
+    // バトルログは不変データのため、フォーカス復帰・再接続時の自動再検証は不要。
+    // 有効にしていると、ストリーミング完了後にタブ切り替え等で巨大ログの再取得が
+    // 走ってしまう
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
   );
 
   return {
     logs: data,
     isLoading,
+    isStreaming: isValidating,
     isError: error,
   };
 }

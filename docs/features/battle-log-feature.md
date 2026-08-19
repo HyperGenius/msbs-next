@@ -210,6 +210,37 @@ dictを直接返す経路は約66MBで済んだ（実測、`resource.getrusage()
 落とし穴）。`res.body` が使えない環境（テスト用のResponseモック等）向けに `res.text()` への
 フォールバックも用意している。
 
+### 逐次パース結果をUIへ段階的に反映する（体感速度改善、Issue #494）
+
+Issue #488の時点では、`fetchBattleLogsNdjson` は行単位で逐次パースしていても、パース結果を
+ローカル変数に溜め続けるだけで呼び出し元へは全件パース完了後にまとめて返していた。これは
+**ピークメモリ削減のみ**が目的で、体感速度（初回描画までの時間）は改善されていなかった。
+
+`fetchBattleLogsNdjson` は第2引数に `onProgress?: (logs: BattleLog[]) => void` を受け取れる。
+`PROGRESSIVE_UPDATE_BATCH_SIZE`（500行）ごとに、その時点までのログ配列のコピーを通知する
+（1行ごとに通知すると大規模バトルで再レンダーが高頻度になりすぎるため、ある程度まとめて反映する）。
+
+`useBattleLogs`（同ファイル）はこの `onProgress` から、SWRのグローバル `mutate`（`swr` パッケージの
+無名エクスポート）をキー（URL）付きで直接呼び出し、リクエストが完了する前にSWRのキャッシュ・`data`
+を更新する。これによりSWRの `isLoading`（`isValidating && !data` 相当）は最初のバッチが届いた時点で
+`false` になる。呼び出し元は「初回データが届いたか」を `isLoading`、「まだ末尾まで読み込み中か」を
+`isStreaming`（`isValidating`）で判別する。
+
+呼び出し元（`BattleDetailModal.tsx`）は `isLoading` が `false` になった時点で `BattleViewer` と
+ログ一覧をマウントし、`isStreaming` が `true` の間は「続きのログを読み込み中」の控えめな表示のみ行う
+（全件ダウンロード完了までブロックしない）。`TurnController.tsx` は `isStreaming` を受け取り、
+再生位置が到着済みログの末尾（`maxTimestamp`）に追いついても、読み込み継続中であれば「再生終了」扱い
+にせず、続きのログが届いて `maxTimestamp` が伸びるのを待って自動的に再生を継続する
+（`maxTimestamp` はeffectの依存配列に含まれているため、値が変わるとtickループが再構築され自動的に
+再開する）。
+
+`getBattleSnapshot`（`useBattleSnapshot.ts`）の差分更新キャッシュは `logs` 配列の参照一致
+（`cached.logs === logs`）でしか再利用判定をしないため、ストリーミング中に新しい配列参照が来るたびに
+（`BattleViewer/index.tsx` の `lastLogsRef` 比較により）キャッシュが作り直され、その時点までのログを
+先頭から再走査する。これは正しく動作するが最適ではない（バッチのたびにO(現在のログ件数)の再走査が
+発生する）。ストリーミング中の合計走査量は概ねO(バッチ数×平均ログ件数)で収まり、実測上は問題にならない
+規模だが、将来的にバッチサイズをさらに小さくする場合などは走査コストの増加に注意すること。
+
 ### GZip圧縮
 
 `main.py` に `GZipMiddleware`（`minimum_size=1000`）を追加済み。StreamingResponseに対しても
