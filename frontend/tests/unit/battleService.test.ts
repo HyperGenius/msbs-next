@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { markBattleAsRead, fetchBattleLogsNdjson } from "@/services/battle";
+import type { BattleLog } from "@/types/battle";
 
 vi.mock("@/services/auth", async () => {
   const actual = await vi.importActual<typeof import("@/services/auth")>("@/services/auth");
@@ -170,5 +171,55 @@ describe("fetchBattleLogsNdjson", () => {
     } as unknown as Response);
 
     await expect(fetchBattleLogsNdjson("http://example.com/logs")).rejects.toThrow("404");
+  });
+
+  // ─────────────────────────────────────────────
+  // onProgress — 全件パース完了を待たない段階的な反映（Issue #494）
+  // ─────────────────────────────────────────────
+
+  it("onProgressに1000行ごとにその時点までのログ配列を通知する", async () => {
+    const lineCount = 1200;
+    const ndjson = Array.from({ length: lineCount }, (_, i) =>
+      `{"timestamp":${i},"actor_id":"a","action_type":"MOVE","message":"m${i}","position_snapshot":{"x":0,"y":0,"z":0}}`
+    ).join("\n") + "\n";
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson, 4096));
+
+    const onProgress = vi.fn();
+    const logs = await fetchBattleLogsNdjson("http://example.com/logs", onProgress);
+
+    expect(logs).toHaveLength(lineCount);
+    // 500行ごとに通知されるため、1200行なら2回（500件目・1000件目）呼ばれる
+    expect(onProgress).toHaveBeenCalledTimes(2);
+    expect(onProgress.mock.calls[0][0]).toHaveLength(500);
+    expect(onProgress.mock.calls[1][0]).toHaveLength(1000);
+  });
+
+  it("onProgressに渡す配列は呼び出しごとに独立したコピーである", async () => {
+    const lineCount = 1000;
+    const ndjson = Array.from({ length: lineCount }, (_, i) =>
+      `{"timestamp":${i},"actor_id":"a","action_type":"MOVE","message":"m${i}","position_snapshot":{"x":0,"y":0,"z":0}}`
+    ).join("\n") + "\n";
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson, 4096));
+
+    const snapshots: BattleLog[][] = [];
+    await fetchBattleLogsNdjson("http://example.com/logs", (partial) => {
+      snapshots.push(partial);
+    });
+
+    // 後続のpushで先に通知済みの配列の中身・長さが書き換わっていないことを確認する
+    expect(snapshots.map((s) => s.length)).toEqual([500, 1000]);
+    expect(snapshots[0]).toHaveLength(500);
+  });
+
+  it("行数がバッチサイズ未満の場合はonProgressが呼ばれない（最終返り値には全件含まれる）", async () => {
+    const ndjson =
+      '{"timestamp":0,"actor_id":"a","action_type":"MOVE","message":"m1","position_snapshot":{"x":0,"y":0,"z":0}}\n';
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson));
+
+    const onProgress = vi.fn();
+    const logs = await fetchBattleLogsNdjson("http://example.com/logs", onProgress);
+
+    expect(onProgress).not.toHaveBeenCalled();
+    expect(logs).toHaveLength(1);
   });
 });
