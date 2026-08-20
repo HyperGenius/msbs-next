@@ -98,7 +98,12 @@ def upload_battle_log(battle_log_id: uuid.UUID, logs: list[dict]) -> str:
         for entry in logs:
             line = json.dumps(entry, ensure_ascii=False) + "\n"
             buffer_parts.append(line)
-            buffer_size += len(line)
+            # _STREAM_CHUNK_SIZEは読み出し側でバイト数として使われているため、
+            # ここも`len(line)`（文字数）ではなくUTF-8エンコード後のバイト数で
+            # 揃える。ensure_ascii=Falseだとマルチバイト文字（日本語ログ等）で
+            # 文字数とバイト数が乖離し、チャンク境界が意図より大きくなるため
+            # （Copilotレビュー指摘）。
+            buffer_size += len(line.encode("utf-8"))
             if buffer_size >= _STREAM_CHUNK_SIZE:
                 f.write("".join(buffer_parts))
                 buffer_parts = []
