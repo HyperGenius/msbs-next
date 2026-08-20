@@ -74,12 +74,17 @@ def upload_battle_log(battle_log_id: uuid.UUID, logs: list[dict]) -> str:
     ピークメモリが倍増する）。`blob.open("w")`のストリーミング書き込みでこれを
     避ける（Copilotレビュー指摘、PR #495）。
 
-    当初1行ずつ`f.write()`していたが、8万行規模のログで1件のオフロードに
-    数十分かかる不具合が実測で見つかった（Issue #497）。resumable uploadへの
-    `write()`呼び出し自体のオーバーヘッドが行数分積み重なっていたためで、
-    `_STREAM_CHUNK_SIZE`（読み出し側と同じ256KB）分だけ行をバッファしてから
-    まとめて`write()`する方式に変更した。ピークメモリは`_STREAM_CHUNK_SIZE`分
-    までに抑えつつ、`write()`呼び出し回数を行数からチャンク数まで削減する。
+    当初1行ずつ`f.write()`していたが、`_STREAM_CHUNK_SIZE`（読み出し側と同じ
+    256KB）分だけ行をバッファしてからまとめて`write()`する方式に変更した
+    （Issue #497）。ピークメモリは`_STREAM_CHUNK_SIZE`分までに抑えつつ、
+    `write()`呼び出し回数を行数からチャンク数まで削減する。
+
+    注意: Issue #497では当初「行単位write()のオーバーヘッドで8万行規模のログが
+    数十分かかる」と実測ベースで報告されたが、その後の調査で実際の遅延原因は
+    別（`BATTLE_LOG_GCS_BUCKET`未設定＋`offload_battle_logs_to_gcs.py`の
+    無限ループ、Issue #500）と判明し、write()呼び出し粒度がボトルネックである
+    ことは実測で確認できていない。本変更はwrite()呼び出し回数を減らす無害な
+    改善として残しているが、性能問題の解消を主張するものではない。
 
     Returns:
         アップロード先のGCSオブジェクトパス（バケット内相対パス）。

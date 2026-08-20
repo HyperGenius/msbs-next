@@ -44,9 +44,9 @@ def test_upload_battle_log_streams_ndjson_without_content_encoding() -> None:
     また、全件を1個の巨大な文字列に組み立ててから`upload_from_string()`する実装は
     ログサイズ分のメモリが追加で必要になる（Copilotレビュー指摘、PR #495）ため、
     `blob.open("w")`でストリーミング書き込みになっていることも確認する。1行ずつ
-    `write()`していた初期実装は8万行規模のログでアップロードに数十分かかる不具合が
-    あったため（Issue #497）、`_STREAM_CHUNK_SIZE`分バッファしてまとめて書き込む
-    方式に変更されている。この程度の小さいログでは1回のwrite呼び出しに収まる。
+    `write()`していた初期実装をやめ、`_STREAM_CHUNK_SIZE`分バッファしてまとめて
+    書き込む方式に変更している（write()呼び出し回数削減、Issue #497）。この程度の
+    小さいログでは1回のwrite呼び出しに収まる。
     """
     log_id = uuid.uuid4()
     mock_file = MagicMock()
