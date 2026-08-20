@@ -34,7 +34,7 @@ def test_logs_to_ndjson_text_one_entry_per_line() -> None:
 
 
 def test_upload_battle_log_streams_ndjson_without_content_encoding() -> None:
-    """アップロードが1行ずつのストリーミング書き込みで、Content-Encoding未設定であることを確認する.
+    """アップロードがチャンクバッファ書き込みで、Content-Encoding未設定であることを確認する.
 
     GCS側は非圧縮のプレーンテキストで保存し、圧縮はCloud Run側のGZipMiddlewareに
     任せる設計（Issue #493）。ここでContent-Encoding: gzipを付けてしまうと、
@@ -43,7 +43,10 @@ def test_upload_battle_log_streams_ndjson_without_content_encoding() -> None:
 
     また、全件を1個の巨大な文字列に組み立ててから`upload_from_string()`する実装は
     ログサイズ分のメモリが追加で必要になる（Copilotレビュー指摘、PR #495）ため、
-    `blob.open("w")`で1行ずつ書き込むストリーミング実装になっていることも確認する。
+    `blob.open("w")`でストリーミング書き込みになっていることも確認する。1行ずつ
+    `write()`していた初期実装は8万行規模のログでアップロードに数十分かかる不具合が
+    あったため（Issue #497）、`_STREAM_CHUNK_SIZE`分バッファしてまとめて書き込む
+    方式に変更されている。この程度の小さいログでは1回のwrite呼び出しに収まる。
     """
     log_id = uuid.uuid4()
     mock_file = MagicMock()
@@ -59,10 +62,36 @@ def test_upload_battle_log_streams_ndjson_without_content_encoding() -> None:
 
     assert path == f"battle-logs/{log_id}.ndjson"
     mock_blob.open.assert_called_once_with("w", content_type="application/x-ndjson")
-    assert mock_file.write.call_count == 2
     written = "".join(call.args[0] for call in mock_file.write.call_args_list)
     assert "hello" in written
     assert "world" in written
+
+
+def test_upload_battle_log_flushes_write_when_buffer_exceeds_chunk_size() -> None:
+    """バッファが`_STREAM_CHUNK_SIZE`を超えたら、全件蓄積を待たず都度flushされることを確認する.
+
+    行単位write()の呼び出し回数削減（Issue #497）が、バッファを無限に蓄積して
+    メモリ削減効果を失っていないか（＝PR #495が対策したピークメモリ増加が
+    再発していないか）を検証する。
+    """
+    log_id = uuid.uuid4()
+    mock_file = MagicMock()
+    mock_blob = MagicMock()
+    mock_blob.open.return_value.__enter__.return_value = mock_file
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_client = MagicMock()
+    mock_client.bucket.return_value = mock_bucket
+
+    # 1エントリあたり約10KB、_STREAM_CHUNK_SIZE(256KB)を跨ぐには30件程度必要。
+    logs = [{"msg": "x" * 10_000, "i": i} for i in range(30)]
+
+    with patch.object(svc, "_client", return_value=mock_client):
+        svc.upload_battle_log(log_id, logs)
+
+    assert mock_file.write.call_count > 1
+    written = "".join(call.args[0] for call in mock_file.write.call_args_list)
+    assert written.count("\n") == 30
 
 
 def test_offload_battle_log_to_gcs_returns_false_on_upload_failure() -> None:
