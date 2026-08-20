@@ -71,8 +71,20 @@ def upload_battle_log(battle_log_id: uuid.UUID, logs: list[dict]) -> str:
 
     `upload_from_string()`で全件を1個の文字列に組み立ててから渡すと、元の`logs`
     リストに加えて同サイズの文字列がもう1つメモリに乗る（実測86MB級のログでは
-    ピークメモリが倍増する）。`blob.open("w")`のストリーミング書き込みで1行ずつ
-    書き出すことでこれを避ける（Copilotレビュー指摘、PR #495）。
+    ピークメモリが倍増する）。`blob.open("w")`のストリーミング書き込みでこれを
+    避ける（Copilotレビュー指摘、PR #495）。
+
+    当初1行ずつ`f.write()`していたが、`_STREAM_CHUNK_SIZE`（読み出し側と同じ
+    256KB）分だけ行をバッファしてからまとめて`write()`する方式に変更した
+    （Issue #497）。ピークメモリは`_STREAM_CHUNK_SIZE`分までに抑えつつ、
+    `write()`呼び出し回数を行数からチャンク数まで削減する。
+
+    注意: Issue #497では当初「行単位write()のオーバーヘッドで8万行規模のログが
+    数十分かかる」と実測ベースで報告されたが、その後の調査で実際の遅延原因は
+    別（`BATTLE_LOG_GCS_BUCKET`未設定＋`offload_battle_logs_to_gcs.py`の
+    無限ループ、Issue #500）と判明し、write()呼び出し粒度がボトルネックである
+    ことは実測で確認できていない。本変更はwrite()呼び出し回数を減らす無害な
+    改善として残しているが、性能問題の解消を主張するものではない。
 
     Returns:
         アップロード先のGCSオブジェクトパス（バケット内相対パス）。
@@ -81,8 +93,23 @@ def upload_battle_log(battle_log_id: uuid.UUID, logs: list[dict]) -> str:
     bucket = _client().bucket(_bucket_name())
     blob = bucket.blob(path)
     with blob.open("w", content_type="application/x-ndjson") as f:
+        buffer_parts: list[str] = []
+        buffer_size = 0
         for entry in logs:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            line = json.dumps(entry, ensure_ascii=False) + "\n"
+            buffer_parts.append(line)
+            # _STREAM_CHUNK_SIZEは読み出し側でバイト数として使われているため、
+            # ここも`len(line)`（文字数）ではなくUTF-8エンコード後のバイト数で
+            # 揃える。ensure_ascii=Falseだとマルチバイト文字（日本語ログ等）で
+            # 文字数とバイト数が乖離し、チャンク境界が意図より大きくなるため
+            # （Copilotレビュー指摘）。
+            buffer_size += len(line.encode("utf-8"))
+            if buffer_size >= _STREAM_CHUNK_SIZE:
+                f.write("".join(buffer_parts))
+                buffer_parts = []
+                buffer_size = 0
+        if buffer_parts:
+            f.write("".join(buffer_parts))
     return path
 
 

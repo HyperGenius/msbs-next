@@ -155,6 +155,64 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 コンソール表示 + JSON出力できる（読み取り専用）。使い方は `docs/features/balance-cli-tools.md` を参照。
 出力先 `backend/scripts/verify/output/` は `.gitignore` 対象なので、取得した実データがコミットされる心配はない。
 
+## バトルログGCSオフロード（Issue #493/#497/#500）の運用・デバッグ知見
+
+`battle_logs.logs`（生ログ、大規模バトルで数万〜十数万行）は本来GCSへオフロードされ
+`gcs_path` が設定される（`app/services/battle_log_storage_service.py`）が、失敗・
+未実施のまま残っている行が実際に存在した。以下の症状が出た場合、まず該当行の
+`gcs_path` を疑うこと:
+
+- リプレイ表示（`GET /api/battles/{id}/logs`）が極端に遅い（実例: 17.54秒/5.8MiB）
+- Neon（Table Editor等のDBコンソール）でその行を開くと "response is too large" 相当のエラーになる
+
+`gcs_path IS NULL` な行は `session.get(BattleLogRecord, id)` でNeonから`logs`列を
+一括ロードする重い経路を通る。`room_id`/`battle_id`から該当行を特定し
+`gcs_path`/`len(logs)`を確認する簡易調査は`fetch_recent_battles.py`に無いため、
+`sqlmodel.Session`で直接クエリする必要がある。
+
+### ローカルで`offload_battle_logs_to_gcs.py`を動かすには2つの認証が必要
+
+1. `BATTLE_LOG_GCS_BUCKET`環境変数（`.env.example`にキーはあるが値は空。本番は
+   `{project_id}-battle-logs-{environment}`、例: `msbs-next-battle-logs-prod`）
+2. `google-cloud-storage`クライアントが使うApplication Default Credentials
+   （`gcloud auth login`とは別物。`gcloud auth application-default login`が必要）
+
+どちらか一方でも欠けると`upload_battle_log()`が即座に失敗するため、「アップロードが
+異常に遅い」ように見える現象の原因が実際には「毎回一瞬で失敗し続けるループ」だった、
+という実例があった（次項）。遅延の原因を「処理が重い」と決めつける前に、実際にログ
+出力を見て本当にアップロード処理が進行しているのかを確認すること。
+
+### `offload_battle_logs_to_gcs.py`の`_run_backfill()`は全件失敗時に無限ループしうる
+
+`--limit`未指定（`limit=None`）で実行すると、内側の`while limit is None or
+processed < limit:`は`gcs_path IS NULL`な行が尽きるまで回り続ける。対象行の
+オフロードが（環境不備等で）全件失敗し続けると`gcs_path`が更新されないため、同じ
+行が毎回`WHERE gcs_path IS NULL`に該当し続けて終了条件を満たさない（Issue #500で
+実際に58分間ハングした）。修正済みの実装は、同一実行内で失敗したIDを
+`failed_ids_this_run`に蓄積し次ページ取得クエリで除外することで対応している。
+同種の「条件を満たす行を取得→処理→失敗しても状態が変わらない」というリトライ
+ループを新たに書く場合、全件失敗時に終了できる設計になっているか必ず確認すること。
+
+### `tests/conftest.py`の全テーブルクリアに新規テーブルを追加し忘れない
+
+`setup_master_data_db`（autouseフィクスチャ）はテスト間分離のため主要テーブルを
+`delete()`しているが、`BattleLogRecord`が長らく漏れていた。そのため`BattleLogRecord`
+を作成するテストが行を残し、後続テストが件数・IDに依存するアサーションを書くと
+（無関係な）残留行と干渉して失敗する（Issue #500の回帰テストで実際に踏み、CIで
+`assert 2 == 1`のような一見無関係な失敗になった）。新しいSQLModelテーブルを
+追加した場合、それを作成するテストを書く前に、このクリア対象リストに含まれているか
+確認すること。
+
+### リトライ/バックフィル系のテストは対象の関数自体をまるごとモックしない
+
+`_run_backfill()`のような「成功したら状態を更新し、その更新結果で次のクエリの
+挙動が変わる」ループをテストする際、ループが呼ぶ関数（`offload_battle_log_to_gcs()`）
+をside effectごとまるごとモックすると、成功時の実際のDB書き込み（`gcs_path`更新）
+がスキップされ、成功したはずの行が条件に該当し続けて無限ループする（このテストを
+書く過程で実際に無限ループを踏んだ）。状態更新を伴う関数をテストする際は、外部I/O
+だけ（この場合は`upload_battle_log()`＝GCS呼び出し）をモックし、DB更新を含む本体
+のロジックは実際に実行させること。
+
 ## `BattleLog` の `velocity_snapshot` は `DESTROYED` ログに含まれない
 
 `combat.py`/`movement.py` の各 `BattleLog` 生成箇所はほぼ毎ティック `velocity_snapshot`（行動時点の速度ベクトル）を

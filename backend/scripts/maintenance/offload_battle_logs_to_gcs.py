@@ -154,17 +154,23 @@ def _run_backfill(dry_run: bool, limit: int | None, skip_confirm: bool) -> None:
     succeeded = 0
     failed = 0
     processed = 0
+    # このプロセス内で失敗済みのIDを除外して次ページを取得する。除外しないと、
+    # gcs_pathが更新されない失敗行を`WHERE gcs_path IS NULL`が毎回返し続け、
+    # 全件失敗が続く限り終了しない（Issue #500で実際に無限ループを起こした）。
+    failed_ids_this_run: set[uuid.UUID] = set()
     while limit is None or processed < limit:
         page_size = (
             _ID_PAGE_SIZE if limit is None else min(_ID_PAGE_SIZE, limit - processed)
         )
         with Session(engine) as session:
-            id_stmt = (
-                select(BattleLogRecord.id)
-                .where(BattleLogRecord.gcs_path.is_(None))  # type: ignore[union-attr]
-                .limit(page_size)
+            id_stmt = select(BattleLogRecord.id).where(
+                BattleLogRecord.gcs_path.is_(None)  # type: ignore[union-attr]
             )
-            ids = session.exec(id_stmt).all()
+            if failed_ids_this_run:
+                id_stmt = id_stmt.where(
+                    BattleLogRecord.id.not_in(failed_ids_this_run)  # type: ignore[union-attr]
+                )
+            ids = session.exec(id_stmt.limit(page_size)).all()
 
         if not ids:
             break
@@ -183,6 +189,7 @@ def _run_backfill(dry_run: bool, limit: int | None, skip_confirm: bool) -> None:
                 succeeded += 1
             else:
                 failed += 1
+                failed_ids_this_run.add(log_id)
                 print(f"  ✗ 失敗: {log_id}（次回実行で再試行されます）")
 
         processed += len(ids)

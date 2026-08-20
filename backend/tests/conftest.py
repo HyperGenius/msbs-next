@@ -87,6 +87,7 @@ def setup_master_data_db() -> Generator[None, None, None]:
     import app.core.gamedata as gd
     from app.models.models import (
         BattleEntry,
+        BattleLogRecord,
         BattleResult,
         BattleRoom,
         Friendship,
@@ -115,6 +116,7 @@ def setup_master_data_db() -> Generator[None, None, None]:
         seed_session.exec(delete(BattleEntry))
         seed_session.exec(delete(BattleRoom))
         seed_session.exec(delete(BattleResult))
+        seed_session.exec(delete(BattleLogRecord))
         seed_session.exec(delete(PlayerWeapon))
         seed_session.exec(delete(MobileSuit))
         seed_session.exec(delete(Pilot))

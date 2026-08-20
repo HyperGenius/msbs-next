@@ -34,7 +34,7 @@ def test_logs_to_ndjson_text_one_entry_per_line() -> None:
 
 
 def test_upload_battle_log_streams_ndjson_without_content_encoding() -> None:
-    """アップロードが1行ずつのストリーミング書き込みで、Content-Encoding未設定であることを確認する.
+    """アップロードがチャンクバッファ書き込みで、Content-Encoding未設定であることを確認する.
 
     GCS側は非圧縮のプレーンテキストで保存し、圧縮はCloud Run側のGZipMiddlewareに
     任せる設計（Issue #493）。ここでContent-Encoding: gzipを付けてしまうと、
@@ -43,7 +43,10 @@ def test_upload_battle_log_streams_ndjson_without_content_encoding() -> None:
 
     また、全件を1個の巨大な文字列に組み立ててから`upload_from_string()`する実装は
     ログサイズ分のメモリが追加で必要になる（Copilotレビュー指摘、PR #495）ため、
-    `blob.open("w")`で1行ずつ書き込むストリーミング実装になっていることも確認する。
+    `blob.open("w")`でストリーミング書き込みになっていることも確認する。1行ずつ
+    `write()`していた初期実装をやめ、`_STREAM_CHUNK_SIZE`分バッファしてまとめて
+    書き込む方式に変更している（write()呼び出し回数削減、Issue #497）。この程度の
+    小さいログでは1回のwrite呼び出しに収まる。
     """
     log_id = uuid.uuid4()
     mock_file = MagicMock()
@@ -59,10 +62,72 @@ def test_upload_battle_log_streams_ndjson_without_content_encoding() -> None:
 
     assert path == f"battle-logs/{log_id}.ndjson"
     mock_blob.open.assert_called_once_with("w", content_type="application/x-ndjson")
-    assert mock_file.write.call_count == 2
+    # チャンクバッファリングが退行して再び行単位write()に戻っていないことを検出する
+    # ため、この程度の小さい入力では1回のwrite呼び出しに収まることを明示する
+    # （Copilotレビュー指摘）。
+    assert mock_file.write.call_count == 1
     written = "".join(call.args[0] for call in mock_file.write.call_args_list)
     assert "hello" in written
     assert "world" in written
+
+
+def test_upload_battle_log_flushes_write_when_buffer_exceeds_chunk_size() -> None:
+    """バッファが`_STREAM_CHUNK_SIZE`を超えたら、全件蓄積を待たず都度flushされることを確認する.
+
+    行単位write()の呼び出し回数削減（Issue #497）が、バッファを無限に蓄積して
+    メモリ削減効果を失っていないか（＝PR #495が対策したピークメモリ増加が
+    再発していないか）を検証する。
+    """
+    log_id = uuid.uuid4()
+    mock_file = MagicMock()
+    mock_blob = MagicMock()
+    mock_blob.open.return_value.__enter__.return_value = mock_file
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_client = MagicMock()
+    mock_client.bucket.return_value = mock_bucket
+
+    # 1エントリあたり約10KB、_STREAM_CHUNK_SIZE(256KB)を跨ぐには30件程度必要。
+    logs = [{"msg": "x" * 10_000, "i": i} for i in range(30)]
+
+    with patch.object(svc, "_client", return_value=mock_client):
+        svc.upload_battle_log(log_id, logs)
+
+    assert mock_file.write.call_count > 1
+    written = "".join(call.args[0] for call in mock_file.write.call_args_list)
+    assert written.count("\n") == 30
+
+
+def test_upload_battle_log_counts_multibyte_chars_as_utf8_bytes() -> None:
+    """バッファサイズの見積もりが文字数ではなくUTF-8バイト数であることを確認する.
+
+    `ensure_ascii=False`で日本語等のマルチバイト文字を含むログの場合、文字数を
+    そのままバイト数として扱うと実際のUTF-8バイト数より小さく見積もってしまい、
+    `_STREAM_CHUNK_SIZE`（読み出し側でバイト数として使われる）との境界が意図より
+    大きくなる（Copilotレビュー指摘）。日本語1文字=3バイトなので、文字数だけで
+    見積もると必要なチャンク数を過少評価してしまうことを確認する。
+    """
+    log_id = uuid.uuid4()
+    mock_file = MagicMock()
+    mock_blob = MagicMock()
+    mock_blob.open.return_value.__enter__.return_value = mock_file
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_client = MagicMock()
+    mock_client.bucket.return_value = mock_bucket
+
+    # 日本語1文字=UTF-8で3バイト。1エントリの`msg`が3,000文字（=約9,000バイト）、
+    # 60件で合計約540KB(_STREAM_CHUNK_SIZE=256KBの2倍超)になるようにする。文字数
+    # だけで見積もると180,000文字（<256KB）でチャンクが1回に収まってしまうが、
+    # 実際のバイト数では複数回のflushに分かれるはず。
+    logs = [{"msg": "あ" * 3_000, "i": i} for i in range(60)]
+
+    with patch.object(svc, "_client", return_value=mock_client):
+        svc.upload_battle_log(log_id, logs)
+
+    assert mock_file.write.call_count > 1
+    written = "".join(call.args[0] for call in mock_file.write.call_args_list)
+    assert written.count("\n") == 60
 
 
 def test_offload_battle_log_to_gcs_returns_false_on_upload_failure() -> None:
