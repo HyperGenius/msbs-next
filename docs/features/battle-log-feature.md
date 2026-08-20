@@ -367,6 +367,16 @@ write-behind方式で失敗した分の再試行を同じ仕組みで兼ねる�
 再リンクは機械的には特定できない。条件が一致する候補を参考表示するのみに留め、
 自動更新はしない（誤った行を書き換えるリスクの方が大きいため）。
 
+**`_run_backfill()`は同一実行内で失敗したIDを除外する（Issue #500）**: `--limit`
+未指定（`limit=None`）で実行すると、内側の`while limit is None or processed <
+limit:`ループは`gcs_path IS NULL`な行が尽きるまで回り続ける。当初は失敗した行を
+除外していなかったため、`gcs_path`が更新されない失敗行が毎回`WHERE gcs_path IS
+NULL`に該当し続け、全件失敗が続く限り終了しない不具合があった（`BATTLE_LOG_GCS_BUCKET`
+未設定のローカル環境で実際に踏んだ）。`failed_ids_this_run`にこのプロセス内で
+失敗したIDを蓄積し、次ページ取得クエリで`NOT IN`除外することで、失敗が続く行が
+無限に再取得されないようにしている。**定期実行の仕組み（cron/Cloud Scheduler等）
+自体はまだ存在しない**（Issue #499）。
+
 ### 環境変数
 
 `BATTLE_LOG_GCS_BUCKET`（`backend/.env.example`参照）でアップロード先バケットを
