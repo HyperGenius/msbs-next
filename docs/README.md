@@ -26,3 +26,6 @@
 
 ### 3. 画像や図解
 - ドキュメント内で使用する画像は、各ディレクトリ内の `assets/` フォルダに集約してください。
+
+### 4. コードコメント
+- コード内コメントの規約は [`setup/comment-style-guide.md`](setup/comment-style-guide.md) を参照してください。
