@@ -185,6 +185,7 @@ def _build_enemies_from_config(enemy_configs: list[dict]) -> list[MobileSuit]:
             ],
             side="ENEMY",
         )
+        enemy.normalize_parts()
         enemies.append(enemy)
     return enemies
 
@@ -262,6 +263,7 @@ async def simulate_battle(
     player.current_hp = player.max_hp
     player.position = Vector3(x=0, y=0, z=0)
     player.side = "PLAYER"
+    player.normalize_parts()
 
     # 3.5. パイロットスキルを取得（ユーザーがログインしている場合）
     player_skills: dict[str, int] = {}

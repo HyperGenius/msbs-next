@@ -1,6 +1,23 @@
 import { Vector3 } from "./geometry";
 import { Weapon, Tactics } from "./weapon";
 
+/** 部位名 (Issue #503)。欠損部位を除きこれら6種で構成される */
+export type PartName =
+    | "HEAD"
+    | "TORSO"
+    | "RIGHT_ARM"
+    | "LEFT_ARM"
+    | "RIGHT_LEG"
+    | "LEFT_LEG";
+
+/** 部位単体のHP/装甲状態 (Issue #503) */
+export interface PartState {
+    max_hp: number;
+    current_hp: number;
+    armor: number;
+    destroyed: boolean;
+}
+
 /** モビルスーツの全ステータス（バトル中のスナップショットとAPIレスポンスで共用） */
 export interface MobileSuit {
     id: string;
@@ -42,6 +59,10 @@ export interface MobileSuit {
     weapon_slot_count?: number;
     /** ビームジェネレータLv (マスター機体由来。required_beam_generator_lv がこの値を超えるBEAM武器は装備不可) */
     beam_generator_lv?: number;
+    /** 欠損部位のリスト (Issue #503。例: 脚部のないMSは ["RIGHT_LEG", "LEFT_LEG"]) */
+    missing_parts?: PartName[];
+    /** 部位別HP/装甲状態 (Issue #503)。欠損部位はキーに含まれない */
+    parts?: Partial<Record<PartName, PartState>>;
 }
 
 /** ガレージ機能で機体を更新する際のリクエスト型（部分更新可） */

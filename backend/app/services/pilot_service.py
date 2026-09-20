@@ -304,6 +304,7 @@ class PilotService:
             beam_resistance=specs.get("beam_resistance", 0.0),
             physical_resistance=specs.get("physical_resistance", 0.0),
             weapons=specs["weapons"],
+            missing_parts=specs.get("missing_parts", []),
             side="PLAYER",
         )
 

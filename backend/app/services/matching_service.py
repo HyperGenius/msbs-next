@@ -30,6 +30,7 @@ def _coerce_suit_json_fields(suit: MobileSuit) -> None:
         suit.velocity = Vector3(**suit.velocity)
     if isinstance(suit.weapons, list):
         suit.weapons = [Weapon(**w) if isinstance(w, dict) else w for w in suit.weapons]
+    suit.normalize_parts()
 
 
 class MatchingService:

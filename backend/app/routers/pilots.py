@@ -196,6 +196,7 @@ async def register_pilot(
         acceleration_bonus=specs.get("acceleration_bonus", 1.0),
         turning_bonus=specs.get("turning_bonus", 1.0),
         weapons=specs["weapons"],
+        missing_parts=specs.get("missing_parts", []),
         side="PLAYER",
     )
     session.add(new_mobile_suit)
