@@ -100,6 +100,64 @@ class WeaponResponse(Weapon):
         )
 
 
+# --- Mobile Suit Parts (部位別HP/装甲, Issue #503) ---
+
+PART_HEAD = "HEAD"
+PART_TORSO = "TORSO"
+PART_RIGHT_ARM = "RIGHT_ARM"
+PART_LEFT_ARM = "LEFT_ARM"
+PART_RIGHT_LEG = "RIGHT_LEG"
+PART_LEFT_LEG = "LEFT_LEG"
+
+# 部位ごとの最大HP配分比率（合計1.0）。頭部はコクピットではあるが被弾面積が
+# 小さいため低め、胴体は中枢機構が集中するため最も高く設定した。戦術設定・
+# 角度・距離に基づく本格的な配分は Phase 4 (#TBD) で見直す前提の暫定値
+# (Issue #503)。
+PART_HP_RATIOS: dict[str, float] = {
+    PART_HEAD: 0.10,
+    PART_TORSO: 0.30,
+    PART_RIGHT_ARM: 0.15,
+    PART_LEFT_ARM: 0.15,
+    PART_RIGHT_LEG: 0.15,
+    PART_LEFT_LEG: 0.15,
+}
+
+ALL_PART_NAMES: list[str] = list(PART_HP_RATIOS.keys())
+
+
+class PartState(SQLModel):
+    """部位単体のHP/装甲状態."""
+
+    max_hp: int = Field(description="部位の最大耐久値")
+    current_hp: int = Field(description="部位の現在耐久値")
+    armor: int = Field(
+        default=0,
+        description="部位の装甲値。現状は機体全体のarmorをそのまま踏襲する（部位ごとの個別調整はPhase 4で検討）",
+    )
+    destroyed: bool = Field(default=False, description="破壊済みかどうか")
+
+
+def build_default_parts(
+    max_hp: int, armor: int, missing_parts: list[str] | None = None
+) -> dict[str, PartState]:
+    """機体全体のmax_hp/armorから部位別の初期状態を組み立てる.
+
+    欠損部位（missing_parts）は結果の辞書に含めない。これにより、命中部位の
+    選択プール自体に欠損部位が含まれなくなり、欠損部位への命中判定・
+    再配分ロジックが不要になる（Issue #503のヒントに沿った設計）。
+    """
+    missing = set(missing_parts or [])
+    parts: dict[str, PartState] = {}
+    for part_name, ratio in PART_HP_RATIOS.items():
+        if part_name in missing:
+            continue
+        part_max_hp = max(1, round(max_hp * ratio))
+        parts[part_name] = PartState(
+            max_hp=part_max_hp, current_hp=part_max_hp, armor=armor
+        )
+    return parts
+
+
 # --- Database Models (テーブル定義) ---
 
 
@@ -196,6 +254,25 @@ class MobileSuit(SQLModel, table=True):
 
     active_weapon_index: int = Field(default=0)
 
+    # Part-based HP/Armor (Issue #503, Phase 3 of #501)
+    missing_parts: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSON),
+        description=(
+            "欠損部位のリスト (例: 脚部のないMS)。ALL_PART_NAMES のいずれかを指定する。"
+            "ここに含めた部位は parts に生成されず、命中部位の選択対象からも除外される"
+        ),
+    )
+    parts: dict[str, PartState] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description=(
+            "部位別HP/装甲状態 (Issue #503)。既存の max_hp/current_hp/armor は"
+            "全体値として引き続き使用し、parts はそれとは別に管理される並行データ。"
+            "未設定(空dict)の場合は max_hp/armor/missing_parts から自動生成される"
+        ),
+    )
+
     # Strategy Mode
     strategy_mode: str | None = Field(
         default=None,
@@ -221,6 +298,30 @@ class MobileSuit(SQLModel, table=True):
         # But here we just want to ensure it has a value.
         # Logic to sync max_hp is better handled in application logic or @model_validator.
         return v
+
+    def normalize_parts(self) -> None:
+        """parts列を PartState 辞書として正規化する (Issue #503).
+
+        - SQLAlchemyのORM読み込み等で parts の値が生のdictのままの場合、
+          PartState へ変換する
+        - parts が空(未設定)の場合は max_hp/armor/missing_parts から自動生成する
+
+        SQLModel の table=True クラスは `@model_validator(mode="after")` が
+        `__init__`/`model_validate` のいずれでも正しく動作しない
+        （SQLAlchemyのインスツルメンテーションと衝突するため）制約があり、
+        `current_hp` の `field_validator` に残るコメントの通りこのクラスでは
+        従来から「アプリケーション側で明示的に呼び出す」方針を取っている。
+        機体をバトルエンジンに渡す・APIレスポンスに変換する前に必ず呼び出すこと。
+        """
+        if self.parts:
+            self.parts = {
+                name: (PartState(**part) if isinstance(part, dict) else part)
+                for name, part in self.parts.items()
+            }
+        else:
+            self.parts = build_default_parts(
+                self.max_hp, self.armor, self.missing_parts
+            )
 
     def get_active_weapon(self) -> Weapon | None:
         """現在選択中の武器を返す."""
@@ -282,6 +383,8 @@ class MobileSuitResponse(SQLModel):
     weapons: list["WeaponResponse"] = []
     tactics: dict = {}
     active_weapon_index: int = 0
+    missing_parts: list[str] = []
+    parts: dict[str, "PartState"] = {}
     personality: str | None = None
     is_ace: bool = False
     ace_id: str | None = None
@@ -342,6 +445,8 @@ class MobileSuitResponse(SQLModel):
                 weapon_obj = w
             weapons_response.append(WeaponResponse.from_weapon(weapon_obj))
 
+        ms.normalize_parts()
+
         return cls(
             id=ms.id,
             user_id=ms.user_id,
@@ -370,6 +475,8 @@ class MobileSuitResponse(SQLModel):
             weapons=weapons_response,
             tactics=ms.tactics,
             active_weapon_index=ms.active_weapon_index,
+            missing_parts=ms.missing_parts,
+            parts=ms.parts,
             personality=ms.personality,
             is_ace=ms.is_ace,
             ace_id=ms.ace_id,
@@ -407,6 +514,10 @@ class MasterMobileSuitSpec(SQLModel):
     acceleration_bonus: float = 1.0
     turning_bonus: float = 1.0
     weapons: list[Weapon]
+    missing_parts: list[str] = Field(
+        default_factory=list,
+        description="欠損部位のリスト (ALL_PART_NAMES のいずれか。例: 脚部のないMSは [RIGHT_LEG, LEFT_LEG])",
+    )
 
 
 class MasterMobileSuitEntry(SQLModel):
@@ -690,6 +801,9 @@ class BattleLog(SQLModel):
     )
     weapon_id: str | None = None  # 使用した武器のID（フロントエンドの武器特定用）
     is_crit: bool = False  # クリティカルヒット判定（構造化フラグ）
+    hit_part: str | None = (
+        None  # 命中部位 (HEAD/TORSO/RIGHT_ARM/LEFT_ARM/RIGHT_LEG/LEFT_LEG) (Issue #503)
+    )
 
 
 class BattleLogRecord(SQLModel, table=True):

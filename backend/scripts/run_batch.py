@@ -144,7 +144,10 @@ def _convert_snapshot_to_mobile_suit(snapshot: dict) -> MobileSuit:
     # MobileSuit モデルにないスナップショット固有のキーを除去
     ms_fields = set(MobileSuit.model_fields.keys())
     filtered = {k: v for k, v in snapshot.items() if k in ms_fields}
-    return MobileSuit(**filtered)
+    mobile_suit = MobileSuit(**filtered)
+    # parts (Issue #503) を PartState 辞書として正規化（未設定なら自動生成）
+    mobile_suit.normalize_parts()
+    return mobile_suit
 
 
 def _prepare_battle_units(

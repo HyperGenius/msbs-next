@@ -316,6 +316,49 @@ SECTOR_FRONT_DEG: float = 60.0
 SECTOR_FRONT_SIDE_DEG: float = 120.0
 SECTOR_REAR_SIDE_DEG: float = 150.0
 
+# 命中部位決定の暫定重み付け (Issue #503 Phase 3)
+# 攻撃セクタ (FRONT/FRONT_SIDE/REAR_SIDE/REAR) ごとに、部位別の命中しやすさを
+# 粗く重み付けしたもの。前面ほど正面装甲（頭部・胴体・腕）に、背面ほど無防備な
+# 脚部に命中しやすい、という直感的な傾向のみを反映した暫定実装であり、戦術設定・
+# 角度・距離に基づく本格的な確率算出は Phase 4 (#TBD) で
+# `app.engine.combat.determine_hit_part()` ごと置き換える前提。
+PART_HIT_WEIGHTS: dict[str, dict[str, float]] = {
+    "FRONT": {
+        "HEAD": 10.0,
+        "TORSO": 35.0,
+        "RIGHT_ARM": 20.0,
+        "LEFT_ARM": 20.0,
+        "RIGHT_LEG": 7.5,
+        "LEFT_LEG": 7.5,
+    },
+    "FRONT_SIDE": {
+        "HEAD": 8.0,
+        "TORSO": 27.0,
+        "RIGHT_ARM": 20.0,
+        "LEFT_ARM": 20.0,
+        "RIGHT_LEG": 12.5,
+        "LEFT_LEG": 12.5,
+    },
+    "REAR_SIDE": {
+        "HEAD": 5.0,
+        "TORSO": 25.0,
+        "RIGHT_ARM": 15.0,
+        "LEFT_ARM": 15.0,
+        "RIGHT_LEG": 20.0,
+        "LEFT_LEG": 20.0,
+    },
+    "REAR": {
+        "HEAD": 3.0,
+        "TORSO": 22.0,
+        "RIGHT_ARM": 10.0,
+        "LEFT_ARM": 10.0,
+        "RIGHT_LEG": 27.5,
+        "LEFT_LEG": 27.5,
+    },
+}
+# 上記テーブルに存在しない部位名（将来の拡張部位）に割り当てるデフォルト重み
+DEFAULT_PART_HIT_WEIGHT: float = 1.0
+
 # フランキング（背後移動）パッシブスキル定数 (Phase E-3.5)
 FLANKING_OFFSET_DISTANCE: float = 30.0
 FLANKING_ATTRACTION_WEIGHT: float = 1.5

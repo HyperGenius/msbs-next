@@ -200,6 +200,7 @@ class BattleSimulator(
         self.player = player
         self.enemies = enemies
         self.units: list[MobileSuit] = [player] + enemies
+        self._normalize_unit_parts()
         # ユニット ID → ユニット の対応表（索敵・ターゲット選定処理でのO(1)引き当て用。Issue #446）
         # self.units の要素構成（リスト自体）はバトル中不変のため、生成時に一度だけ構築すればよい
         self._units_by_id: dict[uuid.UUID, MobileSuit] = {
@@ -411,6 +412,17 @@ class BattleSimulator(
 
         # シグモイドダメージ計算キャッシュ: 全ユニット分を一括計算 (Phase E-1)
         self._build_combat_multiplier_cache()
+
+    def _normalize_unit_parts(self) -> None:
+        """全ユニットの parts (Issue #503) を PartState 辞書として正規化する.
+
+        呼び出し元 (main.py/run_batch.py/matching_service.py) が個別に
+        normalize_parts() を呼んでいる場合でも冪等なため、ここで一括して
+        呼び直しても問題ない。呼び出し漏れがあった場合の安全網として、
+        戦闘エンジンが実際に部位へアクセスする直前のこの単一箇所で担保する。
+        """
+        for unit in self.units:
+            unit.normalize_parts()
 
     # ---------------------------------------------------------------------------
     # Phase 6-3: スポーン領域・障害物自動生成メソッド
