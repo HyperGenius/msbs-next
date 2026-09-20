@@ -9,6 +9,10 @@
 MSBS（Mobile Suit Battle Simulator）は Next.js (App Router) + FastAPI で構成されたオンライン対戦ゲームです。
 詳細なシステム設計は `Agent.md` および `docs/` を参照してください。
 
+## コードコメントのルール
+
+コメントを書く前に `docs/setup/comment-style-guide.md` を参照すること。
+
 ## Git ワークフロー
 
 ### Issueの起票ルール
