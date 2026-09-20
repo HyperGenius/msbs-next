@@ -566,4 +566,24 @@ cd backend && python -m pytest tests/unit --tb=short
 
 # テスト実行例 --tb=line を使用してサマリーのみ表示する
 cd backend && python -m pytest tests/unit --tb=line
-``` 
+```
+
+### `pytest tests/`（全件）が遅い場合: `pytest-xdist` による並列実行
+
+`tests/` 全件実行は `tests/unit/test_area_shrink.py`（`BattleSimulator` を数千ステップ回す
+長時間シミュレーションテスト、特に `test_map_bounds_never_below_min_shrunk_field_size` が
+単体で約40秒）が支配的で、ローカル実測（8論理コアのマシン）でシーケンシャル実行約100秒
+かかった。`requirements-dev.txt` に `pytest-xdist` を追加済みなので `-n <workers>` で
+並列実行できる:
+
+```bash
+cd backend && python -m pytest tests/ --tb=short -n 2
+```
+
+**`-n auto`（論理コア数）は必ずしも最速にならない。** 実測では `-n 2` が最速（約72秒、
+約28%短縮）で、`-n 4`/`-n auto`（8）はどちらもそれより遅くなった（約80秒）。原因は
+支配的なテストがNumPyを使ったCPUバウンドな計算であり、ワーカー数を増やすほどコア間の
+競合（キャッシュ・メモリ帯域）が増えるため。**新しい環境で並列度を上げる場合は
+`-n auto` を鵜呑みにせず、`-n 2`/`-n 4` 等を実際に計測して選ぶこと。**
+`tests/unit` だけの実行（全体で数秒程度）では並列化の恩恵はほぼ無いため、通常の
+開発ループでは並列化なしのままで問題ない。 
