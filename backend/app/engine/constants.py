@@ -41,6 +41,25 @@ SPECIAL_ENVIRONMENT_EFFECTS: dict[str, dict] = {
 # 武器スロットの最大数
 MAX_WEAPON_SLOTS = 2
 
+# 武器スロットindex→部位ロールの対応 (Issue #502)
+# index 0 = 右腕, index 1 = 左腕, index 2以降 = 武装ラック(1始まり)。
+# 本フェーズはラベリングのみが目的で、持ち替えペナルティやエンジン側の武器選択
+# 制約（`_select_weapon_fuzzy()`）には影響しない。腕を持たないMSの正式対応は
+# スコープ外（別Issueで検討）。
+WEAPON_SLOT_ROLE_RIGHT_ARM = "RIGHT_ARM"
+WEAPON_SLOT_ROLE_LEFT_ARM = "LEFT_ARM"
+WEAPON_SLOT_ROLE_RACK = "RACK"
+
+
+def get_weapon_slot_role(slot_index: int) -> str:
+    """スロットindexから部位ロールを返す（0=右腕, 1=左腕, 2以降=ラック）."""
+    if slot_index == 0:
+        return WEAPON_SLOT_ROLE_RIGHT_ARM
+    if slot_index == 1:
+        return WEAPON_SLOT_ROLE_LEFT_ARM
+    return WEAPON_SLOT_ROLE_RACK
+
+
 # 有効な戦略モードのセット
 VALID_STRATEGY_MODES: frozenset[str] = frozenset(
     {"AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"}

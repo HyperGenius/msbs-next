@@ -128,6 +128,37 @@ return Weapon(**merged)
 
 ---
 
+## 武器スロットの部位ロール化（Issue #502, #501 Phase 1）
+
+`equipped_slot`（整数index）に「部位」の意味を持たせるため、スロットindexと部位ロールの対応を明文化した。**本フェーズはラベリング・UI表示の整備のみが目的で、持ち替えペナルティやエンジン側の武器選択制約（`_select_weapon_fuzzy()`）は導入しない。**
+
+### スロットindex→部位ロール対応
+
+| スロットindex | 部位ロール |
+|---|---|
+| 0 | 右腕（`RIGHT_ARM`） |
+| 1 | 左腕（`LEFT_ARM`） |
+| 2以降 | 武装ラック（`RACK`、1始まりの連番でラベリング: ラック1, ラック2, ...） |
+
+- `backend/app/engine/constants.py`: `WEAPON_SLOT_ROLE_RIGHT_ARM` / `WEAPON_SLOT_ROLE_LEFT_ARM` / `WEAPON_SLOT_ROLE_RACK` と `get_weapon_slot_role(slot_index) -> str` を追加。`PlayerWeapon.equipped_slot`（`backend/app/models/models.py`）自体のスキーマ変更はなし（既存の整数indexをそのまま解釈する）
+- `frontend/src/app/garage/constants.ts`: `getWeaponSlots()` が生成するラベルを `Slot N` / `スロットN` から `Right Arm` / `Left Arm` / `Rack N`（`右腕` / `左腕` / `ラックN`）に変更。単一のスロットindexからラベルだけを解決したい箇所向けに `getWeaponSlotLabel(index)` も追加した
+- `weapon_slot_count` が2以下のMS（右腕・左腕のみ）にもそのまま適用できる。腕を持たないMS（部位欠損）の正式対応は本フェーズのスコープ外（Phase 2以降または別Issueで検討）
+- `active_weapon_index` は現状 `targeting.py`/`combat.py`/`simulation.py` のどこからも参照されておらず、戦闘中の武器選択は `_select_weapon_fuzzy()` がスロット概念を無視して自由に選択している（＝「持ち替え」制約自体がエンジン内に存在しない）。本フェーズはこの状態を変更しない
+
+### 表示が変わる箇所
+
+`getWeaponSlots()` を利用する `LoadoutManager.tsx`（装備換装スロット表示）・`WeaponInventoryList.tsx`（未装備武器の装備先スロット選択）は変更不要で新ラベルが自動反映される。装備済みスロット表示（`WeaponInventoryList.tsx` の「→ {MS名}へ移動（スロットN）」）のみ `getWeaponSlotLabel()` を使うよう個別に更新した（`getWeaponSlots()` はMSの `weapon_slot_count` が必要だが、この表示は装備先MSのスロット総数を問わずindexのみから解決できるため）。
+
+### 関連ファイル
+
+- `backend/app/engine/constants.py` — 部位ロール定数・`get_weapon_slot_role()`
+- `backend/tests/unit/test_weapon_slot_roles.py` — 対応関係のユニットテスト
+- `frontend/src/app/garage/constants.ts` — `getWeaponSlots()` のラベル変更、`getWeaponSlotLabel()` 追加
+- `frontend/src/app/garage/components/WeaponInventoryList.tsx` — 装備済みスロット表示を新ラベルに更新
+- `frontend/tests/unit/garageConstants.test.ts` — ラベリングのユニットテスト
+
+---
+
 ## テスト
 
 ```bash

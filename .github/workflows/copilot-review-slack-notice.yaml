@@ -1,0 +1,28 @@
+# .github/workflows/copilot-review-slack-notice.yaml
+name: Copilot Review Slack Notification
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  notify-slack:
+    # レビューの送信者が Copilot (bot) の場合のみ実行
+    if: github.event.review.user.login == 'github-copilot[bot]' || contains(github.event.review.user.login, 'copilot')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack Notification
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          # レビューの評価状態（approved / changes_requested / commented など）を取得
+          STATE="${{ github.event.review.state }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          REVIEW_URL="${{ github.event.review.html_url }}"
+          SENDER="${{ github.event.pull_request.user.login }}"
+
+          curl -X POST -H 'Content-type: application/json' \
+          --data "{
+            \"text\": \"🤖 *Copilot の自動コードレビューが完了しました*\n*PR:* <$PR_URL|$PR_TITLE>\n*Author:* $SENDER\n*Status:* $STATE\n*Review Details:* <$REVIEW_URL|レビュー結果を見る>\"
+          }" $SLACK_WEBHOOK_URL
