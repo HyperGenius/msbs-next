@@ -6,7 +6,7 @@ import { PlayerWeapon, Weapon, Pilot } from "@/types/battle";
 import { EnrichedMobileSuit } from "@/utils/rankUtils";
 import { SciFiButton, SciFiCard, SciFiHeading, SciFiPanel, SciFiSelect } from "@/components/ui";
 import { getWeaponRank } from "@/utils/rankUtils";
-import { getWeaponSlots } from "../constants";
+import { getWeaponSlots, getWeaponSlotLabel } from "../constants";
 import { usePlayerWeapons } from "@/hooks/usePlayerWeapons";
 import WeaponUpgradeModal from "./WeaponUpgradeModal";
 
@@ -451,8 +451,8 @@ function WeaponInventoryRow({
                 onClick={() => onNavigateToEquippedMs(equippedMs.id)}
                 className="w-full border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black active:bg-[#00ff41] active:text-black transition-colors font-bold font-mono text-sm px-4 py-2.5"
               >
-                → {equippedMs.name}へ移動（スロット
-                {(playerWeapon.equipped_slot ?? 0) + 1}）
+                → {equippedMs.name}へ移動（
+                {getWeaponSlotLabel(playerWeapon.equipped_slot ?? 0)}）
               </button>
             ) : (
               <span className="text-xs sm:text-sm font-bold text-[#ffb000]">
