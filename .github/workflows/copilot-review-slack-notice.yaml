@@ -1,28 +1,72 @@
 # .github/workflows/copilot-review-slack-notice.yaml
+#
+# GitHub Copilot のレビューは Actions 上では「未承認の外部アクター」として扱われるため、
+# pull_request_review イベントで直接トリガーすると実行に手動承認が必要になり、
+# 承認されないままタイムアウトして通知が飛ばない（"required approval ... expired"）。
+# そのため schedule による定期ポーリングでレビュー完了を検知する方式にしている。
 name: Copilot Review Slack Notification
 
 on:
-  pull_request_review:
-    types: [submitted]
+  # schedule:
+  #   - cron: "*/5 * * * *"
+  workflow_dispatch: {}
 
 jobs:
   notify-slack:
-    # レビューの送信者が Copilot (bot) の場合のみ実行
-    if: github.event.review.user.login == 'github-copilot[bot]' || contains(github.event.review.user.login, 'copilot')
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
     steps:
-      - name: Send Slack Notification
+      - name: Restore last checked timestamp
+        uses: actions/cache@v4
+        with:
+          path: .copilot-review-notify-last-checked
+          key: copilot-review-notify-last-checked-${{ github.run_id }}
+          restore-keys: |
+            copilot-review-notify-last-checked-
+
+      - name: Find Copilot reviews since last check and notify Slack
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          # レビューの評価状態（approved / changes_requested / commented など）を取得
-          STATE="${{ github.event.review.state }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_URL="${{ github.event.pull_request.html_url }}"
-          REVIEW_URL="${{ github.event.review.html_url }}"
-          SENDER="${{ github.event.pull_request.user.login }}"
+          set -euo pipefail
 
-          curl -X POST -H 'Content-type: application/json' \
-          --data "{
-            \"text\": \"🤖 *Copilot の自動コードレビューが完了しました*\n*PR:* <$PR_URL|$PR_TITLE>\n*Author:* $SENDER\n*Status:* $STATE\n*Review Details:* <$REVIEW_URL|レビュー結果を見る>\"
-          }" $SLACK_WEBHOOK_URL
+          REPO="${{ github.repository }}"
+
+          if [ -f .copilot-review-notify-last-checked ]; then
+            SINCE=$(cat .copilot-review-notify-last-checked)
+          else
+            SINCE=$(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+          fi
+
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          PR_NUMBERS=$(gh pr list --repo "$REPO" --state open --json number -q '.[].number')
+
+          for PR_NUMBER in $PR_NUMBERS; do
+            REVIEWS=$(gh api "repos/$REPO/pulls/$PR_NUMBER/reviews" \
+              -q '[.[] | select(.user.login | test("copilot"; "i")) | select(.submitted_at > "'"$SINCE"'")]')
+
+            COUNT=$(echo "$REVIEWS" | jq 'length')
+            if [ "$COUNT" -eq 0 ]; then
+              continue
+            fi
+
+            PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json title,url,author)
+            PR_TITLE=$(echo "$PR_INFO" | jq -r '.title')
+            PR_URL=$(echo "$PR_INFO" | jq -r '.url')
+            SENDER=$(echo "$PR_INFO" | jq -r '.author.login')
+
+            echo "$REVIEWS" | jq -c '.[]' | while read -r REVIEW; do
+              STATE=$(echo "$REVIEW" | jq -r '.state')
+              REVIEW_URL=$(echo "$REVIEW" | jq -r '.html_url')
+
+              curl -X POST -H 'Content-type: application/json' \
+                --data "{
+                  \"text\": \"🤖 *Copilot の自動コードレビューが完了しました*\n*PR:* <$PR_URL|$PR_TITLE>\n*Author:* $SENDER\n*Status:* $STATE\n*Review Details:* <$REVIEW_URL|レビュー結果を見る>\"
+                }" "$SLACK_WEBHOOK_URL"
+            done
+          done
+
+          echo "$NOW" > .copilot-review-notify-last-checked
