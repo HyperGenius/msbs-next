@@ -316,7 +316,7 @@ SECTOR_FRONT_DEG: float = 60.0
 SECTOR_FRONT_SIDE_DEG: float = 120.0
 SECTOR_REAR_SIDE_DEG: float = 150.0
 
-# 命中部位決定の暫定重み付け (Issue #503 Phase 3)
+# 命中部位決定の暫定重み付け (Issue #503 Phase 2)
 # 攻撃セクタ (FRONT/FRONT_SIDE/REAR_SIDE/REAR) ごとに、部位別の命中しやすさを
 # 粗く重み付けしたもの。前面ほど正面装甲（頭部・胴体・腕）に、背面ほど無防備な
 # 脚部に命中しやすい、という直感的な傾向のみを反映した暫定実装であり、戦術設定・

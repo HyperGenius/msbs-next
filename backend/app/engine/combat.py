@@ -180,13 +180,23 @@ def calculate_attack_sector(
         return "REAR"
 
 
+# 部位選択専用のRNG (Issue #503)。命中判定・クリティカル判定・ダメージ乱数・
+# 格闘コンボ等は共有の `random` モジュールの状態（グローバルストリーム）を
+# 直接消費しており、`random.seed()` を使ったバトル結果の再現性（sim_bench等の
+# バランス検証ツール）がその消費順序に依存している。determine_hit_part() が
+# 同じグローバルストリームから乱数を消費すると、それらの後続の乱数列がずれて
+# 既存の戦闘結果に影響してしまうため、部位選択専用に独立したRNGインスタンスを
+# 用いて分離する（Copilotレビュー指摘, PR #508）。
+_part_hit_rng = random.Random()
+
+
 def determine_hit_part(
     attacker: MobileSuit,
     target: MobileSuit,
     attack_sector: str,
     distance: float,
 ) -> str | None:
-    """命中部位を決定する（暫定ロジック, Issue #503 Phase 3）.
+    """命中部位を決定する（暫定ロジック, Issue #503 Phase 2）.
 
     現状は attack_sector を粗く使った簡易重み付けランダム選択のみで、戦術設定・
     角度・距離に基づく本格的な確率算出は Phase 4 (#TBD) でこの関数ごと
@@ -216,7 +226,7 @@ def determine_hit_part(
     weights = [
         sector_weights.get(name, DEFAULT_PART_HIT_WEIGHT) for name in eligible_parts
     ]
-    return random.choices(eligible_parts, weights=weights, k=1)[0]
+    return _part_hit_rng.choices(eligible_parts, weights=weights, k=1)[0]
 
 
 class CombatMixin:
@@ -630,7 +640,7 @@ class CombatMixin:
         distance: float = 0.0,
     ) -> None:
         """命中時の処理."""
-        # 命中部位決定 (Issue #503 Phase 3): 命中判定とダメージ計算の間のフック
+        # 命中部位決定 (Issue #503 Phase 2): 命中判定とダメージ計算の間のフック
         hit_part = determine_hit_part(actor, target, attack_sector, distance)
 
         base_damage, _log_msg, is_crit = self._calculate_hit_base_damage(
@@ -682,7 +692,7 @@ class CombatMixin:
 
         target.current_hp -= final_damage
 
-        # 部位別ダメージ適用 (Issue #503 Phase 3): 全体HPとは別に並行して管理する。
+        # 部位別ダメージ適用 (Issue #503 Phase 2): 全体HPとは別に並行して管理する。
         # 破壊済み判定・戦闘終了条件は引き続き target.current_hp を正とするため
         # (既存バトルバランスへの回帰を避ける)、部位HPが0になっても撃破処理は行わない。
         if hit_part is not None:

@@ -60,7 +60,7 @@ export interface MobileSuit {
     /** ビームジェネレータLv (マスター機体由来。required_beam_generator_lv がこの値を超えるBEAM武器は装備不可) */
     beam_generator_lv?: number;
     /** 欠損部位のリスト (Issue #503。例: 脚部のないMSは ["RIGHT_LEG", "LEFT_LEG"]) */
-    missing_parts?: string[];
+    missing_parts?: PartName[];
     /** 部位別HP/装甲状態 (Issue #503)。欠損部位はキーに含まれない */
     parts?: Partial<Record<PartName, PartState>>;
 }

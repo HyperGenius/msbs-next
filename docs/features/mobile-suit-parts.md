@@ -87,18 +87,24 @@ def normalize_parts(self) -> None:
 `app/engine/combat.py` に `determine_hit_part(attacker, target, attack_sector, distance) -> str | None` を追加し、`CombatMixin._process_hit()`（命中判定成功後、ダメージ計算の前）で呼び出す。
 
 ```python
+_part_hit_rng = random.Random()  # 部位選択専用のRNG（下記参照）
+
 def determine_hit_part(attacker, target, attack_sector, distance) -> str | None:
     eligible_parts = [name for name, part in target.parts.items() if not part.destroyed]
     if not eligible_parts:
         return None
     sector_weights = PART_HIT_WEIGHTS.get(attack_sector, PART_HIT_WEIGHTS["FRONT_SIDE"])
     weights = [sector_weights.get(name, DEFAULT_PART_HIT_WEIGHT) for name in eligible_parts]
-    return random.choices(eligible_parts, weights=weights, k=1)[0]
+    return _part_hit_rng.choices(eligible_parts, weights=weights, k=1)[0]
 ```
 
 - 欠損部位（`target.parts` に存在しない）・既に破壊済みの部位は選択対象から除外される
 - `attacker`/`distance` は本フェーズでは未使用だが、Phase 4での差し替え（`determine_hit_part(attacker, target, attack_sector, distance) -> PartName` というIssueのヒント記載シグネチャ）を見据えてシグネチャに含めている
 - `attack_sector`（既存の `calculate_attack_sector()`、Phase E-3）を粗く使った簡易重み付け（`PART_HIT_WEIGHTS`, `app/engine/constants.py`）: 前面ほど正面装甲（頭部・胴体・腕）に、背面ほど無防備な脚部に命中しやすい、という直感的な傾向のみを反映
+
+### 部位選択には共有 `random` モジュールとは独立したRNGを使う
+
+命中判定・クリティカル判定・ダメージ乱数・格闘コンボは共有の `random` モジュールのグローバル状態を直接消費しており、`random.seed()` によるバトル結果の再現性（`sim_bench.py` 等のバランス検証ツール）がその消費順序に依存している。`determine_hit_part()` が同じグローバルストリームから乱数を消費すると、それ以降の乱数列がずれて既存の戦闘結果（クリティカル発生・ダメージ変動・コンボ発生等）に予期しない影響を与えてしまう（Copilotレビュー指摘, PR #508）。これを避けるため、`combat.py` モジュール直下に部位選択専用の `random.Random()` インスタンス（`_part_hit_rng`）を用意し、`determine_hit_part()` はこちらのみを使用する。
 
 ### ダメージ適用
 
@@ -137,12 +143,12 @@ def determine_hit_part(attacker, target, attack_sector, distance) -> str | None:
 - `backend/tests/unit/test_hit_part_determination.py`
 - `frontend/src/types/mobileSuit.ts` — `PartName`, `PartState`, `MobileSuit.missing_parts`/`parts`
 
-## 今後の拡張（Phase 4, 別Issue）
+## 今後の拡張（別Issue）
 
-- 戦術設定・角度・距離に基づく本格的な部位命中確率算出（`determine_hit_part()` の置き換え）
-- 部位破壊による機能制限（腕破壊で近接武器使用不可、脚破壊で機動性低下 等）
-- 部位別装甲値の個別調整（現状は機体全体の `armor` をそのまま踏襲）
 - バトルログ・BattleViewerでの部位ヒット表示（Phase 3）
+- 戦術設定・角度・距離に基づく本格的な部位命中確率算出（`determine_hit_part()` の置き換え、Phase 4）
+- 部位破壊による機能制限（腕破壊で近接武器使用不可、脚破壊で機動性低下 等、Phase 4以降）
+- 部位別装甲値の個別調整（現状は機体全体の `armor` をそのまま踏襲、Phase 4以降）
 
 ---
 

@@ -254,7 +254,7 @@ class MobileSuit(SQLModel, table=True):
 
     active_weapon_index: int = Field(default=0)
 
-    # Part-based HP/Armor (Issue #503, Phase 3 of #501)
+    # Part-based HP/Armor (Issue #503, Phase 2 of #501)
     missing_parts: list[str] = Field(
         default_factory=list,
         sa_column=Column(JSON),

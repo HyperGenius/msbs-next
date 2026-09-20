@@ -11,11 +11,13 @@ Note:
     引き続き使用し、parts はそれとは別に並行管理される。
 
     既存行は parts='{}' のまま許容し、アプリケーション側
-    (MobileSuit.model_validate() 実行時の @model_validator、または
-    matching_service._coerce_suit_json_fields()) で max_hp/armor/missing_parts
-    から都度自動生成するため、ここでのバックフィルは行わない
-    （既存レコードとの互換性維持は sigmoid-damage-calculation.md 等、他の
-    JSON列追加マイグレーションと同じ方針）。
+    (MobileSuit.normalize_parts()。SQLModelのtable=Trueクラスは
+    @model_validator(mode="after") が __init__/model_validate() のいずれでも
+    正しく動作しないため、明示的に呼び出すメソッドとして実装している。
+    BattleSimulator.__init__() やmatching_service._coerce_suit_json_fields()
+    等から呼び出される) で max_hp/armor/missing_parts から都度自動生成するため、
+    ここでのバックフィルは行わない（既存レコードとの互換性維持は
+    sigmoid-damage-calculation.md 等、他のJSON列追加マイグレーションと同じ方針）。
 """
 
 from collections.abc import Sequence
