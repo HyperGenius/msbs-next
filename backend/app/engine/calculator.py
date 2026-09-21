@@ -187,3 +187,22 @@ def calculate_initiative(
     """
     ref_multiplier = 1.0 + ref_stat * 0.02
     return mobility * ref_multiplier
+
+
+def calculate_weapon_switch_lock_sec(base_lock_sec: float, ref_stat: int = 0) -> float:
+    """武装持ち替え中の行動不能タイムを計算する.
+
+    REF: 持ち替え行動不能タイムの短縮（-1%/REF、最大30%）
+
+    Note:
+        REF がゼロの場合、戻り値は base_lock_sec と同一になる（従来と互換）。
+
+    Args:
+        base_lock_sec: 持ち替えの基礎行動不能タイム（秒）
+        ref_stat: パイロットの REF ステータス値
+
+    Returns:
+        float: 短縮後の行動不能タイム（秒）
+    """
+    reduction = min(ref_stat * 0.01, 0.3)
+    return base_lock_sec * (1.0 - reduction)

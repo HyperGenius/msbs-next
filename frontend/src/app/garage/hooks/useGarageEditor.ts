@@ -46,6 +46,11 @@ export function useGarageEditor() {
         | "STRONGEST"
         | "THREAT",
       range: "BALANCED" as "MELEE" | "RANGED" | "BALANCED" | "FLEE",
+      weapon_switch_policy: "BALANCED" as
+        | "NEVER"
+        | "RACK_ONLY"
+        | "BALANCED"
+        | "AGGRESSIVE",
     },
   });
 
@@ -57,9 +62,10 @@ export function useGarageEditor() {
       max_hp: ms.max_hp,
       armor: ms.armor,
       mobility: ms.mobility,
-      tactics: ms.tactics || {
-        priority: "CLOSEST",
-        range: "BALANCED",
+      tactics: {
+        priority: ms.tactics?.priority ?? "CLOSEST",
+        range: ms.tactics?.range ?? "BALANCED",
+        weapon_switch_policy: ms.tactics?.weapon_switch_policy ?? "BALANCED",
       },
     });
     setSuccessMessage(null);
