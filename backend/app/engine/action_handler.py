@@ -56,7 +56,7 @@ class ActionHandlerMixin:
             return
 
         if weapon is None:
-            weapon = actor.get_active_weapon()
+            weapon = self._resolve_fallback_weapon(actor, unit_id)
 
         if current_action == "ATTACK":
             self._handle_attack_action(
@@ -79,6 +79,26 @@ class ActionHandlerMixin:
             self._process_movement(  # type: ignore[attr-defined]
                 actor, pos_actor, pos_target, diff_vector, distance, dt
             )
+
+    def _resolve_fallback_weapon(
+        self, actor: MobileSuit, unit_id: str
+    ) -> Weapon | None:
+        """武器選択が None を返した際のフォールバック武器を解決する.
+
+        `_select_weapon_with_switch_policy()` が管理する
+        `unit_resources[unit_id]["active_weapon_id"]`（現在の手持ち武器）を
+        `actor.get_active_weapon()`（`MobileSuit.active_weapon_index` 基準の
+        別系統の状態）より優先する。両者が乖離すると、意図しない武器で
+        攻撃可否を判定してしまうため。
+        """
+        active_weapon_id = self.unit_resources[unit_id].get("active_weapon_id")  # type: ignore[attr-defined]
+        if active_weapon_id is not None:
+            active_weapon = next(
+                (w for w in actor.weapons if w.id == active_weapon_id), None
+            )
+            if active_weapon is not None:
+                return active_weapon
+        return actor.get_active_weapon()
 
     def _handle_attack_action(
         self,
