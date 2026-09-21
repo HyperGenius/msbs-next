@@ -2129,3 +2129,35 @@ Python ループが「200点 × 発火集合数」から「発火集合数」（
 スポーン領域生成にリグレッションがないことを確認した。
 
 既存の `tests/unit` 全体が変更後もすべてパスすることを確認済み。
+
+---
+
+## 28. Issue #519: `test_boost_start_occurs_with_full_field` の残存 flaky 対策
+
+### 28.1 概要
+
+Issue #385（20章）でモンテカルロ的アサーションを複数回試行（`attempts=3`）に変更する対策を
+行ったにもかかわらず、`TestScenarioFullField::test_boost_start_occurs_with_full_field` が
+単体実行でも約15%の確率で3回中0回のまま失敗するケースが残っていた（PR #517 の CI で顕在化）。
+
+### 28.2 調査
+
+- 6障害物・3チーム戦という複雑な統合シナリオでは、ファジィ推論によるAIの行動選択次第で
+  `ENGAGE_MELEE` が選ばれず `BOOST_START` が自然発火しないケースが一定確率で存在し、
+  試行回数を増やす対策だけでは flaky を解消しきれない。
+- 一方、`BOOST_START` の発火メカニズム自体は `TestBoostDashIntegration::test_boost_start_triggered_via_engage_melee`
+  が `current_action` を直接 `ENGAGE_MELEE` に設定してファジィ推論をバイパスし、決定論的に
+  検証済みである。
+- 同ファイル内の類似テスト `TestScenarioBoostDashApproach::test_boost_start_occurs` も、
+  Phase E-3 の攻撃角度セクタ補正により自然発火しなくなった際、削除ではなく `xfail` 化する
+  方針が既に採用されていた。
+
+### 28.3 対応内容
+
+- `test_boost_start_occurs_with_full_field` を削除せず、`@pytest.mark.xfail(reason=..., strict=False)`
+  を付与した。`reason` には flaky になった理由と、機構自体を保証する代替テスト名を明記している。
+- `strict=False` のため、BOOST_START が発生すれば XPASS、発生しなければ XFAIL となり、
+  いずれの場合も CI は失敗しない。統合シナリオとしての検証意図はテストとして残しつつ、
+  CI の安定性を確保した。
+- 同様の flaky なモンテカルロ的アサーションに遭遇した場合の判断基準を `backend/CLAUDE.md`
+  の「テスト規約」に追記した。
