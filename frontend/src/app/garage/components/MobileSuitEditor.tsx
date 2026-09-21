@@ -20,6 +20,7 @@ interface FormData {
   tactics: {
     priority: "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT";
     range: "MELEE" | "RANGED" | "BALANCED" | "FLEE";
+    weapon_switch_policy: "NEVER" | "RACK_ONLY" | "BALANCED" | "AGGRESSIVE";
   };
 }
 

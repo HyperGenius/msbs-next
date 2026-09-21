@@ -493,3 +493,12 @@ class AiDecisionMixin:
                 remaining = weapon_state.get("cooldown_remaining_sec", 0.0)
                 if remaining > 0.0:
                     weapon_state["cooldown_remaining_sec"] = max(0.0, remaining - dt)
+
+            # 武装持ち替えの行動不能タイムを減少
+            switch_lock_remaining = resources.get(
+                "weapon_switch_lock_remaining_sec", 0.0
+            )
+            if switch_lock_remaining > 0.0:
+                resources["weapon_switch_lock_remaining_sec"] = max(
+                    0.0, switch_lock_remaining - dt
+                )

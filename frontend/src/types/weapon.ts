@@ -29,4 +29,6 @@ export interface Weapon {
 export interface Tactics {
     priority: "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT";
     range: "MELEE" | "RANGED" | "BALANCED" | "FLEE";
+    // 武装持ち替えポリシー (Issue #506)。未設定時はエンジン側で BALANCED として扱う
+    weapon_switch_policy?: "NEVER" | "RACK_ONLY" | "BALANCED" | "AGGRESSIVE";
 }

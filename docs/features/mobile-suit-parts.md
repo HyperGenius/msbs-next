@@ -121,6 +121,21 @@ def determine_hit_part(attacker, target, weapon, attack_sector, distance) -> str
 - `PART_HIT_DIFFICULTY` / `PART_DIFFICULTY_DECAY_RANGE` / `PART_DIFFICULTY_DECAY_FLOOR`（`app/engine/constants.py`）: 距離による命中難易度減衰。`_part_distance_decay()`（`app/engine/combat.py`）が、難易度の高い部位（頭部: 1.0、腕: 0.5、脚: 0.35）ほど距離0〜`PART_DIFFICULTY_DECAY_RANGE`(600m)にかけて重みを`PART_DIFFICULTY_DECAY_FLOOR`(0.1)まで減衰させる。難易度0の胴体は常に減衰なし（1.0）で、遠距離での命中の受け皿になる。これにより「遠距離では頭部狙いでもほとんど胴体に当たる」という直感的なリアリティを表現している
 - フロントエンド: `frontend/src/app/garage/components/AimDistributionEditor.tsx`（`WeaponUpgradeModal.tsx` から呼び出される）で、部位ごとのスライダー（合計100%になるよう検証）から `updatePlayerWeaponAimDistribution()`（`frontend/src/services/weaponEngineering.ts`）経由で設定・保存できる
 
+### 武装持ち替えアルゴリズムと行動不能ペナルティ（Phase 5, Issue #506）
+
+#501の最終フェーズ。武装持ち替えの意思決定アルゴリズムと、持ち替え中の行動不能ペナルティを実装した。Phase 1（#502）で定義したスロット部位ロール（右腕/左腕/武装ラック）を前提に、「現在の手持ち武器」（`active_weapon_id`）という概念をエンジンに新規導入している。従来、`_select_weapon_fuzzy()` は毎ステップ制約なく最適武器を再計算するだけで、`MobileSuit.active_weapon_index` はエンジン内で未参照だった（`_action_phase()` の最終フォールバックとしてのみ使用）。
+
+- **持ち替えポリシー（`tactics["weapon_switch_policy"]`）**: `NEVER`/`RACK_ONLY`/`BALANCED`（デフォルト）/`AGGRESSIVE` の4種類（`app/engine/constants.py`）。既存の `tactics: dict`（生の dict、専用スキーマなし）に新規キーとして統合し、バックエンド側のスキーマ変更は不要
+  - `NEVER`: 手持ち武器が使用不能（弾切れ・クールタイム中）になっても一切持ち替えない（攻撃不可のまま待機する）
+  - `RACK_ONLY`: 手持ち武器が使用不能になった時だけ強制的に持ち替える
+  - `BALANCED`（おまかせ）: 候補武器のファジィ武器選択スコア（`_select_weapon_fuzzy()` が既存で算出している `weapon_score`）が手持ち武器のスコアより `WEAPON_SWITCH_BALANCED_SCORE_MARGIN`（0.15）以上高い場合のみ持ち替える閾値ベースの判断。Phase 4（#505）の部位別命中確率・ダメージ期待値そのものではなく、既存のファジィスコア（距離・EN比率・弾薬比率・耐性を統合済み）を「期待効果」の代理指標として採用した（新たに命中率/ダメージ期待値を武器選択レイヤーに露出する設計変更を避けるための現実的な簡略化）
+  - `AGGRESSIVE`: 拘束コストを無視し、スコアが少しでも高ければ毎回持ち替える貪欲型
+- **行動不能タイム**: `unit_resources[unit_id]["weapon_switch_lock_remaining_sec"]`（Issue #506）に、持ち替え開始時 `calculate_weapon_switch_lock_sec()`（`app/engine/calculator.py`）の結果をセットする。既存の `boost_cooldown_remaining`/`cooldown_remaining_sec` と同じ「ランタイム専用カウントダウン」パターンを踏襲し、`_refresh_phase()`（`app/engine/ai_decision.py`）で dt ずつ減算する。基礎値は `WEAPON_SWITCH_LOCK_BASE_SEC`（1.5秒）
+  - **行動不能タイムを短縮するステータス**: 「器用」(DEX) は Phase E-1 で廃止済みのため使用不可（`backend/CLAUDE.md`）。既存の `PilotStats` のうち、イニシアチブ・機動性乗算補正を担う `ref`（反応）を採用し、`calculate_initiative()` と同系統の「REFで最大30%短縮（-1%/REF）」という捷減パターンで実装した（REF=0で従来互換の挙動になる既存関数の設計方針を踏襲）
+  - 持ち替え中は `_action_phase()`（`app/engine/action_handler.py`）が全アクション（ATTACK/ENGAGE_MELEE/BOOST_DASH/HIT_AND_AWAY）を移動のみに強制する（攻撃・格闘突入・ブーストダッシュ等は一切実行されない）。攻撃を試みようとしていた場合は既存の弾切れ/クールダウン待機ログと同様の `WAIT` ログを毎ステップ記録する
+  - 将来のスキルによる行動不能タイム軽減は本フェーズのスコープ外。`app/core/skills.py::SKILL_MASTER_DATA` にフックポイントの位置（`calculate_weapon_switch_lock_sec()` の結果に軽減率を適用する想定）だけコメントで明記した（`flanking` スキルが実効値を別モジュールで管理する既存パターンを踏襲）
+- **BALANCEDポリシーのスコアキャッシュ**: `_select_weapon_fuzzy()` が算出する武器ごとのスコアを `BattleSimulator._weapon_score_cache`（`unit_id → {weapon_id: weapon_score}`）に保持し、持ち替え判定側（`_select_weapon_with_switch_policy()`, `app/engine/targeting.py`）が候補武器と手持ち武器のスコアを比較できるようにした
+
 ### 部位選択には共有 `random` モジュールとは独立したRNGを使う
 
 命中判定・クリティカル判定・ダメージ乱数・格闘コンボは共有の `random` モジュールのグローバル状態を直接消費しており、`random.seed()` によるバトル結果の再現性（`sim_bench.py` 等のバランス検証ツール）がその消費順序に依存している。`determine_hit_part()` が同じグローバルストリームから乱数を消費すると、それ以降の乱数列がずれて既存の戦闘結果（クリティカル発生・ダメージ変動・コンボ発生等）に予期しない影響を与えてしまう（Copilotレビュー指摘, PR #508）。これを避けるため、`combat.py` モジュール直下に部位選択専用の `random.Random()` インスタンス（`_part_hit_rng`）を用意し、`determine_hit_part()` はこちらのみを使用する。
@@ -166,14 +181,26 @@ def determine_hit_part(attacker, target, weapon, attack_sector, distance) -> str
 - `frontend/src/types/weapon.ts` / `frontend/src/types/shop.ts` — `Weapon.aim_distribution`, `WeaponCustomStats.aim_distribution`, `AimDistributionUpdateRequest`（Issue #505）
 - `frontend/src/services/weaponEngineering.ts` — `updatePlayerWeaponAimDistribution()`（Issue #505）
 - `frontend/src/app/garage/components/AimDistributionEditor.tsx` / `WeaponUpgradeModal.tsx`（Issue #505）
+- `backend/app/engine/calculator.py` — `calculate_weapon_switch_lock_sec()`（Issue #506）
+- `backend/app/engine/constants.py` — `WEAPON_SWITCH_POLICY_*`, `DEFAULT_WEAPON_SWITCH_POLICY`, `WEAPON_SWITCH_LOCK_BASE_SEC`, `WEAPON_SWITCH_BALANCED_SCORE_MARGIN`（Issue #506）
+- `backend/app/engine/targeting.py` — `_select_weapon_with_switch_policy()`（Issue #506）
+- `backend/app/engine/action_handler.py` — `_action_phase()` の持ち替え中ロック処理（Issue #506）
+- `backend/app/engine/ai_decision.py` — `_refresh_phase()` の `weapon_switch_lock_remaining_sec` 減算（Issue #506）
+- `backend/app/engine/simulation.py` — `unit_resources` への `active_weapon_id`/`weapon_switch_lock_remaining_sec` 追加、`_weapon_score_cache`（Issue #506）
+- `backend/app/core/skills.py` — 将来のスキル軽減用フックポイントのコメント（Issue #506）
+- `backend/tests/unit/test_weapon_switch_lock.py`（Issue #506）
+- `frontend/src/app/garage/components/TacticsSelector.tsx` / `CustomizationModal.tsx` / `MobileSuitEditor.tsx` — 持ち替えポリシー選択UI（Issue #506）
+- `frontend/src/app/garage/hooks/useGarageEditor.ts` / `frontend/src/types/weapon.ts` — `weapon_switch_policy` の状態管理・型定義（Issue #506）
 
 ## 今後の拡張（別Issue）
 
 - バトルログ・BattleViewerでの部位ヒット表示（Phase 3、完了）
 - 戦術設定・角度・距離に基づく本格的な部位命中確率算出（`determine_hit_part()` の置き換え、Phase 4、完了）
-- 部位破壊による機能制限（腕破壊で近接武器使用不可、脚破壊で機動性低下 等、Phase 4以降）
-- 部位別装甲値の個別調整（現状は機体全体の `armor` をそのまま踏襲、Phase 4以降）
+- 武装持ち替えアルゴリズムと行動不能ペナルティ（Phase 5、完了）
+- 部位破壊による機能制限（腕破壊で近接武器使用不可、脚破壊で機動性低下 等）
+- 部位別装甲値の個別調整（現状は機体全体の `armor` をそのまま踏襲）
 - ガレージUIでの狙う部位配分プレビュー（セクタ別・距離別の実効命中率シミュレーション表示等）
+- 武装持ち替えの行動不能タイム軽減スキルの実装（Issue #506ではフックポイントのみ用意）
 
 ---
 
@@ -181,6 +208,7 @@ def determine_hit_part(attacker, target, weapon, attack_sector, distance) -> str
 
 ```bash
 cd backend && python -m pytest tests/unit/test_hit_part_determination.py tests/unit/test_weapon_custom_stats.py tests/test_aim_distribution.py --tb=short
+cd backend && python -m pytest tests/unit/test_weapon_switch_lock.py --tb=short
 cd backend && python -m pytest tests/unit --tb=short
 cd frontend && ./node_modules/.bin/tsc --noEmit
 cd frontend && npx vitest run tests/unit/weaponEngineeringService.test.ts

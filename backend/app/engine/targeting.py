@@ -6,11 +6,18 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from app.engine.calculator import PilotStats, calculate_weapon_switch_lock_sec
 from app.engine.combat import has_los
 from app.engine.constants import (
+    DEFAULT_WEAPON_SWITCH_POLICY,
     DETECTION_FALLOFF_EXPONENT,
     DETECTION_FALLOFF_EXPONENT_MINOVSKY,
     SPECIAL_ENVIRONMENT_EFFECTS,
+    WEAPON_SWITCH_BALANCED_SCORE_MARGIN,
+    WEAPON_SWITCH_LOCK_BASE_SEC,
+    WEAPON_SWITCH_POLICY_AGGRESSIVE,
+    WEAPON_SWITCH_POLICY_NEVER,
+    WEAPON_SWITCH_POLICY_RACK_ONLY,
 )
 from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, Weapon
@@ -35,6 +42,8 @@ class TargetingMixin:
     _units_by_id: dict
     _unit_order_index: dict
     _fuzzy_target_cache: dict[str, tuple[int, MobileSuit | None]]
+    _weapon_score_cache: dict[str, dict[str, float]]
+    unit_pilot_stats: dict[str, PilotStats]
 
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見.
@@ -604,8 +613,103 @@ class TargetingMixin:
             if best_fuzzy_scores is not None:
                 best_fuzzy_scores["all_scores"] = all_scores
 
+            # 武装持ち替え判定（BALANCEDポリシー）用に武器ごとのスコアを保持する
+            self._weapon_score_cache[unit_id] = all_scores
+
             return best_weapon
 
         except (KeyError, ValueError, ZeroDivisionError, AttributeError):
             # 推論失敗時は最初の使用可能武器をフォールバックとして返す
+            self._weapon_score_cache[unit_id] = {}
             return usable_weapons[0]
+
+    def _select_weapon_with_switch_policy(
+        self, actor: MobileSuit, target: MobileSuit
+    ) -> Weapon | None:
+        """持ち替えポリシーを踏まえて、実際に攻撃に使う武器を選択する.
+
+        `_select_weapon_fuzzy()` が「今この瞬間に最も適した武器」を返すのに対し、
+        本メソッドは「現在の手持ち武器（`active_weapon_id`）」の概念を導入し、
+        `tactics["weapon_switch_policy"]`（NEVER/RACK_ONLY/BALANCED/AGGRESSIVE）に
+        応じて実際に持ち替えるかどうかを判断する。持ち替えを実行する場合は
+        `weapon_switch_lock_remaining_sec` をセットして行動不能タイムを開始し、
+        このステップでは攻撃を行わない（`None` を返す）。
+
+        Returns:
+            実際に攻撃に使う武器。持ち替え中・使用可能な武器が無い場合は None。
+        """
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]  # type: ignore[attr-defined]
+
+        # 持ち替え中は移動のみ可能（攻撃不可）
+        if resources.get("weapon_switch_lock_remaining_sec", 0.0) > 0.0:
+            return None
+
+        fuzzy_best = self._select_weapon_fuzzy(actor, target)
+        active_weapon_id = resources.get("active_weapon_id")
+
+        if fuzzy_best is None:
+            # 使用可能な武器が一つもない
+            resources["active_weapon_id"] = None
+            return None
+
+        if active_weapon_id is None:
+            # 初回の武器選択（持ち替えではないため拘束タイムは発生しない）
+            resources["active_weapon_id"] = fuzzy_best.id
+            return fuzzy_best
+
+        if fuzzy_best.id == active_weapon_id:
+            return fuzzy_best
+
+        active_weapon = next(
+            (w for w in actor.weapons if w.id == active_weapon_id), None
+        )
+        active_usable = active_weapon is not None and self._is_weapon_usable(  # type: ignore[attr-defined]
+            actor, active_weapon
+        )
+
+        policy = actor.tactics.get("weapon_switch_policy", DEFAULT_WEAPON_SWITCH_POLICY)
+
+        if not active_usable:
+            # 現在の手持ち武器が使用不能（弾切れ・クールタイム中）: NEVER以外は強制的に持ち替える
+            should_switch = policy != WEAPON_SWITCH_POLICY_NEVER
+        elif policy == WEAPON_SWITCH_POLICY_NEVER:
+            should_switch = False
+        elif policy == WEAPON_SWITCH_POLICY_RACK_ONLY:
+            # 使用可能な間は持ち替えない
+            should_switch = False
+        elif policy == WEAPON_SWITCH_POLICY_AGGRESSIVE:
+            should_switch = True
+        else:
+            # BALANCED（おまかせ）: 期待効果が拘束コストに見合う場合のみ持ち替える
+            scores = self._weapon_score_cache.get(unit_id, {})
+            active_score = scores.get(str(active_weapon_id), 0.0)
+            candidate_score = scores.get(str(fuzzy_best.id), 0.0)
+            should_switch = (
+                candidate_score - active_score
+            ) >= WEAPON_SWITCH_BALANCED_SCORE_MARGIN
+
+        if not should_switch:
+            return active_weapon if active_usable else None
+
+        # 持ち替えを実行: 行動不能タイムを開始する（このステップは攻撃不可）
+        pilot_stats = self.unit_pilot_stats.get(unit_id, PilotStats())
+        lock_sec = calculate_weapon_switch_lock_sec(
+            WEAPON_SWITCH_LOCK_BASE_SEC, pilot_stats.ref
+        )
+        resources["weapon_switch_lock_remaining_sec"] = lock_sec
+        resources["active_weapon_id"] = fuzzy_best.id
+        self.logs.append(  # type: ignore[attr-defined]
+            BattleLog(
+                timestamp=self.elapsed_time,  # type: ignore[attr-defined]
+                actor_id=actor.id,
+                action_type="WEAPON_SWITCH_START",
+                message=(
+                    f"{self._format_actor_name(actor)}は"  # type: ignore[attr-defined]
+                    f"[{fuzzy_best.name}]への持ち替えを開始した"
+                    f"（残り{lock_sec:.1f}s は攻撃不可）"
+                ),
+                position_snapshot=actor.position,
+            )
+        )
+        return None

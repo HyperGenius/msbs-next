@@ -41,35 +41,27 @@ class ActionHandlerMixin:
         diff_vector = pos_target - pos_actor
         distance = float(np.linalg.norm(diff_vector))
 
-        weapon = self._select_weapon_fuzzy(actor, target)  # type: ignore[attr-defined]
+        weapon = self._select_weapon_with_switch_policy(actor, target)  # type: ignore[attr-defined]
+
+        if self._handle_weapon_switch_lock(
+            actor,
+            target,
+            current_action,
+            pos_actor,
+            pos_target,
+            diff_vector,
+            distance,
+            dt,
+        ):
+            return
+
         if weapon is None:
-            weapon = actor.get_active_weapon()
+            weapon = self._resolve_fallback_weapon(actor, unit_id)
 
         if current_action == "ATTACK":
-            # 攻撃行動: 攻撃可能なら攻撃、そうでなければ移動
-            if weapon and distance <= weapon.range:
-                self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
-                # 攻撃中も慣性を継続させるため移動処理を実行 (Issue #365/#366)
-                # _process_attack() は actor.position を変更しないため pos_actor/diff_vector は有効
-                self._process_movement(  # type: ignore[attr-defined]
-                    actor,
-                    pos_actor,
-                    pos_target,
-                    diff_vector,
-                    distance,
-                    dt,
-                    target=target,
-                )
-            else:
-                self._process_movement(  # type: ignore[attr-defined]
-                    actor,
-                    pos_actor,
-                    pos_target,
-                    diff_vector,
-                    distance,
-                    dt,
-                    target=target,
-                )
+            self._handle_attack_action(
+                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
+            )
         elif current_action == "ENGAGE_MELEE":
             self._handle_engage_melee_action(
                 actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
@@ -87,6 +79,90 @@ class ActionHandlerMixin:
             self._process_movement(  # type: ignore[attr-defined]
                 actor, pos_actor, pos_target, diff_vector, distance, dt
             )
+
+    def _resolve_fallback_weapon(
+        self, actor: MobileSuit, unit_id: str
+    ) -> Weapon | None:
+        """武器選択が None を返した際のフォールバック武器を解決する.
+
+        `_select_weapon_with_switch_policy()` が管理する
+        `unit_resources[unit_id]["active_weapon_id"]`（現在の手持ち武器）を
+        `actor.get_active_weapon()`（`MobileSuit.active_weapon_index` 基準の
+        別系統の状態）より優先する。両者が乖離すると、意図しない武器で
+        攻撃可否を判定してしまうため。
+        """
+        active_weapon_id = self.unit_resources[unit_id].get("active_weapon_id")  # type: ignore[attr-defined]
+        if active_weapon_id is not None:
+            active_weapon = next(
+                (w for w in actor.weapons if w.id == active_weapon_id), None
+            )
+            if active_weapon is not None:
+                return active_weapon
+        return actor.get_active_weapon()
+
+    def _handle_attack_action(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: object,
+        pos_actor: np.ndarray,
+        pos_target: np.ndarray,
+        diff_vector: np.ndarray,
+        distance: float,
+        dt: float,
+    ) -> None:
+        """ATTACK行動処理: 攻撃可能なら攻撃した上で、いずれの場合も移動する.
+
+        攻撃中も慣性を継続させるため移動処理を実行する (Issue #365/#366)。
+        _process_attack() は actor.position を変更しないため pos_actor/diff_vector は有効。
+        """
+        if weapon and isinstance(weapon, Weapon) and distance <= weapon.range:
+            self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
+        self._process_movement(  # type: ignore[attr-defined]
+            actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+        )
+
+    def _handle_weapon_switch_lock(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        current_action: str,
+        pos_actor: np.ndarray,
+        pos_target: np.ndarray,
+        diff_vector: np.ndarray,
+        distance: float,
+        dt: float,
+    ) -> bool:
+        """武装持ち替え中なら移動のみ処理して True を返す（攻撃不可）.
+
+        Returns:
+            持ち替え中で移動のみ処理した場合 True。呼び出し元はこの場合、
+            以降の攻撃系アクション分岐を実行せずに戻る。
+        """
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]  # type: ignore[attr-defined]
+        remaining = resources.get("weapon_switch_lock_remaining_sec", 0.0)
+        if remaining <= 0.0:
+            return False
+
+        if current_action in ("ATTACK", "ENGAGE_MELEE", "BOOST_DASH", "HIT_AND_AWAY"):
+            self.logs.append(  # type: ignore[attr-defined]
+                BattleLog(
+                    timestamp=self.elapsed_time,  # type: ignore[attr-defined]
+                    actor_id=actor.id,
+                    action_type="WAIT",
+                    message=(
+                        f"{self._format_actor_name(actor)}は武装切替中のため攻撃できない"  # type: ignore[attr-defined]
+                        f"（残り{remaining:.1f}s、移動のみ可能）"
+                    ),
+                    position_snapshot=actor.position,
+                    velocity_snapshot=Vector3.from_numpy(resources["velocity_vec"]),
+                )
+            )
+        self._process_movement(  # type: ignore[attr-defined]
+            actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+        )
+        return True
 
     def _handle_hit_and_away_action(
         self,

@@ -14,6 +14,10 @@ class SkillDefinition(TypedDict):
 
 
 # スキルマスターデータ
+# フックポイント: 武装持ち替えの行動不能タイム軽減スキルは本Issueのスコープ外
+# だが、将来追加する場合は「flanking」と同様 effect_per_level を実値管理せず、
+# `app/engine/targeting.py::_select_weapon_with_switch_policy()` が
+# `calculate_weapon_switch_lock_sec()` の結果に軽減率を適用する形で組み込む想定。
 SKILL_MASTER_DATA: dict[str, SkillDefinition] = {
     "accuracy_up": {
         "id": "accuracy_up",

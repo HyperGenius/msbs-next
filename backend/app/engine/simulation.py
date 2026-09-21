@@ -229,6 +229,11 @@ class BattleSimulator(
         # （キー自体に計算時点の _step_count を持たせているため、ステップが
         # 進めば自然に無効化される）。
         self._fuzzy_target_cache: dict[str, tuple[int, MobileSuit | None]] = {}
+        # _select_weapon_fuzzy() が算出した武器ごとのスコア。
+        # unit_id → {weapon_id: weapon_score}。BALANCED 持ち替えポリシーが
+        # 現在の手持ち武器と候補武器の期待効果を比較する際に使う
+        # （TargetingMixin._select_weapon_with_switch_policy 参照）。
+        self._weapon_score_cache: dict[str, dict[str, float]] = {}
         self.player_skills = player_skills or {}
         self.environment = environment
         self.special_effects: list[str] = special_effects or []
@@ -351,6 +356,8 @@ class BattleSimulator(
                 "boost_elapsed": 0.0,  # 現ブーストの継続時間 (s) (Phase B)
                 "boost_cooldown_remaining": 0.0,  # 残クールダウン時間 (s) (Phase B)
                 "flanking_skill_level": 0,  # フランキングスキルレベル (Phase E-3.5)
+                "active_weapon_id": None,  # 現在の手持ち武器ID
+                "weapon_switch_lock_remaining_sec": 0.0,  # 持ち替え中の残り行動不能タイム
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:

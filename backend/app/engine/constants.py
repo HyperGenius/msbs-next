@@ -60,6 +60,27 @@ def get_weapon_slot_role(slot_index: int) -> str:
     return WEAPON_SLOT_ROLE_RACK
 
 
+# 武装持ち替えポリシー (tactics["weapon_switch_policy"])
+# - NEVER: 状況に関わらず一切持ち替えない
+# - RACK_ONLY: 手持ち武器が使用不能（弾切れ・クールタイム中）になった時だけ強制的に持ち替える
+# - BALANCED: 持ち替えの期待効果（ファジィ武器選択スコアの向上分）が拘束コストに見合う場合のみ持ち替える（「おまかせ」）
+# - AGGRESSIVE: 拘束コストを無視し、より適した武装があれば毎回持ち替える（貪欲型）
+WEAPON_SWITCH_POLICY_NEVER = "NEVER"
+WEAPON_SWITCH_POLICY_RACK_ONLY = "RACK_ONLY"
+WEAPON_SWITCH_POLICY_BALANCED = "BALANCED"
+WEAPON_SWITCH_POLICY_AGGRESSIVE = "AGGRESSIVE"
+DEFAULT_WEAPON_SWITCH_POLICY = WEAPON_SWITCH_POLICY_BALANCED
+
+# 持ち替え行動不能タイムの基礎値（秒）。REF ステータスで短縮される
+# （`app/engine/calculator.py::calculate_weapon_switch_lock_sec`）
+WEAPON_SWITCH_LOCK_BASE_SEC = 1.5
+
+# BALANCED ポリシーが持ち替えを実行する基準値: 候補武器のファジィスコアが
+# 現在の手持ち武器のスコアよりこの値以上高い場合のみ、拘束コストに見合うとみなして持ち替える
+# （weapon_score は 0.0〜1.0 のファジィ推論出力）
+WEAPON_SWITCH_BALANCED_SCORE_MARGIN = 0.15
+
+
 def get_weapon_slot_role_for_weapon(weapons: list, weapon_id: str) -> str | None:
     """`actor.weapons` 内でのIDから部位ロールを返す (Issue #504).
 
