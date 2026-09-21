@@ -83,6 +83,7 @@ def test_compute_battle_digest_fields_returns_battle_result_ready_dict():
         "pilot_ms_name",
         "digest_tag",
         "digest_text",
+        "part_hit_summary",
     }
     assert fields["player_survived"] is True
     assert fields["min_hp_percent"] == 100

@@ -31,6 +31,26 @@ export interface BattleLog {
     combo_message?: string;
     /** 行動時点の胴体向き（度数法、XZ平面）— BattleViewer向き可視化用 */
     heading?: number;
+    /** 攻撃方向 "FRONT" | "FRONT_SIDE" | "REAR_SIDE" | "REAR" */
+    attack_sector?: string;
+    /** 命中部位 "HEAD" | "TORSO" | "RIGHT_ARM" | "LEFT_ARM" | "RIGHT_LEG" | "LEFT_LEG"（Issue #503） */
+    hit_part?: string;
+    /** 使用武器のスロット部位ロール "RIGHT_ARM" | "LEFT_ARM" | "RACK"（Issue #504） */
+    weapon_slot_role?: string;
+}
+
+/** 部位別の被弾/命中1件分の集計（回数・合計ダメージ） */
+export interface PartHitStat {
+    hits: number;
+    damage: number;
+}
+
+/** バトル結果に紐づく部位別命中サマリー（Issue #504） */
+export interface PartHitSummary {
+    /** 被弾部位別の集計（キー: hit_part） */
+    taken: Record<string, PartHitStat>;
+    /** 命中させた武器スロット別の集計（キー: weapon_slot_role） */
+    dealt: Record<string, PartHitStat>;
 }
 
 /** バトルで得た報酬（経験値・クレジット・レベル変化） */
@@ -90,6 +110,8 @@ export interface BattleResult {
     digest_tag?: string | null;
     /** ルールベースで生成された一言ログ */
     digest_text?: string | null;
+    /** 部位別の被弾/命中集計（Issue #504）。マイグレーション前の既存レコードは null */
+    part_hit_summary?: PartHitSummary | null;
 }
 
 /** battle_logsテーブルのレコード（リプレイ用の全ログを保持） */

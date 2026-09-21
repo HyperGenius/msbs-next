@@ -12,6 +12,7 @@ BattleResult の生成箇所は `main.py`（ソロミッション）と
 from sqlmodel import Session, desc, select
 
 from app.engine.battle_digest import build_digest, compute_digest_stats
+from app.engine.part_hit_summary import compute_part_hit_summary
 from app.models.models import BattleLog, BattleResult, MobileSuit
 
 
@@ -56,7 +57,8 @@ def compute_battle_digest_fields(
         `BattleResult(...)` にそのまま **展開できる dict
         （player_survived, min_hp_percent, damage_severity,
         damage_taken_count, max_hit_damage, dodge_count,
-        attacks_received_count, pilot_ms_name, digest_tag, digest_text）
+        attacks_received_count, pilot_ms_name, digest_tag, digest_text,
+        part_hit_summary）
     """
     stats = compute_digest_stats(
         player=player,
@@ -68,6 +70,7 @@ def compute_battle_digest_fields(
     )
     avoid_text = get_previous_digest_text(session, user_id)
     digest_tag, digest_text = build_digest(stats, avoid_text=avoid_text)
+    part_hit_summary = compute_part_hit_summary(player=player, logs=logs)
 
     return {
         "player_survived": stats.player_survived,
@@ -80,4 +83,5 @@ def compute_battle_digest_fields(
         "pilot_ms_name": stats.pilot_ms_name,
         "digest_tag": digest_tag,
         "digest_text": digest_text,
+        "part_hit_summary": part_hit_summary,
     }

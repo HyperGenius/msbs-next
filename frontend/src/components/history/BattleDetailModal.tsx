@@ -7,7 +7,9 @@ import BattleViewer from "@/components/BattleViewer";
 import ModalHeader from "./ModalHeader";
 import TurnController from "./TurnController";
 import BattleLogViewer from "./BattleLogViewer";
+import PartHitSummaryTable from "./PartHitSummaryTable";
 import { useBattleLogic } from "@/hooks/useBattleLogic";
+import { usePartHitSummary } from "@/hooks/usePartHitSummary";
 import { useBattleLogs } from "@/services/api";
 import { IS_PRODUCTION } from "@/constants";
 
@@ -41,6 +43,8 @@ export default function BattleDetailModal({
     isFiltered,
     IS_PRODUCTION || isProductionPreview
   );
+
+  const partHitSummary = usePartHitSummary(battle, logs, playerId);
 
   const maxTimestamp = logs.length
     ? logs[logs.length - 1].timestamp
@@ -101,6 +105,7 @@ export default function BattleDetailModal({
                     isStreaming={logsStreaming}
                     onTimestampChange={setCurrentTimestamp}
                   />
+                  <PartHitSummaryTable summary={partHitSummary} />
                 </>
               )
             ) : (

@@ -804,6 +804,9 @@ class BattleLog(SQLModel):
     hit_part: str | None = (
         None  # 命中部位 (HEAD/TORSO/RIGHT_ARM/LEFT_ARM/RIGHT_LEG/LEFT_LEG) (Issue #503)
     )
+    weapon_slot_role: str | None = (
+        None  # 使用武器のスロット部位ロール (RIGHT_ARM/LEFT_ARM/RACK) (Issue #504)
+    )
 
 
 class BattleLogRecord(SQLModel, table=True):
@@ -946,6 +949,13 @@ class BattleResult(SQLModel, table=True):
     )
     digest_text: str | None = Field(default=None, description="一言ログ（生成済み）")
 
+    # --- 部位別命中集計 (Issue #504) ---
+    part_hit_summary: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="部位別の被弾/命中集計（taken: 被弾部位別, dealt: 使用武器スロット別）",
+    )
+
 
 class BattleResultSummary(SQLModel):
     """バトル結果サマリー (logsを含まない軽量レスポンス用)."""
@@ -982,6 +992,7 @@ class BattleResultSummary(SQLModel):
     pilot_ms_name: str | None = None
     digest_tag: str | None = None
     digest_text: str | None = None
+    part_hit_summary: dict | None = None
 
 
 class BattleRoom(SQLModel, table=True):
