@@ -382,7 +382,7 @@ class WeaponService:
             )
 
         player_weapon.custom_stats = {
-            **player_weapon.custom_stats,
+            **(player_weapon.custom_stats or {}),
             "aim_distribution": aim_distribution,
         }
         session.add(player_weapon)

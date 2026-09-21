@@ -65,6 +65,20 @@ def test_update_aim_distribution_persists_into_custom_stats(
     assert updated.custom_stats["aim_distribution"] == VALID_DISTRIBUTION
 
 
+def test_update_aim_distribution_handles_none_custom_stats(
+    session: Session, pilot: Pilot, player_weapon: PlayerWeapon
+) -> None:
+    """custom_stats がNULL（nullable列由来）の既存行でもTypeErrorにならず更新できる (Copilotレビュー指摘)."""
+    player_weapon.custom_stats = None  # type: ignore[assignment]
+    session.add(player_weapon)
+    session.commit()
+
+    updated = WeaponService.update_aim_distribution(
+        session, pilot.user_id, player_weapon.id, VALID_DISTRIBUTION
+    )
+    assert updated.custom_stats["aim_distribution"] == VALID_DISTRIBUTION
+
+
 def test_update_aim_distribution_rejects_invalid_part_name(
     session: Session, pilot: Pilot, player_weapon: PlayerWeapon
 ) -> None:

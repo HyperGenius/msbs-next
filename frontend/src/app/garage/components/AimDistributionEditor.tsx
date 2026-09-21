@@ -22,8 +22,19 @@ const PART_LABELS: { key: string; label: string }[] = [
   { key: "LEFT_LEG", label: "左脚" },
 ];
 
-// バックエンド(DEFAULT_AIM_DISTRIBUTION)と同じ初期値
-const DEFAULT_DISTRIBUTION: Record<string, number> = {
+// バックエンド(DEFAULT_AIM_DISTRIBUTION)と同じ初期値。他の配分値(割合 0.0〜1.0)と
+// 単位を揃えておく（%はUI表示専用でDEFAULT_DISTRIBUTION_PERCENTに分離している）
+const DEFAULT_DISTRIBUTION_RATIO: Record<string, number> = {
+  TORSO: 0.5,
+  RIGHT_ARM: 0.1,
+  LEFT_ARM: 0.1,
+  RIGHT_LEG: 0.1,
+  LEFT_LEG: 0.1,
+  HEAD: 0.1,
+};
+
+// 「初期値に戻す」ボタン用のUI表示値(%)。DEFAULT_DISTRIBUTION_RATIOの100倍と常に一致させること
+const DEFAULT_DISTRIBUTION_PERCENT: Record<string, number> = {
   TORSO: 50,
   RIGHT_ARM: 10,
   LEFT_ARM: 10,
@@ -37,7 +48,7 @@ function resolveCurrentDistribution(playerWeapon: PlayerWeapon): Record<string, 
   const override = playerWeapon.custom_stats?.aim_distribution;
   const base = (playerWeapon.base_snapshot as { aim_distribution?: Record<string, number> })
     .aim_distribution;
-  const source = override ?? base ?? DEFAULT_DISTRIBUTION;
+  const source = override ?? base ?? DEFAULT_DISTRIBUTION_RATIO;
 
   const result: Record<string, number> = {};
   for (const { key } of PART_LABELS) {
@@ -69,7 +80,7 @@ export default function AimDistributionEditor({
   };
 
   const handleReset = () => {
-    setValues({ ...DEFAULT_DISTRIBUTION });
+    setValues({ ...DEFAULT_DISTRIBUTION_PERCENT });
     setMessage(null);
   };
 
