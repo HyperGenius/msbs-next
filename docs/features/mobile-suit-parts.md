@@ -84,23 +84,42 @@ def normalize_parts(self) -> None:
 
 ## 命中後の部位決定レイヤー
 
-`app/engine/combat.py` に `determine_hit_part(attacker, target, attack_sector, distance) -> str | None` を追加し、`CombatMixin._process_hit()`（命中判定成功後、ダメージ計算の前）で呼び出す。
+`app/engine/combat.py` に `determine_hit_part(attacker, target, weapon, attack_sector, distance) -> str | None` を追加し、`CombatMixin._process_hit()`（命中判定成功後、ダメージ計算の前）で呼び出す。
+
+Issue #503（Phase 2）時点では `attack_sector` のみを使った簡易重み付けの暫定実装だったが、Issue #505（Phase 4）で「武器の狙う部位配分 × セクタ露出係数 × 距離減衰」を掛け合わせた本実装に置き換えた。詳細は下記「武器ごとの狙う部位配分と距離減衰（Phase 4, Issue #505）」を参照。
 
 ```python
 _part_hit_rng = random.Random()  # 部位選択専用のRNG（下記参照）
 
-def determine_hit_part(attacker, target, attack_sector, distance) -> str | None:
+def determine_hit_part(attacker, target, weapon, attack_sector, distance) -> str | None:
     eligible_parts = [name for name, part in target.parts.items() if not part.destroyed]
     if not eligible_parts:
         return None
+    aim_distribution = getattr(weapon, "aim_distribution", None) or DEFAULT_AIM_DISTRIBUTION
     sector_weights = PART_HIT_WEIGHTS.get(attack_sector, PART_HIT_WEIGHTS["FRONT_SIDE"])
-    weights = [sector_weights.get(name, DEFAULT_PART_HIT_WEIGHT) for name in eligible_parts]
+    weights = [
+        aim_distribution.get(name, 0.0)
+        * sector_weights.get(name, DEFAULT_PART_HIT_WEIGHT)
+        * _part_distance_decay(name, distance)
+        for name in eligible_parts
+    ]
+    if sum(weights) <= 0.0:
+        weights = [1.0] * len(eligible_parts)  # 全配分が欠損部位向けの縮退ケースの安全策
     return _part_hit_rng.choices(eligible_parts, weights=weights, k=1)[0]
 ```
 
 - 欠損部位（`target.parts` に存在しない）・既に破壊済みの部位は選択対象から除外される
-- `attacker`/`distance` は本フェーズでは未使用だが、Phase 4での差し替え（`determine_hit_part(attacker, target, attack_sector, distance) -> PartName` というIssueのヒント記載シグネチャ）を見据えてシグネチャに含めている
-- `attack_sector`（既存の `calculate_attack_sector()`、Phase E-3）を粗く使った簡易重み付け（`PART_HIT_WEIGHTS`, `app/engine/constants.py`）: 前面ほど正面装甲（頭部・胴体・腕）に、背面ほど無防備な脚部に命中しやすい、という直感的な傾向のみを反映
+- `attacker` は将来のパイロットスキル補正等を見据えてシグネチャに残しているが、現状は未使用
+- `attack_sector`（既存の `calculate_attack_sector()`、Phase E-3）による露出係数（`PART_HIT_WEIGHTS`, `app/engine/constants.py`）: 前面ほど正面装甲（頭部・胴体・腕）に、背面ほど無防備な脚部に露出しやすい、という傾向を表す。Phase 2時点は単体の重みテーブルだったが、Phase 4では aim_distribution・距離減衰と掛け合わせる一要素として再利用している
+- 狙う部位配分に含まれる欠損部位の配分は、`eligible_parts` に含まれないため重み計算の対象外になり、`random.choices` が残りの重みを相対比で正規化することで自動的に他の実在部位へ比例再配分される（明示的な再配分処理は不要）
+
+### 武器ごとの狙う部位配分と距離減衰（Phase 4, Issue #505）
+
+- `WeaponSpecBase.aim_distribution: dict[str, float]`（`app/models/models.py`）: 武器が狙う部位配分（部位名→配分割合、合計1.0）。初期値は `DEFAULT_AIM_DISTRIBUTION`（胴体50% / 右腕10% / 左腕10% / 右脚10% / 左脚10% / 頭部10%）。マスター武器・`PlayerWeapon.base_snapshot` の両方に含まれる
+- `WeaponCustomStats.aim_distribution: dict[str, float] | None`: ユーザーが武器インスタンス単位で上書きする戦術設定。`power_bonus`/`accuracy_bonus` と異なりクレジットを消費しない無償の設定。`None` の場合は `base_snapshot` 側の値（マスター初期値）を使う。`WeaponService.apply_effective_spec()` が `custom_stats.aim_distribution` が設定されていればそれを、無ければ `base_snapshot.aim_distribution` をそのまま実効値として採用する
+- `WeaponService.update_aim_distribution()`（`app/services/weapon_service.py`）: 部位名の妥当性・非負・合計100%（許容誤差1%）を検証した上で `custom_stats.aim_distribution` を更新する。装備中の武器であれば `resync_mobile_suit_weapons()` で `MobileSuit.weapons` の実効スペックも合わせて再同期する。`PUT /api/player-weapons/{pw_id}/aim-distribution` から呼び出される
+- `PART_HIT_DIFFICULTY` / `PART_DIFFICULTY_DECAY_RANGE` / `PART_DIFFICULTY_DECAY_FLOOR`（`app/engine/constants.py`）: 距離による命中難易度減衰。`_part_distance_decay()`（`app/engine/combat.py`）が、難易度の高い部位（頭部: 1.0、腕: 0.5、脚: 0.35）ほど距離0〜`PART_DIFFICULTY_DECAY_RANGE`(600m)にかけて重みを`PART_DIFFICULTY_DECAY_FLOOR`(0.1)まで減衰させる。難易度0の胴体は常に減衰なし（1.0）で、遠距離での命中の受け皿になる。これにより「遠距離では頭部狙いでもほとんど胴体に当たる」という直感的なリアリティを表現している
+- フロントエンド: `frontend/src/app/garage/components/AimDistributionEditor.tsx`（`WeaponUpgradeModal.tsx` から呼び出される）で、部位ごとのスライダー（合計100%になるよう検証）から `updatePlayerWeaponAimDistribution()`（`frontend/src/services/weaponEngineering.ts`）経由で設定・保存できる
 
 ### 部位選択には共有 `random` モジュールとは独立したRNGを使う
 
@@ -132,30 +151,37 @@ def determine_hit_part(attacker, target, attack_sector, distance) -> str | None:
 
 ## 関連ファイル
 
-- `backend/app/models/models.py` — `PartState`, `PART_HP_RATIOS`, `ALL_PART_NAMES`, `build_default_parts()`, `MobileSuit.missing_parts`/`parts`/`normalize_parts()`, `MasterMobileSuitSpec.missing_parts`, `MobileSuitResponse.missing_parts`/`parts`, `BattleLog.hit_part`
-- `backend/app/engine/combat.py` — `determine_hit_part()`, `_process_hit()` の部位ダメージ適用
-- `backend/app/engine/constants.py` — `PART_HIT_WEIGHTS`, `DEFAULT_PART_HIT_WEIGHT`
+- `backend/app/models/models.py` — `PartState`, `PART_HP_RATIOS`, `ALL_PART_NAMES`, `build_default_parts()`, `MobileSuit.missing_parts`/`parts`/`normalize_parts()`, `MasterMobileSuitSpec.missing_parts`, `MobileSuitResponse.missing_parts`/`parts`, `BattleLog.hit_part`, `DEFAULT_AIM_DISTRIBUTION`, `WeaponSpecBase.aim_distribution`, `WeaponCustomStats.aim_distribution`（Issue #505）
+- `backend/app/engine/combat.py` — `determine_hit_part()`, `_part_distance_decay()`, `_process_hit()` の部位ダメージ適用
+- `backend/app/engine/constants.py` — `PART_HIT_WEIGHTS`, `DEFAULT_PART_HIT_WEIGHT`, `PART_HIT_DIFFICULTY`, `PART_DIFFICULTY_DECAY_RANGE`, `PART_DIFFICULTY_DECAY_FLOOR`（Issue #505）
 - `backend/app/engine/simulation.py` — `BattleSimulator.__init__()` での `normalize_parts()` 一括呼び出し
 - `backend/app/services/matching_service.py` — `_coerce_suit_json_fields()` の更新
+- `backend/app/services/weapon_service.py` — `apply_effective_spec()` の aim_distribution マージ、`update_aim_distribution()`（Issue #505）
+- `backend/app/routers/player_weapons.py` — `PUT /{pw_id}/aim-distribution`（Issue #505）
 - `backend/main.py` / `backend/scripts/run_batch.py` — `normalize_parts()` 呼び出しの追加
 - `backend/app/routers/shop.py` / `backend/app/routers/pilots.py` / `backend/app/services/pilot_service.py` — `missing_parts` の伝播
 - `backend/alembic/versions/c7d8e9f0a1b2_add_parts_to_mobile_suits.py`
-- `backend/tests/unit/test_hit_part_determination.py`
+- `backend/tests/unit/test_hit_part_determination.py`, `backend/tests/unit/test_weapon_custom_stats.py`, `backend/tests/test_aim_distribution.py`
 - `frontend/src/types/mobileSuit.ts` — `PartName`, `PartState`, `MobileSuit.missing_parts`/`parts`
+- `frontend/src/types/weapon.ts` / `frontend/src/types/shop.ts` — `Weapon.aim_distribution`, `WeaponCustomStats.aim_distribution`, `AimDistributionUpdateRequest`（Issue #505）
+- `frontend/src/services/weaponEngineering.ts` — `updatePlayerWeaponAimDistribution()`（Issue #505）
+- `frontend/src/app/garage/components/AimDistributionEditor.tsx` / `WeaponUpgradeModal.tsx`（Issue #505）
 
 ## 今後の拡張（別Issue）
 
-- バトルログ・BattleViewerでの部位ヒット表示（Phase 3）
-- 戦術設定・角度・距離に基づく本格的な部位命中確率算出（`determine_hit_part()` の置き換え、Phase 4）
+- バトルログ・BattleViewerでの部位ヒット表示（Phase 3、完了）
+- 戦術設定・角度・距離に基づく本格的な部位命中確率算出（`determine_hit_part()` の置き換え、Phase 4、完了）
 - 部位破壊による機能制限（腕破壊で近接武器使用不可、脚破壊で機動性低下 等、Phase 4以降）
 - 部位別装甲値の個別調整（現状は機体全体の `armor` をそのまま踏襲、Phase 4以降）
+- ガレージUIでの狙う部位配分プレビュー（セクタ別・距離別の実効命中率シミュレーション表示等）
 
 ---
 
 ## テスト
 
 ```bash
-cd backend && python -m pytest tests/unit/test_hit_part_determination.py --tb=short
+cd backend && python -m pytest tests/unit/test_hit_part_determination.py tests/unit/test_weapon_custom_stats.py tests/test_aim_distribution.py --tb=short
 cd backend && python -m pytest tests/unit --tb=short
 cd frontend && ./node_modules/.bin/tsc --noEmit
+cd frontend && npx vitest run tests/unit/weaponEngineeringService.test.ts
 ```

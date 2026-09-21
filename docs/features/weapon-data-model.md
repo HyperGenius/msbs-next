@@ -55,8 +55,9 @@ player_weapons (プレイヤー武器インスタンス)
 | `power_bonus` | `int` | `0` | 威力への加算値 |
 | `accuracy_bonus` | `float` | `0.0` | 命中率への加算値(%) |
 | `upgrade_level` | `int` | `0` | 改造レベル（将来の改造ツリー・表示用、現状は算出に使用しない） |
+| `aim_distribution` | `dict[str, float] \| None` | `None` | 狙う部位配分のユーザー設定上書き（Issue #505）。`power_bonus`/`accuracy_bonus` と異なりクレジットを消費しない無償の戦術設定。詳細は `docs/features/mobile-suit-parts.md` の「武器ごとの狙う部位配分と距離減衰」を参照 |
 
-`custom_stats` カラム自体は引き続き自由形式の `dict`（JSON）。キー欠損時は `WeaponCustomStats` のデフォルト値（0/未変更）として扱われるため、既存の空 `{}` の行も安全にマージできる。
+`custom_stats` カラム自体は引き続き自由形式の `dict`（JSON）。キー欠損時は `WeaponCustomStats` のデフォルト値（0/未変更、`aim_distribution` は `None`）として扱われるため、既存の空 `{}` の行も安全にマージできる。
 
 ---
 
@@ -74,7 +75,7 @@ return Weapon(**merged)
 
 `WeaponService.equip_weapon` は装備時、`MobileSuit.weapons` に書き込む値としてこのマージ結果を使用する（`base_snapshot` をそのまま書き込んでいた従来の実装から変更）。これにより、将来 `custom_stats` に改造差分が書き込まれるようになれば、装備し直すだけでバトルエンジン側にも反映される。
 
-現時点では `custom_stats` を書き込むAPI・UIは未実装のため、常に空 `{}` として扱われ、実質的な挙動は変化しない。
+本Issue時点では `custom_stats` を書き込むAPI・UIは未実装だったが、Issue #411（`power_bonus`/`accuracy_bonus` の武器改造）・Issue #505（`aim_distribution` の狙う部位配分設定）でそれぞれ書き込みAPIが追加されている。
 
 ---
 

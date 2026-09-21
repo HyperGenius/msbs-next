@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { upgradePlayerWeapon, getWeaponUpgradePreview } from "@/services/weaponEngineering";
+import {
+  upgradePlayerWeapon,
+  getWeaponUpgradePreview,
+  updatePlayerWeaponAimDistribution,
+} from "@/services/weaponEngineering";
 
 // getAuthToken をモックしてテスト用トークンを注入する
 vi.mock("@/services/auth", async () => {
@@ -147,5 +151,86 @@ describe("getWeaponUpgradePreview", () => {
     await expect(getWeaponUpgradePreview("pw-1", "power_bonus")).rejects.toThrow(
       "武器インスタンスが見つかりません"
     );
+  });
+});
+
+// ─────────────────────────────────────────────
+// updatePlayerWeaponAimDistribution — 狙う部位配分（ユーザー戦術設定）の更新 (Issue #505)
+// ─────────────────────────────────────────────
+describe("updatePlayerWeaponAimDistribution", () => {
+  const distribution = {
+    HEAD: 0.1,
+    TORSO: 0.5,
+    RIGHT_ARM: 0.1,
+    LEFT_ARM: 0.1,
+    RIGHT_LEG: 0.1,
+    LEFT_LEG: 0.1,
+  };
+
+  it("成功時に更新後のPlayerWeaponを返す", async () => {
+    const mockResponse = {
+      id: "pw-1",
+      custom_stats: { aim_distribution: distribution },
+    };
+    vi.mocked(fetch).mockResolvedValue(mockOk(mockResponse));
+
+    const result = await updatePlayerWeaponAimDistribution("pw-1", {
+      aim_distribution: distribution,
+    });
+
+    expect(result).toEqual(mockResponse);
+  });
+
+  it("PUTメソッドと正しいエンドポイントでfetchを呼び出す", async () => {
+    vi.mocked(fetch).mockResolvedValue(mockOk({}));
+
+    await updatePlayerWeaponAimDistribution("pw-1", { aim_distribution: distribution });
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/player-weapons/pw-1/aim-distribution"),
+      expect.objectContaining({ method: "PUT" })
+    );
+  });
+
+  it("Authorizationヘッダーにトークンを付与する", async () => {
+    vi.mocked(fetch).mockResolvedValue(mockOk({}));
+
+    await updatePlayerWeaponAimDistribution("pw-1", { aim_distribution: distribution });
+
+    const [, options] = vi.mocked(fetch).mock.calls[0];
+    expect((options as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer test-token",
+    });
+  });
+
+  it("aim_distributionをJSONボディとして送信する", async () => {
+    vi.mocked(fetch).mockResolvedValue(mockOk({}));
+
+    await updatePlayerWeaponAimDistribution("pw-1", { aim_distribution: distribution });
+
+    const [, options] = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse((options as RequestInit).body as string);
+    expect(body).toEqual({ aim_distribution: distribution });
+  });
+
+  it("APIがエラーを返したときdetailメッセージで例外を投げる", async () => {
+    vi.mocked(fetch).mockResolvedValue(mockErr("配分の合計は100%にしてください（現在の合計: 90.0%）"));
+
+    await expect(
+      updatePlayerWeaponAimDistribution("pw-1", { aim_distribution: distribution })
+    ).rejects.toThrow("配分の合計は100%にしてください（現在の合計: 90.0%）");
+  });
+
+  it("APIがdetailなしでエラーを返したときフォールバックメッセージで例外を投げる", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      json: () => Promise.resolve({}),
+    } as unknown as Response);
+
+    await expect(
+      updatePlayerWeaponAimDistribution("pw-1", { aim_distribution: distribution })
+    ).rejects.toThrow("500");
   });
 });

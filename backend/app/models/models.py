@@ -28,6 +28,20 @@ class Vector3(SQLModel):
         return cls(x=float(arr[0]), y=float(arr[1]), z=float(arr[2]))
 
 
+# 武器の狙う部位配分（PartName → 配分割合、合計1.0）の初期値。
+# 胴体50% / 右腕10% / 左腕10% / 右脚10% / 左脚10% / 頭部10%（Issue #505）。
+# PART_HP_RATIOS 等の部位定義（本ファイル下部）より前で参照する必要があるため、
+# 部位名は文字列リテラルで直接記述している。
+DEFAULT_AIM_DISTRIBUTION: dict[str, float] = {
+    "TORSO": 0.5,
+    "RIGHT_ARM": 0.1,
+    "LEFT_ARM": 0.1,
+    "RIGHT_LEG": 0.1,
+    "LEFT_LEG": 0.1,
+    "HEAD": 0.1,
+}
+
+
 class WeaponSpecBase(SQLModel):
     """武装データのうち id/name を除いたスペック部分.
 
@@ -65,6 +79,15 @@ class WeaponSpecBase(SQLModel):
     fire_arc_deg: float = Field(
         default=30.0,
         description="射撃可能弧（胴体正面からの片側角度、度）。格闘武器は 360 を設定",
+    )
+    aim_distribution: dict[str, float] = Field(
+        default_factory=lambda: dict(DEFAULT_AIM_DISTRIBUTION),
+        description=(
+            "この武器が狙う部位配分（部位名→配分割合、合計1.0を想定）。"
+            "命中部位決定 (app.engine.combat.determine_hit_part) が、角度セクタ別の"
+            "露出係数・距離減衰と掛け合わせて命中部位確率を算出する際に使用する"
+            "（Issue #505）。ユーザーは PlayerWeapon.custom_stats 経由で上書き可能"
+        ),
     )
 
 
@@ -1278,6 +1301,14 @@ class WeaponCustomStats(SQLModel):
     accuracy_bonus: float = Field(default=0.0, description="命中率への加算値(%)")
     upgrade_level: int = Field(
         default=0, description="改造レベル（将来の改造ツリー・表示用）"
+    )
+    aim_distribution: dict[str, float] | None = Field(
+        default=None,
+        description=(
+            "狙う部位配分のユーザー設定上書き（Issue #505）。未設定(None)の場合は "
+            "base_snapshot 側の aim_distribution（マスター武器の初期値）を使用する。"
+            "改造費用を伴う強化とは異なり、ユーザーが無償で変更できる戦術設定"
+        ),
     )
 
 

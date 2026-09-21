@@ -8,6 +8,7 @@ import SciFiModal from "@/components/ui/SciFiModal";
 import { SciFiBlockIndicator, SciFiHeading } from "@/components/ui";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
 import { getRankColor, getWeaponRank } from "@/utils/rankUtils";
+import AimDistributionEditor from "./AimDistributionEditor";
 
 interface WeaponUpgradeModalProps {
   playerWeapon: PlayerWeapon;
@@ -348,6 +349,12 @@ export default function WeaponUpgradeModal({
               loadingLabel="改造中..."
             />
           </div>
+
+          {/* 狙う部位配分（無償のユーザー戦術設定, Issue #505） */}
+          <AimDistributionEditor
+            playerWeapon={playerWeapon}
+            onUpdated={onUpgraded}
+          />
         </div>
       </div>
     </SciFiModal>
