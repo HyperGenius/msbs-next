@@ -1,5 +1,6 @@
 """武器インスタンス管理サービス."""
 
+import math
 import re
 import uuid
 from datetime import UTC, datetime
@@ -10,6 +11,7 @@ from sqlmodel import Session, select
 from app.core.gamedata import get_weapon_listing_by_id
 from app.engine.constants import MAX_WEAPON_SLOTS
 from app.models.models import (
+    ALL_PART_NAMES,
     MasterWeaponCreate,
     MasterWeaponUpdate,
     MobileSuit,
@@ -43,6 +45,8 @@ class WeaponService:
         merged = dict(base_snapshot)
         merged["power"] = merged.get("power", 0) + diff.power_bonus
         merged["accuracy"] = merged.get("accuracy", 0.0) + diff.accuracy_bonus
+        if diff.aim_distribution is not None:
+            merged["aim_distribution"] = diff.aim_distribution
         return Weapon(**merged)
 
     @staticmethod
@@ -321,6 +325,74 @@ class WeaponService:
         player_weapon.equipped_ms_id = None
         player_weapon.equipped_slot = None
         session.add(player_weapon)
+        session.commit()
+        session.refresh(player_weapon)
+
+        return player_weapon
+
+    @staticmethod
+    def update_aim_distribution(
+        session: Session,
+        user_id: str,
+        player_weapon_id: uuid.UUID,
+        aim_distribution: dict[str, float],
+    ) -> PlayerWeapon:
+        """武器の狙う部位配分（ユーザー戦術設定）を更新する (Issue #505).
+
+        power_bonus/accuracy_bonus の改造とは異なりクレジットを消費しない
+        ユーザー戦術設定のため、無償・即時に変更できる。装備中の武器の場合は
+        MobileSuit.weapons の実効スペックも合わせて再同期する。
+
+        Args:
+            session: データベースセッション
+            user_id: 操作ユーザーID
+            player_weapon_id: 対象 PlayerWeapon の UUID
+            aim_distribution: 部位名→配分割合の辞書（合計1.0を要求）
+
+        Returns:
+            PlayerWeapon: 更新された武器インスタンス
+
+        Raises:
+            HTTPException: 権限エラー・不正な部位名・配分不正（負値/合計不一致）
+        """
+        invalid_keys = sorted(set(aim_distribution) - set(ALL_PART_NAMES))
+        if invalid_keys:
+            raise HTTPException(
+                status_code=400, detail=f"不正な部位名です: {invalid_keys}"
+            )
+        if any(v < 0 for v in aim_distribution.values()):
+            raise HTTPException(
+                status_code=400, detail="配分の値は0以上で指定してください"
+            )
+        total = sum(aim_distribution.values())
+        if not math.isclose(total, 1.0, abs_tol=0.01):
+            raise HTTPException(
+                status_code=400,
+                detail=f"配分の合計は100%にしてください（現在の合計: {total * 100:.1f}%）",
+            )
+
+        player_weapon = session.get(PlayerWeapon, player_weapon_id)
+        if not player_weapon:
+            raise HTTPException(
+                status_code=404, detail="武器インスタンスが見つかりません"
+            )
+        if player_weapon.user_id != user_id:
+            raise HTTPException(
+                status_code=403, detail="この武器インスタンスへのアクセス権がありません"
+            )
+
+        player_weapon.custom_stats = {
+            **(player_weapon.custom_stats or {}),
+            "aim_distribution": aim_distribution,
+        }
+        session.add(player_weapon)
+
+        if player_weapon.equipped_ms_id is not None:
+            mobile_suit = session.get(MobileSuit, player_weapon.equipped_ms_id)
+            if mobile_suit is not None:
+                WeaponService.resync_mobile_suit_weapons(session, mobile_suit)
+                session.add(mobile_suit)
+
         session.commit()
         session.refresh(player_weapon)
 

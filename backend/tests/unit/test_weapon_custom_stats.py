@@ -43,3 +43,37 @@ def test_apply_effective_spec_with_none_custom_stats_returns_base_values() -> No
 
     assert weapon.power == 50
     assert weapon.accuracy == 80.0
+
+
+def test_apply_effective_spec_without_aim_distribution_override_uses_base_default() -> (
+    None
+):
+    """custom_stats に aim_distribution が無い場合、base_snapshot側(未設定ならデフォルト値)を使う (Issue #505)."""
+    weapon = WeaponService.apply_effective_spec(BASE_SNAPSHOT, {})
+
+    assert weapon.aim_distribution == {
+        "TORSO": 0.5,
+        "RIGHT_ARM": 0.1,
+        "LEFT_ARM": 0.1,
+        "RIGHT_LEG": 0.1,
+        "LEFT_LEG": 0.1,
+        "HEAD": 0.1,
+    }
+
+
+def test_apply_effective_spec_applies_aim_distribution_override() -> None:
+    """custom_stats.aim_distribution が指定された場合、base_snapshotの値を上書きする (Issue #505)."""
+    override = {
+        "HEAD": 0.4,
+        "TORSO": 0.4,
+        "RIGHT_ARM": 0.05,
+        "LEFT_ARM": 0.05,
+        "RIGHT_LEG": 0.05,
+        "LEFT_LEG": 0.05,
+    }
+
+    weapon = WeaponService.apply_effective_spec(
+        BASE_SNAPSHOT, {"aim_distribution": override}
+    )
+
+    assert weapon.aim_distribution == override

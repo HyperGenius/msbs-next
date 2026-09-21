@@ -330,12 +330,14 @@ SECTOR_FRONT_DEG: float = 60.0
 SECTOR_FRONT_SIDE_DEG: float = 120.0
 SECTOR_REAR_SIDE_DEG: float = 150.0
 
-# 命中部位決定の暫定重み付け (Issue #503 Phase 2)
-# 攻撃セクタ (FRONT/FRONT_SIDE/REAR_SIDE/REAR) ごとに、部位別の命中しやすさを
-# 粗く重み付けしたもの。前面ほど正面装甲（頭部・胴体・腕）に、背面ほど無防備な
-# 脚部に命中しやすい、という直感的な傾向のみを反映した暫定実装であり、戦術設定・
-# 角度・距離に基づく本格的な確率算出は Phase 4 (#TBD) で
-# `app.engine.combat.determine_hit_part()` ごと置き換える前提。
+# 攻撃セクタ別の部位露出係数 (Issue #503 Phase 2 → Issue #505 Phase 4)
+# 攻撃セクタ (FRONT/FRONT_SIDE/REAR_SIDE/REAR) ごとに、部位別の露出しやすさ
+# （命中確率算出における相対的な重み）を表す。前面ほど正面装甲（頭部・胴体・腕）が、
+# 背面ほど無防備な脚部が露出しやすい、という直感的な傾向を反映している。
+# Issue #503 (Phase 2) 時点ではこのテーブル単体で命中部位を決定する暫定実装だったが、
+# Issue #505 (Phase 4) で `app.engine.combat.determine_hit_part()` が本実装に置き換わり、
+# 武器の狙う部位配分 (aim_distribution) × このセクタ露出係数 × 距離減衰
+# (PART_HIT_DIFFICULTY 等) を掛け合わせた重み付き確率選択の一要素として使われる。
 PART_HIT_WEIGHTS: dict[str, dict[str, float]] = {
     "FRONT": {
         "HEAD": 10.0,
@@ -372,6 +374,26 @@ PART_HIT_WEIGHTS: dict[str, dict[str, float]] = {
 }
 # 上記テーブルに存在しない部位名（将来の拡張部位）に割り当てるデフォルト重み
 DEFAULT_PART_HIT_WEIGHT: float = 1.0
+
+# 距離による命中部位の難易度減衰 (Issue #505 Phase 4)
+# 部位ごとの「狙いにくさ」係数。値が大きいほど、距離が伸びるにつれてその部位への
+# 実際の命中重みが大きく減衰する（＝遠距離では頭部を狙っていてもほとんど胴体に
+# 当たる、という直感的なリアリティをエンジンに反映する）。TORSO は 0.0 とし
+# 距離による減衰を受けない（遠距離ほど命中が寄っていく先の受け皿として機能する）。
+PART_HIT_DIFFICULTY: dict[str, float] = {
+    "HEAD": 1.0,
+    "TORSO": 0.0,
+    "RIGHT_ARM": 0.5,
+    "LEFT_ARM": 0.5,
+    "RIGHT_LEG": 0.35,
+    "LEFT_LEG": 0.35,
+}
+# 減衰が最大効果（PART_DIFFICULTY_DECAY_FLOORへの到達）に達する距離(m)。
+# CLOSE_RANGE(200m)の3倍を目安に設定し、近接〜中距離では緩やかに、
+# それを超える遠距離で頭部/腕/脚への配分がしっかり絞られるようにしている。
+PART_DIFFICULTY_DECAY_RANGE: float = 600.0
+# 最大距離減衰後も残る重み係数の下限（difficulty=1.0の部位でも0にはしない）。
+PART_DIFFICULTY_DECAY_FLOOR: float = 0.1
 
 # フランキング（背後移動）パッシブスキル定数 (Phase E-3.5)
 FLANKING_OFFSET_DISTANCE: float = 30.0

@@ -30,6 +30,9 @@ from app.engine.constants import (
     MELEE_CLOSE_ACCURACY_BONUS,
     MELEE_MID_ACCURACY_BONUS,
     MELEE_RANGE,
+    PART_DIFFICULTY_DECAY_FLOOR,
+    PART_DIFFICULTY_DECAY_RANGE,
+    PART_HIT_DIFFICULTY,
     PART_HIT_WEIGHTS,
     RANGED_CLOSE_ACCURACY_PENALTY,
     RANGED_MID_ACCURACY_PENALTY,
@@ -42,6 +45,7 @@ from app.engine.constants import (
     get_weapon_slot_role_for_weapon,
 )
 from app.models.models import (
+    DEFAULT_AIM_DISTRIBUTION,
     BattleLog,
     MobileSuit,
     Obstacle,
@@ -191,42 +195,71 @@ def calculate_attack_sector(
 _part_hit_rng = random.Random()
 
 
+def _part_distance_decay(part_name: str, distance: float) -> float:
+    """距離による部位命中難易度の減衰係数を返す (Issue #505 Phase 4).
+
+    距離が伸びるほど難易度の高い部位（頭部等）の重みを減衰させ、距離0では
+    減衰なし(1.0)、PART_DIFFICULTY_DECAY_RANGE 以遠では
+    PART_DIFFICULTY_DECAY_FLOOR まで減衰した値で頭打ちになる。難易度0の部位
+    （胴体等）は距離によらず常に1.0を返す。
+    """
+    difficulty = PART_HIT_DIFFICULTY.get(part_name, 0.0)
+    if difficulty <= 0.0:
+        return 1.0
+    normalized_distance = min(max(distance, 0.0) / PART_DIFFICULTY_DECAY_RANGE, 1.0)
+    return 1.0 - difficulty * normalized_distance * (1.0 - PART_DIFFICULTY_DECAY_FLOOR)
+
+
 def determine_hit_part(
     attacker: MobileSuit,
     target: MobileSuit,
+    weapon: Weapon,
     attack_sector: str,
     distance: float,
 ) -> str | None:
-    """命中部位を決定する（暫定ロジック, Issue #503 Phase 2）.
+    """命中部位を決定する（本実装, Issue #505 Phase 4）.
 
-    現状は attack_sector を粗く使った簡易重み付けランダム選択のみで、戦術設定・
-    角度・距離に基づく本格的な確率算出は Phase 4 (#TBD) でこの関数ごと
-    置き換える前提のフックポイントとして切り出している。
-    `attacker`/`distance` は本フェーズでは未使用だが、Phase 4での差し替えを
-    見据えてシグネチャに含めている。
+    武器ごとの狙う部位配分 (weapon.aim_distribution) を基準に、攻撃セクタ別の
+    露出係数 (PART_HIT_WEIGHTS) と、距離による命中難易度減衰
+    (PART_HIT_DIFFICULTY 等) を掛け合わせた重みで確率的に部位を選択する
+    （Issue #503 Phase 2 の暫定ロジックを置き換え）。
 
     欠損部位（target.parts に存在しない部位）や既に破壊済みの部位は選択対象
-    から除外される。
+    から除外される。除外により重みの合計が変化しても `random.choices` が
+    残りの重みを相対比で正規化するため、狙う部位配分に含まれていた欠損部位の
+    配分は自動的に他の実在部位へ比例再配分される（明示的な再配分処理は不要）。
 
     Args:
-        attacker: 攻撃ユニット（本フェーズでは未使用）
+        attacker: 攻撃ユニット（将来のパイロットスキル補正等で使用予定、現状未使用）
         target: 攻撃対象
+        weapon: 攻撃に使用した武器（aim_distribution を保持する）
         attack_sector: 攻撃方向 (FRONT/FRONT_SIDE/REAR_SIDE/REAR)
-        distance: 攻撃距離（本フェーズでは未使用）
+        distance: 攻撃距離(m)
 
     Returns:
         命中した部位名。target に選択可能な部位が1つも無い場合は None。
     """
-    del attacker, distance  # Phase 4 で使用予定 (現状は未使用)
+    del attacker  # 将来のパイロットスキル補正等で使用予定 (現状は未使用)
 
     eligible_parts = [name for name, part in target.parts.items() if not part.destroyed]
     if not eligible_parts:
         return None
 
+    aim_distribution = (
+        getattr(weapon, "aim_distribution", None) or DEFAULT_AIM_DISTRIBUTION
+    )
     sector_weights = PART_HIT_WEIGHTS.get(attack_sector, PART_HIT_WEIGHTS["FRONT_SIDE"])
     weights = [
-        sector_weights.get(name, DEFAULT_PART_HIT_WEIGHT) for name in eligible_parts
+        aim_distribution.get(name, 0.0)
+        * sector_weights.get(name, DEFAULT_PART_HIT_WEIGHT)
+        * _part_distance_decay(name, distance)
+        for name in eligible_parts
     ]
+    if sum(weights) <= 0.0:
+        # 狙う部位配分が実在部位のいずれにも割り当てられていない縮退ケース
+        # （例: 頭部100%配分の武器が、頭部欠損機体を攻撃した場合）の安全策として
+        # 均等重みにフォールバックする
+        weights = [1.0] * len(eligible_parts)
     return _part_hit_rng.choices(eligible_parts, weights=weights, k=1)[0]
 
 
@@ -641,8 +674,8 @@ class CombatMixin:
         distance: float = 0.0,
     ) -> None:
         """命中時の処理."""
-        # 命中部位決定 (Issue #503 Phase 2): 命中判定とダメージ計算の間のフック
-        hit_part = determine_hit_part(actor, target, attack_sector, distance)
+        # 命中部位決定 (Issue #505 Phase 4): 命中判定とダメージ計算の間のフック
+        hit_part = determine_hit_part(actor, target, weapon, attack_sector, distance)
 
         base_damage, _log_msg, is_crit = self._calculate_hit_base_damage(
             actor, target, weapon, log_base, attack_sector=attack_sector

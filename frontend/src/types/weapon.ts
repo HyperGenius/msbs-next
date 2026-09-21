@@ -21,6 +21,8 @@ export interface Weapon {
     range_rank?: string;
     /** 命中率ランク (S〜E) - APIから付与される */
     accuracy_rank?: string;
+    /** 狙う部位配分（部位名→配分割合、合計1.0）。未設定時はバックエンド側のデフォルト値が使われる (Issue #505) */
+    aim_distribution?: Record<string, number>;
 }
 
 /** 機体の戦術設定（ターゲット優先度と交戦距離の方針） */

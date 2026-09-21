@@ -107,14 +107,15 @@ class TestNormalizeParts:
 
 
 class TestDetermineHitPart:
-    """determine_hit_part() の単体テスト."""
+    """determine_hit_part() の単体テスト (Issue #505 Phase 4 本実装)."""
 
     def test_returns_none_when_no_eligible_parts(self):
         """partsが空の場合はNoneを返す（撃破済み機体等のエッジケース）."""
         attacker = _make_unit(name="Attacker")
         target = _make_unit(name="Target")
         target.parts = {}
-        assert determine_hit_part(attacker, target, "FRONT", 100.0) is None
+        weapon = attacker.weapons[0]
+        assert determine_hit_part(attacker, target, weapon, "FRONT", 100.0) is None
 
     def test_only_returns_eligible_non_destroyed_parts(self):
         """欠損部位・破壊済み部位は選択されない."""
@@ -124,9 +125,10 @@ class TestDetermineHitPart:
         target.parts["HEAD"] = PartState(
             max_hp=20, current_hp=0, armor=20, destroyed=True
         )
+        weapon = attacker.weapons[0]
 
         for _ in range(50):
-            hit_part = determine_hit_part(attacker, target, "FRONT", 100.0)
+            hit_part = determine_hit_part(attacker, target, weapon, "FRONT", 100.0)
             assert hit_part is not None
             assert hit_part not in ("RIGHT_LEG", "LEFT_LEG", "HEAD")
             assert hit_part in target.parts
@@ -136,7 +138,113 @@ class TestDetermineHitPart:
         attacker = _make_unit(name="Attacker")
         target = _make_unit(name="Target")
         target.normalize_parts()
-        hit_part = determine_hit_part(attacker, target, "UNKNOWN_SECTOR", 100.0)
+        weapon = attacker.weapons[0]
+        hit_part = determine_hit_part(attacker, target, weapon, "UNKNOWN_SECTOR", 100.0)
+        assert hit_part in target.parts
+
+    def test_weapon_aim_distribution_biases_hit_part_selection(self):
+        """武器のaim_distributionを頭部100%にすると、頭部への命中が支配的になる."""
+        attacker = _make_unit(name="Attacker")
+        target = _make_unit(name="Target")
+        target.normalize_parts()
+        weapon = Weapon(
+            id="head_hunter",
+            name="Head Hunter",
+            power=10,
+            range=100,
+            accuracy=100,
+            aim_distribution={
+                "HEAD": 1.0,
+                "TORSO": 0.0,
+                "RIGHT_ARM": 0.0,
+                "LEFT_ARM": 0.0,
+                "RIGHT_LEG": 0.0,
+                "LEFT_LEG": 0.0,
+            },
+        )
+
+        # 距離0（減衰なし）なら常に頭部を狙う
+        results = {
+            determine_hit_part(attacker, target, weapon, "FRONT_SIDE", 0.0)
+            for _ in range(50)
+        }
+        assert results == {"HEAD"}
+
+    def test_distance_decay_shifts_high_difficulty_part_hits_toward_torso(self):
+        """遠距離では頭部狙いの武器でも、実際の命中は胴体などへ寄る."""
+        attacker = _make_unit(name="Attacker")
+        target = _make_unit(name="Target")
+        target.normalize_parts()
+        weapon = Weapon(
+            id="head_hunter",
+            name="Head Hunter",
+            power=10,
+            range=100,
+            accuracy=100,
+            aim_distribution={
+                "HEAD": 0.5,
+                "TORSO": 0.5,
+                "RIGHT_ARM": 0.0,
+                "LEFT_ARM": 0.0,
+                "RIGHT_LEG": 0.0,
+                "LEFT_LEG": 0.0,
+            },
+        )
+
+        head_hits_near = sum(
+            1
+            for _ in range(400)
+            if determine_hit_part(attacker, target, weapon, "FRONT_SIDE", 0.0) == "HEAD"
+        )
+        head_hits_far = sum(
+            1
+            for _ in range(400)
+            if determine_hit_part(attacker, target, weapon, "FRONT_SIDE", 2000.0)
+            == "HEAD"
+        )
+
+        # 遠距離では難易度の高い部位(頭部)への実命中割合が近距離より明確に下がる
+        assert head_hits_far < head_hits_near
+
+    def test_missing_part_allocation_is_proportionally_redistributed(self):
+        """狙う部位配分に含まれる欠損部位の配分は、実在部位へ自動的に再配分される."""
+        attacker = _make_unit(name="Attacker")
+        target = _make_unit(name="Target", missing_parts=["RIGHT_LEG", "LEFT_LEG"])
+        target.normalize_parts()
+        # RIGHT_LEG/LEFT_LEGにも配分しているが、targetには存在しない
+        weapon = Weapon(
+            id="balanced",
+            name="Balanced",
+            power=10,
+            range=100,
+            accuracy=100,
+            aim_distribution={
+                "HEAD": 0.0,
+                "TORSO": 0.0,
+                "RIGHT_ARM": 0.0,
+                "LEFT_ARM": 0.0,
+                "RIGHT_LEG": 0.5,
+                "LEFT_LEG": 0.5,
+            },
+        )
+
+        # 全配分が欠損部位に割り当てられているため、安全策の均等重みにフォールバックする
+        results = {
+            determine_hit_part(attacker, target, weapon, "FRONT_SIDE", 100.0)
+            for _ in range(80)
+        }
+        assert results.issubset(set(target.parts.keys()))
+        assert len(results) > 1
+
+    def test_no_aim_distribution_falls_back_to_default(self):
+        """武器にaim_distributionが無い（旧データ等）場合はデフォルト配分で選択される."""
+        attacker = _make_unit(name="Attacker")
+        target = _make_unit(name="Target")
+        target.normalize_parts()
+        weapon = attacker.weapons[0]
+        weapon.aim_distribution = {}
+
+        hit_part = determine_hit_part(attacker, target, weapon, "FRONT_SIDE", 100.0)
         assert hit_part in target.parts
 
 

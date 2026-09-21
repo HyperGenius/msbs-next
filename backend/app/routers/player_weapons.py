@@ -31,6 +31,12 @@ class WeaponUpgradeResponse(BaseModel):
     cost_paid: int
 
 
+class AimDistributionUpdateRequest(BaseModel):
+    """武器の狙う部位配分更新リクエスト (Issue #505)."""
+
+    aim_distribution: dict[str, float]
+
+
 class WeaponUpgradePreviewResponse(BaseModel):
     """武器改造プレビューレスポンス."""
 
@@ -100,6 +106,36 @@ def delete_player_weapon(
 
     session.delete(player_weapon)
     session.commit()
+
+
+@router.put("/{pw_id}/aim-distribution", response_model=PlayerWeaponResponse)
+def update_player_weapon_aim_distribution(
+    pw_id: uuid.UUID,
+    request: AimDistributionUpdateRequest,
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> PlayerWeaponResponse:
+    """武器の狙う部位配分（ユーザー戦術設定）を更新する (Issue #505).
+
+    改造とは異なりクレジットを消費しない無償の戦術設定。装備中の武器の場合は
+    MobileSuit.weapons の実効スペックも合わせて再同期される。
+
+    Args:
+        pw_id: 更新対象の PlayerWeapon の UUID
+        request: 部位名→配分割合（合計1.0）
+        session: データベースセッション
+        user_id: 現在のユーザーID
+
+    Returns:
+        PlayerWeaponResponse: 更新後の武器インスタンス
+
+    Raises:
+        HTTPException: 武器が見つからない、権限なし、配分が不正な場合
+    """
+    updated_pw = WeaponService.update_aim_distribution(
+        session, user_id, pw_id, request.aim_distribution
+    )
+    return PlayerWeaponResponse.model_validate(updated_pw.model_dump())
 
 
 @router.post("/{pw_id}/upgrade", response_model=WeaponUpgradeResponse)

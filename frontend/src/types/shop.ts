@@ -118,6 +118,8 @@ export interface WeaponCustomStats {
     power_bonus?: number;
     accuracy_bonus?: number;
     upgrade_level?: number;
+    /** 狙う部位配分のユーザー設定上書き（未設定時はbase_snapshot側のデフォルト値を使用, Issue #505） */
+    aim_distribution?: Record<string, number>;
 }
 
 /** プレイヤーが所有する武器インスタンス（マスターとは別に個別強化データを持つ） */
@@ -159,4 +161,12 @@ export interface WeaponUpgradePreview {
     new_value: number;
     cost: number;
     at_max_cap: boolean;
+}
+
+/**
+ * 武器の狙う部位配分（ユーザー戦術設定）更新リクエスト（Issue #505）。
+ * 改造とは異なりクレジットを消費しない無償の設定。部位名→配分割合（合計1.0）を指定する。
+ */
+export interface AimDistributionUpdateRequest {
+    aim_distribution: Record<string, number>;
 }
