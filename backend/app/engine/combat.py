@@ -39,6 +39,7 @@ from app.engine.constants import (
     SECTOR_FRONT_SIDE_DEG,
     SECTOR_REAR_SIDE_DEG,
     SPECIAL_ENVIRONMENT_EFFECTS,
+    get_weapon_slot_role_for_weapon,
 )
 from app.models.models import (
     BattleLog,
@@ -740,6 +741,12 @@ class CombatMixin:
                 f" {target.name}に{final_damage}ダメージ！（{damage_desc}）{hp_comment}"
             )
 
+        weapon_slot_role = (
+            get_weapon_slot_role_for_weapon(actor.weapons, weapon.id)
+            if weapon
+            else None
+        )
+
         self.logs.append(  # type: ignore[attr-defined]
             BattleLog(
                 timestamp=self.elapsed_time,  # type: ignore[attr-defined]
@@ -758,6 +765,7 @@ class CombatMixin:
                 heading=self.unit_resources[str(actor.id)].get("body_heading_deg"),  # type: ignore[attr-defined]
                 attack_sector=attack_sector,
                 hit_part=hit_part,
+                weapon_slot_role=weapon_slot_role,
                 velocity_snapshot=Vector3.from_numpy(
                     self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                 ),  # type: ignore[attr-defined]
@@ -774,7 +782,14 @@ class CombatMixin:
         ) == "MELEE" or getattr(weapon, "is_melee", False)
         if is_melee_weapon:
             self._process_melee_combo(
-                actor, target, weapon, base_damage, snapshot, attack_chatter
+                actor,
+                target,
+                weapon,
+                base_damage,
+                snapshot,
+                attack_chatter,
+                hit_part=hit_part,
+                weapon_slot_role=weapon_slot_role,
             )
 
     def _process_melee_combo(
@@ -785,6 +800,8 @@ class CombatMixin:
         base_damage: int,
         snapshot: Vector3,
         attack_chatter: str | None = None,
+        hit_part: str | None = None,
+        weapon_slot_role: str | None = None,
     ) -> None:
         """格闘コンボシステム: 命中時に確率的にコンボ（連続ヒット）が発生する (Phase C).
 
@@ -799,6 +816,11 @@ class CombatMixin:
             base_damage: 最初の命中で計算されたベースダメージ
             snapshot: 攻撃時点の座標スナップショット
             attack_chatter: 攻撃時のセリフ
+            hit_part: 起点となった `_process_hit` の命中部位 (Issue #504)。
+                コンボの追撃は部位再判定を行わず、最初のヒットと同じ部位への
+                連続ヒットとして記録する
+            weapon_slot_role: 起点となった `_process_hit` で算出済みの
+                武器スロット部位ロール (Issue #504)
         """
         combo_count = 0
         combo_total_damage = 0
@@ -837,9 +859,12 @@ class CombatMixin:
                     ),
                     position_snapshot=snapshot,
                     weapon_name=weapon.name if weapon else None,
+                    weapon_id=weapon.id if weapon else None,
                     chatter=attack_chatter,
                     combo_count=combo_count,
                     combo_message=combo_message,
+                    hit_part=hit_part,
+                    weapon_slot_role=weapon_slot_role,
                     velocity_snapshot=Vector3.from_numpy(
                         self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                     ),  # type: ignore[attr-defined]

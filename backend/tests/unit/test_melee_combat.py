@@ -487,6 +487,32 @@ class TestMeleeCombo:
         combo_logs = [log for log in sim.logs if log.action_type == "MELEE_COMBO"]
         assert len(combo_logs) == 0
 
+    def test_combo_log_carries_hit_part_and_weapon_slot_role_from_caller(self) -> None:
+        """MELEE_COMBOログは呼び出し元から渡されたhit_part/weapon_slot_roleを保持する (Issue #504)."""
+        player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
+        enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=10, y=0, z=0), hp=10000)
+        sim = BattleSimulator(player, [enemy])
+
+        melee_w = _make_melee_weapon(power=100)
+        snapshot = player.position
+
+        with patch("random.random", side_effect=[0.1, 1.0]):
+            sim._process_melee_combo(
+                player,
+                enemy,
+                melee_w,
+                100,
+                snapshot,
+                hit_part="TORSO",
+                weapon_slot_role="RIGHT_ARM",
+            )
+
+        combo_logs = [log for log in sim.logs if log.action_type == "MELEE_COMBO"]
+        assert len(combo_logs) == 1
+        assert combo_logs[0].hit_part == "TORSO"
+        assert combo_logs[0].weapon_slot_role == "RIGHT_ARM"
+        assert combo_logs[0].weapon_id == melee_w.id
+
     def test_single_combo_fires(self) -> None:
         """1回コンボが発生する（確率を制御）."""
         player = _make_unit("P", "PLAYER", "PT", Vector3(x=0, y=0, z=0))

@@ -233,3 +233,67 @@ class TestPartDamageApplication:
         }
         assert "RIGHT_LEG" not in hit_parts_seen
         assert "LEFT_LEG" not in hit_parts_seen
+
+
+class TestWeaponSlotRoleLogging:
+    """CombatMixin._process_hit() が武器スロット部位ロールをログへ記録することを検証する (Issue #504)."""
+
+    def test_attack_log_carries_weapon_slot_role_of_firing_weapon(self):
+        """actor.weapons内でのindexに対応する部位ロールがATTACKログに記録される."""
+        player = _make_unit(
+            name="Player", side="PLAYER", position=Vector3(x=0, y=0, z=0)
+        )
+        enemy = _make_unit(
+            name="Enemy", side="ENEMY", position=Vector3(x=100, y=0, z=0)
+        )
+        enemy.weapons = [
+            Weapon(id="right_w", name="Right Rifle", power=30, range=400, accuracy=80),
+            Weapon(id="left_w", name="Left Rifle", power=30, range=400, accuracy=80),
+        ]
+        sim = BattleSimulator(player, [enemy])
+        snapshot = Vector3.from_numpy(enemy.position.to_numpy())
+
+        with patch("app.engine.combat.determine_hit_part", return_value="TORSO"):
+            with patch("random.random", return_value=0.99):
+                sim._process_hit(
+                    enemy,
+                    player,
+                    enemy.weapons[1],
+                    "test attack",
+                    snapshot,
+                    attack_sector="FRONT_SIDE",
+                    distance=100.0,
+                )
+
+        attack_logs = [log for log in sim.logs if log.action_type == "ATTACK"]
+        assert len(attack_logs) == 1
+        assert attack_logs[0].weapon_slot_role == "LEFT_ARM"
+
+    def test_attack_log_weapon_slot_role_is_none_when_weapon_not_in_actor_weapons(self):
+        """actor.weaponsに存在しない武器（テスト用ダミー等）の場合はNoneになる."""
+        player = _make_unit(
+            name="Player", side="PLAYER", position=Vector3(x=0, y=0, z=0)
+        )
+        enemy = _make_unit(
+            name="Enemy", side="ENEMY", position=Vector3(x=100, y=0, z=0)
+        )
+        sim = BattleSimulator(player, [enemy])
+        snapshot = Vector3.from_numpy(enemy.position.to_numpy())
+        unrelated_weapon = Weapon(
+            id="not_in_list", name="Unrelated", power=30, range=400, accuracy=80
+        )
+
+        with patch("app.engine.combat.determine_hit_part", return_value="TORSO"):
+            with patch("random.random", return_value=0.99):
+                sim._process_hit(
+                    enemy,
+                    player,
+                    unrelated_weapon,
+                    "test attack",
+                    snapshot,
+                    attack_sector="FRONT_SIDE",
+                    distance=100.0,
+                )
+
+        attack_logs = [log for log in sim.logs if log.action_type == "ATTACK"]
+        assert attack_logs[0].weapon_slot_role is None

@@ -739,3 +739,56 @@ BattleOverlay
 - LOS 計算は `currentTimestamp` 変更時のみ再計算（`useMemo` で制御）
 - `showLos` が OFF の場合は計算をスキップ（`undefined` を返す）
 - 敵MS数 × 障害物数 = 最大 5 × 50 = 250 回の交差判定（1フレームで軽量）
+
+---
+
+## 部位別命中サマリー（Issue #504）
+
+### 概要
+
+Issue #501（部位別フィードバック導入）Phase 3。Phase 1（#502, 武器スロットの部位ロール化）と
+Phase 2（#503, 命中後の部位判定）の結果を紐付け、バトルログへ出力・集計し、
+自機視点の「どの部位に被弾したか」「どの武器スロットが命中させたか」を
+バトル結果画面に表示する。改造判断（装甲を強化すべき部位、主力武器スロットの把握）に
+使えるデータを提供する目的。
+
+### バックエンド
+
+- `BattleLog`（`backend/app/models/models.py`）に `weapon_slot_role`
+  （`RIGHT_ARM`/`LEFT_ARM`/`RACK`）を追加。`hit_part` は Phase 2 で追加済み。
+  いずれも Optional で、既存ログ（未設定）との後方互換性を保つ
+- `combat.py` の `_process_hit`（ATTACK ログ）・`_process_melee_combo`
+  （MELEE_COMBO ログ）で `weapon_slot_role` を設定する。武器選択は
+  `Weapon` オブジェクトのみでスロットindexを持たないため、
+  `app.engine.constants.get_weapon_slot_role_for_weapon()` で
+  `actor.weapons` 内をIDから逆引きしてから `get_weapon_slot_role()` に渡す。
+  格闘コンボの追撃は部位を再判定せず、起点となった `_process_hit` の
+  `hit_part`/`weapon_slot_role` をそのまま引き継ぐ
+- 部位別集計は `app/engine/part_hit_summary.py` の
+  `compute_part_hit_summary(player, logs)` が担い、
+  `{"taken": {部位名: {"hits", "damage"}}, "dealt": {武器スロットロール: {"hits", "damage"}}}`
+  を返す。`app/services/battle_digest_service.py` の
+  `compute_battle_digest_fields()`（`battle_digest.py` と同じ「書き込み時に
+  1回だけ計算する」パターン）経由で呼ばれるため、`BattleResult` の
+  生成箇所2箇所（`backend/main.py` / `backend/scripts/run_batch.py`）に
+  個別実装を追加する必要はない
+- `BattleResult`/`BattleResultSummary` に `part_hit_summary: dict | None`
+  （JSON列）を追加。`GET /api/battles/{battle_id}` のレスポンスに含まれる
+- バトルログのGCSオフロード（`battle_log_storage_service.py`）は
+  `list[dict]` を素通しするだけのスキーマ非依存実装のため、
+  新フィールド追加による変更は不要
+
+### フロントエンド
+
+- `BattleLog`（`frontend/src/types/battleCore.ts`）に `attack_sector`
+  ・`hit_part`・`weapon_slot_role` を追加（`attack_sector`/`hit_part` は
+  バックエンドには既存だったがフロントエンド型に未反映だったため本Issueで追加）
+- `BattleResult` に `part_hit_summary?: PartHitSummary | null` を追加
+- `frontend/src/hooks/usePartHitSummary.ts`: `battle.part_hit_summary`
+  （バックエンド計算済み）を優先し、`null`（マイグレーション前の既存レコード）の
+  場合はロード済みの `logs` からクライアント側で同じロジックを計算して
+  フォールバック表示する
+- `frontend/src/components/history/PartHitSummaryTable.tsx`:
+  被弾部位別・命中武装別の集計テーブルを表示する。`BattleDetailModal.tsx`
+  の `TurnController` 直下（3D リプレイビューア・再生コントローラーと同じ
+  上部固定エリア）に統合されている

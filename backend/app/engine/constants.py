@@ -60,6 +60,20 @@ def get_weapon_slot_role(slot_index: int) -> str:
     return WEAPON_SLOT_ROLE_RACK
 
 
+def get_weapon_slot_role_for_weapon(weapons: list, weapon_id: str) -> str | None:
+    """`actor.weapons` 内でのIDから部位ロールを返す (Issue #504).
+
+    武器選択（`_select_weapon_fuzzy()`等）は `Weapon` オブジェクトを返すのみで
+    スロットindexを保持しないため、バトルログ生成箇所ではその都度
+    `actor.weapons` 内の位置をIDで引き直す必要がある。`weapons` に該当IDが
+    見つからない場合（例: 武器を持たないユニット）は None を返す。
+    """
+    for index, w in enumerate(weapons):
+        if w.id == weapon_id:
+            return get_weapon_slot_role(index)
+    return None
+
+
 # 有効な戦略モードのセット
 VALID_STRATEGY_MODES: frozenset[str] = frozenset(
     {"AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"}
