@@ -2,6 +2,7 @@
 
 "use client";
 
+import { useMemo } from "react";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import { HpBar } from "./HpBar";
 import { getHpBarColor, getEnemyHpBarColor, DEFAULT_MAX_EN } from "../utils";
@@ -14,6 +15,10 @@ interface UnitState {
     warnings: string[];
 }
 
+/** 敵HPパネルに表示する敵機の最大数。超過分は「…他N機」で省略する（Issue #521） */
+const MAX_VISIBLE_ENEMIES = 2;
+const SELF_ATTACK_ACTION_TYPES = new Set(["ATTACK", "MELEE_COMBO", "MISS"]);
+
 interface BattleOverlayProps {
     player: MobileSuit;
     playerState: UnitState;
@@ -22,6 +27,8 @@ interface BattleOverlayProps {
     currentTimestamp: number;
     /** 現在タイムスタンプ分にフィルタ済みのログ（呼び出し元で計算済み。Issue #467） */
     timestampLogs: BattleLog[];
+    /** 自機の現在ターゲット判定用の全ログ（Issue #521） */
+    logs: BattleLog[];
     /** LOS 表示の現在の状態 */
     showLos: boolean;
     /** LOS 表示トグルのコールバック */
@@ -35,9 +42,40 @@ export function BattleOverlay({
     environment,
     currentTimestamp,
     timestampLogs,
+    logs,
     showLos,
     onToggleLos,
 }: BattleOverlayProps) {
+    // 自機が攻撃対象にした敵ログのみを事前に抽出しておく（Issue #521）。currentTimestamp は
+    // 再生中100msごとに変わるため、全ログの逆順走査を毎tick行うと大規模バトル（十万件規模の
+    // ログ、docs/features/battle-log-feature.md参照）で重くなる。logs参照が変わらない限り
+    // この絞り込み自体は再計算しない。
+    const selfTargetLogs = useMemo(
+        () =>
+            logs.filter(
+                (log) => log.actor_id === player.id && log.target_id && SELF_ATTACK_ACTION_TYPES.has(log.action_type)
+            ),
+        [logs, player.id]
+    );
+
+    const currentTargetId = useMemo(() => {
+        for (let i = selfTargetLogs.length - 1; i >= 0; i--) {
+            if (selfTargetLogs[i].timestamp <= currentTimestamp) {
+                return selfTargetLogs[i].target_id ?? null;
+            }
+        }
+        return null;
+    }, [selfTargetLogs, currentTimestamp]);
+
+    const sortedAliveEnemies = useMemo(() => {
+        const alive = enemyStates.filter(({ state }) => state.hp > 0);
+        const target = alive.filter(({ enemy }) => enemy.id === currentTargetId);
+        const others = alive.filter(({ enemy }) => enemy.id !== currentTargetId);
+        return [...target, ...others];
+    }, [enemyStates, currentTargetId]);
+    const visibleEnemies = sortedAliveEnemies.slice(0, MAX_VISIBLE_ENEMIES);
+    const hiddenEnemyCount = sortedAliveEnemies.length - visibleEnemies.length;
+
     return (
         <>
             {/* UIオーバーレイ */}
@@ -76,17 +114,20 @@ export function BattleOverlay({
                         </div>
                     )}
                 </div>
-                {enemyStates.filter(({ state }) => state.hp > 0).map(({ enemy, state }) => (
+                {visibleEnemies.map(({ enemy, state }) => (
                     <div key={enemy.id} className="mt-1 sm:mt-2">
                         <span className="font-bold text-red-400 block truncate text-[10px] sm:text-xs">
+                            {enemy.id === currentTargetId && (
+                                <span className="bg-yellow-400 text-black text-[8px] font-bold rounded px-1 mr-1 align-middle">TGT</span>
+                            )}
                             {enemy.npc_pilot_level !== undefined && enemy.npc_pilot_level !== null && (
                                 <span className="text-yellow-400 mr-1">Lv.{enemy.npc_pilot_level}</span>
                             )}
                             {enemy.name}
                         </span>
-                        <HpBar 
-                            current={state.hp} 
-                            max={enemy.max_hp} 
+                        <HpBar
+                            current={state.hp}
+                            max={enemy.max_hp}
                             colorFunc={getEnemyHpBarColor}
                             currentTimestamp={currentTimestamp}
                             unitId={enemy.id}
@@ -94,6 +135,9 @@ export function BattleOverlay({
                         />
                     </div>
                 ))}
+                {hiddenEnemyCount > 0 && (
+                    <div className="mt-1 text-[9px] sm:text-[10px] text-gray-400 text-right">…他{hiddenEnemyCount}機</div>
+                )}
             </div>
 
             {/* Environment Label */}
