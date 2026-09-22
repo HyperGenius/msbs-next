@@ -135,6 +135,7 @@ export default function BattleViewer({
                 environment={environment}
                 currentTimestamp={currentTimestamp}
                 timestampLogs={timestampLogs}
+                logs={logs}
                 showLos={showLos}
                 onToggleLos={() => setShowLos(v => !v)}
             />

@@ -1,35 +1,28 @@
 /* frontend/src/components/history/BattleDetailModal.tsx */
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
+import ChapterTrack from "@/components/BattleViewer/ui/ChapterTrack";
+import { useBattleChapters } from "@/components/BattleViewer/hooks/useBattleChapters";
 import ModalHeader from "./ModalHeader";
 import TurnController from "./TurnController";
-import BattleLogViewer from "./BattleLogViewer";
-import PartHitSummaryTable from "./PartHitSummaryTable";
-import { useBattleLogic } from "@/hooks/useBattleLogic";
-import { usePartHitSummary } from "@/hooks/usePartHitSummary";
+import BattleSummaryPanel from "./BattleSummaryPanel";
 import { useBattleLogs } from "@/services/api";
-import { IS_PRODUCTION } from "@/constants";
 
 interface BattleDetailModalProps {
   battle: BattleResult;
   missionName: string;
-  mobileSuits: MobileSuit[] | undefined;
   onClose: () => void;
 }
 
 export default function BattleDetailModal({
   battle,
   missionName,
-  mobileSuits,
   onClose,
 }: BattleDetailModalProps) {
   const [currentTimestamp, setCurrentTimestamp] = useState(0);
-  const [isFiltered, setIsFiltered] = useState(IS_PRODUCTION);
-  // 開発環境専用: 本番ログの抽象化をプレビューするトグル
-  const [isProductionPreview, setIsProductionPreview] = useState(false);
 
   // バトルログを遅延ロード（リプレイ用）。全件ダウンロード完了を待たず、
   // 届いた分から段階的に反映する（Issue #494）。isLoadingは初回データ到達まで、
@@ -37,14 +30,16 @@ export default function BattleDetailModal({
   const { logs: fetchedLogs, isLoading: logsLoading, isStreaming: logsStreaming } = useBattleLogs(battle.id);
   const logs = fetchedLogs ?? [];
 
-  const { ownedMobileSuitIds, playerId, filterRelevantLogs } = useBattleLogic(
-    battle,
-    mobileSuits,
-    isFiltered,
-    IS_PRODUCTION || isProductionPreview
-  );
+  const playerId = battle.player_info?.id ?? null;
+  // battle.enemies_info のキャストをレンダーのたびに新しい配列参照として作ると、
+  // useBattleChapters/BattleSummaryPanel 側の useMemo が毎回再計算されてしまうためメモ化する
+  const enemies = useMemo(() => (battle.enemies_info ?? []) as MobileSuit[], [battle.enemies_info]);
 
-  const partHitSummary = usePartHitSummary(battle, logs, playerId);
+  const chapters = useBattleChapters(
+    logs,
+    playerId && battle.player_info ? { id: playerId, name: battle.player_info.name } : null,
+    enemies
+  );
 
   const maxTimestamp = logs.length
     ? logs[logs.length - 1].timestamp
@@ -67,7 +62,7 @@ export default function BattleDetailModal({
       >
         <ModalHeader battle={battle} missionName={missionName} onClose={onClose} />
 
-        {/* Modal Body — BattleViewer は固定、ログのみスクロール */}
+        {/* Modal Body — BattleViewer は固定、戦果サマリーのみスクロール */}
         <div className="flex flex-col flex-1 min-h-0">
           {/* 上部固定: 3D Replay Viewer + ターンコントローラー */}
           <div className="flex-none p-4 border-b border-gray-700">
@@ -99,13 +94,14 @@ export default function BattleDetailModal({
                       <span>続きのログを読み込み中... （{logs.length.toLocaleString()}件到着済み）</span>
                     </div>
                   )}
+                  {/* チャプタートラック: 3Dビューア直下に常駐し、有意なイベントのみクリックでジャンプする（Issue #521） */}
+                  <ChapterTrack chapters={chapters} currentTimestamp={currentTimestamp} onSeek={setCurrentTimestamp} />
                   <TurnController
                     currentTimestamp={currentTimestamp}
                     maxTimestamp={maxTimestamp}
                     isStreaming={logsStreaming}
                     onTimestampChange={setCurrentTimestamp}
                   />
-                  <PartHitSummaryTable summary={partHitSummary} />
                 </>
               )
             ) : (
@@ -117,26 +113,17 @@ export default function BattleDetailModal({
             )}
           </div>
 
-          {/* 下部スクロール: ログ一覧。初回データ到着後は、残りが裏で読み込み中でも
-              到着済みの分から表示する（全件到着まで待たせない、Issue #494） */}
-          {logsLoading ? (
-            <div className="flex-1 flex items-center justify-center p-4">
-              <p className="text-gray-400 text-sm">ログを読み込み中...</p>
-            </div>
-          ) : (
-            <BattleLogViewer
-              logs={logs}
-              currentTimestamp={currentTimestamp}
-              isFiltered={isFiltered}
-              isProductionPreview={isProductionPreview}
-              hasReplayData={hasReplayData}
-              playerId={playerId}
-              ownedMobileSuitIds={ownedMobileSuitIds}
-              filterRelevantLogs={filterRelevantLogs}
-              onFilterToggle={() => setIsFiltered((v) => !v)}
-              onProductionPreviewToggle={() => setIsProductionPreview((v) => !v)}
-            />
-          )}
+          {/* 下部スクロール: 戦果サマリー（タブ切り替えなしの常時表示、Issue #521）。初回データ到着後は、
+              残りが裏で読み込み中でも到着済みの分から表示する（全件到着まで待たせない、Issue #494） */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-4">
+            {logsLoading ? (
+              <div className="flex items-center justify-center p-4">
+                <p className="text-gray-400 text-sm">ログを読み込み中...</p>
+              </div>
+            ) : (
+              <BattleSummaryPanel battle={battle} logs={logs} playerId={playerId} enemies={enemies} />
+            )}
+          </div>
         </div>
       </div>
     </div>

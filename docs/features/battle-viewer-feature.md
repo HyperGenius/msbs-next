@@ -261,7 +261,8 @@ interface UnitSnapshot {
 |---------|------|
 | `frontend/src/components/history/BattleDetailModal.tsx` | モーダル全体 |
 | `frontend/src/components/history/TurnController.tsx` | タイムライン操作コントローラー |
-| `frontend/src/components/history/BattleLogViewer.tsx` | バトルログ表示 |
+| `frontend/src/components/history/BattleSummaryPanel.tsx` | 戦果サマリー（Issue #521） |
+| `frontend/src/components/BattleViewer/ui/ChapterTrack.tsx` | チャプタートラック（Issue #521） |
 | `frontend/src/components/BattleViewer/index.tsx` | 3D リプレイビューア |
 | `frontend/src/components/BattleViewer/scene/BattleScene.tsx` | Three.js シーン |
 | `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx` | MS 球体描画 |
@@ -623,7 +624,8 @@ function CameraInitializer({ px, py, pz, controlsRef }) {
 |---------|------|
 | `frontend/src/components/history/BattleDetailModal.tsx` | モーダル全体 |
 | `frontend/src/components/history/TurnController.tsx` | タイムライン操作コントローラー |
-| `frontend/src/components/history/BattleLogViewer.tsx` | バトルログ表示 |
+| `frontend/src/components/history/BattleSummaryPanel.tsx` | 戦果サマリー（Issue #521） |
+| `frontend/src/components/BattleViewer/ui/ChapterTrack.tsx` | チャプタートラック（Issue #521） |
 | `frontend/src/components/BattleViewer/index.tsx` | 3D リプレイビューア |
 | `frontend/src/components/BattleViewer/scene/BattleScene.tsx` | Three.js シーン |
 | `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx` | MS 球体描画 |
@@ -792,3 +794,79 @@ Phase 2（#503, 命中後の部位判定）の結果を紐付け、バトルロ�
   被弾部位別・命中武装別の集計テーブルを表示する。`BattleDetailModal.tsx`
   の `TurnController` 直下（3D リプレイビューア・再生コントローラーと同じ
   上部固定エリア）に統合されている
+
+---
+
+## バトルビューアへのフィードバック統一（Issue #521）
+
+### 概要
+
+従来フロントエンドに存在した「バトルログ」（`BattleLogViewer.tsx`、テキストの時系列ログ一覧）を廃止し、
+ユーザー向けフィードバックをバトルビューア側の2要素に統一した。モックアップ:
+https://claude.ai/artifact/RNmQeBem8BFxyuYDXhontS
+
+```
+BattleDetailModal
+├── BattleViewer                       # 3D リプレイビューア（HPパネル拡張、後述）
+├── ChapterTrack                       # チャプタートラック（3Dビューア直下に常駐）
+├── TurnController                     # タイムライン操作
+└── BattleSummaryPanel                 # 戦果サマリー（タブなし・常時表示）
+    ├── 撃墜数 / 被攻撃回数 / 索敵成功（stat card）
+    ├── 命中率（useWeaponAccuracySummary）
+    └── PartHitSummaryTable（既存、Issue #504）
+```
+
+### チャプタートラック（`ChapterTrack.tsx` / `useBattleChapters.ts`）
+
+「読むログ」ではなく「ジャンプ先」として位置づけたコンポーネント。自機関連ログのうち、以下の**有意なイベントのみ**
+を抽出する（通常の `ATTACK`/`MISS` は対象外とし、3Dシーン側の `BattleEventDisplay` によるフローティング演出のみで表現する）。
+
+| 種別 | 抽出条件 |
+|---|---|
+| `COMBO` | `action_type === "MELEE_COMBO"` かつ自機が `actor_id` |
+| `CRITICAL` | `action_type === "ATTACK"` かつ `is_crit === true`、自機が `actor_id`/`target_id` のいずれか |
+| `DESTROYED_ENEMY` / `DESTROYED_SELF` | `action_type === "DESTROYED"`、`actor_id` が敵機体/自機 |
+| `DETECTION` | `action_type === "DETECTION"` かつ自機が `actor_id` |
+
+表示文言は `message` の自由文ではなく、`weapon_name`/`damage`/`combo_count`/`action_type` 等の構造化フィールドから
+組み立てる（`computeBattleChapters()`、`frontend/src/components/BattleViewer/hooks/useBattleChapters.ts`）。
+
+`currentTimestamp` に同期して該当チャプターをハイライトし自動スクロールで追従、クリックで `onSeek` を呼び出して
+その時刻へシークする（字幕トラック的な挙動）。
+
+### 敵機HPパネルの複数機対応（`BattleOverlay.tsx`）
+
+テキストログ廃止に伴い3Dビューアが唯一の状況把握手段になったため、敵HPパネルを拡張した:
+
+- 自機が現在攻撃対象にしている敵機（`currentTargetId`）を常に最上段に固定し `TGT` バッジを表示する
+- 表示件数を `MAX_VISIBLE_ENEMIES`（2機）に制限し、超過分は「…他N機」で省略する
+
+`currentTargetId` は自機の `ATTACK`/`MELEE_COMBO`/`MISS` ログ（`target_id` 付き）のみを `logs` から事前に
+絞り込んだ `selfTargetLogs` を `currentTimestamp` 以下の範囲で逆順探索して求める。`currentTimestamp` は再生中
+100msごとに変わるため、絞り込み前の全ログ（大規模バトルで十万件規模、`docs/features/battle-log-feature.md`
+参照）を毎tick逆順走査すると重くなる。`selfTargetLogs` 自体は `logs` の参照が変わらない限り再計算されないため、
+毎tickの逆順探索は自機の攻撃ログ数（全体よりはるかに少ない）に対してのみ行われる。
+
+### 戦果サマリー（`BattleSummaryPanel.tsx`）
+
+タブ切り替えは行わず常時表示する。チャプタートラック/3D演出とは異なり、ここは「自身のカスタマイズの妥当性を
+判断する」ための事後分析用途のため、ダメージ等の実数値をそのまま表示する方針とした（issue #521 コメント参照）。
+
+- `usePartHitSummary`（既存、Issue #504）: 部位別の被弾/命中集計
+- `useWeaponAccuracySummary`（新規）: 自機の武装ごとの命中率。`ATTACK`/`MELEE_COMBO`/`MISS` の件数から算出し、
+  一度も使用しなかった装備武器（`battle.player_info.weapons`）も 0/0・`--%` 表示で一覧に含める
+- `useDetectionSummary`（新規）: 自機が索敵に成功した敵機数（`DETECTION` ログの `target_id` をユニーク集計）/ 総敵機数
+- 撃墜数・被攻撃回数は `BattleResult.kills`/`attacks_received_count`（Issue #415 の戦闘ダイジェスト、書き込み時に
+  1回だけ計算済みの非正規化カラム）をそのまま表示し、ログからの再計算はしない
+
+### 削除・整理したもの
+
+- `frontend/src/components/history/BattleLogViewer.tsx`
+- `frontend/src/hooks/useBattleLogic.ts`（自機フォーカスフィルタ。用途が `BattleLogViewer` のみだったため）
+- `frontend/src/utils/logFormatter.ts` の `isProductionDebugLog()`/`formatBattleLogs()`（同上、未使用化のため削除）
+- `BattleDetailModal` の `mobileSuits` prop・`useMobileSuits()` 呼び出し（`ownedMobileSuitIds` が
+  `BattleLogViewer` 専用だったため、フェッチごと不要になった）
+
+`frontend/src/utils/logFormatter.ts` の `formatBattleLog()` 本体（距離/命中率/ダメージの抽象化・スタイル判定）は
+`frontend/src/components/Dashboard/DevSimulationPanel.tsx`（開発環境専用の即時シミュレーションパネル）が
+引き続き利用しているため削除していない。

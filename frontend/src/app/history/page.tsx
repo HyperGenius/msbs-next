@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useBattleHistory, useMissions, useMobileSuits } from "@/services/api";
+import { useBattleHistory, useMissions } from "@/services/api";
 import { BattleResult } from "@/types/battle";
 import BattleList from "@/components/history/BattleList";
 import BattleDetailModal from "@/components/history/BattleDetailModal";
@@ -12,7 +12,6 @@ export default function HistoryPage() {
   const { isLoaded } = useAuth();
   const { battles, isLoading, isError } = useBattleHistory(50);
   const { missions } = useMissions();
-  const { mobileSuits } = useMobileSuits();
   const [selectedBattle, setSelectedBattle] = useState<BattleResult | null>(null);
   const [clerkTimedOut, setClerkTimedOut] = useState(false);
 
@@ -82,7 +81,6 @@ export default function HistoryPage() {
           <BattleDetailModal
             battle={selectedBattle}
             missionName={getMissionName(selectedBattle.mission_id, selectedBattle.created_at)}
-            mobileSuits={mobileSuits}
             onClose={() => setSelectedBattle(null)}
           />
         )}

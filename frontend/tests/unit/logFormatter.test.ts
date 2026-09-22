@@ -1,6 +1,6 @@
 /* frontend/tests/unit/logFormatter.test.ts */
 import { describe, it, expect } from "vitest";
-import { formatBattleLog, formatBattleLogs, isProductionDebugLog } from "@/utils/logFormatter";
+import { formatBattleLog } from "@/utils/logFormatter";
 import { BattleLog } from "@/types/battle";
 
 const PLAYER_ID = "player-001";
@@ -193,47 +193,6 @@ describe("formatBattleLog – スタイル判定", () => {
     const result = formatBattleLog(log, false, PLAYER_ID);
     expect(result.style.borderStyle).toBe("border-green-900");
     expect(result.style.textStyle).toContain("text-green-600");
-  });
-});
-
-// ─────────────────────────────────────────────
-// formatBattleLogs — フィルタリング
-// ─────────────────────────────────────────────
-describe("formatBattleLogs – フィルタリング", () => {
-  const logs: BattleLog[] = [
-    makeLog({ actor_id: PLAYER_ID, target_id: undefined }),
-    makeLog({ actor_id: "enemy-001", target_id: PLAYER_ID }),
-    makeLog({ actor_id: "enemy-001", target_id: "enemy-002" }),
-    makeLog({ actor_id: "ally-001", target_id: "enemy-001" }),
-  ];
-
-  it("開発環境ではすべてのログを返す", () => {
-    const results = formatBattleLogs(logs, false, PLAYER_ID);
-    expect(results).toHaveLength(4);
-  });
-
-  it("本番環境では playerId に関連するログのみ返す", () => {
-    const results = formatBattleLogs(logs, true, PLAYER_ID);
-    // actor_id === PLAYER_ID (1件) + target_id === PLAYER_ID (1件)
-    expect(results).toHaveLength(2);
-    expect(results.every(
-      (r) => r.actor_id === PLAYER_ID || logs.find(
-        (l) => l.actor_id === r.actor_id && l.target_id === PLAYER_ID
-      )
-    )).toBe(true);
-  });
-
-  it("本番環境で playerId が空文字のときはすべてのログを返す", () => {
-    const results = formatBattleLogs(logs, true, "");
-    expect(results).toHaveLength(4);
-  });
-
-  it("本番環境ではメッセージも抽象化される", () => {
-    const productionLogs: BattleLog[] = [
-      makeLog({ actor_id: PLAYER_ID, message: "300m から射撃 (命中: 60%) 40ダメージ", damage: 40 }),
-    ];
-    const results = formatBattleLogs(productionLogs, true, PLAYER_ID);
-    expect(results[0].message).toBe("中距離 から射撃 ダメージ");
   });
 });
 
@@ -705,90 +664,3 @@ describe("formatBattleLog – UNKNOWN機 メッセージ表示", () => {
   });
 });
 
-// ─────────────────────────────────────────────
-// isProductionDebugLog — デバッグログ判定
-// ─────────────────────────────────────────────
-describe("isProductionDebugLog", () => {
-  it("「ファジィ推論」を含むメッセージは true を返す", () => {
-    expect(isProductionDebugLog("GelgoogはファジィでZaku IIを最優先ターゲットに決定（優先度スコア: 0.868）")).toBe(true);
-  });
-
-  it("「優先度スコア」を含むメッセージは true を返す", () => {
-    expect(isProductionDebugLog("優先度スコア: 0.75 で決定")).toBe(true);
-  });
-
-  it("「UNKNOWN機」を含むメッセージは true を返す", () => {
-    expect(isProductionDebugLog("UNKNOWN機が中距離にDom (NPC)を発見！（索敵確率 82%）")).toBe(true);
-  });
-
-  it("「[FUZZY]」を含むメッセージは true を返す", () => {
-    expect(isProductionDebugLog("[FUZZY] ファジィ推論の中間スコア: 0.5")).toBe(true);
-  });
-
-  it("デバッグパターンを含まない通常メッセージは false を返す", () => {
-    expect(isProductionDebugLog("[アムロ]のGundamが[ビーム・ライフル]で攻撃！")).toBe(false);
-  });
-
-  it("空文字列は false を返す", () => {
-    expect(isProductionDebugLog("")).toBe(false);
-  });
-
-  it("デバッグパターンの一部のみ含む場合も true を返す（ファジィ推論）", () => {
-    expect(isProductionDebugLog("ファジィ推論を適用中")).toBe(true);
-  });
-});
-
-// ─────────────────────────────────────────────
-// formatBattleLogs — デバッグログフィルタリング（本番環境）
-// ─────────────────────────────────────────────
-describe("formatBattleLogs – 本番環境デバッグログフィルタリング", () => {
-  it("本番環境では「ファジィ推論」を含むログを除外する", () => {
-    const logs: BattleLog[] = [
-      makeLog({ actor_id: PLAYER_ID, message: "GelgoogはファジィでZaku IIを最優先ターゲットに決定（優先度スコア: 0.868）" }),
-      makeLog({ actor_id: PLAYER_ID, message: "通常の行動ログ" }),
-    ];
-    const results = formatBattleLogs(logs, true, PLAYER_ID);
-    expect(results).toHaveLength(1);
-    expect(results[0].message).toBe("通常の行動ログ");
-  });
-
-  it("本番環境では「優先度スコア」を含むログを除外する", () => {
-    const logs: BattleLog[] = [
-      makeLog({ actor_id: PLAYER_ID, message: "優先度スコア: 0.75 で決定" }),
-      makeLog({ actor_id: PLAYER_ID, message: "移動した" }),
-    ];
-    const results = formatBattleLogs(logs, true, PLAYER_ID);
-    expect(results).toHaveLength(1);
-    expect(results[0].message).toBe("移動した");
-  });
-
-  it("本番環境では「UNKNOWN機」を含むログを除外する", () => {
-    const logs: BattleLog[] = [
-      makeLog({ actor_id: "enemy-001", message: "UNKNOWN機が中距離にDomを発見！（索敵確率 82%）", target_id: PLAYER_ID }),
-      makeLog({ actor_id: PLAYER_ID, message: "攻撃した" }),
-    ];
-    const results = formatBattleLogs(logs, true, PLAYER_ID);
-    // UNKNOWN機のログは除外（target_id === PLAYER_ID でも除外）
-    expect(results).toHaveLength(1);
-    expect(results[0].message).toBe("攻撃した");
-  });
-
-  it("本番環境では「[FUZZY]」を含むログを除外する", () => {
-    const logs: BattleLog[] = [
-      makeLog({ actor_id: PLAYER_ID, message: "[FUZZY] デバッグ情報" }),
-      makeLog({ actor_id: PLAYER_ID, message: "行動ログ" }),
-    ];
-    const results = formatBattleLogs(logs, true, PLAYER_ID);
-    expect(results).toHaveLength(1);
-    expect(results[0].message).toBe("行動ログ");
-  });
-
-  it("開発環境ではデバッグログを除外しない", () => {
-    const logs: BattleLog[] = [
-      makeLog({ actor_id: PLAYER_ID, message: "GelgoogはファジィでZaku IIを最優先ターゲットに決定（優先度スコア: 0.868）" }),
-      makeLog({ actor_id: PLAYER_ID, message: "通常の行動ログ" }),
-    ];
-    const results = formatBattleLogs(logs, false, PLAYER_ID);
-    expect(results).toHaveLength(2);
-  });
-});
