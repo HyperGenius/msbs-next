@@ -1,7 +1,7 @@
 /* frontend/src/components/history/BattleDetailModal.tsx */
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 import ChapterTrack from "@/components/BattleViewer/ui/ChapterTrack";
@@ -31,7 +31,9 @@ export default function BattleDetailModal({
   const logs = fetchedLogs ?? [];
 
   const playerId = battle.player_info?.id ?? null;
-  const enemies = (battle.enemies_info ?? []) as MobileSuit[];
+  // battle.enemies_info のキャストをレンダーのたびに新しい配列参照として作ると、
+  // useBattleChapters/BattleSummaryPanel 側の useMemo が毎回再計算されてしまうためメモ化する
+  const enemies = useMemo(() => (battle.enemies_info ?? []) as MobileSuit[], [battle.enemies_info]);
 
   const chapters = useBattleChapters(
     logs,

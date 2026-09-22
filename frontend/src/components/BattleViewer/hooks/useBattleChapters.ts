@@ -55,7 +55,7 @@ export function computeBattleChapters(
         icon: style.icon,
         accentColor: style.accentColor,
         label: log.combo_count ? `${log.combo_count}HIT格闘コンボ` : "格闘コンボ",
-        detail: log.damage ? `-${log.damage}` : undefined,
+        detail: log.damage != null ? `-${log.damage}` : undefined,
       });
       return;
     }
@@ -69,7 +69,7 @@ export function computeBattleChapters(
         icon: style.icon,
         accentColor: style.accentColor,
         label: log.weapon_name ? `${log.weapon_name} クリティカルヒット` : "クリティカルヒット",
-        detail: log.damage ? `-${log.damage}` : undefined,
+        detail: log.damage != null ? `-${log.damage}` : undefined,
       });
       return;
     }
@@ -120,14 +120,19 @@ export function computeBattleChapters(
 /**
  * `computeBattleChapters` をメモ化するフック。
  * `logs` の参照が変わらない限り再計算しない（BattleViewer 全体の再計算方針に合わせる）。
+ * 依存配列には `player` オブジェクトの参照ではなく `id`/`name` のプリミティブを使う。
+ * 呼び出し側が `{id, name}` をレンダーのたびにインライン生成しても、参照比較では
+ * ないため不要な再計算が起きない。
  */
 export function useBattleChapters(
   logs: BattleLog[],
   player: { id: string; name: string } | null,
   enemies: MobileSuit[]
 ): ChapterEvent[] {
+  const playerId = player?.id;
+  const playerName = player?.name;
   return useMemo(() => {
-    if (!player) return [];
-    return computeBattleChapters(logs, player, enemies);
-  }, [logs, player, enemies]);
+    if (!playerId || !playerName) return [];
+    return computeBattleChapters(logs, { id: playerId, name: playerName }, enemies);
+  }, [logs, playerId, playerName, enemies]);
 }

@@ -52,6 +52,18 @@ describe("computeBattleChapters", () => {
     expect(chapters[0].label).toBe("ビームライフル クリティカルヒット");
   });
 
+  it("damageが0のコンボでもdetailは「-0」になる（falsy値の取り違え回避）", () => {
+    const logs = [makeLog({ action_type: "MELEE_COMBO", target_id: enemy.id, combo_count: 1, damage: 0 })];
+    const chapters = computeBattleChapters(logs, PLAYER, [enemy]);
+    expect(chapters[0].detail).toBe("-0");
+  });
+
+  it("damageが0のクリティカルでもdetailは「-0」になる（falsy値の取り違え回避）", () => {
+    const logs = [makeLog({ action_type: "ATTACK", target_id: enemy.id, is_crit: true, damage: 0 })];
+    const chapters = computeBattleChapters(logs, PLAYER, [enemy]);
+    expect(chapters[0].detail).toBe("-0");
+  });
+
   it("is_crit=falseのATTACKはチャプターにならない", () => {
     const logs = [makeLog({ action_type: "ATTACK", target_id: enemy.id, is_crit: false, damage: 50 })];
     expect(computeBattleChapters(logs, PLAYER, [enemy])).toHaveLength(0);
