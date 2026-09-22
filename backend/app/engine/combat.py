@@ -566,6 +566,7 @@ class CombatMixin:
             self._process_miss(
                 actor,
                 target,
+                weapon,
                 log_base,
                 snapshot,
                 attack_chatter,
@@ -720,6 +721,8 @@ class CombatMixin:
                     velocity_snapshot=Vector3.from_numpy(
                         self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                     ),  # type: ignore[attr-defined]
+                    weapon_name=weapon.name if weapon else None,
+                    weapon_id=weapon.id if weapon else None,
                 )
             )
             return
@@ -1054,6 +1057,7 @@ class CombatMixin:
         self,
         actor: MobileSuit,
         target: MobileSuit,
+        weapon: Weapon,
         log_base: str,
         snapshot: Vector3,
         attack_chatter: str | None = None,
@@ -1083,6 +1087,8 @@ class CombatMixin:
                 velocity_snapshot=Vector3.from_numpy(
                     self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                 ),  # type: ignore[attr-defined]
+                weapon_name=weapon.name if weapon else None,
+                weapon_id=weapon.id if weapon else None,
             )
         )
 
