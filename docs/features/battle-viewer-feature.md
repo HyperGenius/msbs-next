@@ -267,9 +267,13 @@ interface UnitSnapshot {
 | `frontend/src/components/BattleViewer/scene/BattleScene.tsx` | Three.js シーン |
 | `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx` | MS 球体描画 |
 | `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx` | 障害物円柱描画 |
-| `frontend/src/components/BattleViewer/scene/BattleEventDisplay.tsx` | イベントエフェクト表示 |
+| `frontend/src/components/BattleViewer/scene/TracerMesh.tsx` | 射線（ビーム／実弾）描画（Issue #531） |
+| `frontend/src/components/BattleViewer/scene/WeaponLabel.tsx` | 発射側の武器名ラベル（Issue #531） |
+| `frontend/src/components/BattleViewer/scene/ImpactMarker.tsx` | 着弾フラッシュとダメージ数字（Issue #531） |
 | `frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts` | 状態スナップショット管理 |
-| `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts` | イベント管理 |
+| `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts` | 現在タイムスタンプの攻撃演出データ生成 |
+| `frontend/src/components/BattleViewer/hooks/useAttackEffectQueue.ts` | 攻撃演出のスポーン・タイミング・段積み（Issue #531） |
+| `frontend/src/components/BattleViewer/hooks/useHudAttackLog.ts` | HUD の攻撃ログ行（Issue #531） |
 
 ---
 
@@ -351,100 +355,127 @@ BattleSimulator.map_bounds (backend/app/engine/simulation.py)
 
 ---
 
-## 攻撃エフェクト（武器・命中結果の可視化）
+## 攻撃エフェクト（ヒット演出）（Issue #531）
 
 ### 概要
 
-攻撃が発生した際に「どの武器で」「どのMSに」「命中したかミスか」を視覚的に表示する。
+「誰 → 誰」は射線と発射側の武器名で、「何が起きたか」は着弾地点のフラッシュと数字で伝える。
+情報を発生地点ごとに分け、次の順に再生する（見た目・タイミングの基準はモックアップ `msbs_hit_effect_final_mockup.html`）。
+
+```
+射線（発射側 → 被弾側） → 発射側の武器名 → 着弾フラッシュ → 上昇する数字 → HP バーのチップ → HUD ログ
+```
+
+以前の `AttackLine`（止まって表示される線）・`ProjectileMesh`（800ms で飛ぶ弾）・`HitEffectMesh`（パーティクル）・
+`BattleEventDisplay`（ユニット上方に武器名とテキストをまとめて表示）は、この方式に置き換えて削除した。
 
 ---
 
-### 1. 攻撃ライン（ビーム/弾道）の表示
-
-攻撃者からターゲットへの攻撃ラインを一時表示する。
-
-| 状態 | 線スタイル | 色 |
-|------|----------|-----|
-| 命中 | 実線（太め） | 黄色 `#ffcc00` |
-| ミス | 破線（細め） | グレー `#888888` |
-
-**表示時間:** 現在のタイムスタンプが変わると消える（次のステップへ進むと自動消去）
-
-#### `AttackLine` コンポーネント（`BattleScene.tsx` 内）
-
-```typescript
-function AttackLine({ fromPos, toPos, hit }) {
-    // 命中: THREE.LineBasicMaterial (color: 0xffcc00, linewidth: 2)
-    // ミス: THREE.LineDashedMaterial (color: 0x888888, dashSize: 1, gapSize: 0.5)
-}
-```
-
-攻撃ラインは `BattleEventEffect.targetPos` が存在するユニットに対して描画される。
-
----
-
-### 2. 命中エフェクト（テキスト表示）
-
-`BattleEventDisplay` コンポーネントがターゲット位置でエフェクトテキストを表示する。
-
-| 種別 | テキスト | 色 |
-|------|---------|-----|
-| 通常命中 | `💥 -450` | 黄色 `#ffcc00` |
-| クリティカル（ターゲット） | `💥💥 -450` | 赤 `#ff0000` |
-| クリティカル（アクター） | `💥💥 CRITICAL HIT!!` | 赤 `#ff0000` |
-| ミス | `💨 MISS` | グレー `#888888` |
-| 防御軽減 | `RESIST XX%` | 緑 `#4caf50` |
-
-武器名が `weapon_name` フィールドに存在する場合、エフェクトテキストの上に小さく表示される。
-
----
-
-### 3. `BattleEventEffect` 型拡張
-
-```typescript
-interface BattleEventEffect {
-    type: 'critical' | 'resist' | 'guard' | 'damage' | 'miss' | 'attack_line';
-    text: string;
-    color: string;
-    weaponName?: string;       // 武器名（表示用）
-    targetPos?: { x: number; y: number; z: number }; // 攻撃ライン描画用ターゲット位置
-    hit?: boolean;             // 命中フラグ（true: 命中, false: ミス）
-}
-```
-
-- `type: 'attack_line'` はアクター側に設定され、テキスト表示なし（ライン描画のみ）
-- `targetPos` が設定されたエフェクトは、そのユニットの位置からターゲット位置への攻撃ラインを描画
-
----
-
-### 4. `useBattleEvents` フック処理フロー
+### 1. データフロー
 
 ```
-currentTimestampLogs
-  Pass 1: positionMap を構築（actor_id → position_snapshot）
-  Pass 2: エフェクト生成
-    ├── ATTACK + クリティカルヒット → アクター: critical (targetPos付き)
-    │                               → ターゲット: critical damage (💥💥)
-    ├── MELEE_COMBO → アクター: combo テキスト / ターゲット: damage (💥)
-    ├── ATTACK（通常命中） → アクター: attack_line (hit=true, 黄色)
-    │                       → ターゲット: damage (💥) または resist
-    └── MISS → アクター: attack_line (hit=false, グレー破線)
-               → ターゲット: miss (💨 MISS)
-```
-
----
-
-### 5. レンダリングフロー（`BattleScene.tsx`）
-
-```
+timestampLogs（現在タイムスタンプのログ）
+  └─ useBattleEvents → computeAttackEvents()
+       ATTACK / MISS / MELEE_COMBO 1 件 → AttackEvent 1 件
+       （発射側 ID・被弾側 ID・武器名・射線種別・結果・ダメージ）
 BattleScene
-  ├── playerEvent
-  │   ├── BattleEventDisplay (type !== 'attack_line' の場合)
-  │   └── AttackLine (targetPos が存在する場合)
-  └── enemyEvents
-      ├── BattleEventDisplay (type !== 'attack_line' の場合)
-      └── AttackLine (targetPos が存在する場合)
+  └─ useAttackEffectQueue（currentTimestamp が変わった時だけスポーン）
+       spawnAttackEffects() → tracers / labels / impacts
+       ├─ TracerMesh    … 射線
+       ├─ WeaponLabel   … 発射側の武器名
+       └─ ImpactMarker  … 着弾フラッシュ + ダメージ数字
+BattleOverlay
+  ├─ HpBar           … チップ表現
+  └─ useHudAttackLog … 左下の HUD ログ行
 ```
+
+- `AttackEvent.impact` は `hit` / `critical` / `combo` / `miss` の 4 種。
+  Critical は `is_crit` または message の「クリティカルヒット」で判定する。
+- 射線種別（`BEAM` / `BULLET`）は、武器 ID から引いた `Weapon.type === "BEAM"` を優先し、
+  引けない場合は武器名（「ビーム」「beam」「mega particle」）で判定する。
+- 射線・演出の位置は `getBattleSnapshot()` の現在位置（`playerState.pos` / 各敵の `state.pos`）を使う。
+  未索敵の敵が発射側の場合は射線と武器名を出さず、被弾側の着弾演出だけを出す。
+- 演出はタイムスタンプをまたいで保持するキュー（`useAttackEffectQueue`）で管理する。
+  表示期間を過ぎた演出は次のスポーン時にも取り除く（上限: 射線 20 / 武器名 8 / 着弾 15）。
+
+---
+
+### 2. 射線（`TracerMesh`）
+
+| 種別 | 描き方 | 時間 | 着弾演出の開始 |
+|---|---|---|---|
+| ビーム | 発射側から直線が伸び（約 60ms）、フェードで消える | 220ms | 150ms 後 |
+| 実弾 | 長さ 1.2（Three.js 座標）の弾体が飛ぶ | 距離 ÷ 1.6m/ms（120〜350ms） | 弾体の到着時 |
+| MISS | 目標の横上方（横 30m・上 20m）へ外し、1.2 倍先まで伸ばす | 同上 | 同上（数字のみ） |
+
+- 線は drei の `Line`（Line2）で描く。線幅はピクセル単位（ビーム 2.5px / 実弾 2px）。
+- 格闘コンボ（`MELEE_COMBO`）は直前の格闘 `ATTACK` と同じ射線上で起きるため、射線と武器名を重ねて出さない。
+  数字は同じ組の `ATTACK` の着弾から 200ms 遅らせて出す。
+- 時間の定数は `useAttackEffectQueue.ts` の `EFFECT_TIMING` にまとめている。
+
+### 3. 武器名（`WeaponLabel`）
+
+- 発射側の上に `▶ ビームライフル` を発射の瞬間から 900ms 表示し、フェードで消す（左端の帯は射線の色）。
+- 被弾側には武器名を出さない。
+- 同じ発射側・同じ武器の連射はラベルを積まずに出し直す。別の武器が同時に出る場合は 24px ずつ上に積む。
+
+### 4. 着弾フラッシュとダメージ数字（`ImpactMarker`）
+
+- **フラッシュ:** 被弾側の位置に白い芯と黄色のリングを出す（通常 160ms / Critical 240ms でリングが大きい）。MISS はフラッシュ無し。
+- **数字:** 被弾側の中心から右上（右 22px・上 18px）にスポーンし、850ms かけて 20px 上昇しながらフェードする（ease-out）。
+  バウンス・スケールのポップ・`💥` 絵文字は使わない。黒の 1px 縁取り（`text-shadow`）で緑のグリッドに埋もれないようにする。
+- **タイミング:** フラッシュと数字は射線が届いた時刻に始まる（CSS の `animation-delay`）。
+- **連続ヒット:** 表示期間が重なる同じ被弾側の数字は、空いている一番下の段（24px 刻み）に積む（押し上げ方式。合算はしない）。
+- **表記:**
+
+| 結果 | 数字 | 補足ラベル | サイズ |
+|---|---|---|---|
+| 通常命中 | `-150` | なし | 16px |
+| Critical | `-350` | `CRITICAL` | 22px |
+| 格闘コンボ | `-750` | `NHIT COMBO` | 22px |
+| RESIST | `-120` | `RESIST 30%`（緑） | 16px |
+| MISS | `MISS` | なし | 16px |
+
+- Critical は攻撃側に `CRITICAL HIT!!` を出さず、被弾側の数字（サイズ・補足ラベル）と大きいフラッシュで表現する。
+  被弾した機体メッシュのフラッシュ（`MobileSuitMesh` の `isFlashing`）は従来どおり。
+- RESIST の判定文字列（「対ビーム装甲により」「対実弾装甲により」）は現行バックエンドの文言と一致しないため、
+  本番ではまだ発火しない（Issue #529 で対応予定）。
+- CSS のキーフレーム（`bv-weapon-label` / `bv-number-rise` / `bv-number-fade` / `bv-flash-ring` / `bv-flash-core`）は
+  `frontend/src/app/globals.css` に定義している。フラッシュのキーフレームは 0% を透明にしており、
+  `animation-delay` 中（着弾前）に `fill-mode: both` で見えてしまうのを防いでいる。
+
+### 5. 配色
+
+| 用途 | 色 |
+|---|---|
+| 与ダメージ（自機以外が被弾） | `#ffd84a` |
+| 被ダメージ（自機が被弾） | `#ff5a4e` |
+| MISS | `#9aa0a6` |
+| 射線・武器名の帯（ビーム） | `#6fe6ff` |
+| 射線・武器名の帯（実弾） | `#ffb36b` |
+| フラッシュ（芯 / リング） | `#ffffff` / `#ffd84a` |
+| RESIST の補足ラベル | `#4caf50`（既存） |
+
+定数は `BattleViewer/utils/index.ts` の `HIT_EFFECT_COLORS`。`frontend/CLAUDE.md` の配色パレットにも追記している。
+
+### 6. HP バーのチップ表現（`HpBar`）
+
+- 本体の帯は 150ms で新しい幅に縮む。その下の白い帯（チップ）は 400ms 待ってから 500ms かけて縮むため、
+  減った量が一瞬白く残る。
+- 連続ヒット中は幅が変わるたびに待ち時間がやり直されるため、合計の減少量が残ってから縮む。
+- シークで時刻を戻して HP が増えた場合は、本体・チップともにトランジション無しで幅を合わせる。
+- 以前の `animate-pulse` による点滅は削除した（`HpBar` は `timestampLogs` 等を受け取らなくなった）。
+
+### 7. HUD ログ行（`BattleOverlay` / `useHudAttackLog`）
+
+- 左下に直近 3 行を `ガンダム ▶ ザクII (NPC)  ビームライフル  -150` の形式で出す。
+  結果は `-150` / `-350 CRITICAL` / `-750 (2HIT COMBO)` / `MISS`。
+- 色は被ダメージ `#ff5a4e`、MISS `#9aa0a6`、それ以外は HUD 本文と同じグレー。最新行以外は半透明にする。
+- 自機と索敵済みの敵が絡むログだけを出す（未索敵の敵の名前を出さない）。
+- 全ログから攻撃ログ（`ATTACK` / `MELEE_COMBO` でダメージ > 0、または `MISS`）を 1 回だけ抜き出し、
+  再生中は二分探索で現在時刻以前の末尾を探す。
+- `formatBattleLog()`（`utils/logFormatter.ts`）との共通化は見送った。`formatBattleLog()` は backend の
+  message 文字列を加工する関数で、HUD ログは `actor_id` / `target_id` / `weapon_name` / `damage` から組み立てるため。
 
 ---
 
@@ -630,9 +661,13 @@ function CameraInitializer({ px, py, pz, controlsRef }) {
 | `frontend/src/components/BattleViewer/scene/BattleScene.tsx` | Three.js シーン |
 | `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx` | MS 球体描画 |
 | `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx` | 障害物円柱描画 |
-| `frontend/src/components/BattleViewer/scene/BattleEventDisplay.tsx` | イベントエフェクト表示 |
+| `frontend/src/components/BattleViewer/scene/TracerMesh.tsx` | 射線（ビーム／実弾）描画（Issue #531） |
+| `frontend/src/components/BattleViewer/scene/WeaponLabel.tsx` | 発射側の武器名ラベル（Issue #531） |
+| `frontend/src/components/BattleViewer/scene/ImpactMarker.tsx` | 着弾フラッシュとダメージ数字（Issue #531） |
 | `frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts` | 状態スナップショット管理 |
-| `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts` | イベント管理 |
+| `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts` | 現在タイムスタンプの攻撃演出データ生成 |
+| `frontend/src/components/BattleViewer/hooks/useAttackEffectQueue.ts` | 攻撃演出のスポーン・タイミング・段積み（Issue #531） |
+| `frontend/src/components/BattleViewer/hooks/useHudAttackLog.ts` | HUD の攻撃ログ行（Issue #531） |
 
 ---
 
@@ -819,7 +854,7 @@ BattleDetailModal
 ### チャプタートラック（`ChapterTrack.tsx` / `useBattleChapters.ts`）
 
 「読むログ」ではなく「ジャンプ先」として位置づけたコンポーネント。自機関連ログのうち、以下の**有意なイベントのみ**
-を抽出する（通常の `ATTACK`/`MISS` は対象外とし、3Dシーン側の `BattleEventDisplay` によるフローティング演出のみで表現する）。
+を抽出する（通常の `ATTACK`/`MISS` は対象外とし、3Dシーン側の攻撃演出（射線・武器名・着弾数字）と HUD ログ行で表現する。Issue #531）。
 
 | 種別 | 抽出条件 |
 |---|---|
@@ -895,7 +930,7 @@ npm run storybook   # http://localhost:6006 → BattleViewer/Effects, BattleView
 
 | ストーリー | 内容 |
 |---|---|
-| `BattleViewer/Effects/*` | 自機 1 機・敵 1 機で演出を 1 件だけ発生させ、繰り返し再生する。Controls で演出種別・攻撃側・武器・距離・ダメージ・コンボ数・環境・自動リプレイ間隔を変更できる |
+| `BattleViewer/Effects/*` | 自機 1 機・敵 1 機で演出を 1 件だけ発生させ、繰り返し再生する。Controls で演出種別・攻撃側・武器・距離・ダメージ・コンボ数・環境・自動リプレイ間隔を変更できる。`RapidFire` は同時刻に 3 発命中させ、数字の段積みを確認する（Issue #531） |
 | `BattleViewer/Scenario/Skirmish` | 自機 1 機・敵 2 機の約 8 秒のバトル。`BattleDetailModal` と同じく `ChapterTrack` / `TurnController` 付きで通し再生・チャプタージャンプできる |
 
 ### ファイル
@@ -915,13 +950,12 @@ npm run storybook   # http://localhost:6006 → BattleViewer/Effects, BattleView
   （`backend/app/engine/combat.py`）と異なる文言でログを作ると、本番では出ない演出を再現してしまう。
   格闘コンボも本番同様「格闘命中の `ATTACK` → 直後に `MELEE_COMBO`」の順で生成している。
   バックエンドの文言や `COMBO_DAMAGE_MULTIPLIER` を変更した場合は `battleLogFixtures.ts` も合わせて更新する。
-- **演出は `currentTimestamp` の変化で発火する。** 飛翔体・ヒットエフェクトは `BattleScene` の
+- **演出は `currentTimestamp` の変化で発火する。** 射線・武器名・着弾演出は `useAttackEffectQueue` の
   `useEffect([currentTimestamp])` でスポーンされるため、時刻を固定したままでは 1 回しか再生されない。
   `EffectReplayStage` は「0 秒（演出なし）→ 150ms 後に演出時刻」と往復させることで再発火させている
   （同一レンダー内で往復すると effect が発火しない）。
-- **同時刻のターゲット位置ログが必要。** 攻撃ラインの着弾点は同じタイムスタンプ内の `position_snapshot`
-  から引くため、演出ログと同時刻にターゲットの `MOVE` ログを先に置いている。
-  また敵機は自機の `DETECTION` ログが無いと描画されない。
+- **敵機は自機の `DETECTION` ログが無いと描画されない。** 射線・演出の位置は各ユニットのスナップショット位置を使うため、
+  未索敵の敵が発射側だと射線と武器名が出ない。
 - **Docs ページは無効化している（`tags: ["!autodocs"]`）。** Canvas を 1 ページに並べると
   ブラウザの WebGL コンテキスト数上限を超えるため。
 - アニメーションが `Date.now()` / `useFrame` に依存するため、Chromatic 等のビジュアルリグレッションには使っていない。
@@ -932,5 +966,6 @@ npm run storybook   # http://localhost:6006 → BattleViewer/Effects, BattleView
 - RESIST 演出（`RESIST xx%`）は、フロントの判定文字列（「対ビーム装甲により」「対実弾装甲により」）が
   現行バックエンドのメッセージと一致しないため本番で発火しない。Issue #529 で対応予定のため、
   Effects ストーリーには RESIST を含めていない。
-- 格闘コンボ時は同時刻の `ATTACK` ログが先にアクター側の演出枠を使うため、3D 上の「N HIT COMBO!!」
-  テキスト（`useBattleEvents` の `MELEE_COMBO` 分岐）は表示されず、`ComboEffect` のオーバーレイのみが表示される。
+- 格闘コンボは、以前は同時刻の `ATTACK` ログが先にアクター側の演出枠を使うため 3D 上の「N HIT COMBO!!」が
+  表示されていなかった。Issue #531 で演出枠の仕組みを廃止し、被弾側の `NHIT COMBO` 付きの数字として表示するようにした
+  （画面中央の `ComboEffect` オーバーレイは従来どおり）。

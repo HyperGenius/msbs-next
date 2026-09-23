@@ -2,61 +2,45 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { BattleLog } from "@/types/battle";
+import { useState } from "react";
 
-// HPバーコンポーネント（ダメージフラッシュ効果付き）
+// チップ（減った分の白い帯）は本体より遅れて縮む。
+// 本体と同じ幅を遅延付きトランジションで追うため、HP が下がった時だけ本体との差が白く見える。
+// 連続ヒット中は幅が変わるたびに遅延がやり直されるため、コンボの合計分が残ってから縮む。
+const BAR_TRANSITION = "width 150ms ease-out";
+const CHIP_TRANSITION = "width 500ms ease-in 400ms";
+
+/** HP バー。被弾時は減った分を一瞬白く残してから削る。 */
 export function HpBar({
     current,
     max,
     colorFunc,
-    currentTimestamp,
-    unitId,
-    timestampLogs
 }: {
     current: number;
     max: number;
     colorFunc: (ratio: number) => string;
-    currentTimestamp: number;
-    unitId: string;
-    /** 現在タイムスタンプ分のログ（呼び出し元で事前フィルタ済み。Issue #467） */
-    timestampLogs: BattleLog[];
 }) {
-    const [flash, setFlash] = useState(false);
-    const prevTimestampRef = useRef(currentTimestamp);
+    // シークで時刻を戻すと HP が増える。そのときはチップを出さず、すぐに幅を合わせる
+    const [prevCurrent, setPrevCurrent] = useState(current);
+    const [increased, setIncreased] = useState(false);
+    if (current !== prevCurrent) {
+        setIncreased(current > prevCurrent);
+        setPrevCurrent(current);
+    }
 
-    useEffect(() => {
-        // タイムスタンプが変わったときにダメージを受けたかチェック
-        if (currentTimestamp !== prevTimestampRef.current) {
-            const tookDamage = timestampLogs.some(log =>
-                (log.action_type === "ATTACK" && log.target_id === unitId && log.damage && log.damage > 0) ||
-                (log.action_type === "DAMAGE" && log.actor_id === unitId && log.damage && log.damage > 0)
-            );
+    const ratio = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
+    const width = `${ratio * 100}%`;
 
-            if (tookDamage) {
-                // Note: This is intentional for triggering damage flash animation
-                // eslint-disable-next-line react-hooks/set-state-in-effect
-                setFlash(true);
-                setTimeout(() => setFlash(false), 300);
-            }
-
-            prevTimestampRef.current = currentTimestamp;
-        }
-    }, [currentTimestamp, unitId, timestampLogs]);
-    
-    const ratio = current / max;
-    const bgColor = colorFunc(ratio);
-    
     return (
         <div className="w-24 h-2 bg-gray-700 mt-1 rounded overflow-hidden border border-gray-600 relative">
-            <div 
-                className={`h-full transition-all duration-300 ${flash ? 'animate-pulse' : ''}`}
-                style={{ 
-                    width: `${ratio * 100}%`,
-                    backgroundColor: bgColor,
-                    boxShadow: flash ? `0 0 8px ${bgColor}` : 'none'
-                }}
-            ></div>
+            <div
+                className="absolute inset-y-0 left-0 bg-gray-100"
+                style={{ width, transition: increased ? "none" : CHIP_TRANSITION }}
+            />
+            <div
+                className="absolute inset-y-0 left-0"
+                style={{ width, backgroundColor: colorFunc(ratio), transition: increased ? "none" : BAR_TRANSITION }}
+            />
         </div>
     );
 }

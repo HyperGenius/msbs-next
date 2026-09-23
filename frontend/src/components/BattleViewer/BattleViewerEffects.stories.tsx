@@ -53,7 +53,7 @@ const meta: Meta<EffectStoryArgs> = {
         replayIntervalMs: 2500,
     },
     argTypes: {
-        effect: { control: "select", options: ["HIT", "CRITICAL", "MISS", "MELEE_COMBO"] },
+        effect: { control: "select", options: ["HIT", "CRITICAL", "MISS", "MELEE_COMBO", "RAPID_FIRE"] },
         attacker: { control: "inline-radio", options: ["PLAYER", "ENEMY"] },
         weapon: { control: "select", options: Object.keys(WEAPONS) },
         distance: { control: { type: "range", min: 50, max: 1500, step: 50 } },
@@ -84,7 +84,12 @@ export const MeleeCombo: Story = {
     args: { effect: "MELEE_COMBO", weapon: "BEAM_SABER", distance: 50, comboCount: 3 },
 };
 
-/** 実弾武器の飛翔体。武器名に「ビーム」を含まない武器は実弾として描画される。 */
+/** 同じ被弾側への連続ヒット。ダメージ数字が重ならず縦に積まれる。 */
+export const RapidFire: Story = {
+    args: { effect: "RAPID_FIRE", weapon: "MACHINE_GUN", damage: 40 },
+};
+
+/** 実弾武器の射線。`type` が BEAM でない武器は、短い弾体が飛ぶ射線で描画される。 */
 export const BulletProjectile: Story = {
     args: { weapon: "MACHINE_GUN", damage: 40 },
 };

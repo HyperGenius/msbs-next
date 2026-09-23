@@ -2,164 +2,94 @@
 
 import { useMemo } from "react";
 import { BattleLog } from "@/types/battle";
-import { BattleEventEffect } from "../types";
-import { RESIST_PATTERN } from "../utils";
+import { AttackEvent, TracerKind } from "../types";
+import { isBeamWeapon, RESIST_PATTERN } from "../utils";
 
 /** useBattleEvents の返却型 */
 export interface BattleEventsResult {
-    /** ユニット ID → 現在タイムスタンプのバトルエフェクト */
-    events: Map<string, BattleEventEffect | null>;
+    /** 現在タイムスタンプの攻撃。ログの出現順に並ぶ。 */
+    attacks: AttackEvent[];
     /** 現在タイムスタンプで攻撃アクション中のユニット ID セット（射撃反動アニメーション用） */
     attackingUnitIds: Set<string>;
+    /** 現在タイムスタンプでクリティカルを受けたユニット ID セット（機体フラッシュ用） */
+    criticalTargetIds: Set<string>;
+}
+
+export function isCriticalLog(log: BattleLog): boolean {
+    return log.is_crit === true || log.message.includes("クリティカルヒット");
+}
+
+function resolveTracerKind(log: BattleLog, beamWeaponIds: ReadonlySet<string>): TracerKind {
+    if (log.weapon_id && beamWeaponIds.has(log.weapon_id)) return "BEAM";
+    return isBeamWeapon(log.weapon_name) ? "BEAM" : "BULLET";
+}
+
+// RESIST の判定文字列は現行バックエンドの文言と一致していない。
+// 判定を直すまで本番では resistPercent が付かない。
+function parseResistPercent(message: string): number | undefined {
+    if (!message.includes("対ビーム装甲により") && !message.includes("対実弾装甲により")) {
+        return undefined;
+    }
+    const match = message.match(RESIST_PATTERN);
+    return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * 1 タイムスタンプ分のログから攻撃演出データを作る。
+ *
+ * @param beamWeaponIds `type === "BEAM"` の武器 ID。武器名だけでビームか判定できない武器を補う。
+ */
+export function computeAttackEvents(
+    timestampLogs: BattleLog[],
+    beamWeaponIds: ReadonlySet<string> = new Set(),
+): AttackEvent[] {
+    const attacks: AttackEvent[] = [];
+    for (const log of timestampLogs) {
+        if (!log.actor_id || !log.target_id) continue;
+        const base = {
+            attackerId: log.actor_id,
+            targetId: log.target_id,
+            weaponName: log.weapon_name,
+            tracerKind: resolveTracerKind(log, beamWeaponIds),
+        };
+
+        if (log.action_type === "MISS") {
+            attacks.push({ ...base, impact: "miss", damage: 0 });
+        } else if (log.action_type === "MELEE_COMBO" && log.damage && log.damage > 0) {
+            attacks.push({ ...base, impact: "combo", damage: log.damage, comboCount: log.combo_count ?? 1 });
+        } else if (log.action_type === "ATTACK" && log.damage && log.damage > 0) {
+            attacks.push({
+                ...base,
+                impact: isCriticalLog(log) ? "critical" : "hit",
+                damage: log.damage,
+                resistPercent: parseResistPercent(log.message),
+            });
+        }
+    }
+    return attacks;
 }
 
 /**
  * @param timestampLogs 現在タイムスタンプ分にフィルタ済みのログ（呼び出し元で計算し、他コンポーネントと共有する。Issue #467）
  */
 export function useBattleEvents(
-    timestampLogs: BattleLog[]
+    timestampLogs: BattleLog[],
+    beamWeaponIds: ReadonlySet<string>,
 ): BattleEventsResult {
     return useMemo(() => {
-        const currentTimestampLogs = timestampLogs;
-        const battleEventMap = new Map<string, BattleEventEffect | null>();
+        const attacks = computeAttackEvents(timestampLogs, beamWeaponIds);
 
-        // Pass 1: ユニットの位置マップを構築（攻撃ライン描画のターゲット座標取得用）
-        const positionMap = new Map<string, { x: number; y: number; z: number }>();
-        for (const log of currentTimestampLogs) {
-            if (log.actor_id && log.position_snapshot) {
-                positionMap.set(log.actor_id, log.position_snapshot);
-            }
-        }
-
-        // 攻撃中ユニット ID セットを構築（射撃反動アニメーション用）(Issue #365)
         const attackingUnitIds = new Set<string>();
-        for (const log of currentTimestampLogs) {
-            if (
-                (log.action_type === "ATTACK" || log.action_type === "MELEE_COMBO") &&
-                log.actor_id
-            ) {
+        for (const log of timestampLogs) {
+            if ((log.action_type === "ATTACK" || log.action_type === "MELEE_COMBO") && log.actor_id) {
                 attackingUnitIds.add(log.actor_id);
             }
         }
 
-        // Pass 2: イベントエフェクトを生成
-        for (const log of currentTimestampLogs) {
-            // クリティカルヒット検出（アクター側に表示 + 攻撃ライン情報を付加）
-            if (log.action_type === "ATTACK" && log.actor_id &&
-                log.message.includes("クリティカルヒット") && !battleEventMap.has(log.actor_id)) {
-                const targetPos = log.target_id ? positionMap.get(log.target_id) : undefined;
-                battleEventMap.set(log.actor_id, {
-                    type: 'critical',
-                    text: '💥💥 CRITICAL HIT!!',
-                    color: '#ff0000',
-                    weaponName: log.weapon_name,
-                    targetPos,
-                    hit: true,
-                });
-            }
+        const criticalTargetIds = new Set(
+            attacks.filter((a) => a.impact === "critical").map((a) => a.targetId),
+        );
 
-            // 格闘コンボ検出 (Phase C) — MELEE_COMBO ログはアクター側にエフェクト表示
-            if (log.action_type === "MELEE_COMBO" && log.actor_id && !battleEventMap.has(log.actor_id)) {
-                const comboCount = log.combo_count ?? 1;
-                const color = comboCount >= 3 ? '#ff2200' : comboCount === 2 ? '#ff7700' : '#ffdd00';
-                battleEventMap.set(log.actor_id, {
-                    type: 'critical',
-                    text: `${comboCount}HIT COMBO!!`,
-                    color,
-                    weaponName: log.weapon_name,
-                });
-            }
-
-            // 格闘コンボのターゲットダメージ（action_type に依存しない統一処理）
-            if (log.action_type === "MELEE_COMBO" && log.target_id && !battleEventMap.has(log.target_id)) {
-                if (log.damage && log.damage > 0) {
-                    battleEventMap.set(log.target_id, {
-                        type: 'damage',
-                        text: `💥 -${log.damage}`,
-                        color: '#ff5722',
-                        weaponName: log.weapon_name,
-                    });
-                }
-            }
-
-            // 防御/軽減検出（ダメージを受けた側）
-            if (log.action_type === "ATTACK" && log.target_id && !battleEventMap.has(log.target_id)) {
-                if (log.message.includes("対ビーム装甲により") || log.message.includes("対実弾装甲により")) {
-                    const resistMatch = log.message.match(RESIST_PATTERN);
-                    const percent = resistMatch ? resistMatch[1] : '';
-                    battleEventMap.set(log.target_id, {
-                        type: 'resist',
-                        text: `RESIST ${percent}%`,
-                        color: '#4caf50',
-                        weaponName: log.weapon_name,
-                    });
-                } else if (log.message.includes("クリティカルヒット") && log.damage && log.damage > 0) {
-                    // クリティカルダメージはターゲット側にも大きく表示
-                    battleEventMap.set(log.target_id, {
-                        type: 'critical',
-                        text: `💥💥 -${log.damage}`,
-                        color: '#ff0000',
-                        weaponName: log.weapon_name,
-                    });
-                } else if (log.damage && log.damage > 0) {
-                    // 通常ダメージ
-                    battleEventMap.set(log.target_id, {
-                        type: 'damage',
-                        text: `💥 -${log.damage}`,
-                        color: '#ffcc00',
-                        weaponName: log.weapon_name,
-                    });
-                }
-            }
-
-            // ATTACK アクター側 → 攻撃ライン（命中）
-            // クリティカル/コンボで既にアクター効果が設定済みの場合、targetPos を付加してライン描画も行う
-            if (log.action_type === "ATTACK" && log.actor_id && log.target_id) {
-                const targetPos = positionMap.get(log.target_id);
-                if (targetPos) {
-                    const existing = battleEventMap.get(log.actor_id);
-                    if (existing) {
-                        if (!existing.targetPos) {
-                            battleEventMap.set(log.actor_id, { ...existing, targetPos, hit: true });
-                        }
-                    } else {
-                        // 通常ATTACK: アクターに attack_line エフェクトを設定
-                        battleEventMap.set(log.actor_id, {
-                            type: 'attack_line',
-                            text: '',
-                            color: '#ffcc00',
-                            weaponName: log.weapon_name,
-                            targetPos,
-                            hit: true,
-                        });
-                    }
-                }
-            }
-
-            // MISS → アクターに attack_line（ミス）、ターゲットにミスエフェクト
-            if (log.action_type === "MISS" && log.actor_id && log.target_id) {
-                const targetPos = positionMap.get(log.target_id);
-                if (targetPos && !battleEventMap.has(log.actor_id)) {
-                    battleEventMap.set(log.actor_id, {
-                        type: 'attack_line',
-                        text: '',
-                        color: '#888888',
-                        weaponName: log.weapon_name,
-                        targetPos,
-                        hit: false,
-                    });
-                }
-                if (!battleEventMap.has(log.target_id)) {
-                    battleEventMap.set(log.target_id, {
-                        type: 'miss',
-                        text: '💨 MISS',
-                        color: '#888888',
-                        weaponName: log.weapon_name,
-                    });
-                }
-            }
-        }
-
-        return { events: battleEventMap, attackingUnitIds };
-    }, [timestampLogs]);
+        return { attacks, attackingUnitIds, criticalTargetIds };
+    }, [timestampLogs, beamWeaponIds]);
 }

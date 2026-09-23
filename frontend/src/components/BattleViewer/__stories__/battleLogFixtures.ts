@@ -202,7 +202,10 @@ export function destroyedLog(timestamp: number, unit: MobileSuit, pos: Vector3):
 // backend/app/engine/constants.py の COMBO_DAMAGE_MULTIPLIER と揃える。
 const COMBO_DAMAGE_MULTIPLIER = 1.5;
 
-export type EffectKind = "HIT" | "CRITICAL" | "MISS" | "MELEE_COMBO";
+export type EffectKind = "HIT" | "CRITICAL" | "MISS" | "MELEE_COMBO" | "RAPID_FIRE";
+
+/** RAPID_FIRE で同時刻に出す命中ログの数。数字が縦に積まれることを確認するため。 */
+const RAPID_FIRE_HITS = 3;
 
 export interface EffectScenarioOptions {
     effect: EffectKind;
@@ -261,7 +264,6 @@ export function buildEffectScenario(options: EffectScenarioOptions): EffectScena
         detectionLog(0, player, enemy, playerPos),
         moveLog(0, player, playerPos),
         moveLog(0, enemy, enemyPos),
-        // 攻撃ラインの着弾点は同時刻のターゲット位置ログから引くため、先に置く
         moveLog(t, target, targetPos),
     ];
 
@@ -274,6 +276,11 @@ export function buildEffectScenario(options: EffectScenarioOptions): EffectScena
             break;
         case "MISS":
             logs.push(missLog({ timestamp: t, actor, target, actorPos, weapon }));
+            break;
+        case "RAPID_FIRE":
+            for (let i = 0; i < RAPID_FIRE_HITS; i++) {
+                logs.push(attackHitLog({ timestamp: t, actor, target, actorPos, weapon, damage }));
+            }
             break;
         case "MELEE_COMBO":
             // backend は格闘命中の ATTACK を出した直後に MELEE_COMBO を出す

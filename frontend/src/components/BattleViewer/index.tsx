@@ -77,21 +77,24 @@ export default function BattleViewer({
         [enemyStates, detectedIds]
     );
     
-    // 現在タイムスタンプ分のログ。useBattleEvents と BattleOverlay(HpBar) の両方が同じ
-    // フィルタ結果を必要とするため、ここで一度だけ計算して共有する（Issue #467）
+    // 現在タイムスタンプ分のログ。再生中は毎 tick 変わるため、ここで一度だけ計算する（Issue #467）
     const timestampLogs = useMemo(
         () => logs.filter(log => Math.abs(log.timestamp - currentTimestamp) < 1e-9),
         [logs, currentTimestamp]
     );
 
-    // バトルイベントの取得（攻撃中ユニット ID セットを含む）(Issue #365)
-    const { events: battleEventMap, attackingUnitIds } = useBattleEvents(timestampLogs);
+    // 武器名に「ビーム」を含まないビーム武器も射線をビームで描けるよう、武器 ID から属性を引く
+    const beamWeaponIds = useMemo(() => {
+        const ids = new Set<string>();
+        for (const ms of [player, ...enemies]) {
+            for (const weapon of ms.weapons ?? []) {
+                if (weapon.type === "BEAM") ids.add(weapon.id);
+            }
+        }
+        return ids;
+    }, [player, enemies]);
 
-    const playerEvent = battleEventMap.get(player.id) || null;
-    const enemyEvents = enemies.map(enemy => ({
-        id: enemy.id,
-        event: battleEventMap.get(enemy.id) || null
-    }));
+    const { attacks, attackingUnitIds, criticalTargetIds } = useBattleEvents(timestampLogs, beamWeaponIds);
 
     // LOS 計算（currentTimestamp 変更時のみ再計算、showLos が OFF のときはスキップ）
     const losResults = useMemo(() => {
@@ -121,9 +124,9 @@ export default function BattleViewer({
                 environment={environment}
                 player={player}
                 playerState={playerState}
-                playerEvent={playerEvent}
                 enemyStates={visibleEnemyStates}
-                enemyEvents={enemyEvents}
+                attacks={attacks}
+                criticalTargetIds={criticalTargetIds}
                 obstacles={obstacles}
                 mapBounds={mapBounds}
                 losResults={losResults}
@@ -138,7 +141,6 @@ export default function BattleViewer({
                 enemyStates={visibleEnemyStates}
                 environment={environment}
                 currentTimestamp={currentTimestamp}
-                timestampLogs={timestampLogs}
                 logs={logs}
                 showLos={showLos}
                 onToggleLos={() => setShowLos(v => !v)}
