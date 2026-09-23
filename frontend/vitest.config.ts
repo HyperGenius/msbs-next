@@ -23,10 +23,15 @@ export default defineConfig({
         ],
         test: {
           name: 'storybook',
+          // BattleViewer の初回描画（WebGL 初期化 + three.js 読み込み）は並列実行時に 15 秒を超えることがある
+          testTimeout: 30000,
           browser: {
             enabled: true,
             headless: true,
-            provider: playwright({}),
+            // BattleViewer の Canvas がヘッドレス環境でも WebGL コンテキストを作れるよう、ソフトウェアレンダラを使う
+            provider: playwright({
+              launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
+            }),
             instances: [{ browser: 'chromium' }],
           },
           setupFiles: ['.storybook/vitest.setup.ts'],
