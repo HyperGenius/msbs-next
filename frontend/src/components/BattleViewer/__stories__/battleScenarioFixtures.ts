@@ -122,7 +122,6 @@ export function buildSkirmishScenario(): BattleScenario {
         destroyedLog(7.0, rickDom, rp(7.0)),
     ];
 
-    // 攻撃ラインの着弾点は同時刻のターゲット位置ログから引くため、
     // 同時刻では MOVE ログを演出ログより前に並べる（sort は安定ソート）
     const logs = [
         ...moveLogs(player, playerPath, 8.0),

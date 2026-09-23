@@ -43,3 +43,24 @@ export function getEnvironmentColor(environment: string) {
             return "#000000"; // 黒
     }
 }
+
+/** ビーム武器かどうかを weapon_name の文字列で判定する（武器 ID から型を引けない場合のフォールバック）。 */
+export function isBeamWeapon(weaponName?: string): boolean {
+    if (!weaponName) return false;
+    const lower = weaponName.toLowerCase();
+    return lower.includes("beam") || weaponName.includes("ビーム") || lower.includes("mega particle");
+}
+
+/** ヒット演出の配色。モックアップ（msbs_hit_effect_final_mockup.html）に合わせる。 */
+export const HIT_EFFECT_COLORS = {
+    /** 自機以外が受けたダメージ（与ダメージ） */
+    dealt: "#ffd84a",
+    /** 自機が受けたダメージ */
+    taken: "#ff5a4e",
+    miss: "#9aa0a6",
+    resist: "#4caf50",
+    flashCore: "#ffffff",
+    flashRing: "#ffd84a",
+    tracerBeam: "#6fe6ff",
+    tracerBullet: "#ffb36b",
+} as const;

@@ -1288,6 +1288,9 @@ export interface BattleEventsResult {
 }
 ```
 
+> Issue #531 で `events` は `attacks: AttackEvent[]` と `criticalTargetIds: Set<string>` に置き換えた
+> （`docs/features/battle-viewer-feature.md` の「攻撃エフェクト（ヒット演出）」参照）。`attackingUnitIds` は変更なし。
+
 **`MobileSuitMesh.tsx`:**
 
 `isAttacking?: boolean` prop を追加し、`useFrame` で減衰振動アニメーションを実装。

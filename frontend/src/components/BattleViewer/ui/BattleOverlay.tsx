@@ -5,7 +5,8 @@
 import { useMemo } from "react";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import { HpBar } from "./HpBar";
-import { getHpBarColor, getEnemyHpBarColor, DEFAULT_MAX_EN } from "../utils";
+import { getHpBarColor, getEnemyHpBarColor, DEFAULT_MAX_EN, HIT_EFFECT_COLORS } from "../utils";
+import { HudLogLine, useHudAttackLog } from "../hooks/useHudAttackLog";
 
 interface UnitState {
     pos: { x: number; y: number; z: number };
@@ -18,6 +19,13 @@ interface UnitState {
 /** 敵HPパネルに表示する敵機の最大数。超過分は「…他N機」で省略する（Issue #521） */
 const MAX_VISIBLE_ENEMIES = 2;
 const SELF_ATTACK_ACTION_TYPES = new Set(["ATTACK", "MELEE_COMBO", "MISS"]);
+const HUD_LOG_LINES = 3;
+// dealt は色を付けず、HUD 本文と同じ明るいグレー（text-gray-200）で出す
+const HUD_LOG_TONE_COLOR: Record<HudLogLine["tone"], string | undefined> = {
+    dealt: undefined,
+    taken: HIT_EFFECT_COLORS.taken,
+    miss: HIT_EFFECT_COLORS.miss,
+};
 
 interface BattleOverlayProps {
     player: MobileSuit;
@@ -25,9 +33,7 @@ interface BattleOverlayProps {
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     environment: string;
     currentTimestamp: number;
-    /** 現在タイムスタンプ分にフィルタ済みのログ（呼び出し元で計算済み。Issue #467） */
-    timestampLogs: BattleLog[];
-    /** 自機の現在ターゲット判定用の全ログ（Issue #521） */
+    /** 自機の現在ターゲット判定と HUD ログに使う全ログ */
     logs: BattleLog[];
     /** LOS 表示の現在の状態 */
     showLos: boolean;
@@ -41,7 +47,6 @@ export function BattleOverlay({
     enemyStates,
     environment,
     currentTimestamp,
-    timestampLogs,
     logs,
     showLos,
     onToggleLos,
@@ -76,6 +81,21 @@ export function BattleOverlay({
     const visibleEnemies = sortedAliveEnemies.slice(0, MAX_VISIBLE_ENEMIES);
     const hiddenEnemyCount = sortedAliveEnemies.length - visibleEnemies.length;
 
+    // 未索敵の敵は名前を引けないようにし、HUD ログにも出さない
+    const unitNames = useMemo(() => {
+        const names = new Map<string, string>([[player.id, player.name]]);
+        enemyStates.forEach(({ enemy }) => names.set(enemy.id, enemy.name));
+        return names;
+    }, [player.id, player.name, enemyStates]);
+
+    const hudLogLines = useHudAttackLog({
+        logs,
+        currentTimestamp,
+        names: unitNames,
+        playerId: player.id,
+        limit: HUD_LOG_LINES,
+    });
+
     return (
         <>
             {/* UIオーバーレイ */}
@@ -85,14 +105,7 @@ export function BattleOverlay({
                     <span className="text-[9px] sm:text-xs">
                         HP: {playerState.hp} / {player.max_hp}
                     </span>
-                    <HpBar 
-                        current={playerState.hp} 
-                        max={player.max_hp} 
-                        colorFunc={getHpBarColor}
-                        currentTimestamp={currentTimestamp}
-                        unitId={player.id}
-                        timestampLogs={timestampLogs}
-                    />
+                    <HpBar current={playerState.hp} max={player.max_hp} colorFunc={getHpBarColor} />
                     
                     {/* EN Display */}
                     <div className="mt-0.5 sm:mt-1">
@@ -125,14 +138,7 @@ export function BattleOverlay({
                             )}
                             {enemy.name}
                         </span>
-                        <HpBar
-                            current={state.hp}
-                            max={enemy.max_hp}
-                            colorFunc={getEnemyHpBarColor}
-                            currentTimestamp={currentTimestamp}
-                            unitId={enemy.id}
-                            timestampLogs={timestampLogs}
-                        />
+                        <HpBar current={state.hp} max={enemy.max_hp} colorFunc={getEnemyHpBarColor} />
                     </div>
                 ))}
                 {hiddenEnemyCount > 0 && (
@@ -144,6 +150,24 @@ export function BattleOverlay({
             <div className="absolute top-1 right-1 sm:top-2 sm:right-2 text-white bg-black/60 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-mono pointer-events-none rounded border border-green-900/50">
                 <span className="text-green-400">環境:</span> {environment}
             </div>
+
+            {/* 直近の攻撃ログ。右下の LOS ボタンと重ならないよう幅を抑える */}
+            {hudLogLines.length > 0 && (
+                <div className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 max-w-[calc(100%-6rem)] bg-black/60 px-2 py-1 text-[9px] sm:text-xs font-mono text-gray-200 pointer-events-none rounded border border-green-900/50">
+                    {hudLogLines.map((line, i) => {
+                        const isLatest = i === hudLogLines.length - 1;
+                        return (
+                            <div
+                                key={line.key}
+                                className={`truncate ${isLatest ? "animate-fade-in" : "opacity-60"}`}
+                                style={{ color: HUD_LOG_TONE_COLOR[line.tone], whiteSpace: "pre" }}
+                            >
+                                {line.text}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* LOS 表示トグルボタン */}
             <div className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2">
