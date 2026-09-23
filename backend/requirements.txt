@@ -3,7 +3,7 @@ numpy
 fastapi
 uvicorn
 python-dotenv
-sqlmodel
+sqlmodel==0.0.31
 psycopg2-binary
 alembic
 pyjwt[crypto]

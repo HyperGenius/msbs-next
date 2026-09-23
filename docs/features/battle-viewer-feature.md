@@ -854,7 +854,12 @@ BattleDetailModal
 
 - `usePartHitSummary`（既存、Issue #504）: 部位別の被弾/命中集計
 - `useWeaponAccuracySummary`（新規）: 自機の武装ごとの命中率。`ATTACK`/`MELEE_COMBO`/`MISS` の件数から算出し、
-  一度も使用しなかった装備武器（`battle.player_info.weapons`）も 0/0・`--%` 表示で一覧に含める
+  一度も使用しなかった装備武器（`battle.player_info.weapons`）も 0/0・`--%` 表示で一覧に含める。
+  `log.weapon_name ?? "格闘"` というフォールバックがあるため、`MISS` ログに `weapon_name`/`weapon_id` が
+  正しく記録されていることが前提になる（Issue #523: `combat.py` の `_process_miss()` が長らく
+  `BattleLog` 生成時に `weapon_name`/`weapon_id` を渡しておらず、遠隔武器のMISSも全て「格闘」に
+  誤集計されるバグがあった。`_process_hit()` 内の完全回避（LUK）分岐で発生する `action_type="MISS"`
+  ログも同様に欠落していたため合わせて修正済み）
 - `useDetectionSummary`（新規）: 自機が索敵に成功した敵機数（`DETECTION` ログの `target_id` をユニーク集計）/ 総敵機数
 - 撃墜数・被攻撃回数は `BattleResult.kills`/`attacks_received_count`（Issue #415 の戦闘ダイジェスト、書き込み時に
   1回だけ計算済みの非正規化カラム）をそのまま表示し、ログからの再計算はしない
