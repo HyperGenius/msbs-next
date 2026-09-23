@@ -23,6 +23,14 @@ export default function BattleDetailModal({
   onClose,
 }: BattleDetailModalProps) {
   const [currentTimestamp, setCurrentTimestamp] = useState(0);
+  // チャプタークリック由来のシークを明示するトークン。増分の度に BattleScene 側でカメラの
+  // 再センタリングをトリガーする（自動再生・シークバードラッグでは増分しない、Issue #524）
+  const [recenterToken, setRecenterToken] = useState(0);
+
+  const handleChapterSeek = (timestamp: number) => {
+    setCurrentTimestamp(timestamp);
+    setRecenterToken((t) => t + 1);
+  };
 
   // バトルログを遅延ロード（リプレイ用）。全件ダウンロード完了を待たず、
   // 届いた分から段階的に反映する（Issue #494）。isLoadingは初回データ到達まで、
@@ -85,6 +93,7 @@ export default function BattleDetailModal({
                     mapBounds={battle.map_bounds}
                     currentTimestamp={currentTimestamp}
                     environment={battle.environment || "SPACE"}
+                    recenterToken={recenterToken}
                   />
                   {/* ログを裏で読み込み中でも再生をブロックしない。読み込み継続中であることだけ
                       控えめに示す（全件到着まで待たされないUX、Issue #494） */}
@@ -95,7 +104,7 @@ export default function BattleDetailModal({
                     </div>
                   )}
                   {/* チャプタートラック: 3Dビューア直下に常駐し、有意なイベントのみクリックでジャンプする（Issue #521） */}
-                  <ChapterTrack chapters={chapters} currentTimestamp={currentTimestamp} onSeek={setCurrentTimestamp} />
+                  <ChapterTrack chapters={chapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
                   <TurnController
                     currentTimestamp={currentTimestamp}
                     maxTimestamp={maxTimestamp}

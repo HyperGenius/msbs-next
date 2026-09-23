@@ -474,3 +474,33 @@ BattleViewerを起動した直後（再生開始前、`currentTimestamp = 0`）�
 
 **影響ファイル:**
 - `backend/main.py`
+
+---
+
+## チャプタージャンプ時にカメラを自機へ再センタリング（Issue #524）
+
+チャプタートラック（Issue #521）でチャプターをクリックしてシークしても、3Dビューアのカメラターゲットは
+モーダルオープン時に配置された位置のまま動かず、チャプタージャンプ後に自機がカメラ範囲外に出て見失う
+ことがあった。
+
+**要件:** チャプタージャンプ時のみカメラターゲットを自機の新しい位置へ瞬間的に再センタリングする。
+通常の自動再生（100msごとのtick）や `TurnController` のシークバードラッグでは再センタリングしない
+（`currentTimestamp` の変化だけではこの2つを区別できないため、チャプタークリックを明示するトリガーが
+別途必要）。また、再センタリングはカメラの距離・角度（ズーム/回転、`camera.position`）を変更せず、
+`OrbitControls` の `target` のみを更新する（ユーザーが直前まで操作していたカメラ操作を尊重するため）。
+
+**実装:**
+- `BattleDetailModal.tsx`: `ChapterTrack` の `onSeek` を、`currentTimestamp` 更新に加えて
+  `recenterToken` state をincrementする `handleChapterSeek` に差し替えた。この `recenterToken` が
+  「チャプタージャンプ由来のシークである」ことを表すトリガーになる
+- `BattleViewer/index.tsx` → `BattleScene.tsx`: `recenterToken` をpropとして橋渡しするだけで、
+  データ取得や計算ロジックの追加は不要（自機の新しい位置は既存の `playerState.pos` をそのまま使える）
+- `BattleScene.tsx`: 既存の `CameraInitializer`（マウント時のみ実行、`camera.position` と `target` の
+  両方を初期配置する）とは別に `CameraRecenterer` を新設した。`recenterToken` の変化を検知する
+  `useEffect` の中で `controlsRef.current.target.set(px, py, pz)` + `update()` のみを実行し、
+  `camera.position` には触れない
+
+**影響ファイル:**
+- `frontend/src/components/history/BattleDetailModal.tsx`
+- `frontend/src/components/BattleViewer/index.tsx`
+- `frontend/src/components/BattleViewer/scene/BattleScene.tsx`

@@ -21,6 +21,8 @@ interface BattleViewerProps {
     mapBounds?: [number, number] | null;
     currentTimestamp: number;
     environment?: string;
+    /** チャプタージャンプ時のみ増分されるトークン。カメラターゲットの再センタリングをトリガーする（Issue #524） */
+    recenterToken?: number;
 }
 
 export default function BattleViewer({
@@ -30,7 +32,8 @@ export default function BattleViewer({
     obstacles,
     mapBounds,
     currentTimestamp,
-    environment = "SPACE"
+    environment = "SPACE",
+    recenterToken,
 }: BattleViewerProps) {
     // LOS 表示のトグルステート（デフォルト: OFF）
     const [showLos, setShowLos] = useState(false);
@@ -126,6 +129,7 @@ export default function BattleViewer({
                 losResults={losResults}
                 attackingUnitIds={attackingUnitIds}
                 currentTimestamp={currentTimestamp}
+                recenterToken={recenterToken}
             />
             
             <BattleOverlay
