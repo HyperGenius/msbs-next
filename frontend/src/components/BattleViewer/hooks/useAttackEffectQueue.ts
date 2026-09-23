@@ -126,6 +126,10 @@ function impactColor(attack: AttackEvent, playerId: string): string {
     return attack.targetId === playerId ? HIT_EFFECT_COLORS.taken : HIT_EFFECT_COLORS.dealt;
 }
 
+function countEffects(effects: AttackEffects): number {
+    return effects.tracers.length + effects.labels.length + effects.impacts.length;
+}
+
 /** 表示期間を過ぎた演出を取り除く。onComplete が呼ばれなかった演出が残り続けるのを防ぐ。 */
 export function pruneExpiredEffects(effects: AttackEffects, now: number): AttackEffects {
     return {
@@ -258,8 +262,15 @@ export function useAttackEffectQueue({
     const idCounterRef = useRef(0);
 
     useEffect(() => {
-        if (attacks.length === 0) return;
         const now = Date.now();
+        if (attacks.length === 0) {
+            // 攻撃が無い時刻でも期限切れの演出は掃除する。何も消えない時は再レンダーしない
+            setEffects((prev) => {
+                const pruned = pruneExpiredEffects(prev, now);
+                return countEffects(pruned) === countEffects(prev) ? prev : pruned;
+            });
+            return;
+        }
         const nextId = () => `fx-${idCounterRef.current++}`;
         setEffects((prev) => spawnAttackEffects({ active: prev, attacks, positions, playerId, now, nextId }));
     // eslint-disable-next-line react-hooks/exhaustive-deps

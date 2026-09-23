@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 // チップ（減った分の白い帯）は本体より遅れて縮む。
 // 本体と同じ幅を遅延付きトランジションで追うため、HP が下がった時だけ本体との差が白く見える。
@@ -20,26 +20,30 @@ export function HpBar({
     max: number;
     colorFunc: (ratio: number) => string;
 }) {
-    // シークで時刻を戻すと HP が増える。そのときはチップを出さず、すぐに幅を合わせる
-    const [prevCurrent, setPrevCurrent] = useState(current);
-    const [increased, setIncreased] = useState(false);
-    if (current !== prevCurrent) {
-        setIncreased(current > prevCurrent);
-        setPrevCurrent(current);
-    }
+    const barRef = useRef<HTMLDivElement>(null);
+    const chipRef = useRef<HTMLDivElement>(null);
+    const prevCurrentRef = useRef(current);
+
+    // シークで時刻を戻すと HP が増える。そのときはチップを出さず、すぐに幅を合わせる。
+    // transition は幅の変更と同じコミット内（描画前）に書き換える。
+    // ブラウザは変更後の transition で幅のトランジションを判定するため、増加時はアニメーションしない。
+    useLayoutEffect(() => {
+        const increased = current > prevCurrentRef.current;
+        prevCurrentRef.current = current;
+        if (barRef.current) barRef.current.style.transition = increased ? "none" : BAR_TRANSITION;
+        if (chipRef.current) chipRef.current.style.transition = increased ? "none" : CHIP_TRANSITION;
+    }, [current]);
 
     const ratio = max > 0 ? Math.max(0, Math.min(1, current / max)) : 0;
     const width = `${ratio * 100}%`;
 
     return (
         <div className="w-24 h-2 bg-gray-700 mt-1 rounded overflow-hidden border border-gray-600 relative">
+            <div ref={chipRef} className="absolute inset-y-0 left-0 bg-gray-100" style={{ width }} />
             <div
-                className="absolute inset-y-0 left-0 bg-gray-100"
-                style={{ width, transition: increased ? "none" : CHIP_TRANSITION }}
-            />
-            <div
+                ref={barRef}
                 className="absolute inset-y-0 left-0"
-                style={{ width, backgroundColor: colorFunc(ratio), transition: increased ? "none" : BAR_TRANSITION }}
+                style={{ width, backgroundColor: colorFunc(ratio) }}
             />
         </div>
     );

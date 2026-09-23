@@ -7,6 +7,7 @@ import { useFrame } from "@react-three/fiber";
 import { Line } from "@react-three/drei";
 import * as THREE from "three";
 import { TracerKind } from "../types";
+import { HIT_EFFECT_COLORS } from "../utils";
 
 const POSITION_SCALE = 0.05;
 
@@ -14,7 +15,25 @@ const POSITION_SCALE = 0.05;
 const BEAM_GROW_RATIO = 0.27;
 const BEAM_FADE_START_RATIO = 0.36;
 /** 実弾の弾体の長さ（Three.js 座標）。 */
-const BULLET_LENGTH = 1.2;
+const BULLET_LENGTH = 2;
+
+// 射線は緑のグリッドと重なると埋もれる。
+// 暗い縁取り（halo）の上に本体を重ね、ビームは白い芯も足してグリッドと輝度差を付ける。
+// 線幅は px。下の層から順に描く。
+const TRACER_LAYERS: Record<TracerKind, { width: number; color: "halo" | "body" | "core"; opacity: number }[]> = {
+    BEAM: [
+        { width: 8, color: "halo", opacity: 0.75 },
+        { width: 3.5, color: "body", opacity: 1 },
+        { width: 1.2, color: "core", opacity: 1 },
+    ],
+    BULLET: [
+        { width: 7, color: "halo", opacity: 0.75 },
+        { width: 3, color: "body", opacity: 1 },
+    ],
+};
+const HALO_COLOR = "#000000";
+// グリッド（透過描画）より後に、深度を無視して描く。射線がグリッドや障害物の下に隠れないようにする
+const TRACER_RENDER_ORDER = 10;
 
 interface TracerMeshProps {
     from: { x: number; y: number; z: number };
@@ -36,7 +55,7 @@ export function TracerMesh({ from, to, kind, color, startAt, durationMs, onCompl
     const groupRef = useRef<THREE.Group>(null);
     // drei の Line は Line2 を返す。線幅はピクセル単位のため、group を拡縮しても太さは変わらない
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lineRef = useRef<any>(null);
+    const lineRefs = useRef<any[]>([]);
     const completedRef = useRef(false);
 
     const { from3D, to3D, points } = useMemo(() => {
@@ -60,7 +79,10 @@ export function TracerMesh({ from, to, kind, color, startAt, durationMs, onCompl
             // 始点を原点にした線を拡大して伸ばす
             groupRef.current.scale.setScalar(Math.min(1, Math.max(t / BEAM_GROW_RATIO, 0.001)));
             const fade = t <= BEAM_FADE_START_RATIO ? 1 : 1 - (t - BEAM_FADE_START_RATIO) / (1 - BEAM_FADE_START_RATIO);
-            if (lineRef.current?.material) lineRef.current.material.opacity = fade;
+            TRACER_LAYERS.BEAM.forEach((layer, i) => {
+                const material = lineRefs.current[i]?.material;
+                if (material) material.opacity = layer.opacity * fade;
+            });
         } else {
             groupRef.current.position.lerpVectors(from3D, to3D, t);
         }
@@ -73,14 +95,22 @@ export function TracerMesh({ from, to, kind, color, startAt, durationMs, onCompl
 
     return (
         <group ref={groupRef} position={from3D} scale={kind === "BEAM" ? 0.001 : 1}>
-            <Line
-                ref={lineRef}
-                points={points}
-                color={color}
-                lineWidth={kind === "BEAM" ? 2.5 : 2}
-                transparent
-                depthWrite={false}
-            />
+            {TRACER_LAYERS[kind].map((layer, i) => (
+                <Line
+                    key={layer.color}
+                    ref={(el) => {
+                        lineRefs.current[i] = el;
+                    }}
+                    points={points}
+                    color={layer.color === "halo" ? HALO_COLOR : layer.color === "core" ? HIT_EFFECT_COLORS.flashCore : color}
+                    lineWidth={layer.width}
+                    opacity={layer.opacity}
+                    transparent
+                    depthTest={false}
+                    depthWrite={false}
+                    renderOrder={TRACER_RENDER_ORDER + i}
+                />
+            ))}
         </group>
     );
 }
