@@ -875,3 +875,62 @@ BattleDetailModal
 `frontend/src/utils/logFormatter.ts` の `formatBattleLog()` 本体（距離/命中率/ダメージの抽象化・スタイル判定）は
 `frontend/src/components/Dashboard/DevSimulationPanel.tsx`（開発環境専用の即時シミュレーションパネル）が
 引き続き利用しているため削除していない。
+
+---
+
+## Storybook による演出確認（Issue #528）
+
+### 概要
+
+BattleViewer の 3D 演出（Hit / Critical / Miss / 格闘コンボ / 弾種別の飛翔体 / 環境）を、実際にバトルを
+実行せずに Storybook 上で再現・反復確認できる。`BattleViewer` 本体には手を加えず、最小限の `BattleLog` を
+props で渡すだけなので、本番と同じ描画パス（`useBattleEvents` → `BattleScene` / `ComboEffect`）を通る。
+
+```bash
+cd frontend
+npm run storybook   # http://localhost:6006 → BattleViewer/Effects, BattleViewer/Scenario
+```
+
+### ストーリー構成
+
+| ストーリー | 内容 |
+|---|---|
+| `BattleViewer/Effects/*` | 自機 1 機・敵 1 機で演出を 1 件だけ発生させ、繰り返し再生する。Controls で演出種別・攻撃側・武器・距離・ダメージ・コンボ数・環境・自動リプレイ間隔を変更できる |
+| `BattleViewer/Scenario/Skirmish` | 自機 1 機・敵 2 機の約 8 秒のバトル。`BattleDetailModal` と同じく `ChapterTrack` / `TurnController` 付きで通し再生・チャプタージャンプできる |
+
+### ファイル
+
+| ファイル | 役割 |
+|---|---|
+| `frontend/src/components/BattleViewer/BattleViewerEffects.stories.tsx` | 演出別ストーリー |
+| `frontend/src/components/BattleViewer/BattleViewerScenario.stories.tsx` | シナリオ通し再生ストーリー |
+| `frontend/src/components/BattleViewer/__stories__/battleLogFixtures.ts` | ログ生成ヘルパー（`attackHitLog` / `missLog` / `meleeComboLog` 等）と演出 1 件分のシナリオ生成 |
+| `frontend/src/components/BattleViewer/__stories__/battleScenarioFixtures.ts` | キーフレーム補間で MOVE ログを生成し、複数演出を時系列に並べたシナリオを作る |
+| `frontend/src/components/BattleViewer/__stories__/EffectReplayStage.tsx` | 演出を繰り返し発火させる再生ラッパー |
+
+### 設計上の注意
+
+- **ログの `message` はバックエンドの実際の文言に合わせる。** `useBattleEvents` は Critical を
+  `message` 内の「クリティカルヒット」で判定するなど文字列に依存しているため、バックエンド
+  （`backend/app/engine/combat.py`）と異なる文言でログを作ると、本番では出ない演出を再現してしまう。
+  格闘コンボも本番同様「格闘命中の `ATTACK` → 直後に `MELEE_COMBO`」の順で生成している。
+  バックエンドの文言や `COMBO_DAMAGE_MULTIPLIER` を変更した場合は `battleLogFixtures.ts` も合わせて更新する。
+- **演出は `currentTimestamp` の変化で発火する。** 飛翔体・ヒットエフェクトは `BattleScene` の
+  `useEffect([currentTimestamp])` でスポーンされるため、時刻を固定したままでは 1 回しか再生されない。
+  `EffectReplayStage` は「0 秒（演出なし）→ 150ms 後に演出時刻」と往復させることで再発火させている
+  （同一レンダー内で往復すると effect が発火しない）。
+- **同時刻のターゲット位置ログが必要。** 攻撃ラインの着弾点は同じタイムスタンプ内の `position_snapshot`
+  から引くため、演出ログと同時刻にターゲットの `MOVE` ログを先に置いている。
+  また敵機は自機の `DETECTION` ログが無いと描画されない。
+- **Docs ページは無効化している（`tags: ["!autodocs"]`）。** Canvas を 1 ページに並べると
+  ブラウザの WebGL コンテキスト数上限を超えるため。
+- アニメーションが `Date.now()` / `useFrame` に依存するため、Chromatic 等のビジュアルリグレッションには使っていない。
+  `npx vitest run --project storybook` による描画スモークテストの対象にはなる。
+
+### ストーリー整備時に判明した既知の挙動
+
+- RESIST 演出（`RESIST xx%`）は、フロントの判定文字列（「対ビーム装甲により」「対実弾装甲により」）が
+  現行バックエンドのメッセージと一致しないため本番で発火しない。Issue #529 で対応予定のため、
+  Effects ストーリーには RESIST を含めていない。
+- 格闘コンボ時は同時刻の `ATTACK` ログが先にアクター側の演出枠を使うため、3D 上の「N HIT COMBO!!」
+  テキスト（`useBattleEvents` の `MELEE_COMBO` 分岐）は表示されず、`ComboEffect` のオーバーレイのみが表示される。

@@ -325,6 +325,20 @@ npm run storybook -- -p 6007
 - `preview.tsx` のファイル拡張子が `.tsx` であることを確認してください（`.ts` ではエラーになります）
 - `main.ts` で ESM 環境対応の `__dirname` 定義があることを確認してください
 
+### 3D（React Three Fiber）コンポーネントのストーリー
+
+`BattleViewer` のように `<Canvas>` を含むストーリーは、以下に注意してください（例: `src/components/BattleViewer/BattleViewerEffects.stories.tsx`）。
+
+- **`tags: ["!autodocs"]` を付ける**: Docs ページに複数の Canvas が並ぶと、ブラウザの WebGL コンテキスト数上限（Chrome で約 16）を超えて描画が壊れます。
+- **Story の型は `@storybook/nextjs-vite` から import する**: `@storybook/react` を直接 import すると `eslint-plugin-storybook` の `no-renderer-packages` ルールでエラーになります。
+- **ヘッドレスでのテスト**: `vitest.config.ts` の storybook プロジェクトは、ヘッドレス Chromium でも WebGL を使えるよう SwiftShader（`--use-angle=swiftshader --enable-unsafe-swiftshader`）で起動します。初回の WebGL 初期化が遅いため `testTimeout` を 30 秒にしています。
+
+```bash
+# ストーリーの描画スモークテスト（BattleViewer 分のみ）
+cd frontend
+npx vitest run --project storybook src/components/BattleViewer
+```
+
 ---
 
 ## 8. まとめ
