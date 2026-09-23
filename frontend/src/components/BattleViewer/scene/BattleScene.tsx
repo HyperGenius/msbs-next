@@ -73,6 +73,52 @@ function CameraInitializer({
     return null;
 }
 
+// チャプタージャンプ時のみカメラターゲットを自機位置へ再センタリングするコンポーネント（Issue #524）。
+// CameraInitializer と異なり camera.position（距離・角度）は変更せず target のみ更新することで、
+// ユーザーが直前まで操作していたズーム・回転を保持する
+function CameraRecenterer({
+    px, py, pz,
+    recenterToken,
+    controlsRef,
+}: {
+    px: number;
+    py: number;
+    pz: number;
+    recenterToken?: number;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    controlsRef: React.RefObject<any>;
+}) {
+    useEffect(() => {
+        // recenterToken は 0 始まりのため、マウント時（実際のチャプタークリック前）に
+        // 誤って再センタリングされないよう 0 以下は無視する
+        if (!recenterToken || recenterToken <= 0) return;
+
+        let cancelled = false;
+        let frameId: number;
+
+        // controlsRef（OrbitControls）がまだ生成されていないタイミングでこの effect が
+        // 実行された場合に備え、生成されるまで次フレームでリトライする
+        const applyRecenter = () => {
+            if (cancelled) return;
+            if (controlsRef.current) {
+                controlsRef.current.target.set(px, py, pz);
+                controlsRef.current.update();
+            } else {
+                frameId = requestAnimationFrame(applyRecenter);
+            }
+        };
+        applyRecenter();
+
+        return () => {
+            cancelled = true;
+            if (frameId) cancelAnimationFrame(frameId);
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recenterToken]);
+
+    return null;
+}
+
 interface UnitState {
     pos: { x: number; y: number; z: number };
     hp: number;
@@ -111,6 +157,8 @@ interface BattleSceneProps {
     attackingUnitIds?: Set<string>;
     /** 現在の再生タイムスタンプ（飛翔体・ヒットエフェクトのスポーン検出用） */
     currentTimestamp: number;
+    /** チャプタージャンプ時のみ増分されるトークン。カメラターゲットの再センタリングをトリガーする（Issue #524） */
+    recenterToken?: number;
 }
 
 /** 自機からターゲット敵MSへの照準線コンポーネント */
@@ -255,6 +303,7 @@ export function BattleScene({
     losResults,
     attackingUnitIds,
     currentTimestamp,
+    recenterToken,
 }: BattleSceneProps) {
     // フィールド中心・全体をカバーするグリッドの位置とフェード距離を算出（Issue #436）
     const [mapMin, mapMax] = mapBounds ?? DEFAULT_MAP_BOUNDS;
@@ -268,6 +317,12 @@ export function BattleScene({
         z: playerState.pos.z * POSITION_SCALE, // game.z（地面平面の第2軸）→ Three.js の奥行き方向 z
     });
     const { x: px, y: py, z: pz } = initialPos.current;
+    // チャプタージャンプ時の再センタリング先。毎レンダーで現在の自機位置から再計算する（初期化専用の initialPos とは別物）
+    const currentPos = {
+        x: playerState.pos.x * POSITION_SCALE,
+        y: playerState.pos.y * POSITION_SCALE,
+        z: playerState.pos.z * POSITION_SCALE,
+    };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const controlsRef = useRef<any>(null);
 
@@ -373,6 +428,15 @@ export function BattleScene({
         >
             {/* モーダルオープン時に自機MSを中心にカメラを初期配置 */}
             <CameraInitializer px={px} py={py} pz={pz} controlsRef={controlsRef} />
+
+            {/* チャプタージャンプ時のみカメラターゲットを自機の新しい位置へ再センタリング（Issue #524） */}
+            <CameraRecenterer
+                px={currentPos.x}
+                py={currentPos.y}
+                pz={currentPos.z}
+                recenterToken={recenterToken}
+                controlsRef={controlsRef}
+            />
 
             {/* 距離フォグ: 背景色(getEnvironmentColor)と同色にして遠景を自然に馴染ませ、奥行き感を出す */}
             <fog attach="fog" args={[getEnvironmentColor(environment), 90, 220]} />
