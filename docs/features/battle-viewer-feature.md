@@ -924,7 +924,7 @@ BattleDetailModal
 
 BattleViewer の 3D 演出（Hit / Critical / Miss / 格闘コンボ / 弾種別の飛翔体 / 環境）を、実際にバトルを
 実行せずに Storybook 上で再現・反復確認できる。`BattleViewer` 本体には手を加えず、最小限の `BattleLog` を
-props で渡すだけなので、本番と同じ描画パス（`useBattleEvents` → `BattleScene` / `ComboEffect`）を通る。
+props で渡すだけなので、本番と同じ描画パス（`useBattleEvents` → `BattleScene`）を通る。
 
 ```bash
 cd frontend
@@ -973,4 +973,5 @@ npm run storybook   # http://localhost:6006 → BattleViewer/Effects, BattleView
   Effects ストーリーには RESIST を含めていない。
 - 格闘コンボは、以前は同時刻の `ATTACK` ログが先にアクター側の演出枠を使うため 3D 上の「N HIT COMBO!!」が
   表示されていなかった。Issue #531 で演出枠の仕組みを廃止し、被弾側の `NHIT COMBO` 付きの数字として表示するようにした
-  （画面中央の `ComboEffect` オーバーレイは従来どおり）。
+  画面中央に「×N / NCombo XXXダメージ!!」を出していた `ComboEffect` オーバーレイは、
+  被弾側の数字と情報が重複し、`animate-bounce` で跳ねるため削除した。

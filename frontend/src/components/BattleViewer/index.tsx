@@ -8,7 +8,6 @@ import { getBattleSnapshot, getDetectedUnits, SnapshotCache } from "./hooks/useB
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
-import { ComboEffect } from "./ui/ComboEffect";
 import { getEnvironmentColor, SIMULATION_STEP_S } from "./utils";
 import { hasLos } from "./utils/losUtils";
 
@@ -145,9 +144,6 @@ export default function BattleViewer({
                 showLos={showLos}
                 onToggleLos={() => setShowLos(v => !v)}
             />
-
-            {/* 格闘コンボエフェクト (Phase C) */}
-            <ComboEffect logs={logs} currentTimestamp={currentTimestamp} />
         </div>
     );
 }
