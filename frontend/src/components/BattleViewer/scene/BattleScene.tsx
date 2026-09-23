@@ -89,11 +89,30 @@ function CameraRecenterer({
     controlsRef: React.RefObject<any>;
 }) {
     useEffect(() => {
-        if (recenterToken === undefined) return;
-        if (controlsRef.current) {
-            controlsRef.current.target.set(px, py, pz);
-            controlsRef.current.update();
-        }
+        // recenterToken は 0 始まりのため、マウント時（実際のチャプタークリック前）に
+        // 誤って再センタリングされないよう 0 以下は無視する
+        if (!recenterToken || recenterToken <= 0) return;
+
+        let cancelled = false;
+        let frameId: number;
+
+        // controlsRef（OrbitControls）がまだ生成されていないタイミングでこの effect が
+        // 実行された場合に備え、生成されるまで次フレームでリトライする
+        const applyRecenter = () => {
+            if (cancelled) return;
+            if (controlsRef.current) {
+                controlsRef.current.target.set(px, py, pz);
+                controlsRef.current.update();
+            } else {
+                frameId = requestAnimationFrame(applyRecenter);
+            }
+        };
+        applyRecenter();
+
+        return () => {
+            cancelled = true;
+            if (frameId) cancelAnimationFrame(frameId);
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [recenterToken]);
 
