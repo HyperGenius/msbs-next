@@ -245,7 +245,7 @@ class MobileSuit(SQLModel, table=True):
     max_en: int = Field(
         default=1000, description="最大エネルギー容量 (ジェネレーター出力)"
     )
-    en_recovery: int = Field(default=100, description="ターン毎のEN回復量")
+    en_recovery: int = Field(default=100, description="毎秒のEN回復量")
     max_propellant: int = Field(
         default=1000, description="最大推進剤容量 (将来的な移動コスト用)"
     )

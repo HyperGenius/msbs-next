@@ -267,6 +267,10 @@ DEFAULT_BOOST_EN_COST: float = 5.0  # ブースト中 EN 消費量 (/s)
 DEFAULT_BOOST_MAX_DURATION: float = 3.0  # 1 回のブーストの最大継続時間 (s)
 DEFAULT_BOOST_COOLDOWN: float = 5.0  # ブースト終了後の再使用不可時間 (s)
 
+# BattleLog.details["reason_code"] の値。フロントエンドが EN 不足イベントの判定に使う。
+EN_SHORTAGE_REASON_CODE: str = "EN_SHORTAGE"  # EN 不足で武器を使えず待機した
+EN_DEPLETED_REASON_CODE: str = "EN_DEPLETED"  # EN 枯渇でブーストが終了した
+
 # 近接戦闘システム定数 (Phase C)
 POST_MELEE_DISTANCE: float = 10.0  # 格闘命中後の再配置距離 (m)
 CLOSE_RANGE: float = 200.0  # 近距離定義 (m)

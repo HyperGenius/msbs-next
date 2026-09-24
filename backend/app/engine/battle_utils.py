@@ -36,6 +36,16 @@ def serialize_obstacles(obstacles: "list[Obstacle]") -> list[dict[str, Any]] | N
     ]
 
 
+def en_log_details(current_en: float) -> dict[str, int]:
+    """EN 消費ログの `details` に載せる EN 残量を返す.
+
+    EN 残量は EN を消費したログにだけ記録する。
+    全ログに載せるとログサイズが増えるためである。
+    フロントエンドは記録の間の値を `en_recovery` から補間する。
+    """
+    return {"en": round(current_en)}
+
+
 # バトルログ保存時に除去するデバッグ専用フィールドのセット
 _BATTLE_LOG_DEBUG_FIELDS: frozenset[str] = frozenset({"fuzzy_scores"})
 

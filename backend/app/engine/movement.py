@@ -6,6 +6,7 @@ import random
 
 import numpy as np
 
+from app.engine.battle_utils import en_log_details
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
     BOUNDARY_MARGIN,
@@ -13,6 +14,7 @@ from app.engine.constants import (
     DEFAULT_BOOST_EN_COST,
     DEFAULT_BOOST_MAX_DURATION,
     DEFAULT_BOOST_SPEED_MULTIPLIER,
+    EN_DEPLETED_REASON_CODE,
     FLANKING_ACTIVATION_PROBS,
     FLANKING_ATTRACTION_WEIGHT,
     FLANKING_ENERGY_COST_RATE,
@@ -610,6 +612,7 @@ class MovementMixin:
         current_en = resources.get("current_en", 0.0)
 
         cancel_reason: str | None = None
+        reason_code: str | None = None
 
         # 条件 1: 最大継続時間超過
         if boost_elapsed >= boost_max_duration:
@@ -618,6 +621,7 @@ class MovementMixin:
         # 条件 2: EN 切れ
         elif current_en <= 0:
             cancel_reason = "EN 枯渇"
+            reason_code = EN_DEPLETED_REASON_CODE
 
         elif target is not None:
             pos_actor = actor.position.to_numpy()
@@ -682,6 +686,21 @@ class MovementMixin:
         resources["is_boosting"] = False
         resources["boost_cooldown_remaining"] = boost_cooldown
 
+        self._log_boost_end(actor, cancel_reason, reason_code, current_en)
+        return True
+
+    def _log_boost_end(
+        self,
+        actor: MobileSuit,
+        cancel_reason: str,
+        reason_code: str | None,
+        current_en: float,
+    ) -> None:
+        """BOOST_END ログを追記する."""
+        details: dict = {"reason": cancel_reason, **en_log_details(current_en)}
+        if reason_code is not None:
+            details["reason_code"] = reason_code
+
         self.logs.append(  # type: ignore[attr-defined]
             BattleLog(
                 timestamp=float(self.elapsed_time),  # type: ignore[attr-defined]
@@ -692,11 +711,9 @@ class MovementMixin:
                     f" (理由: {cancel_reason})"
                 ),
                 position_snapshot=actor.position,
-                details={"reason": cancel_reason},
+                details=details,
             )
         )
-
-        return True
 
     def _search_movement(self, actor: MobileSuit, dt: float = 0.1) -> None:
         """索敵移動: 未発見の敵を探すための移動."""
