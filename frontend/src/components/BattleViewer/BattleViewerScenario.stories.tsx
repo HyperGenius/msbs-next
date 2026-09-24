@@ -4,15 +4,16 @@ import BattleViewer from ".";
 import ChapterTrack from "./ui/ChapterTrack";
 import { useBattleChapters } from "./hooks/useBattleChapters";
 import TurnController from "@/components/history/TurnController";
-import { buildSkirmishScenario } from "./__stories__/battleScenarioFixtures";
+import { BattleScenario, buildEnShortageScenario, buildSkirmishScenario } from "./__stories__/battleScenarioFixtures";
 
 interface ScenarioStoryArgs {
     environment: string;
+    buildScenario: () => BattleScenario;
 }
 
 /** BattleDetailModal と同じ部品構成で、複数の演出を含むバトルを通し再生する。 */
-function ScenarioStory({ environment }: ScenarioStoryArgs) {
-    const { logs, player, enemies } = useMemo(() => buildSkirmishScenario(), []);
+function ScenarioStory({ environment, buildScenario }: ScenarioStoryArgs) {
+    const { logs, player, enemies } = useMemo(() => buildScenario(), [buildScenario]);
     const [currentTimestamp, setCurrentTimestamp] = useState(0);
     const [recenterToken, setRecenterToken] = useState(0);
     const chapters = useBattleChapters(logs, player, enemies);
@@ -52,9 +53,10 @@ const meta: Meta<ScenarioStoryArgs> = {
         layout: "fullscreen",
         backgrounds: { default: "dark" },
     },
-    args: { environment: "SPACE" },
+    args: { environment: "SPACE", buildScenario: buildSkirmishScenario },
     argTypes: {
         environment: { control: "select", options: ["SPACE", "GROUND", "COLONY", "UNDERWATER"] },
+        buildScenario: { table: { disable: true } },
     },
 };
 
@@ -62,3 +64,8 @@ export default meta;
 type Story = StoryObj<ScenarioStoryArgs>;
 
 export const Skirmish: Story = {};
+
+/** ENゲージの追従・20%未満での赤色表示・EN不足イベントでの2回点滅（Issue #534） */
+export const EnShortage: Story = {
+    args: { buildScenario: buildEnShortageScenario },
+};

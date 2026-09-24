@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { getBattleSnapshot, SnapshotCache } from "@/components/BattleViewer/hooks/useBattleSnapshot";
+import {
+    findLatestEnShortageEvent,
+    getBattleSnapshot,
+    isEnShortageLog,
+    SnapshotCache,
+} from "@/components/BattleViewer/hooks/useBattleSnapshot";
 import { BattleLog } from "@/types/battle";
 import { MobileSuit } from "@/types/mobileSuit";
 import { Weapon } from "@/types/weapon";
@@ -119,5 +124,95 @@ describe("getBattleSnapshot: 差分更新キャッシュ（Issue #465）", () =>
         expect(cached.warnings).not.toContain("cooldown");
         expect(fresh.warnings).not.toContain("cooldown");
         expect(cached).toEqual(fresh);
+    });
+});
+
+describe("getBattleSnapshot: EN残量の再構築（Issue #534）", () => {
+    const beamRifle: Weapon = { id: "beam", name: "Beam Rifle", power: 10, range: 100, accuracy: 80, en_cost: 50 };
+    const enMs: MobileSuit = { ...baseMs, weapons: [beamRifle], max_en: 200, en_recovery: 10, boost_en_cost: 20 };
+    const pos = { x: 0, y: 0, z: 0 };
+
+    function enLog(timestamp: number, actionType: BattleLog["action_type"], details?: Record<string, unknown>): BattleLog {
+        return { timestamp, actor_id: "unit-1", action_type: actionType, message: "", position_snapshot: pos, weapon_id: "beam", details };
+    }
+
+    it("通常時は details.en を基準に en_recovery × 経過秒で回復する", () => {
+        const logs = [enLog(1.0, "ATTACK", { en: 100 })];
+        expect(getBattleSnapshot("unit-1", enMs, logs, 1.0).en).toBeCloseTo(100);
+        expect(getBattleSnapshot("unit-1", enMs, logs, 3.5).en).toBeCloseTo(125);
+    });
+
+    it("回復は max_en で頭打ちになる", () => {
+        const logs = [enLog(1.0, "ATTACK", { en: 150 })];
+        expect(getBattleSnapshot("unit-1", enMs, logs, 20.0).en).toBe(200);
+    });
+
+    it("MISS ログの details.en も基準値として使う", () => {
+        const logs = [enLog(1.0, "ATTACK", { en: 150 }), enLog(2.0, "MISS", { en: 110 })];
+        expect(getBattleSnapshot("unit-1", enMs, logs, 3.0).en).toBeCloseTo(120);
+    });
+
+    it("ブースト中は回復せず boost_en_cost × 経過秒で減り、0 未満にならない", () => {
+        const logs = [enLog(1.0, "BOOST_START", { en: 100 }), enLog(4.0, "BOOST_END", { reason: "EN 枯渇", en: 40, reason_code: "EN_DEPLETED" })];
+        expect(getBattleSnapshot("unit-1", enMs, logs, 2.0).en).toBeCloseTo(80);
+        // BOOST_END 後は終了時の記録値から回復に戻る
+        expect(getBattleSnapshot("unit-1", enMs, logs, 5.0).en).toBeCloseTo(50);
+
+        const longBoost = [enLog(1.0, "BOOST_START", { en: 30 })];
+        expect(getBattleSnapshot("unit-1", enMs, longBoost, 10.0).en).toBe(0);
+    });
+
+    it("details.en の無い旧ログは en_cost 減算方式にフォールバックする（回復しない）", () => {
+        const logs = [enLog(1.0, "ATTACK"), enLog(2.0, "ATTACK")];
+        expect(getBattleSnapshot("unit-1", enMs, logs, 10.0).en).toBe(100);
+    });
+
+    it("他ユニットの details.en は自機の EN に影響しない", () => {
+        const logs = [{ ...enLog(1.0, "ATTACK", { en: 0 }), actor_id: "enemy-1" }];
+        expect(getBattleSnapshot("unit-1", enMs, logs, 2.0).en).toBe(200);
+    });
+
+    it("シーク（巻き戻し）してもキャッシュなしの結果と一致する", () => {
+        const logs = [
+            enLog(1.0, "ATTACK", { en: 150 }),
+            enLog(2.0, "BOOST_START", { en: 160 }),
+            enLog(4.0, "BOOST_END", { en: 120 }),
+            enLog(6.0, "ATTACK", { en: 90 }),
+        ];
+        const cache: SnapshotCache = new Map();
+        for (const ts of [7.0, 3.0, 5.0, 1.5, 8.0]) {
+            expect(getBattleSnapshot("unit-1", enMs, logs, ts, cache).en).toBeCloseTo(
+                getBattleSnapshot("unit-1", enMs, logs, ts).en
+            );
+        }
+    });
+
+    it("EN が少なくても3Dシーン用の警告に EN 不足を含めない", () => {
+        const logs = [enLog(1.0, "ATTACK", { en: 0 })];
+        expect(getBattleSnapshot("unit-1", enMs, logs, 1.0).warnings).toEqual([]);
+    });
+});
+
+describe("EN不足イベントの検出（Issue #534）", () => {
+    const pos = { x: 0, y: 0, z: 0 };
+
+    it("reason_code が EN_SHORTAGE / EN_DEPLETED のログだけを EN 不足イベントとみなす", () => {
+        const make = (actionType: BattleLog["action_type"], details?: Record<string, unknown>): BattleLog => ({
+            timestamp: 1, actor_id: "unit-1", action_type: actionType, message: "", position_snapshot: pos, details,
+        });
+        expect(isEnShortageLog(make("WAIT", { reason_code: "EN_SHORTAGE" }))).toBe(true);
+        expect(isEnShortageLog(make("BOOST_END", { reason: "EN 枯渇", en: 0, reason_code: "EN_DEPLETED" }))).toBe(true);
+        expect(isEnShortageLog(make("BOOST_END", { reason: "最大継続時間", en: 50 }))).toBe(false);
+        expect(isEnShortageLog(make("WAIT"))).toBe(false);
+    });
+
+    it("(from, to] の範囲にある最後のイベント時刻を返す", () => {
+        const events = [1.0, 2.0, 3.0];
+        expect(findLatestEnShortageEvent(events, 1.9, 2.0)).toBe(2.0);
+        expect(findLatestEnShortageEvent(events, 0.5, 3.5)).toBe(3.0);
+        // 始点ちょうどのイベントは前回の区間で通過済み
+        expect(findLatestEnShortageEvent(events, 2.0, 2.9)).toBeNull();
+        expect(findLatestEnShortageEvent(events, 3.0, 10.0)).toBeNull();
+        expect(findLatestEnShortageEvent([], 0, 10)).toBeNull();
     });
 });

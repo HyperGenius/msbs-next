@@ -245,7 +245,8 @@ interface UnitSnapshot {
 
 ### 実際に使用した武器の特定（EN/弾薬消費計算）
 
-`getBattleSnapshot`（`useBattleSnapshot.ts`）は ATTACK ログの EN/弾薬消費を計算する際、
+`getBattleSnapshot`（`useBattleSnapshot.ts`）は ATTACK ログの EN/弾薬消費を計算する際
+（EN は `details.en` の無い旧ログのみ。「EN ゲージ（Issue #534）」参照）、
 `BattleLog.weapon_id` から `initialMs.weapons` 内の該当武器を検索して使用する。
 
 - `log.weapon_id` が存在する場合: 一致する武器を `initialMs.weapons` から検索
@@ -481,6 +482,63 @@ BattleOverlay
   再生中は二分探索で現在時刻以前の末尾を探す。
 - `formatBattleLog()`（`utils/logFormatter.ts`）との共通化は見送った。`formatBattleLog()` は backend の
   message 文字列を加工する関数で、HUD ログは `actor_id` / `target_id` / `weapon_name` / `damage` から組み立てるため。
+
+---
+
+## EN ゲージ（Issue #534）
+
+### 概要
+
+左上オーバーレイ（`BattleOverlay`）の EN ゲージを実際の EN 残量に追従させる。
+EN 不足は3Dシーン上のアイコンではなく、この EN ゲージの色と点滅で示す。
+
+### 1. EN 残量の算出（`getBattleSnapshot`）
+
+バックエンドは EN を消費したログの `details.en` に消費後の EN 残量を記録する（Issue #533、
+[battle-log-feature.md](battle-log-feature.md) 参照）。自機の直近の記録を基準値とし、次の記録までは経過秒から算出する。
+
+| 状態 | EN 残量 |
+|---|---|
+| 通常時 | `min(max_en, 基準値 + en_recovery × 経過秒)` |
+| ブースト中（`BOOST_START`〜`BOOST_END`） | `max(0, 基準値 − boost_en_cost × 経過秒)`（回復しない） |
+
+- 基準値にするログは `ATTACK` / `MISS`（EN 武器）、`BOOST_START`、`BOOST_END`。
+- `en_recovery` / `boost_en_cost` が未指定の機体はバックエンドの既定値（100 /s、5.0 /s）を使う（`utils/index.ts` の `DEFAULT_EN_RECOVERY` / `DEFAULT_BOOST_EN_COST`）。
+- `details.en` の無い旧ログは、従来どおり ATTACK ログごとに `en_cost` を減算する（回復は反映しない）。
+- 基準値とブースト状態は `SnapshotCache` のエントリに持つため、シークで巻き戻したときも先頭からの再計算で同じ値になる。
+- 返す EN は小数を含む。表示時に `Math.round()` する。
+
+### 2. 低残量の赤色表示
+
+EN 比率が `EN_WARNING_THRESHOLD`（20%）未満の間、ゲージと「EN:」ラベルをシアンから赤（`bg-red-500` / `text-red-400`）にする。
+色の切り替えは既存のゲージ幅と同じ `transition-all duration-300`。
+
+### 3. EN 不足イベントでの点滅
+
+自機の次のログの時刻を再生位置が通過したとき、EN ゲージを 2 回点滅させる（0.3s × 2）。
+
+| ログ | 判定条件 |
+|---|---|
+| `WAIT` | `details.reason_code === "EN_SHORTAGE"`（EN 武器が使用不可） |
+| `BOOST_END` | `details.reason_code === "EN_DEPLETED"`（EN 枯渇でブースト打ち切り） |
+
+- 判定は `isEnShortageLog()`、通過したイベントの検出は `findLatestEnShortageEvent()`（どちらも `useBattleSnapshot.ts`）。
+- `BattleOverlay` の `useEnShortageBlink` が前回の再生位置を ref に持ち、`(前回, 今回]` の区間にイベントがあれば
+  ゲージ要素を Web Animations API（`element.animate()`）で点滅させる。点滅中に次のイベントが来たら前の点滅を
+  `cancel()` してから再生するので、最初から 2 回点滅し直す（点滅が重ならない）。
+- 点滅に React の state を使わない。レンダー中や effect 内で state を更新すると再レンダーが余分に走るため。
+- 一時停止中は再生位置が変わらないため発火しない。巻き戻した場合は点滅を解除し、過去のイベントでは発火させない。
+- 「最善の武器が EN 不足で選択候補から外れた」ケースは対象外。
+
+### 4. 3Dシーンの EN 不足アイコンの廃止
+
+`MobileSuitMesh` の ⚡「EN不足」アイコンと、`getBattleSnapshot` の `'energy'` 警告を削除した（`WarningType` からも削除）。
+従来の EN 推定は減る一方だったため、一度点灯すると消えず実態と逆の情報を出していた。
+弾切れ・クールダウンのアイコンは従来どおり。
+
+### 5. Storybook
+
+`BattleViewer/Scenario` の `EnShortage` で、連射による減少 → ブーストで枯渇（点滅）→ EN 不足の WAIT が 2 回（点滅し直し）→ 回復 を確認できる。
 
 ---
 

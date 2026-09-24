@@ -1,7 +1,7 @@
 /* frontend/src/components/BattleViewer/types.ts */
 
 // 警告アイコンの種類
-export type WarningType = 'ammo' | 'energy' | 'cooldown';
+export type WarningType = 'ammo' | 'cooldown';
 
 /** 射線の描き方。BEAM は伸びる直線、BULLET は飛んでいく短い弾体。 */
 export type TracerKind = 'BEAM' | 'BULLET';

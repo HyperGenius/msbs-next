@@ -44,6 +44,8 @@ export interface MobileSuit {
     terrain_adaptability?: Record<string, string>;
     max_en?: number;
     en_recovery?: number;
+    /** ブースト中の EN 消費量 (/s) */
+    boost_en_cost?: number;
     max_propellant?: number;
     /** NPC の場合のパイロットレベル（スナップショットから） */
     npc_pilot_level?: number;
