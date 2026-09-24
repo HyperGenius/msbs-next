@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { RefObject, useEffect, useMemo, useRef } from "react";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import { HpBar } from "./HpBar";
 import { getHpBarColor, getEnemyHpBarColor, DEFAULT_MAX_EN, EN_WARNING_THRESHOLD, HIT_EFFECT_COLORS } from "../utils";
@@ -15,6 +15,39 @@ interface UnitState {
     en: number;
     ammo: Record<string, number>;
     warnings: string[];
+}
+
+/** ENゲージの点滅（Issue #534）。0.3s で 1 回、2 回繰り返す */
+const EN_BLINK_KEYFRAMES: Keyframe[] = [{ opacity: 1 }, { opacity: 0.15 }, { opacity: 1 }];
+const EN_BLINK_OPTIONS: KeyframeAnimationOptions = { duration: 300, iterations: 2, easing: "ease-in-out" };
+
+/**
+ * 再生位置が EN 不足イベントの時刻を通過したとき、target 要素を 2 回点滅させる。
+ * 前回の再生位置は ref で持ち、React の state は更新しない（アニメーションは Web Animations API で直接再生する）。
+ * 一時停止中は currentTimestamp が変わらないため発火せず、巻き戻したときは点滅を止めて過去のイベントでは発火させない。
+ */
+function useEnShortageBlink(
+    target: RefObject<HTMLDivElement | null>,
+    enShortageTimestamps: number[],
+    currentTimestamp: number
+) {
+    const prevTimestampRef = useRef(currentTimestamp);
+    const animationRef = useRef<Animation | null>(null);
+
+    useEffect(() => {
+        const prevTimestamp = prevTimestampRef.current;
+        prevTimestampRef.current = currentTimestamp;
+        if (currentTimestamp === prevTimestamp) return;
+
+        if (currentTimestamp < prevTimestamp) {
+            animationRef.current?.cancel();
+            return;
+        }
+        if (findLatestEnShortageEvent(enShortageTimestamps, prevTimestamp, currentTimestamp) === null) return;
+        // 点滅中に次のイベントが来たら、重ねずに最初から 2 回点滅し直す
+        animationRef.current?.cancel();
+        animationRef.current = target.current?.animate(EN_BLINK_KEYFRAMES, EN_BLINK_OPTIONS) ?? null;
+    }, [target, enShortageTimestamps, currentTimestamp]);
 }
 
 /** 敵HPパネルに表示する敵機の最大数。超過分は「…他N機」で省略する（Issue #521） */
@@ -89,23 +122,13 @@ export function BattleOverlay({
         return names;
     }, [player.id, player.name, enemyStates]);
 
-    // EN不足イベント（Issue #534）。再生で時刻を通過したときだけ点滅させ、
-    // 一時停止（時刻が変わらない）やシークの巻き戻しでは発火させない。
+    // EN不足イベント（Issue #534）。再生で時刻を通過したときだけ ENゲージを点滅させる
     const enShortageTimestamps = useMemo(
         () => logs.filter((log) => log.actor_id === player.id && isEnShortageLog(log)).map((log) => log.timestamp),
         [logs, player.id]
     );
-    const [prevTimestamp, setPrevTimestamp] = useState(currentTimestamp);
-    const [enBlinkKey, setEnBlinkKey] = useState<number | null>(null);
-    if (currentTimestamp !== prevTimestamp) {
-        setPrevTimestamp(currentTimestamp);
-        if (currentTimestamp < prevTimestamp) {
-            setEnBlinkKey(null);
-        } else {
-            const eventTs = findLatestEnShortageEvent(enShortageTimestamps, prevTimestamp, currentTimestamp);
-            if (eventTs !== null) setEnBlinkKey(eventTs);
-        }
-    }
+    const enGaugeRef = useRef<HTMLDivElement>(null);
+    useEnShortageBlink(enGaugeRef, enShortageTimestamps, currentTimestamp);
 
     const maxEn = player.max_en || DEFAULT_MAX_EN;
     const enRatio = maxEn > 0 ? playerState.en / maxEn : 0;
@@ -134,12 +157,9 @@ export function BattleOverlay({
                     <div className="mt-0.5 sm:mt-1">
                         <span className={`${isEnLow ? "text-red-400" : "text-cyan-400"} text-[9px] sm:text-xs transition-all duration-300`}>EN:</span>
                         <span className="text-[9px] sm:text-xs">{Math.round(playerState.en)} / {maxEn}</span>
-                        {/* key を EN 不足イベント時刻にして再マウントし、点滅中の次のイベントでも最初から2回点滅させる */}
                         <div
-                            key={enBlinkKey ?? "idle"}
-                            className={`w-16 sm:w-24 h-1.5 sm:h-2 bg-gray-700 mt-0.5 sm:mt-1 rounded overflow-hidden border border-gray-600 ${
-                                enBlinkKey !== null ? "animate-en-blink" : ""
-                            }`}
+                            ref={enGaugeRef}
+                            className="w-16 sm:w-24 h-1.5 sm:h-2 bg-gray-700 mt-0.5 sm:mt-1 rounded overflow-hidden border border-gray-600"
                         >
                             <div
                                 className={`h-full ${isEnLow ? "bg-red-500" : "bg-cyan-500"} transition-all duration-300`}

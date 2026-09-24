@@ -515,7 +515,7 @@ EN 比率が `EN_WARNING_THRESHOLD`（20%）未満の間、ゲージと「EN:」
 
 ### 3. EN 不足イベントでの点滅
 
-自機の次のログの時刻を再生位置が通過したとき、EN ゲージを 2 回点滅させる（`globals.css` の `animate-en-blink`、0.3s × 2）。
+自機の次のログの時刻を再生位置が通過したとき、EN ゲージを 2 回点滅させる（0.3s × 2）。
 
 | ログ | 判定条件 |
 |---|---|
@@ -523,8 +523,10 @@ EN 比率が `EN_WARNING_THRESHOLD`（20%）未満の間、ゲージと「EN:」
 | `BOOST_END` | `details.reason_code === "EN_DEPLETED"`（EN 枯渇でブースト打ち切り） |
 
 - 判定は `isEnShortageLog()`、通過したイベントの検出は `findLatestEnShortageEvent()`（どちらも `useBattleSnapshot.ts`）。
-- `BattleOverlay` は前回の再生位置を state に持ち、`(前回, 今回]` の区間にイベントがあればその時刻を点滅用の `key` にする。
-  ゲージ要素を再マウントするので、点滅中に次のイベントが来ても最初から 2 回点滅し直す（点滅が重ならない）。
+- `BattleOverlay` の `useEnShortageBlink` が前回の再生位置を ref に持ち、`(前回, 今回]` の区間にイベントがあれば
+  ゲージ要素を Web Animations API（`element.animate()`）で点滅させる。点滅中に次のイベントが来たら前の点滅を
+  `cancel()` してから再生するので、最初から 2 回点滅し直す（点滅が重ならない）。
+- 点滅に React の state を使わない。レンダー中や effect 内で state を更新すると再レンダーが余分に走るため。
 - 一時停止中は再生位置が変わらないため発火しない。巻き戻した場合は点滅を解除し、過去のイベントでは発火させない。
 - 「最善の武器が EN 不足で選択候補から外れた」ケースは対象外。
 

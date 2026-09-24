@@ -198,16 +198,6 @@ a:not(.no-min-size),
   animation: fade-in 0.2s ease-out;
 }
 
-/* BattleViewer の EN 不足時の ENゲージ点滅（Issue #534）。2回で止める。 */
-@keyframes bv-en-blink {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.15; }
-}
-
-.animate-en-blink {
-  animation: bv-en-blink 0.3s ease-in-out 2;
-}
-
 /* BattleViewer のヒット演出。色・時間・遅延は各コンポーネントがインラインで指定する。 */
 @keyframes bv-weapon-label {
   0%   { opacity: 0; }
