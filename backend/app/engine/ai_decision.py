@@ -480,7 +480,7 @@ class AiDecisionMixin:
                 current_en = resources["current_en"]
                 max_en = unit.max_en
                 en_recovery = unit.en_recovery
-                new_en = min(current_en + en_recovery, max_en)
+                new_en = min(current_en + en_recovery * dt, max_en)
                 resources["current_en"] = new_en
 
                 # ブーストクールダウンを減算

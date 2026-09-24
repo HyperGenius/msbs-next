@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from app.engine.battle_utils import en_log_details
 from app.engine.constants import MELEE_BOOST_ARRIVAL_RANGE, POST_MELEE_DISTANCE
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 
@@ -230,6 +231,7 @@ class ActionHandlerMixin:
                         f"{self._format_actor_name(actor)} がブーストダッシュを開始した！"  # type: ignore[attr-defined]
                     ),
                     position_snapshot=actor.position,
+                    details=en_log_details(resources["current_en"]),
                 )
             )
 

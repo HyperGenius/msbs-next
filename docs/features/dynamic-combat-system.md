@@ -139,16 +139,21 @@ IF is_boosting:
     current_en -= boost_en_cost × dt
     boost_elapsed += dt
 ELSE:
-    current_en += en_recovery  # 通常の EN 回復
+    current_en = min(current_en + en_recovery × dt, max_en)  # 通常の EN 回復（en_recovery は毎秒）
     boost_cooldown_remaining = max(0, boost_cooldown_remaining - dt)
 ```
+
+`en_recovery` は **毎秒** の回復量である（Issue #533）。以前は `dt` を掛けずに毎ステップ加算しており、
+`dt=0.1s` では実質 `en_recovery × 10` /秒 で回復していた。
 
 ### 3.8 BattleLog 記録
 
 | action_type | タイミング | details フィールド |
 |---|---|---|
-| `BOOST_START` | ブーストダッシュ開始時 | — |
-| `BOOST_END` | ブースト終了時 | `{"reason": "終了理由の文字列"}` |
+| `BOOST_START` | ブーストダッシュ開始時 | `{"en": 開始時のEN残量}` |
+| `BOOST_END` | ブースト終了時 | `{"reason": "終了理由の文字列", "en": 終了時のEN残量}`。EN 枯渇による終了時のみ `"reason_code": "EN_DEPLETED"` を追加 |
+
+EN 残量・`reason_code` の記録方針は `docs/features/battle-log-feature.md` の「EN 残量と EN 不足イベントの記録」を参照。
 
 `BOOST_START` / `BOOST_END` ログを BattleViewer でブーストエフェクト（推進炎等）に利用する（フロントエンド実装は別 issue）。
 

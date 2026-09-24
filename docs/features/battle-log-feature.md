@@ -20,6 +20,36 @@
 
 ---
 
+## EN 残量と EN 不足イベントの記録（Issue #533）
+
+BattleViewer の EN ゲージ表示のため、EN 残量を `BattleLog.details` に記録する。
+**記録するのは EN を消費したログだけ**で、全ログには載せない。
+
+| action_type | 条件 | `details` |
+|---|---|---|
+| `ATTACK` / `MISS` | 使用武器の `en_cost > 0`（格闘武器を除く） | `{"en": 消費後のEN残量}` |
+| `BOOST_START` | ブースト開始時 | `{"en": 開始時のEN残量}` |
+| `BOOST_END` | ブースト終了時 | `{"reason": ..., "en": 終了時のEN残量}` |
+| `WAIT` | EN 不足で武器を使えず待機 | `{"reason_code": "EN_SHORTAGE"}` |
+| `BOOST_END` | EN 枯渇でブースト終了 | 上記に加えて `{"reason_code": "EN_DEPLETED"}` |
+
+- EN 残量は `round()` した整数（`app/engine/battle_utils.py` の `en_log_details()`）。
+- `reason_code` の値は `app/engine/constants.py` の `EN_SHORTAGE_REASON_CODE` / `EN_DEPLETED_REASON_CODE`。
+  フロントエンドはメッセージ文字列ではなくこの値で EN 不足イベントを判定する。
+- フランキング機動の EN 消費は専用ログが無く、消費量も小さいため記録しない。
+- 記録の間の EN 残量はフロントエンドで算出する（通常時は `en_recovery × 経過秒` で回復、
+  `BOOST_START`〜`BOOST_END` の間は `boost_en_cost × 経過秒` で減少）。
+
+### `BattleLog` に専用フィールドを追加しない理由
+
+保存時の `strip_debug_fields()` は `model_dump()` をそのまま使うため、`None` のフィールドも
+全ログに `null` として保存される。専用フィールド（例: `en_after`）を追加すると、EN を消費しない
+大多数のログにもキーが付き、ログサイズとダウンロード時間が増える。既存の `details` は EN 消費ログ
+以外では `null` のままなので、サイズ増加は EN 消費ログの分だけで済む。
+NPC エース同士の1vs1（20戦）の実測では、ログ1件あたりの平均サイズは 744.6 → 746.2 byte（+0.2%）だった。
+
+---
+
 ## バックエンド: `GET /api/battles/{battle_id}/logs`（遅延ロード配信）
 
 バトルログは `battle_results` とは別テーブル `battle_logs`（`BattleLogRecord`, `backend/app/models/models.py`）に

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from app.engine.battle_utils import en_log_details
 from app.engine.calculator import (
     PilotStats,
     calculate_critical_chance,
@@ -25,6 +26,7 @@ from app.engine.constants import (
     DEFAULT_PART_HIT_WEIGHT,
     DEFENSE_SIGMOID_K,
     DEFENSE_SIGMOID_MIDPOINT,
+    EN_SHORTAGE_REASON_CODE,
     MAX_ATTACK_BONUS,
     MAX_DEFENSE_REDUCTION,
     MELEE_CLOSE_ACCURACY_BONUS,
@@ -414,10 +416,14 @@ class CombatMixin:
 
     def _consume_attack_resources(
         self, weapon: Weapon, weapon_state: dict, resources: dict
-    ) -> None:
+    ) -> dict | None:
         """攻撃実行時のリソースを消費する.
 
         MELEE 武器は弾薬・EN 消費がゼロのためスキップする (Phase C)。
+
+        Returns:
+            EN を消費した場合は攻撃ログの `details` に載せる EN 残量。
+            消費しなかった場合は None。
         """
         is_melee_weapon = getattr(
             weapon, "weapon_type", "RANGED"
@@ -438,6 +444,10 @@ class CombatMixin:
         if cooldown > 0.0:
             weapon_state["cooldown_remaining_sec"] = cooldown
 
+        if not is_melee_weapon and weapon.en_cost > 0:
+            return en_log_details(resources["current_en"])
+        return None
+
     def _log_attack_wait(
         self,
         actor: MobileSuit,
@@ -447,12 +457,14 @@ class CombatMixin:
         snapshot: Vector3,
     ) -> None:
         """攻撃リソース不足時の待機ログを追記する."""
+        details: dict | None = None
         actor_name = self._format_actor_name(actor)  # type: ignore[attr-defined]
         weapon_display = f"[{weapon.name}]" if weapon.name else "[格闘]"
         if "弾切れ" in failure_reason:
             wait_message = f"{actor_name}は{weapon_display}の弾薬が尽き、攻撃手段がない"
         elif "EN不足" in failure_reason:
             wait_message = f"{actor_name}はENが枯渇し、{weapon_display}を使えず待機中"
+            details = {"reason_code": EN_SHORTAGE_REASON_CODE}
         elif "クールダウン" in failure_reason:
             remaining_sec = weapon_state.get("cooldown_remaining_sec", 0.0)
             wait_message = f"{actor_name}は{weapon_display}の冷却を待ちながら（残り{remaining_sec:.1f}s）、やむなく待機"
@@ -465,6 +477,7 @@ class CombatMixin:
                 action_type="WAIT",
                 message=wait_message,
                 position_snapshot=snapshot,
+                details=details,
                 velocity_snapshot=Vector3.from_numpy(
                     self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                 ),  # type: ignore[attr-defined]
@@ -544,7 +557,7 @@ class CombatMixin:
         log_base = f"{actor_name}が{weapon_display}で攻撃！ (命中: {int(hit_chance)}%)"
 
         # リソース消費
-        self._consume_attack_resources(weapon, weapon_state, resources)
+        en_details = self._consume_attack_resources(weapon, weapon_state, resources)
 
         # 攻撃時のセリフ生成
         attack_chatter = self._generate_chatter(actor, "attack")  # type: ignore[attr-defined]
@@ -561,6 +574,7 @@ class CombatMixin:
                 skill_activated,
                 attack_sector=attack_sector,
                 distance=distance,
+                en_details=en_details,
             )
         else:
             self._process_miss(
@@ -572,6 +586,7 @@ class CombatMixin:
                 attack_chatter,
                 is_bad_distance,
                 skill_activated,
+                en_details=en_details,
             )
 
     def _is_fire_arc_blocked(
@@ -673,8 +688,12 @@ class CombatMixin:
         skill_activated: bool = False,
         attack_sector: str = "FRONT_SIDE",
         distance: float = 0.0,
+        en_details: dict | None = None,
     ) -> None:
-        """命中時の処理."""
+        """命中時の処理.
+
+        `en_details` は ATTACK / MISS ログの `details` にそのまま載せる。
+        """
         # 命中部位決定 (Issue #505 Phase 4): 命中判定とダメージ計算の間のフック
         hit_part = determine_hit_part(actor, target, weapon, attack_sector, distance)
 
@@ -723,6 +742,7 @@ class CombatMixin:
                     ),  # type: ignore[attr-defined]
                     weapon_name=weapon.name if weapon else None,
                     weapon_id=weapon.id if weapon else None,
+                    details=en_details,
                 )
             )
             return
@@ -805,6 +825,7 @@ class CombatMixin:
                 velocity_snapshot=Vector3.from_numpy(
                     self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                 ),  # type: ignore[attr-defined]
+                details=en_details,
             )
         )
 
@@ -1063,8 +1084,12 @@ class CombatMixin:
         attack_chatter: str | None = None,
         is_bad_distance: bool = False,
         skill_activated: bool = False,
+        en_details: dict | None = None,
     ) -> None:
-        """ミス時の処理."""
+        """ミス時の処理.
+
+        `en_details` は MISS ログの `details` にそのまま載せる。
+        """
         # ミス時のセリフ生成
         miss_chatter = self._generate_chatter(actor, "miss")  # type: ignore[attr-defined]
 
@@ -1089,6 +1114,7 @@ class CombatMixin:
                 ),  # type: ignore[attr-defined]
                 weapon_name=weapon.name if weapon else None,
                 weapon_id=weapon.id if weapon else None,
+                details=en_details,
             )
         )
 

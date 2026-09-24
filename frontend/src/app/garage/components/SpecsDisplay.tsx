@@ -86,7 +86,7 @@ export default function SpecsDisplay({ selectedMs }: SpecsDisplayProps) {
           <div>
             <span className="text-gray-400">{STATUS_LABELS.en_recovery}:</span>
             <span className="ml-2 font-bold text-cyan-400">
-              {selectedMs.en_recovery || 100}/ターン
+              {selectedMs.en_recovery || 100}/秒
             </span>
           </div>
           <div>
