@@ -1,7 +1,7 @@
 /* frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts */
 
 import { BattleLog, MobileSuit } from "@/types/battle";
-import { DEFAULT_MAX_EN, EN_WARNING_THRESHOLD } from "../utils";
+import { DEFAULT_BOOST_EN_COST, DEFAULT_EN_RECOVERY, DEFAULT_MAX_EN, EN_SHORTAGE_REASON_CODES } from "../utils";
 import { WarningType } from "../types";
 
 /** 浮動小数点数の誤差許容値（タイムスタンプ比較用） */
@@ -49,7 +49,12 @@ interface SnapshotCacheEntry {
     nextIndex: number;
     pos: { x: number; y: number; z: number };
     hp: number;
+    /** 旧ログ用の EN（en_cost 減算方式）。enRecord がある場合は使わない */
     en: number;
+    /** 直近の details.en の記録。null のときは旧ログとして en をそのまま使う */
+    enRecord: { en: number; timestamp: number } | null;
+    /** BOOST_START〜BOOST_END の間は true（EN が回復せず boost_en_cost で減る） */
+    isBoosting: boolean;
     ammo: Record<string, number>;
     heading?: number;
     prevHeadingTs?: number;
@@ -78,12 +83,31 @@ function createInitialEntry(initialMs: MobileSuit, logs: BattleLog[]): SnapshotC
         pos: initialMs.position,
         hp: initialMs.max_hp, // 戦闘開始時は満タンと仮定
         en: initialMs.max_en || DEFAULT_MAX_EN,
+        enRecord: null,
+        isBoosting: false,
         ammo,
         // 未攻撃時に 0 を使うと、戦闘開始直後（currentTimestamp が小さい）でも
         // 「直近0秒に攻撃した」とみなされクールダウン警告が誤表示されるため、
         // 「まだ攻撃していない」ことを表す -Infinity で初期化する
         lastAttackTimestamp: -Infinity,
     };
+}
+
+/**
+ * currentTimestamp 時点の EN 残量を返す。
+ * 直近の details.en を基準に、通常時は en_recovery、ブースト中は boost_en_cost で経過秒ぶん増減させる。
+ * バックエンドと同じく、ブースト中は回復しない。
+ */
+function estimateEn(entry: SnapshotCacheEntry, initialMs: MobileSuit, currentTimestamp: number): number {
+    if (entry.enRecord === null) return entry.en;
+    const elapsed = Math.max(0, currentTimestamp - entry.enRecord.timestamp);
+    if (entry.isBoosting) {
+        const boostCost = initialMs.boost_en_cost ?? DEFAULT_BOOST_EN_COST;
+        return Math.max(0, entry.enRecord.en - boostCost * elapsed);
+    }
+    const maxEn = initialMs.max_en || DEFAULT_MAX_EN;
+    const recovery = initialMs.en_recovery ?? DEFAULT_EN_RECOVERY;
+    return Math.min(maxEn, entry.enRecord.en + recovery * elapsed);
 }
 
 // 現在のタイムスタンプ時点での情報を計算する関数（Hookではない）
@@ -146,6 +170,16 @@ export function getBattleSnapshot(
             entry.hp -= log.damage;
         }
 
+        // EN 残量の基準値: EN 消費ログ（ATTACK / MISS / BOOST_START / BOOST_END）の details.en（Issue #533）
+        if (log.actor_id === targetId) {
+            const recordedEn = log.details?.en;
+            if (typeof recordedEn === "number") {
+                entry.enRecord = { en: recordedEn, timestamp: log.timestamp };
+            }
+            if (log.action_type === "BOOST_START") entry.isBoosting = true;
+            if (log.action_type === "BOOST_END") entry.isBoosting = false;
+        }
+
         // リソース消費・クールダウン基準時刻の更新: log.weapon_id から実際に使用した武器を特定する
         // weapon_id が無い古いログについては後方互換のため先頭武器を使用したと仮定する
         if (log.action_type === "ATTACK" && log.actor_id === targetId) {
@@ -154,7 +188,8 @@ export function getBattleSnapshot(
                 ? initialMs.weapons.find(w => w.id === log.weapon_id) ?? initialMs.weapons[0]
                 : initialMs.weapons[0];
             if (weapon) {
-                if (weapon.en_cost) {
+                // details.en の無い旧ログのみ en_cost 減算で推定する
+                if (weapon.en_cost && log.details?.en === undefined) {
                     entry.en = Math.max(0, entry.en - weapon.en_cost);
                 }
                 if (weapon.max_ammo && entry.ammo[weapon.id] !== undefined) {
@@ -197,13 +232,8 @@ export function getBattleSnapshot(
         }
     }
 
-    // 警告状態を判定
+    // 警告状態を判定（EN不足は3Dシーンではなく BattleOverlay のENゲージで示す、Issue #534）
     const warnings: WarningType[] = [];
-    // EN不足: EN_WARNING_THRESHOLD以下
-    const maxEn = initialMs.max_en || DEFAULT_MAX_EN;
-    if (maxEn > 0 && entry.en / maxEn < EN_WARNING_THRESHOLD) {
-        warnings.push('energy');
-    }
 
     // 弾切れ: 第1武器の弾薬が0
     const firstWeapon = initialMs.weapons[0];
@@ -226,12 +256,35 @@ export function getBattleSnapshot(
     return {
         pos,
         hp: Math.max(0, entry.hp),
-        en: entry.en,
+        en: estimateEn(entry, initialMs, currentTimestamp),
         ammo: { ...entry.ammo },
         warnings,
         heading,
         targetId: entry.unitTargetId,
     };
+}
+
+/** details.reason_code から EN 不足イベント（ENゲージを点滅させるログ）かを判定する */
+export function isEnShortageLog(log: BattleLog): boolean {
+    const reasonCode = log.details?.reason_code;
+    return typeof reasonCode === "string" && EN_SHORTAGE_REASON_CODES.has(reasonCode);
+}
+
+/**
+ * (fromTimestamp, toTimestamp] の間にある最後の EN 不足イベントの時刻を返す。無ければ null。
+ * enShortageTimestamps は昇順であること。
+ */
+export function findLatestEnShortageEvent(
+    enShortageTimestamps: number[],
+    fromTimestamp: number,
+    toTimestamp: number
+): number | null {
+    for (let i = enShortageTimestamps.length - 1; i >= 0; i--) {
+        const ts = enShortageTimestamps[i];
+        if (ts > toTimestamp + TIMESTAMP_EPSILON) continue;
+        return ts > fromTimestamp + TIMESTAMP_EPSILON ? ts : null;
+    }
+    return null;
 }
 
 /**

@@ -5,7 +5,7 @@ import { MobileSuit } from "./mobileSuit";
 export interface BattleLog {
     timestamp: number;
     actor_id: string;
-    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT" | "MELEE_COMBO";
+    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT" | "MELEE_COMBO" | "BOOST_START" | "BOOST_END";
     target_id?: string;
     damage?: number;
     message: string;
@@ -37,6 +37,8 @@ export interface BattleLog {
     hit_part?: string;
     /** 使用武器のスロット部位ロール "RIGHT_ARM" | "LEFT_ARM" | "RACK"（Issue #504） */
     weapon_slot_role?: string;
+    /** ログ種別ごとの追加情報。EN 消費ログの `en`（消費後の EN 残量）や `reason_code` など（Issue #533） */
+    details?: Record<string, unknown> | null;
 }
 
 /** 部位別の被弾/命中1件分の集計（回数・合計ダメージ） */

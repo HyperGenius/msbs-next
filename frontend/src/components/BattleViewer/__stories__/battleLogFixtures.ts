@@ -128,8 +128,10 @@ export function attackHitLog(params: {
     weapon: Weapon;
     damage: number;
     isCrit?: boolean;
+    /** EN 武器の場合は消費後の EN 残量を { en } で渡す（Issue #533） */
+    details?: Record<string, unknown>;
 }): BattleLog {
-    const { timestamp, actor, target, actorPos, weapon, damage, isCrit = false } = params;
+    const { timestamp, actor, target, actorPos, weapon, damage, isCrit = false, details } = params;
     const desc = damageDescription(damage, target);
     const hitText = isCrit ? " -> ★★ クリティカルヒット！！" : " -> 命中！";
     const damageText = isCrit
@@ -145,6 +147,7 @@ export function attackHitLog(params: {
         weapon_name: weapon.name,
         weapon_id: weapon.id,
         is_crit: isCrit,
+        details,
     };
 }
 
@@ -188,6 +191,35 @@ export function meleeComboLog(params: {
         weapon_id: weapon.id,
         combo_count: comboCount,
         combo_message: comboMessage,
+    };
+}
+
+// EN 関連ログの message / details は backend の action_handler.py / movement.py / combat.py に合わせる（Issue #533）
+export function boostStartLog(timestamp: number, actor: MobileSuit, pos: Vector3, en: number): BattleLog {
+    return {
+        ...baseLog(timestamp, actor, pos),
+        action_type: "BOOST_START",
+        message: `${actor.name} がブーストダッシュを開始した！`,
+        details: { en },
+    };
+}
+
+export function boostEndLog(timestamp: number, actor: MobileSuit, pos: Vector3, en: number): BattleLog {
+    const depleted = en <= 0;
+    const reason = depleted ? "EN 枯渇" : "最大継続時間";
+    return {
+        ...baseLog(timestamp, actor, pos),
+        action_type: "BOOST_END",
+        message: `${actor.name} のブーストが終了した (理由: ${reason})`,
+        details: depleted ? { reason, en, reason_code: "EN_DEPLETED" } : { reason, en },
+    };
+}
+
+export function enShortageWaitLog(timestamp: number, actor: MobileSuit, pos: Vector3, weapon: Weapon): BattleLog {
+    return {
+        ...baseLog(timestamp, actor, pos),
+        message: `${actor.name}はENが枯渇し、[${weapon.name}]を使えず待機中`,
+        details: { reason_code: "EN_SHORTAGE" },
     };
 }
 

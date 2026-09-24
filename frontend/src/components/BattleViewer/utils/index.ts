@@ -2,7 +2,13 @@
 
 // デフォルト値定数
 export const DEFAULT_MAX_EN = 1000;
-export const EN_WARNING_THRESHOLD = 0.2; // 20%以下でEN不足警告
+export const EN_WARNING_THRESHOLD = 0.2; // EN比率がこれ未満でENゲージを赤くする
+/** en_recovery 未指定時の EN 回復量 (/s)。バックエンドの MobileSuit.en_recovery の既定値に合わせる。 */
+export const DEFAULT_EN_RECOVERY = 100;
+/** boost_en_cost 未指定時のブースト中 EN 消費量 (/s)。バックエンドの DEFAULT_BOOST_EN_COST に合わせる。 */
+export const DEFAULT_BOOST_EN_COST = 5.0;
+/** ENゲージを点滅させる details.reason_code（backend/app/engine/constants.py と同じ値） */
+export const EN_SHORTAGE_REASON_CODES: ReadonlySet<string> = new Set(["EN_SHORTAGE", "EN_DEPLETED"]);
 export const RESIST_PATTERN = /(\d+)%軽減/; // 軽減率パターン
 /** シミュレーションのステップ幅（秒）。prevSnapshot 計算に使用する。 */
 export const SIMULATION_STEP_S = 0.1;

@@ -3,8 +3,11 @@
 import { BattleLog, MobileSuit, Vector3 } from "@/types/battle";
 import {
     attackHitLog,
+    boostEndLog,
+    boostStartLog,
     destroyedLog,
     detectionLog,
+    enShortageWaitLog,
     makeMobileSuit,
     meleeComboLog,
     missLog,
@@ -131,4 +134,66 @@ export function buildSkirmishScenario(): BattleScenario {
     ].sort((a, b) => a.timestamp - b.timestamp);
 
     return { logs, player, enemies: [zaku, rickDom] };
+}
+
+/**
+ * EN ゲージの追従・赤色表示・点滅を確認するバトル（Issue #534）。
+ * 自機の max_en を小さくし、ビームライフル連射 → ブーストで EN 枯渇 → EN 不足で待機 → 回復 の順に進む。
+ */
+export function buildEnShortageScenario(): BattleScenario {
+    const playerPath: Keyframe[] = [
+        [0, { x: 2300, y: 0, z: 2500 }],
+        [2.5, { x: 2300, y: 0, z: 2500 }],
+        [5.3, { x: 2300, y: 0, z: 2750 }],
+        [10.0, { x: 2300, y: 0, z: 2750 }],
+    ];
+    const enemyPos: Vector3 = { x: 2750, y: 0, z: 2600 };
+
+    // EN の推移: 回復 40/s・ブースト消費 50/s・ビームライフル 50/回
+    const player = makeMobileSuit({
+        id: PLAYER_ID,
+        name: "ガンダム",
+        side: "PLAYER",
+        position: playerPath[0][1],
+        weapons: [WEAPONS.BEAM_RIFLE, WEAPONS.BEAM_SABER],
+        max_en: 300,
+        en_recovery: 40,
+        boost_en_cost: 50,
+    });
+    const zaku = makeMobileSuit({
+        id: "story-enemy-zaku",
+        name: "ザクII (NPC)",
+        side: "ENEMY",
+        position: enemyPos,
+        weapons: [WEAPONS.MACHINE_GUN, WEAPONS.HEAT_HAWK],
+        max_hp: 3000,
+        is_npc: true,
+    });
+
+    const pp = (t: number) => positionAt(playerPath, t);
+    const { BEAM_RIFLE } = WEAPONS;
+    const rifle = (timestamp: number, en: number) =>
+        attackHitLog({ timestamp, actor: player, target: zaku, actorPos: pp(timestamp), weapon: BEAM_RIFLE, damage: 100, details: { en } });
+
+    const events: BattleLog[] = [
+        detectionLog(0, player, zaku, pp(0)),
+        rifle(0.5, 250),
+        rifle(1.0, 220),
+        rifle(1.5, 190),
+        rifle(2.0, 160),
+        boostStartLog(2.5, player, pp(2.5), 140),
+        boostEndLog(5.3, player, pp(5.3), 0),
+        enShortageWaitLog(6.0, player, pp(6.0), BEAM_RIFLE),
+        // 点滅中に次のイベントが来たら最初から点滅し直す
+        enShortageWaitLog(6.3, player, pp(6.3), BEAM_RIFLE),
+        rifle(9.0, 98),
+    ];
+
+    const logs = [
+        ...moveLogs(player, playerPath, 10.0),
+        ...moveLogs(zaku, [[0, enemyPos]], 10.0),
+        ...events,
+    ].sort((a, b) => a.timestamp - b.timestamp);
+
+    return { logs, player, enemies: [zaku] };
 }

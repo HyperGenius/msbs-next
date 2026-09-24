@@ -2,11 +2,12 @@
 
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { BattleLog, MobileSuit } from "@/types/battle";
 import { HpBar } from "./HpBar";
-import { getHpBarColor, getEnemyHpBarColor, DEFAULT_MAX_EN, HIT_EFFECT_COLORS } from "../utils";
+import { getHpBarColor, getEnemyHpBarColor, DEFAULT_MAX_EN, EN_WARNING_THRESHOLD, HIT_EFFECT_COLORS } from "../utils";
 import { HudLogLine, useHudAttackLog } from "../hooks/useHudAttackLog";
+import { findLatestEnShortageEvent, isEnShortageLog } from "../hooks/useBattleSnapshot";
 
 interface UnitState {
     pos: { x: number; y: number; z: number };
@@ -88,6 +89,28 @@ export function BattleOverlay({
         return names;
     }, [player.id, player.name, enemyStates]);
 
+    // EN不足イベント（Issue #534）。再生で時刻を通過したときだけ点滅させ、
+    // 一時停止（時刻が変わらない）やシークの巻き戻しでは発火させない。
+    const enShortageTimestamps = useMemo(
+        () => logs.filter((log) => log.actor_id === player.id && isEnShortageLog(log)).map((log) => log.timestamp),
+        [logs, player.id]
+    );
+    const [prevTimestamp, setPrevTimestamp] = useState(currentTimestamp);
+    const [enBlinkKey, setEnBlinkKey] = useState<number | null>(null);
+    if (currentTimestamp !== prevTimestamp) {
+        setPrevTimestamp(currentTimestamp);
+        if (currentTimestamp < prevTimestamp) {
+            setEnBlinkKey(null);
+        } else {
+            const eventTs = findLatestEnShortageEvent(enShortageTimestamps, prevTimestamp, currentTimestamp);
+            if (eventTs !== null) setEnBlinkKey(eventTs);
+        }
+    }
+
+    const maxEn = player.max_en || DEFAULT_MAX_EN;
+    const enRatio = maxEn > 0 ? playerState.en / maxEn : 0;
+    const isEnLow = enRatio < EN_WARNING_THRESHOLD;
+
     const hudLogLines = useHudAttackLog({
         logs,
         currentTimestamp,
@@ -109,12 +132,18 @@ export function BattleOverlay({
                     
                     {/* EN Display */}
                     <div className="mt-0.5 sm:mt-1">
-                        <span className="text-cyan-400 text-[9px] sm:text-xs">EN:</span> 
-                        <span className="text-[9px] sm:text-xs">{playerState.en} / {player.max_en || DEFAULT_MAX_EN}</span>
-                        <div className="w-16 sm:w-24 h-1.5 sm:h-2 bg-gray-700 mt-0.5 sm:mt-1 rounded overflow-hidden border border-gray-600">
-                            <div 
-                                className="h-full bg-cyan-500 transition-all duration-300" 
-                                style={{ width: `${(playerState.en / (player.max_en || DEFAULT_MAX_EN)) * 100}%` }}
+                        <span className={`${isEnLow ? "text-red-400" : "text-cyan-400"} text-[9px] sm:text-xs transition-all duration-300`}>EN:</span>
+                        <span className="text-[9px] sm:text-xs">{Math.round(playerState.en)} / {maxEn}</span>
+                        {/* key を EN 不足イベント時刻にして再マウントし、点滅中の次のイベントでも最初から2回点滅させる */}
+                        <div
+                            key={enBlinkKey ?? "idle"}
+                            className={`w-16 sm:w-24 h-1.5 sm:h-2 bg-gray-700 mt-0.5 sm:mt-1 rounded overflow-hidden border border-gray-600 ${
+                                enBlinkKey !== null ? "animate-en-blink" : ""
+                            }`}
+                        >
+                            <div
+                                className={`h-full ${isEnLow ? "bg-red-500" : "bg-cyan-500"} transition-all duration-300`}
+                                style={{ width: `${Math.min(1, Math.max(0, enRatio)) * 100}%` }}
                             ></div>
                         </div>
                     </div>
