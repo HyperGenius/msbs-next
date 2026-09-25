@@ -587,3 +587,76 @@ class TestFuzzyRuleSetLoad:
         assert len(rs.rules) >= 10
         assert "distance_to_target" in rs.membership_functions
         assert "weapon_is_beam" in rs.membership_functions
+
+
+# ---------------------------------------------------------------------------
+# 武器選択ルール: EN低下時のビーム武器抑制（assault / retreat）
+# ---------------------------------------------------------------------------
+
+
+def _weapon_score(
+    engine: FuzzyEngine, distance: float, current_en_ratio: float, is_beam: bool
+) -> float:
+    """耐性なし・弾薬満タンの条件で weapon_score を推論する."""
+    result = engine.infer(
+        {
+            "distance_to_target": distance,
+            "current_en_ratio": current_en_ratio,
+            "ammo_ratio": 1.0,
+            "weapon_is_beam": 1.0 if is_beam else 0.0,
+            "target_beam_resistance": 0.0,
+            "target_physical_resistance": 0.0,
+        }
+    )
+    return result.get("weapon_score", 0.0)
+
+
+class TestWeaponSelectionEnLowBeamSuppression:
+    """EN残量LOW時にビーム武器のスコアが実弾武器を下回ることのテスト."""
+
+    @pytest.fixture()
+    def assault_engine(self) -> FuzzyEngine:
+        """assault_weapon_selection.json から FuzzyEngine を生成する."""
+        return FuzzyEngine.from_json(_FUZZY_RULES_DIR / "assault_weapon_selection.json")
+
+    @pytest.fixture()
+    def retreat_engine(self) -> FuzzyEngine:
+        """retreat_weapon_selection.json から FuzzyEngine を生成する."""
+        return FuzzyEngine.from_json(_FUZZY_RULES_DIR / "retreat_weapon_selection.json")
+
+    # 遠距離は突撃戦略の交戦距離外で、ビーム・実弾ともに LOW となるため対象外
+    @pytest.mark.parametrize("distance", [200.0, 900.0])
+    def test_assault_en_low_beam_below_physical(
+        self, assault_engine: FuzzyEngine, distance: float
+    ) -> None:
+        """assault: EN LOW ではビーム武器のスコアが実弾武器より低い."""
+        beam = _weapon_score(assault_engine, distance, 0.1, is_beam=True)
+        physical = _weapon_score(assault_engine, distance, 0.1, is_beam=False)
+        assert beam < physical
+
+    @pytest.mark.parametrize("current_en_ratio", [0.5, 0.9])
+    def test_assault_close_beam_high_when_en_sufficient(
+        self, assault_engine: FuzzyEngine, current_en_ratio: float
+    ) -> None:
+        """assault: EN が十分なら近距離のビーム武器は HIGH 相当を維持する."""
+        beam = _weapon_score(assault_engine, 200.0, current_en_ratio, is_beam=True)
+        physical = _weapon_score(assault_engine, 200.0, current_en_ratio, is_beam=False)
+        assert beam >= 0.7
+        assert beam >= physical
+
+    @pytest.mark.parametrize("distance", [200.0, 900.0, 2000.0])
+    def test_retreat_en_low_beam_below_physical(
+        self, retreat_engine: FuzzyEngine, distance: float
+    ) -> None:
+        """retreat: EN LOW ではビーム武器のスコアが実弾武器より低い."""
+        beam = _weapon_score(retreat_engine, distance, 0.1, is_beam=True)
+        physical = _weapon_score(retreat_engine, distance, 0.1, is_beam=False)
+        assert beam < physical
+
+    @pytest.mark.parametrize("distance", [900.0, 2000.0])
+    def test_retreat_mid_far_beam_high_when_en_high(
+        self, retreat_engine: FuzzyEngine, distance: float
+    ) -> None:
+        """retreat: EN HIGH では中・遠距離のビーム武器は HIGH 相当を維持する."""
+        beam = _weapon_score(retreat_engine, distance, 0.9, is_beam=True)
+        assert beam >= 0.7
