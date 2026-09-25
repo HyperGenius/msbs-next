@@ -595,13 +595,13 @@ class TestFuzzyRuleSetLoad:
 
 
 def _weapon_score(
-    engine: FuzzyEngine, distance: float, en_ratio: float, is_beam: bool
+    engine: FuzzyEngine, distance: float, current_en_ratio: float, is_beam: bool
 ) -> float:
     """耐性なし・弾薬満タンの条件で weapon_score を推論する."""
     result = engine.infer(
         {
             "distance_to_target": distance,
-            "current_en_ratio": en_ratio,
+            "current_en_ratio": current_en_ratio,
             "ammo_ratio": 1.0,
             "weapon_is_beam": 1.0 if is_beam else 0.0,
             "target_beam_resistance": 0.0,
@@ -634,13 +634,13 @@ class TestWeaponSelectionEnLowBeamSuppression:
         physical = _weapon_score(assault_engine, distance, 0.1, is_beam=False)
         assert beam < physical
 
-    @pytest.mark.parametrize("en_ratio", [0.5, 0.9])
+    @pytest.mark.parametrize("current_en_ratio", [0.5, 0.9])
     def test_assault_close_beam_high_when_en_sufficient(
-        self, assault_engine: FuzzyEngine, en_ratio: float
+        self, assault_engine: FuzzyEngine, current_en_ratio: float
     ) -> None:
         """assault: EN が十分なら近距離のビーム武器は HIGH 相当を維持する."""
-        beam = _weapon_score(assault_engine, 200.0, en_ratio, is_beam=True)
-        physical = _weapon_score(assault_engine, 200.0, en_ratio, is_beam=False)
+        beam = _weapon_score(assault_engine, 200.0, current_en_ratio, is_beam=True)
+        physical = _weapon_score(assault_engine, 200.0, current_en_ratio, is_beam=False)
         assert beam >= 0.7
         assert beam >= physical
 

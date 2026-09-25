@@ -415,11 +415,11 @@ Python ループ版と同一の式を評価しているため、出力値その�
 
 | 戦略 | ルールID | 条件 | 出力 |
 |------|----------|------|------|
-| AGGRESSIVE | ws_rule_002 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
-| DEFENSIVE | def_ws_rule_001 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
-| SNIPER | snp_ws_rule_007 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
-| ASSAULT | asl_ws_rule_013 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
-| RETREAT | ret_ws_rule_013 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| AGGRESSIVE | ws_rule_002 | current_en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| DEFENSIVE | def_ws_rule_001 | current_en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| SNIPER | snp_ws_rule_007 | current_en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| ASSAULT | asl_ws_rule_013 | current_en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| RETREAT | ret_ws_rule_013 | current_en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
 
 **ASSAULT の補足:** 近距離ビーム優先ルール `asl_ws_rule_001`（CLOSE AND weapon_is_beam=TRUE → HIGH）は  
 EN残量を条件に含まず EN LOW 時も HIGH を発火させていたため、`current_en_ratio=MEDIUM` を条件に追加した。  
@@ -428,7 +428,7 @@ EN HIGH 時は `asl_ws_rule_002` / `asl_ws_rule_006` が同じ HIGH を出すた
 
 **RETREAT の補足:** 中・遠距離ビーム優先ルール（`ret_ws_rule_001` / `ret_ws_rule_002` → HIGH）と  
 `ret_ws_rule_013`（LOW）が同時発火した場合、重心法により出力は約 0.5 となり、  
-`ret_ws_rule_005`（en_ratio=LOW AND weapon_is_beam=FALSE → HIGH）で約 0.88 となる実弾武器を下回る。
+`ret_ws_rule_005`（current_en_ratio=LOW AND weapon_is_beam=FALSE → HIGH）で約 0.88 となる実弾武器を下回る。
 
 | 戦略 | 距離 | EN比率 | ビーム | 実弾 |
 |------|------|--------|--------|------|
