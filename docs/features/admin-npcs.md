@@ -18,8 +18,8 @@
 （`MatchingService.select_npcs_for_room` 経由の再利用）でも参照されるため、`pilots.name` のみ更新すると
 これらの表示が機体名のまま残ってしまう。
 
-エースNPCのパイロット名は引き続き `npc_data.py` の `ACE_PILOTS[*]["pilot_name"]`（例: `"Char Aznable"`）
-由来で、本セクションの対象外。
+エースNPCのパイロット名は `ace_pilots` テーブルの `pilot_name`（例: `"Char Aznable"`）由来で、
+本セクションの対象外（Issue #442 で `npc_data.py` の `ACE_PILOTS` から DB へ移行。[admin-ace-pilots.md](./admin-ace-pilots.md) 参照）。
 
 ## 概要
 
@@ -28,10 +28,13 @@ admin-tool から一覧・閲覧・編集できる管理画面。#171（NPC自�
 間の暫定運用、および実装後の挙動確認・チューニング用途を想定している。
 
 > [!NOTE]
-> `npc_data.py` の `ACE_PILOTS`（エースパイロットの静的マスタデータ）自体の編集は本Issueのスコープ外。
+> エースパイロットのマスターデータ自体の編集は本Issueのスコープ外で、`/ace-pilots` 画面で行う
+> （Issue #442、[admin-ace-pilots.md](./admin-ace-pilots.md)）。
 > エースパイロットの `MobileSuit` は戦闘マッチング時に `user_id=None` の使い捨てレコードとして都度生成され
-> `Pilot` テーブルには永続化されないため、`ACE_PILOTS` 由来かどうかは `Pilot.name` と
-> `ACE_PILOTS[*].pilot_name` の一致による best-effort 判定（`PilotService.is_ace_pilot`）で識別している。
+> `Pilot` テーブルには永続化されないため、エース由来かどうかは `Pilot.name` と
+> `ace_pilots.pilot_name` の一致による best-effort 判定（`PilotService.is_ace_pilot`）で識別している。
+> 判定元の名前集合は `PilotService.get_ace_pilot_names()` が呼び出し毎に TTL キャッシュ経由で取得するため、
+> マスターの `pilot_name` を変更・追加すると判定結果も追従する。
 > 恒久的な紐付け（例: `Pilot` にエースIDを持たせる等）が必要になった場合は別Issueで対応する。
 
 ---
@@ -114,7 +117,7 @@ NPCの所有機体は `MobileSuit.user_id == Pilot.user_id` で紐づく。エ�
 - `PilotService.list_npc_pilots(session, personality, min_level, max_level, ace_only)` — 一覧取得（フィルタ対応）
 - `PilotService.get_npc_pilot_by_id(session, pilot_id)` — idによる単体取得（`is_npc=True` のみ）
 - `PilotService.get_npc_owned_mobile_suits(session, user_id)` — 所有機体一覧取得
-- `PilotService.is_ace_pilot(pilot)` — `ACE_PILOTS` 由来かどうかの best-effort 判定（名前一致）
+- `PilotService.is_ace_pilot(pilot)` — `ace_pilots` 由来かどうかの best-effort 判定（名前一致）
 - `PilotService.update_npc_pilot(session, pilot_id, update_data)` — ステータス更新
 
 既存の `PilotService` はインスタンスメソッド中心（`__init__(self, session)`）だが、上記の管理者用メソッドは
@@ -189,9 +192,9 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_admin_key_12345" pytho
 ## 関連ファイル
 
 - `backend/app/routers/admin.py` — `npc_router`（NPC CRUD API）
-- `backend/app/services/pilot_service.py` — NPC管理者用メソッド・`ACE_PILOT_NAMES`
+- `backend/app/services/pilot_service.py` — NPC管理者用メソッド・`get_ace_pilot_names()`
 - `backend/app/models/models.py` — `NpcPilotEntry` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuitEntry`
-- `backend/app/core/npc_data.py` — `ACE_PILOTS`（エース識別の名前一致元データ）
+- `backend/app/core/gamedata.py` — `get_ace_pilots()`（エース識別の名前一致元データ。`ace_pilots` テーブル）
 - `backend/main.py` — `app.include_router(admin.npc_router)`
 - `backend/tests/unit/test_admin_npcs.py` — NPC管理APIテスト
 - `admin-tool/src/app/npcs/page.tsx` — 管理画面

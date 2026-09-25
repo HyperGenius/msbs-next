@@ -93,6 +93,7 @@ app.include_router(admin.router)
 app.include_router(admin.weapon_router)
 app.include_router(admin.simulation_router)
 app.include_router(admin.npc_router)
+app.include_router(admin.ace_pilot_router)
 app.include_router(player_weapons.router)
 
 # --- Response Schemas ---
@@ -128,13 +129,13 @@ class BattleResponse(BaseModel):
 
 
 def _resolve_npc_pilot_stats(enemies: list[MobileSuit]) -> "dict[str, PilotStats]":
-    """エース NPC のパイロットステータスを npc_data マスターから解決する (Phase E-2).
+    """エース NPC のパイロットステータスを ace_pilots マスターから解決する (Phase E-2).
 
     is_ace=True かつ ace_id が設定されているユニットのみを対象とし、
-    npc_data.ACE_PILOTS の "stats" キーからステータスを取得する。
+    ace_pilots テーブルの stats 列からステータスを取得する。
     "stats" キーがない場合は simulation.py 側で personality から自動解決される。
     """
-    from app.core.npc_data import get_ace_pilot_by_id
+    from app.core.gamedata import get_ace_pilot_by_id
     from app.engine.calculator import PilotStats
 
     result: dict[str, PilotStats] = {}

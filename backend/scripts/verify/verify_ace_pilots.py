@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Verification script for NPC personality and ace pilot features."""
+"""Verification script for NPC personality and ace pilot features.
+
+エースパイロットは ace_pilots テーブルから読み込むため、
+インメモリDBに data/master/ace_pilots.json をシードしてから検証する。
+"""
 
 import json
 import os
 import sys
+from pathlib import Path
 
 # Add the backend directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -12,14 +17,43 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 os.environ.setdefault("NEON_DATABASE_URL", "postgresql://dummy:dummy@dummy/dummy")
 
 from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel.pool import StaticPool
 
-from app.core.npc_data import ACE_PILOTS, BATTLE_CHATTER, PERSONALITY_TYPES
+import app.db as app_db
+from app.core.gamedata import get_ace_pilots
+from app.core.npc_data import BATTLE_CHATTER, PERSONALITY_TYPES
+from app.models.models import AcePilot
 from app.services.matching_service import MatchingService
+
+_ACE_PILOTS_JSON = (
+    Path(__file__).resolve().parent.parent.parent
+    / "data"
+    / "master"
+    / "ace_pilots.json"
+)
 
 
 def json_serializer(*args, **kwargs):
     """Simple JSON serializer for in-memory database."""
     return json.dumps(*args, **kwargs)
+
+
+def _setup_in_memory_db():
+    """インメモリDBを作成し、gamedata の参照先に差し替えてエースをシードする."""
+    engine = create_engine(
+        "sqlite://",
+        json_serializer=json_serializer,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    app_db.engine = engine
+
+    with Session(engine) as session:
+        for item in json.loads(_ACE_PILOTS_JSON.read_text(encoding="utf-8")):
+            session.add(AcePilot(**item))
+        session.commit()
+    return engine
 
 
 def test_ace_pilot_data():
@@ -28,9 +62,10 @@ def test_ace_pilot_data():
     print("Ace Pilot Data Verification")
     print("=" * 60)
 
-    print(f"\n総エースパイロット数: {len(ACE_PILOTS)}")
+    aces = get_ace_pilots()
+    print(f"\n総エースパイロット数: {len(aces)}")
 
-    for ace in ACE_PILOTS:
+    for ace in aces:
         print(f"\n【{ace['name']}】")
         print(f"  パイロット名: {ace['pilot_name']}")
         print(f"  性格: {ace['personality']}")
@@ -67,15 +102,11 @@ def test_personality_system():
                 print(f"  被弾時セリフ例: 「{chatter['hit'][0]}」")
 
 
-def test_npc_creation():
+def test_npc_creation(engine):
     """Test NPC creation with personality."""
     print("\n" + "=" * 60)
     print("NPC Creation Test")
     print("=" * 60)
-
-    # Create in-memory database
-    engine = create_engine("sqlite:///:memory:", json_serializer=json_serializer)
-    SQLModel.metadata.create_all(engine)
 
     with Session(engine) as session:
         service = MatchingService(session)
@@ -95,6 +126,8 @@ def test_npc_creation():
         print("\n\nエースパイロット生成テスト:")
         for i in range(3):
             ace = service._create_ace_pilot()
+            if ace is None:
+                raise RuntimeError("ace_pilots テーブルが空です")
             print(f"\nエース {i + 1}:")
             print(f"  名前: {ace.name}")
             print(f"  パイロット名: {ace.pilot_name}")
@@ -134,9 +167,10 @@ def test_battle_chatter_examples():
 def main():
     """Run all verification tests."""
     try:
+        engine = _setup_in_memory_db()
         test_ace_pilot_data()
         test_personality_system()
-        test_npc_creation()
+        test_npc_creation(engine)
         test_battle_chatter_examples()
 
         print("\n" + "=" * 60)

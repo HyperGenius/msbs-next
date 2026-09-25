@@ -8,7 +8,8 @@ from typing import Any, cast
 
 from sqlmodel import Session, select
 
-from app.core.npc_data import ACE_PILOTS, PERSONALITY_TYPES, generate_npc_pilot_name
+from app.core.gamedata import get_ace_pilots
+from app.core.npc_data import PERSONALITY_TYPES, generate_npc_pilot_name
 from app.models.models import (
     BattleEntry,
     BattleRoom,
@@ -110,8 +111,11 @@ class MatchingService:
 
                 # エースパイロットの出現判定（1回のみ）
                 # ace_spawned = False
-                if random.random() < self.ace_spawn_rate:
-                    ace_suit = self._create_ace_pilot()
+                # ace_pilots マスターが空の場合は出現させない
+                if (
+                    random.random() < self.ace_spawn_rate
+                    and (ace_suit := self._create_ace_pilot()) is not None
+                ):
                     self.session.add(ace_suit)
                     self.session.flush()
 
@@ -423,14 +427,18 @@ class MatchingService:
 
         return npc
 
-    def _create_ace_pilot(self) -> MobileSuit:
+    def _create_ace_pilot(self) -> MobileSuit | None:
         """エースパイロットのモビルスーツを生成する.
 
         Returns:
-            生成されたエースパイロットのモビルスーツ
+            生成されたエースパイロットのモビルスーツ。ace_pilots マスターが空の場合はNone
         """
+        aces = get_ace_pilots()
+        if not aces:
+            return None
+
         # ランダムにエースパイロットを選択
-        ace_data = cast(dict[str, Any], random.choice(ACE_PILOTS))
+        ace_data = random.choice(aces)
         ms_data = cast(dict[str, Any], ace_data["mobile_suit"])
 
         # ランダムな初期位置（1000m x 1000m x 500m の空間）
@@ -460,6 +468,7 @@ class MatchingService:
             weapons=weapons_list,
             side="ENEMY",
             tactics=ms_data["tactics"],
+            missing_parts=ms_data.get("missing_parts", []),
             user_id=None,
             personality=ace_data["personality"],
             is_ace=True,

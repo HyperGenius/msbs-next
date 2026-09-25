@@ -5,7 +5,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlmodel import Session, create_engine
 
-from app.core.npc_data import ACE_PILOTS, BATTLE_CHATTER, PERSONALITY_TYPES
+from app.core.gamedata import get_ace_pilots
+from app.core.npc_data import BATTLE_CHATTER, PERSONALITY_TYPES
 from app.models.models import BattleEntry, BattleRoom, MobileSuit, Vector3, Weapon
 from app.services.matching_service import MatchingService
 
@@ -50,10 +51,11 @@ def test_battle_chatter_defined():
 
 
 def test_ace_pilots_defined():
-    """Test that ace pilots are properly defined."""
-    assert len(ACE_PILOTS) > 0
+    """Test that ace pilots are properly defined (ace_pilots テーブル)."""
+    aces = get_ace_pilots()
+    assert len(aces) > 0
 
-    for ace in ACE_PILOTS:
+    for ace in aces:
         # Required fields
         assert "id" in ace
         assert "name" in ace
@@ -106,6 +108,7 @@ def test_ace_pilot_creation(in_memory_session):
     ace = service._create_ace_pilot()
 
     # Validate ace pilot properties
+    assert ace is not None
     assert ace.is_ace is True
     assert ace.ace_id is not None
     assert ace.pilot_name is not None
@@ -259,7 +262,7 @@ def test_no_ace_spawn_with_zero_rate(in_memory_session):
 
 def test_ace_pilot_data_integrity():
     """Test that all ace pilot data is valid."""
-    for ace in ACE_PILOTS:
+    for ace in get_ace_pilots():
         # Test that weapons are valid Weapon objects
         ms = ace["mobile_suit"]
         for weapon in ms["weapons"]:

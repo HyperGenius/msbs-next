@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """マスターデータシードスクリプト.
 
-mobile_suits.json / weapons.json から master_mobile_suits / master_weapons
-テーブルへデータを投入する。べき等に実行可能（ON CONFLICT DO NOTHING）。
+mobile_suits.json / weapons.json / ace_pilots.json から master_mobile_suits /
+master_weapons / ace_pilots テーブルへデータを投入する。べき等に実行可能（ON CONFLICT DO NOTHING）。
 
 Usage:
     python scripts/seed/seed_master_data.py [--force]
@@ -40,6 +40,39 @@ def _get_engine():
     if not url:
         raise ValueError("DATABASE_URL または NEON_DATABASE_URL が設定されていません")
     return create_engine(url)
+
+
+def _seed_ace_pilots(session: Session, data_dir: Path, force: bool) -> tuple[int, int]:
+    """ace_pilots.json から ace_pilots テーブルへデータを投入する.
+
+    Returns:
+        tuple[int, int]: (挿入件数, スキップ件数)
+    """
+    from app.models.models import AcePilot
+
+    ace_json_path = data_dir / "ace_pilots.json"
+    if not ace_json_path.exists():
+        print(f"[WARNING] {ace_json_path} が見つかりません。スキップします。")
+        return 0, 0
+
+    inserted = 0
+    skipped = 0
+    for item in json.loads(ace_json_path.read_text(encoding="utf-8")):
+        existing = session.get(AcePilot, item["id"])
+
+        if existing is not None and not force:
+            skipped += 1
+            continue
+
+        if existing is not None:
+            for key, value in item.items():
+                setattr(existing, key, value)
+            existing.updated_at = datetime.now(UTC)
+            session.add(existing)
+        else:
+            session.add(AcePilot(**item))
+            inserted += 1
+    return inserted, skipped
 
 
 def seed_master_data(force: bool = False) -> dict[str, int]:
@@ -142,6 +175,8 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
                     session.add(record)
                     inserted_w += 1
 
+        inserted_ace, skipped_ace = _seed_ace_pilots(session, data_dir, force)
+
         session.commit()
 
     return {
@@ -149,13 +184,15 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
         "mobile_suits_skipped": skipped_ms,
         "weapons_inserted": inserted_w,
         "weapons_skipped": skipped_w,
+        "ace_pilots_inserted": inserted_ace,
+        "ace_pilots_skipped": skipped_ace,
     }
 
 
 def main() -> None:
     """コマンドラインエントリーポイント."""
     parser = argparse.ArgumentParser(
-        description="マスターデータ (mobile_suits / weapons) を DB へシードする"
+        description="マスターデータ (mobile_suits / weapons / ace_pilots) を DB へシードする"
     )
     parser.add_argument(
         "--force",
@@ -170,6 +207,8 @@ def main() -> None:
     w_in, w_sk = result["weapons_inserted"], result["weapons_skipped"]
     print(f"[INFO] mobile_suits: {ms_in} 件挿入, {ms_sk} 件スキップ")
     print(f"[INFO] weapons: {w_in} 件挿入, {w_sk} 件スキップ")
+    ace_in, ace_sk = result["ace_pilots_inserted"], result["ace_pilots_skipped"]
+    print(f"[INFO] ace_pilots: {ace_in} 件挿入, {ace_sk} 件スキップ")
     print("[INFO] シード完了")
 
 
