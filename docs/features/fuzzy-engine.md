@@ -408,6 +408,40 @@ Python ループ版と同一の式を評価しているため、出力値その�
 
 推論が失敗した場合は最初の使用可能武器にフォールバックする。
 
+### 8.5 EN低下時のビーム武器抑制（全戦略共通）
+
+全戦略の武器選択ルールセットに「EN残量が少ないときはビーム武器のスコアを下げる」ルールを持たせ、  
+`en_cost` を払えなくなる前に実弾武器へ持ち替えるようにしている。
+
+| 戦略 | ルールID | 条件 | 出力 |
+|------|----------|------|------|
+| AGGRESSIVE | ws_rule_002 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| DEFENSIVE | def_ws_rule_001 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| SNIPER | snp_ws_rule_007 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| ASSAULT | asl_ws_rule_013 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+| RETREAT | ret_ws_rule_013 | en_ratio=LOW AND weapon_is_beam=TRUE | weapon_score=LOW |
+
+**ASSAULT の補足:** 近距離ビーム優先ルール `asl_ws_rule_001`（CLOSE AND weapon_is_beam=TRUE → HIGH）は  
+EN残量を条件に含まず EN LOW 時も HIGH を発火させていたため、`current_en_ratio=MEDIUM` を条件に追加した。  
+EN HIGH 時は `asl_ws_rule_002` / `asl_ws_rule_006` が同じ HIGH を出すため、EN十分時の近距離ビーム優先は維持される。  
+遠距離（FAR）は突撃戦略の交戦距離外で、ビーム・実弾ともに `asl_ws_rule_005` により LOW となる。
+
+**RETREAT の補足:** 中・遠距離ビーム優先ルール（`ret_ws_rule_001` / `ret_ws_rule_002` → HIGH）と  
+`ret_ws_rule_013`（LOW）が同時発火した場合、重心法により出力は約 0.5 となり、  
+`ret_ws_rule_005`（en_ratio=LOW AND weapon_is_beam=FALSE → HIGH）で約 0.88 となる実弾武器を下回る。
+
+| 戦略 | 距離 | EN比率 | ビーム | 実弾 |
+|------|------|--------|--------|------|
+| ASSAULT | 200 (CLOSE) | 0.1 | 0.117 | 0.883 |
+| ASSAULT | 900 (MID) | 0.1 | 0.319 | 0.500 |
+| ASSAULT | 200 (CLOSE) | 0.9 | 0.883 | 0.883 |
+| RETREAT | 200 (CLOSE) | 0.1 | 0.117 | 0.681 |
+| RETREAT | 900 (MID) | 0.1 | 0.500 | 0.883 |
+| RETREAT | 2000 (FAR) | 0.1 | 0.500 | 0.883 |
+| RETREAT | 2000 (FAR) | 0.9 | 0.883 | 0.883 |
+
+※ 耐性 0・弾薬満タン時の `weapon_score`。
+
 ---
 
 ## 9. 使用例
@@ -468,6 +502,7 @@ cd backend && python -m pytest tests/unit/test_fuzzy_engine.py -v
 - 全ルール不発火時のフォールバックテスト
 - `aggressive.json` のロード・推論統合テスト
 - `defensive.json` / `sniper.json` / `assault.json` / `retreat.json` のロードテスト
+- ASSAULT / RETREAT 武器選択の EN LOW 時ビーム抑制テスト（`TestWeaponSelectionEnLowBeamSuppression`）
 - `_select_target_fuzzy()` のターゲット選択テスト（`backend/tests/unit/test_simulation.py`）
 - `_select_weapon_fuzzy()` / `_is_weapon_usable()` の武器選択テスト（`backend/tests/unit/test_simulation.py`）
 - ASSAULT 近距離攻撃行動・近距離武器優先テスト（`backend/tests/unit/test_simulation.py`）

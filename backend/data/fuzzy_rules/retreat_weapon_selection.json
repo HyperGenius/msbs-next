@@ -115,6 +115,15 @@
       ],
       "operator": "AND",
       "output": { "variable": "weapon_score", "set": "MEDIUM" }
+    },
+    {
+      "id": "ret_ws_rule_013",
+      "conditions": [
+        { "variable": "current_en_ratio", "set": "LOW" },
+        { "variable": "weapon_is_beam", "set": "TRUE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "weapon_score", "set": "LOW" }
     }
   ],
   "membership_functions": {
