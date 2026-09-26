@@ -746,6 +746,116 @@ class MasterWeapon(SQLModel, table=True):
     )
 
 
+class AcePilot(SQLModel, table=True):
+    """エースパイロットのマスターデータ テーブルモデル (DBテーブル).
+
+    マッチング時にこの雛形から is_ace=True の MobileSuit が都度生成される。
+    生成済み MobileSuit は ace_id 文字列で参照するのみ（FKなし）。
+    """
+
+    __tablename__ = "ace_pilots"
+
+    id: str = Field(
+        primary_key=True, description="スネークケースID (例: ace_char_aznable)"
+    )
+    name: str = Field(description="二つ名 (例: 赤い彗星)")
+    pilot_name: str = Field(description="パイロット名 (例: Char Aznable)")
+    description: str = Field(default="", description="説明文")
+    personality: str = Field(description="性格タイプ (AGGRESSIVE/CAUTIOUS/SNIPER)")
+    mobile_suit: dict = Field(
+        sa_column=Column(JSON),
+        description="搭乗機体スペック (AcePilotMobileSuitSpec の全フィールド)",
+    )
+    bounty_exp: int = Field(default=0, description="撃破時のボーナス経験値")
+    bounty_credits: int = Field(default=0, description="撃破時のボーナスクレジット")
+    stats: dict = Field(
+        sa_column=Column(JSON),
+        description="パイロットステータス (sht/mel/intel/ref/tou/luk)",
+    )
+    skills: dict = Field(
+        sa_column=Column(JSON),
+        description="スキルレベル (スキルID→レベル。例: {'flanking': 3})",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="作成日時",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="更新日時",
+    )
+
+
+# --- Ace Pilot Admin Models ---
+
+
+class AcePilotMobileSuitSpec(SQLModel):
+    """エースパイロットの搭乗機体スペック（ace_pilots.mobile_suit 列の形式）."""
+
+    name: str
+    max_hp: int = Field(gt=0)
+    armor: int = Field(ge=0)
+    mobility: float = Field(gt=0)
+    sensor_range: float = 500.0
+    beam_resistance: float = Field(default=0.0, ge=0, le=1)
+    physical_resistance: float = Field(default=0.0, ge=0, le=1)
+    max_en: int = Field(default=1000, ge=0)
+    en_recovery: int = Field(default=100, ge=0)
+    weapons: list[Weapon]
+    tactics: dict = Field(
+        default_factory=lambda: {"priority": "CLOSEST", "range": "BALANCED"},
+        description="戦術設定 (priority / range)",
+    )
+    missing_parts: list[str] = Field(
+        default_factory=list,
+        description="欠損部位のリスト (ALL_PART_NAMES のいずれか)",
+    )
+
+
+class AcePilotEntry(SQLModel):
+    """エースパイロットエントリー定義（管理者用レスポンス）."""
+
+    id: str
+    name: str
+    pilot_name: str
+    description: str = ""
+    personality: str
+    mobile_suit: AcePilotMobileSuitSpec
+    bounty_exp: int = 0
+    bounty_credits: int = 0
+    stats: PilotStatsInput
+    skills: dict[str, int] = Field(default_factory=dict)
+
+
+class AcePilotCreate(SQLModel):
+    """エースパイロット新規追加リクエスト."""
+
+    id: str
+    name: str
+    pilot_name: str
+    description: str = ""
+    personality: str
+    mobile_suit: AcePilotMobileSuitSpec
+    bounty_exp: int = Field(default=0, ge=0)
+    bounty_credits: int = Field(default=0, ge=0)
+    stats: PilotStatsInput
+    skills: dict[str, int] = Field(default_factory=dict)
+
+
+class AcePilotUpdate(SQLModel):
+    """エースパイロット更新リクエスト."""
+
+    name: str | None = None
+    pilot_name: str | None = None
+    description: str | None = None
+    personality: str | None = None
+    mobile_suit: AcePilotMobileSuitSpec | None = None
+    bounty_exp: int | None = Field(default=None, ge=0)
+    bounty_credits: int | None = Field(default=None, ge=0)
+    stats: PilotStatsInput | None = None
+    skills: dict[str, int] | None = None
+
+
 class RetreatPoint(SQLModel):
     """撤退ポイント定義 (Phase 3-3)."""
 

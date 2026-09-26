@@ -5,20 +5,23 @@ from datetime import UTC, datetime
 
 from sqlmodel import Session, func, select
 
-from app.core.gamedata import get_shop_listing_by_id
-from app.core.npc_data import ACE_PILOTS
+from app.core.gamedata import get_ace_pilots, get_shop_listing_by_id
 from app.core.skills import SKILL_COST, get_skill_definition
 from app.models.models import MobileSuit, NpcPilotUpdate, Pilot
 
 # レベルアップ時に付与するステータスポイント数
 STATUS_POINTS_PER_LEVEL: int = 2
 
-# npc_data.ACE_PILOTS に由来するパイロット名の集合。
-# エースはMobileSuit(user_id=None)として都度生成されPilotテーブルに永続化されないため、
-# 名前の一致による best-effort な識別に留める（Issue #441）。
-ACE_PILOT_NAMES: frozenset[str] = frozenset(
-    str(ace["pilot_name"]) for ace in ACE_PILOTS
-)
+
+def get_ace_pilot_names() -> frozenset[str]:
+    """ace_pilots マスターに由来するパイロット名の集合を返す.
+
+    エースはMobileSuit(user_id=None)として都度生成されPilotテーブルに永続化されないため、
+    名前の一致による best-effort な識別に留める（Issue #441）。
+    マスターは管理画面から変更されうるため、import 時ではなく呼び出し毎に
+    TTL キャッシュ経由で取得する。
+    """
+    return frozenset(str(ace["pilot_name"]) for ace in get_ace_pilots())
 
 
 class PilotService:
@@ -125,9 +128,9 @@ class PilotService:
         if max_level is not None:
             statement = statement.where(Pilot.level <= max_level)
         if ace_only is True:
-            statement = statement.where(Pilot.name.in_(ACE_PILOT_NAMES))  # type: ignore[attr-defined]
+            statement = statement.where(Pilot.name.in_(get_ace_pilot_names()))  # type: ignore[attr-defined]
         elif ace_only is False:
-            statement = statement.where(Pilot.name.not_in(ACE_PILOT_NAMES))  # type: ignore[attr-defined]
+            statement = statement.where(Pilot.name.not_in(get_ace_pilot_names()))  # type: ignore[attr-defined]
 
         return list(session.exec(statement).all())
 
@@ -194,7 +197,7 @@ class PilotService:
         Returns:
             bool: エース由来のNPCの場合 True
         """
-        return pilot.name in ACE_PILOT_NAMES
+        return pilot.name in get_ace_pilot_names()
 
     @staticmethod
     def update_npc_pilot(

@@ -1,4 +1,4 @@
-import { Weapon, WeaponSpec } from "./weapon";
+import { Tactics, Weapon, WeaponSpec } from "./weapon";
 
 /** 管理者用マスター機体のスペック定義 */
 export interface MasterMobileSuitSpec {
@@ -158,7 +158,7 @@ export interface NpcPilot {
     user_id: string;
     name: string;
     npc_personality: NpcPersonality | null;
-    /** ACE_PILOTS由来のエースパイロットかどうか（名前一致によるbest-effort判定） */
+    /** ace_pilots マスター由来のエースパイロットかどうか（名前一致によるbest-effort判定） */
     is_ace: boolean;
     level: number;
     exp: number;
@@ -206,3 +206,41 @@ export interface NpcMobileSuitUpdate {
     armor?: number;
     mobility?: number;
 }
+
+/** エースパイロットの搭乗機体スペック（ace_pilots.mobile_suit 列） */
+export interface AcePilotMobileSuitSpec {
+    name: string;
+    max_hp: number;
+    armor: number;
+    mobility: number;
+    sensor_range: number;
+    beam_resistance: number;
+    physical_resistance: number;
+    max_en: number;
+    en_recovery: number;
+    weapons: Weapon[];
+    tactics: Tactics;
+    missing_parts: string[];
+}
+
+/** エースパイロットのマスターデータ（管理者用レスポンス） */
+export interface AcePilot {
+    id: string;
+    /** 二つ名 (例: 赤い彗星) */
+    name: string;
+    pilot_name: string;
+    description: string;
+    personality: NpcPersonality;
+    mobile_suit: AcePilotMobileSuitSpec;
+    bounty_exp: number;
+    bounty_credits: number;
+    stats: PilotStatsInput;
+    /** スキルID→レベル (例: { flanking: 3 }) */
+    skills: Record<string, number>;
+}
+
+/** エースパイロットの新規追加リクエスト（AcePilotと同形） */
+export type AcePilotCreate = AcePilot;
+
+/** エースパイロットの部分更新リクエスト */
+export type AcePilotUpdate = Partial<Omit<AcePilot, "id">>;

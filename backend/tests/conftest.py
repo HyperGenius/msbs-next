@@ -41,8 +41,8 @@ _MASTER_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "master"
 
 
 def _seed_master_data(session: Session) -> None:
-    """master_mobile_suits / master_weapons テーブルにシードデータを投入する."""
-    from app.models.models import MasterMobileSuit, MasterWeapon
+    """master_mobile_suits / master_weapons / ace_pilots テーブルにシードデータを投入する."""
+    from app.models.models import AcePilot, MasterMobileSuit, MasterWeapon
 
     # --- mobile_suits ---
     ms_data = json.loads(
@@ -75,6 +75,13 @@ def _seed_master_data(session: Session) -> None:
         )
         session.add(record)
 
+    # --- ace_pilots ---
+    ace_data = json.loads(
+        (_MASTER_DATA_DIR / "ace_pilots.json").read_text(encoding="utf-8")
+    )
+    for item in ace_data:
+        session.add(AcePilot(**item))
+
     session.commit()
 
 
@@ -86,6 +93,7 @@ def setup_master_data_db() -> Generator[None, None, None]:
     """
     import app.core.gamedata as gd
     from app.models.models import (
+        AcePilot,
         BattleEntry,
         BattleLogRecord,
         BattleResult,
@@ -106,6 +114,7 @@ def setup_master_data_db() -> Generator[None, None, None]:
     gd._shop_listings_cache = None
     gd._weapon_shop_listings_cache = None
     gd._cache_expires_at = None
+    gd.invalidate_ace_pilots_cache()
 
     # 全テーブルをクリア（外部キー制約がない SQLite では順不同で削除可能）
     with Session(_test_engine) as seed_session:
@@ -123,6 +132,7 @@ def setup_master_data_db() -> Generator[None, None, None]:
         seed_session.exec(delete(Season))
         seed_session.exec(delete(MasterMobileSuit))
         seed_session.exec(delete(MasterWeapon))
+        seed_session.exec(delete(AcePilot))
         seed_session.commit()
         _seed_master_data(seed_session)
 
@@ -132,6 +142,7 @@ def setup_master_data_db() -> Generator[None, None, None]:
     gd._shop_listings_cache = None
     gd._weapon_shop_listings_cache = None
     gd._cache_expires_at = None
+    gd.invalidate_ace_pilots_cache()
 
 
 @pytest.fixture(name="session")

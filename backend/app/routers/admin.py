@@ -1,6 +1,7 @@
 """管理者専用 API ルーター.
 
-マスター機体データ・マスター武器データ・NPC(Pilot)データの CRUD エンドポイントを提供する。
+マスター機体データ・マスター武器データ・NPC(Pilot)データ・エースパイロットの
+CRUD エンドポイントを提供する。
 全エンドポイントは ADMIN_API_KEY ヘッダー (X-API-Key) による認証が必要。
 """
 
@@ -12,6 +13,9 @@ from sqlmodel import Session
 from app.core.auth import verify_admin_api_key
 from app.db import get_session
 from app.models.models import (
+    AcePilotCreate,
+    AcePilotEntry,
+    AcePilotUpdate,
     CombatSimulationRequest,
     CombatSimulationResponse,
     MasterMobileSuitCreate,
@@ -30,6 +34,7 @@ from app.models.models import (
     Pilot,
     Weapon,
 )
+from app.services.ace_pilot_service import AcePilotService
 from app.services.combat_simulation_service import CombatSimulationService
 from app.services.mobile_suit_service import MobileSuitService
 from app.services.pilot_service import PilotService
@@ -56,6 +61,12 @@ simulation_router = APIRouter(
 npc_router = APIRouter(
     prefix="/api/admin/npcs",
     tags=["admin-npcs"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
+ace_pilot_router = APIRouter(
+    prefix="/api/admin/ace-pilots",
+    tags=["admin-ace-pilots"],
     dependencies=[Depends(verify_admin_api_key)],
 )
 
@@ -449,3 +460,77 @@ def update_npc_mobile_suit(
         bounty_exp=updated.bounty_exp,
         bounty_credits=updated.bounty_credits,
     )
+
+
+# ===========================================================
+# エースパイロット マスターデータ CRUD エンドポイント
+# ===========================================================
+
+
+@ace_pilot_router.get("", response_model=list[AcePilotEntry])
+def list_ace_pilots(
+    session: Session = Depends(get_session),
+) -> list[AcePilotEntry]:
+    """全エースパイロット一覧を返す."""
+    return [
+        AcePilotEntry.model_validate(r) for r in AcePilotService.get_ace_pilots(session)
+    ]
+
+
+@ace_pilot_router.post(
+    "", response_model=AcePilotEntry, status_code=status.HTTP_201_CREATED
+)
+def create_ace_pilot(
+    data: AcePilotCreate,
+    session: Session = Depends(get_session),
+) -> AcePilotEntry:
+    """新規エースパイロットを追加する.
+
+    - id はスネークケース英数字のみ許可（例: ace_char_aznable）
+    - mobile_suit.weapons は最低1件必須
+    - id が重複している場合は 409 を返す
+    """
+    try:
+        result = AcePilotService.create_ace_pilot(session, data)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+    return AcePilotEntry.model_validate(result)
+
+
+@ace_pilot_router.put("/{ace_id}", response_model=AcePilotEntry)
+def update_ace_pilot(
+    ace_id: str,
+    data: AcePilotUpdate,
+    session: Session = Depends(get_session),
+) -> AcePilotEntry:
+    """既存エースパイロットを更新する."""
+    try:
+        result = AcePilotService.update_ace_pilot(session, ace_id, data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ace pilot '{ace_id}' not found.",
+        )
+    return AcePilotEntry.model_validate(result)
+
+
+@ace_pilot_router.delete("/{ace_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ace_pilot(
+    ace_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    """エースパイロットを削除する."""
+    if not AcePilotService.delete_ace_pilot(session, ace_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ace pilot '{ace_id}' not found.",
+        )

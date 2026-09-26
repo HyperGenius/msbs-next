@@ -5,7 +5,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from app.core.npc_data import ACE_PILOTS
+from app.core.gamedata import get_ace_pilots
 from app.core.skills import SKILL_MASTER_DATA
 from app.engine.constants import (
     DEFAULT_BOOST_EN_COST,
@@ -364,7 +364,7 @@ class TestFlankingIntegration:
 
     def test_ace_pilots_have_flanking_skills(self) -> None:
         """全エースパイロットに flanking スキルが定義されていること."""
-        for ace in ACE_PILOTS:
+        for ace in get_ace_pilots():
             assert "skills" in ace, f"{ace['id']} に skills キーがない"
             assert "flanking" in ace["skills"], f"{ace['id']} に flanking スキルがない"
             level = ace["skills"]["flanking"]
@@ -372,7 +372,9 @@ class TestFlankingIntegration:
 
     def test_aggressive_ace_has_flanking_level3(self) -> None:
         """AGGRESSIVE エースは flanking Lv.3 を持つこと."""
-        aggressive_aces = [a for a in ACE_PILOTS if a["personality"] == "AGGRESSIVE"]
+        aggressive_aces = [
+            a for a in get_ace_pilots() if a["personality"] == "AGGRESSIVE"
+        ]
         for ace in aggressive_aces:
             assert ace["skills"]["flanking"] == 3, (
                 f"{ace['id']} は AGGRESSIVE なので flanking Lv.3 のはず"

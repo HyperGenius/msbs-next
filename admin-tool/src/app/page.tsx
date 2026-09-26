@@ -25,6 +25,11 @@ export default function HomePage() {
               NPCパイロット管理
             </SciFiButton>
           </Link>
+          <Link href="/ace-pilots">
+            <SciFiButton className="w-full" variant="secondary">
+              エースパイロット管理
+            </SciFiButton>
+          </Link>
         </div>
       </SciFiPanel>
     </main>

@@ -608,7 +608,7 @@ mel: int = Field(default=0, description="格闘技巧 (MEL) - 格闘攻撃力補
 | ユニット種別 | 参照元 |
 |---|---|
 | Player | `self.player_pilot_stats`（`sht`/`mel` 対応済み） |
-| NPC（エース） | `npc_data.py` の `ACE_PILOTS[*]["stats"]` フィールド（`main.py` で解決して渡す） |
+| NPC（エース） | `ace_pilots` テーブルの `stats` 列（`main.py` で `gamedata.get_ace_pilot_by_id()` から解決して渡す。Issue #442 で `npc_data.py` の `ACE_PILOTS` から移行） |
 | NPC（通常） | `personality` に基づくデフォルト値（下表）→ `simulation.py::_personality_pilot_stats()` |
 
 **パーソナリティ別デフォルト `PilotStats`:**
@@ -620,7 +620,7 @@ mel: int = Field(default=0, description="格闘技巧 (MEL) - 格闘攻撃力補
 | `SNIPER` | 6 | 1 | 3 | 1 | 1 | 2 | 射撃精度特化・距離減衰緩和 |
 | `None`（デフォルト） | 1 | 1 | 1 | 1 | 1 | 1 | 均等な素人パイロット |
 
-**エースパイロット（`is_ace = True`）:** `npc_data.py` の `ACE_PILOTS` に `"stats"` キーで定義。各スタット 5〜15 の範囲で通常 NPC との明確な差別化が生まれる。
+**エースパイロット（`is_ace = True`）:** `ace_pilots` テーブルの `stats` 列で定義（admin-tool の `/ace-pilots` で編集可能）。各スタット 5〜15 の範囲で通常 NPC との明確な差別化が生まれる。
 
 #### 3.6.4 適用箇所の変更 ✅ Phase E-2 実装済み
 

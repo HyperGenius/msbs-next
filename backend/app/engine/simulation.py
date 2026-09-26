@@ -135,7 +135,7 @@ def _resolve_flanking_skill_level(
     Returns:
         フランキングスキルレベル (0〜3)
     """
-    from app.core.npc_data import get_ace_pilot_by_id  # noqa: PLC0415
+    from app.core.gamedata import get_ace_pilot_by_id  # noqa: PLC0415
 
     if is_player:
         return (player_skills or {}).get("flanking", 0)

@@ -13,7 +13,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from app.models.models import MasterMobileSuit, MasterWeapon, Weapon
+from app.models.models import AcePilot, MasterMobileSuit, MasterWeapon, Weapon
 
 # マスターデータディレクトリのパス (backgrounds.json / STARTER_KITS 用)
 _DATA_DIR = Path(
@@ -31,6 +31,9 @@ _shop_listings_cache: list[dict] | None = None
 _weapon_shop_listings_cache: list[dict] | None = None
 _backgrounds_cache: dict[str, dict[str, Any]] | None = None
 _cache_expires_at: datetime | None = None
+# エースパイロットは機体/武器と更新契機が独立しているため有効期限を別管理する
+_ace_pilots_cache: list[dict] | None = None
+_ace_pilots_cache_expires_at: datetime | None = None
 
 
 # 練習機マスターデータ（ショップには並ばない専用機体）
@@ -227,6 +230,37 @@ def _load_weapons_from_db() -> list[dict]:
     return listings
 
 
+def _load_ace_pilots_from_db() -> list[dict]:
+    """DBからエースパイロットのマスターデータを読み込む.
+
+    mobile_suit.weapons は Weapon インスタンスに復元して返す。
+    """
+    from app import db as _app_db
+
+    with Session(_app_db.engine) as db_session:
+        records = db_session.exec(select(AcePilot)).all()
+
+    aces = []
+    for record in records:
+        ms_raw = record.mobile_suit
+        weapons = [Weapon(**w) for w in ms_raw.get("weapons", [])]
+        aces.append(
+            {
+                "id": record.id,
+                "name": record.name,
+                "pilot_name": record.pilot_name,
+                "description": record.description,
+                "personality": record.personality,
+                "mobile_suit": {**ms_raw, "weapons": weapons},
+                "bounty_exp": record.bounty_exp,
+                "bounty_credits": record.bounty_credits,
+                "stats": dict(record.stats),
+                "skills": dict(record.skills),
+            }
+        )
+    return aces
+
+
 def _get_shop_listings() -> list[dict]:
     """キャッシュ済みの機体ショップリストを取得（TTL 期限切れ時はDB再取得）."""
     global _shop_listings_cache
@@ -243,6 +277,51 @@ def _get_weapon_shop_listings() -> list[dict]:
         _weapon_shop_listings_cache = _load_weapons_from_db()
         _refresh_cache_expiry()
     return _weapon_shop_listings_cache
+
+
+def get_ace_pilots() -> list[dict]:
+    """エースパイロットのマスターデータを TTL キャッシュ経由で返す.
+
+    エンジン層などセッションを持たない箇所から呼ばれるため、独自セッションで DB を参照する。
+
+    Returns:
+        list[dict]: エースパイロットデータのリスト
+    """
+    global _ace_pilots_cache, _ace_pilots_cache_expires_at
+    now = datetime.now(UTC)
+    if (
+        _ace_pilots_cache is None
+        or _CACHE_TTL_SEC == 0
+        or _ace_pilots_cache_expires_at is None
+        or now >= _ace_pilots_cache_expires_at
+    ):
+        _ace_pilots_cache = _load_ace_pilots_from_db()
+        _ace_pilots_cache_expires_at = (
+            now + timedelta(seconds=_CACHE_TTL_SEC) if _CACHE_TTL_SEC > 0 else None
+        )
+    return _ace_pilots_cache
+
+
+def get_ace_pilot_by_id(ace_id: str) -> dict | None:
+    """IDからエースパイロットデータを取得する.
+
+    Args:
+        ace_id: エースパイロットID
+
+    Returns:
+        dict | None: エースパイロットデータ。見つからない場合はNone
+    """
+    for ace in get_ace_pilots():
+        if ace["id"] == ace_id:
+            return ace
+    return None
+
+
+def invalidate_ace_pilots_cache() -> None:
+    """エースパイロットのキャッシュを無効化する（管理画面での変更時に呼ぶ）."""
+    global _ace_pilots_cache, _ace_pilots_cache_expires_at
+    _ace_pilots_cache = None
+    _ace_pilots_cache_expires_at = None
 
 
 def get_master_mobile_suits(session: Session) -> list[dict]:
@@ -442,12 +521,14 @@ def reload_master_data() -> dict[str, int]:
     _weapon_shop_listings_cache = None
     _backgrounds_cache = None
     _cache_expires_at = None
+    invalidate_ace_pilots_cache()
 
     from app import db as _app_db
 
     with Session(_app_db.engine) as db_session:
         ms_count = len(db_session.exec(select(MasterMobileSuit)).all())
         w_count = len(db_session.exec(select(MasterWeapon)).all())
+        ace_count = len(db_session.exec(select(AcePilot)).all())
 
     bg_count = len(_get_backgrounds())
 
@@ -455,6 +536,7 @@ def reload_master_data() -> dict[str, int]:
         "mobile_suits": ms_count,
         "weapons": w_count,
         "backgrounds": bg_count,
+        "ace_pilots": ace_count,
     }
 
 
