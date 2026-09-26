@@ -1,6 +1,6 @@
 /* frontend/tests/unit/weaponEditFormValidation.test.ts */
 import { describe, it, expect } from "vitest";
-import { masterWeaponSchema } from "@/components/admin/WeaponEditForm";
+import { masterWeaponSchema, type WeaponFormValues } from "@/components/admin/WeaponEditForm";
 
 // ============================================================
 // テストデータ
@@ -86,7 +86,7 @@ describe("masterWeaponSchema — エントリー基本情報", () => {
 // ============================================================
 
 describe("masterWeaponSchema — weapon スペック", () => {
-  function withWeapon(patch: Partial<typeof validWeaponSpec>) {
+  function withWeapon(patch: Partial<WeaponFormValues["weapon"]>) {
     return { ...validMasterWeapon, weapon: { ...validWeaponSpec, ...patch } };
   }
 

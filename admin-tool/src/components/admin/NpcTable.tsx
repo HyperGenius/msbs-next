@@ -15,6 +15,11 @@ type SortDir = "asc" | "desc";
 
 const PERSONALITY_OPTIONS: NpcPersonality[] = ["AGGRESSIVE", "CAUTIOUS", "SNIPER"];
 
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <span className="text-[#00ff41]/30 ml-1">⇅</span>;
+  return <span className="text-[#ffb000] ml-1">{dir === "asc" ? "↑" : "↓"}</span>;
+}
+
 export default function NpcTable({ npcs, selectedId, onSelect }: NpcTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("level");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -50,11 +55,6 @@ export default function NpcTable({ npcs, selectedId, onSelect }: NpcTableProps) 
     if (av > bv) return sortDir === "asc" ? 1 : -1;
     return 0;
   });
-
-  function SortIcon({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="text-[#00ff41]/30 ml-1">⇅</span>;
-    return <span className="text-[#ffb000] ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
-  }
 
   const thClass =
     "px-3 py-2 text-left text-xs font-bold uppercase tracking-wider cursor-pointer select-none text-[#ffb000]/80 hover:text-[#ffb000] whitespace-nowrap";
@@ -113,22 +113,22 @@ export default function NpcTable({ npcs, selectedId, onSelect }: NpcTableProps) 
           <thead className="bg-[#0a0a0a] border-b border-[#00ff41]/20">
             <tr>
               <th className={thClass} onClick={() => handleSort("name")}>
-                名前 <SortIcon k="name" />
+                名前 <SortIcon active={sortKey === "name"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("npc_personality")}>
-                性格 <SortIcon k="npc_personality" />
+                性格 <SortIcon active={sortKey === "npc_personality"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("level")}>
-                Lv <SortIcon k="level" />
+                Lv <SortIcon active={sortKey === "level"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("exp")}>
-                EXP <SortIcon k="exp" />
+                EXP <SortIcon active={sortKey === "exp"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("credits")}>
-                クレジット <SortIcon k="credits" />
+                クレジット <SortIcon active={sortKey === "credits"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("mobile_suit_count")}>
-                所属機体数 <SortIcon k="mobile_suit_count" />
+                所属機体数 <SortIcon active={sortKey === "mobile_suit_count"} dir={sortDir} />
               </th>
             </tr>
           </thead>

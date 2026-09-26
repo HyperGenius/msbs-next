@@ -242,3 +242,5 @@ cd admin-tool && npx vitest run tests/unit/weaponEditFormValidation.test.ts
 - weapon スペック（power・range・accuracy・type・weapon_type・is_melee・required_beam_generator_lv など）のバリデーション
 - 設計図設定のバリデーション・初期値・絞り込み（`tests/unit/blueprintSettings.test.ts`、Issue #554）
 
+テストで weapon スペックの一部を差し替えるヘルパー `withWeapon` は、引数の型をスキーマの型（`Partial<WeaponFormValues["weapon"]>`）にしている。テストデータから推論した型にすると、`weapon_type: "MELEE"` や `max_ammo: 8` を渡すテストが型エラーになる。vitest は型チェックをしないため、型エラーは `npx tsc --noEmit -p .` で確認する（Issue #557）。
+
