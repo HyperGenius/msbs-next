@@ -13,6 +13,7 @@ from app.engine.constants import (
 )
 from app.models.models import (
     ALL_PART_NAMES,
+    BlueprintTargetType,
     MasterMobileSuit,
     MasterMobileSuitCreate,
     MasterMobileSuitUpdate,
@@ -24,6 +25,7 @@ from app.models.models import (
     Weapon,
     resolve_weapon_slot_count,
 )
+from app.services.blueprint_service import BlueprintService
 from app.services.weapon_service import validate_aim_distribution
 
 # 機体マスターの specs から MobileSuit へそのままコピーする項目（weapons は別途変換する）。
@@ -333,6 +335,9 @@ class MobileSuitService:
             specs=specs_dict,
         )
         session.add(record)
+        BlueprintService.ensure_master_blueprint(
+            session, BlueprintTargetType.MOBILE_SUIT, data.id, data.price
+        )
         session.commit()
 
         # キャッシュを無効化
@@ -499,6 +504,9 @@ class MobileSuitService:
             )
 
         session.delete(record)
+        BlueprintService.delete_master_blueprint(
+            session, BlueprintTargetType.MOBILE_SUIT, ms_id
+        )
         session.commit()
 
         # キャッシュを無効化

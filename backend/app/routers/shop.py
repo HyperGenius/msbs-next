@@ -167,6 +167,7 @@ async def purchase_mobile_suit(
     new_mobile_suit = MobileSuit(
         user_id=user_id,
         name=listing["name"],
+        master_mobile_suit_id=listing["id"],
         max_hp=specs["max_hp"],
         current_hp=specs["max_hp"],
         armor=specs["armor"],

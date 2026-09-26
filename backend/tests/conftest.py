@@ -41,8 +41,14 @@ _MASTER_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "master"
 
 
 def _seed_master_data(session: Session) -> None:
-    """master_mobile_suits / master_weapons / ace_pilots テーブルにシードデータを投入する."""
-    from app.models.models import AcePilot, MasterMobileSuit, MasterWeapon
+    """master_mobile_suits / master_weapons / ace_pilots / master_blueprints にシードデータを投入する."""
+    from app.models.models import (
+        AcePilot,
+        BlueprintTargetType,
+        MasterMobileSuit,
+        MasterWeapon,
+    )
+    from app.services.blueprint_service import BlueprintService
 
     # --- mobile_suits ---
     ms_data = json.loads(
@@ -60,6 +66,9 @@ def _seed_master_data(session: Session) -> None:
             specs=specs,
         )
         session.add(record)
+        BlueprintService.ensure_master_blueprint(
+            session, BlueprintTargetType.MOBILE_SUIT, item["id"], item["price"]
+        )
 
     # --- weapons ---
     weapons_data = json.loads(
@@ -74,6 +83,9 @@ def _seed_master_data(session: Session) -> None:
             weapon=dict(item["weapon"]),
         )
         session.add(record)
+        BlueprintService.ensure_master_blueprint(
+            session, BlueprintTargetType.WEAPON, item["id"], item["price"]
+        )
 
     # --- ace_pilots ---
     ace_data = json.loads(
@@ -100,10 +112,12 @@ def setup_master_data_db() -> Generator[None, None, None]:
         BattleRoom,
         Friendship,
         Leaderboard,
+        MasterBlueprint,
         MasterMobileSuit,
         MasterWeapon,
         MobileSuit,
         Pilot,
+        PlayerBlueprint,
         PlayerWeapon,
         Season,
         Team,
@@ -127,6 +141,8 @@ def setup_master_data_db() -> Generator[None, None, None]:
         seed_session.exec(delete(BattleResult))
         seed_session.exec(delete(BattleLogRecord))
         seed_session.exec(delete(PlayerWeapon))
+        seed_session.exec(delete(PlayerBlueprint))
+        seed_session.exec(delete(MasterBlueprint))
         seed_session.exec(delete(MobileSuit))
         seed_session.exec(delete(Pilot))
         seed_session.exec(delete(Season))

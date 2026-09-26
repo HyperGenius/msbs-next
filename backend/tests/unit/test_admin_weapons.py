@@ -272,3 +272,50 @@ def test_delete_persists_to_db(client_admin, session):
         select(MasterWeapon).where(MasterWeapon.id == "test_beam_cannon")
     ).first()
     assert record is None
+
+
+# ===================== 設計図マスター =====================
+
+
+def test_create_master_weapon_creates_standard_blueprint(client_admin, session):
+    """武器マスターを作成すると、標準配備の設計図マスターも作成されること."""
+    from app.models.models import MasterBlueprint
+
+    client_admin.post("/api/admin/weapons", json=SAMPLE_WEAPON, headers=HEADERS)
+
+    blueprint = session.get(MasterBlueprint, "weapon:test_beam_cannon")
+    assert blueprint is not None
+    assert blueprint.target_type == "WEAPON"
+    assert blueprint.target_id == "test_beam_cannon"
+    assert blueprint.is_standard_issue is True
+    assert blueprint.duplicate_credit_value == 120  # 600 の 20%
+
+
+def test_delete_master_weapon_deletes_blueprint(client_admin, session):
+    """武器マスターを削除すると、設計図マスターと所持記録も削除されること."""
+    from sqlmodel import select
+
+    from app.models.models import MasterBlueprint, PlayerBlueprint
+
+    client_admin.post("/api/admin/weapons", json=SAMPLE_WEAPON, headers=HEADERS)
+    session.add(
+        PlayerBlueprint(
+            user_id="user_test",
+            blueprint_id="weapon:test_beam_cannon",
+            source="DROP",
+        )
+    )
+    session.commit()
+
+    client_admin.delete("/api/admin/weapons/test_beam_cannon", headers=HEADERS)
+
+    session.expire_all()
+    assert session.get(MasterBlueprint, "weapon:test_beam_cannon") is None
+    assert (
+        session.exec(
+            select(PlayerBlueprint).where(
+                PlayerBlueprint.blueprint_id == "weapon:test_beam_cannon"
+            )
+        ).first()
+        is None
+    )

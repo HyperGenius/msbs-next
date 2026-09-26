@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 import numpy as np
@@ -1580,4 +1581,90 @@ class PlayerWeaponResponse(SQLModel):
     custom_stats: dict
     equipped_ms_id: uuid.UUID | None
     equipped_slot: int | None
+    acquired_at: datetime
+
+
+# --- Blueprint Models ---
+
+
+class BlueprintTargetType(StrEnum):
+    """設計図の対象マスターの種別."""
+
+    MOBILE_SUIT = "MOBILE_SUIT"
+    WEAPON = "WEAPON"
+
+
+class BlueprintSource(StrEnum):
+    """設計図の入手経路."""
+
+    MIGRATION = "MIGRATION"
+    DROP = "DROP"
+
+
+class MasterBlueprint(SQLModel, table=True):
+    """設計図マスター (DBテーブル).
+
+    機体マスター・武器マスターの各アイテムと1対1で対応する。
+    """
+
+    __tablename__ = "master_blueprints"
+    __table_args__ = (
+        UniqueConstraint("target_type", "target_id", name="uq_master_blueprint_target"),
+    )
+
+    id: str = Field(
+        primary_key=True,
+        description="設計図ID。target_type と target_id から決まる (例: mobile_suit:rx_78_2)",
+    )
+    target_type: str = Field(description="対象の種別 (BlueprintTargetType)")
+    target_id: str = Field(
+        index=True, description="対象の機体マスターID・武器マスターID"
+    )
+    is_standard_issue: bool = Field(
+        default=True, description="標準配備品か。true なら設計図なしで購入できる"
+    )
+    duplicate_credit_value: int = Field(
+        default=0,
+        ge=0,
+        description="入手済みの設計図を再入手したときに付与するクレジット",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
+
+
+class PlayerBlueprint(SQLModel, table=True):
+    """プレイヤーの所持設計図 (DBテーブル)."""
+
+    __tablename__ = "player_blueprints"
+    __table_args__ = (
+        UniqueConstraint("user_id", "blueprint_id", name="uq_player_blueprint"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: str = Field(index=True, description="所有者 (Pilot.user_id)")
+    blueprint_id: str = Field(
+        foreign_key="master_blueprints.id", index=True, description="設計図ID"
+    )
+    source: str = Field(description="入手経路 (BlueprintSource)")
+    source_battle_id: uuid.UUID | None = Field(
+        default=None,
+        description="入手元のバトル (BattleResult.id)。バトル以外で入手した場合は null",
+    )
+    acquired_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="入手日時"
+    )
+
+
+class PlayerBlueprintResponse(SQLModel):
+    """所持設計図APIレスポンスモデル."""
+
+    blueprint_id: str
+    target_type: str
+    target_id: str
+    source: str
+    source_battle_id: uuid.UUID | None
     acquired_at: datetime

@@ -35,6 +35,7 @@ from app.models.models import (
 )
 from app.routers import (
     admin,
+    blueprints,
     engineering,
     entries,
     friends,
@@ -95,6 +96,7 @@ app.include_router(admin.simulation_router)
 app.include_router(admin.npc_router)
 app.include_router(admin.ace_pilot_router)
 app.include_router(player_weapons.router)
+app.include_router(blueprints.router)
 
 # --- Response Schemas ---
 # models.py にあるクラスを使用する形でも良いですが、
