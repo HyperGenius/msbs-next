@@ -27,6 +27,8 @@ export interface WeaponSpec {
 export interface Weapon extends WeaponSpec {
     id: string;
     name: string;
+    /** 元になった武器マスターのID。武器IDには重複回避の接尾辞が付くため、武器IDからは逆引きできない */
+    master_weapon_id?: string | null;
 }
 
 /** 機体の戦術設定（ターゲット優先度と交戦距離の方針） */

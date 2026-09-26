@@ -91,6 +91,8 @@ admin-tool から一覧・閲覧・編集できる管理画面。#171（NPC自�
 | `max_hp` / `armor` / `mobility` / `sensor_range` / 耐性 / 適性・補正 / `missing_parts` | 機体マスターの `specs` からコピー |
 | `weapons` | 機体マスターの `specs.weapons`（既定値との差分で保存されていても `Weapon` として補完する） |
 | `weapon_slot_count` | 機体マスターの `weapon_slot_count`（Issue #543） |
+| `master_mobile_suit_id` | 機体マスターの `id`（Issue #545） |
+| `weapons[].master_weapon_id` | 武器 ID が武器マスター（`master_weapons`）に存在する武器だけ、その ID（Issue #545）。存在しない武器は `null` |
 | `name` | `"{機体マスター名} (NPC)"`（マッチングで生成される NPC 機体の命名に合わせる） |
 | `current_hp` | `max_hp` と同じ |
 | `user_id` / `side` | NPC パイロットの `user_id` / `"ENEMY"` |
@@ -194,6 +196,20 @@ NPC 機は機体名が `"{機体マスター名} (NPC)"` のため、プレイ�
 | 機体マスターから追加した NPC 機 | 機体マスターの値 |
 | エース機 | 雛形（`ace_pilots.mobile_suit.weapon_slot_count`）の値。未設定なら `max(装備数, MAX_WEAPON_SLOTS)` |
 
+#### 元になったマスター `master_mobile_suit_id` / `master_weapon_id`（Issue #545）
+
+機体・武器がどのマスターから作られたかを記録し、admin-tool でマスター値を併記するために使う。
+
+| 項目 | 型 | 記録するタイミング |
+|---|---|---|
+| `mobile_suits.master_mobile_suit_id` | nullable str（マイグレーション `h2c3d4e5f6a7`） | 機体マスターから NPC 機を追加したとき。エース機はマッチング時に雛形の値をコピーする |
+| `Weapon.master_weapon_id` | `str \| None`（`weapons` JSON 内の項目。マイグレーション不要） | 武器マスターから武器を追加したとき。機体マスターからの追加・取り込みでは、武器 ID が武器マスターにある武器だけ |
+
+- FK は張らない。マスターを削除しても機体・武器は残り、マスター値を表示しないだけになる
+- 既存の機体・武器はバックフィルしない（NULL のまま）。マッチングで生成した NPC 機は乱数でスペックを決めており、機体マスターと対応しないため
+- 武器 ID には重複を避ける接尾辞（`_2` など）が付くため、武器 ID から武器マスターを逆引きしない
+- 手入力で追加した武器は NULL のまま
+
 ### `app/services/pilot_service.py` に追加した管理者用メソッド
 
 - `PilotService.list_npc_pilots(session, personality, min_level, max_level, ace_only)` — 一覧取得（フィルタ対応）
@@ -263,6 +279,13 @@ admin-tool/src/
     （`refineWeaponSlots()`）
 - 武装フォームで扱わない項目（`weapon_type` / `cooldown_sec` / `fire_arc_deg` / `aim_distribution` 等）は、
   同じ武器IDの既存値・武器マスターから追加した武器の値を引き継いで送信する（`mergeWeaponSources()`）
+- マスター値の併記（Issue #545）: 機体・武器が元のマスター ID を持つ場合、数値項目のラベルに現在のマスター値を `最大 HP (1100)` の形で併記する
+  （`MasterValueLabel`）。現在の値がマスター値と異なる項目はラベルを水色にする
+  - 機体: 最大 HP・装甲・機動性・索敵範囲・ビーム耐性・実弾耐性・武器スロット数・適性/補正。EN・戦術は機体マスターに無いため表示しない
+  - 武器: 威力・射程・命中率・種別・最適射程・減衰係数・消費 EN
+  - 所属機体カード・機体タブの「スペック」見出しに機体マスター名、各武器の見出しに武器マスター名を表示する
+  - 表示するのはコピーした時点ではなく現在のマスター値。マスターは既存の `useAdminMobileSuits()` / `useAdminWeapons()` の一覧から ID で引く
+  - マスター ID が無い機体・武器、または参照先のマスターが削除されている場合は何も表示しない
 
 `MobileSuitSpecSection` / `WeaponListSection` は `useFormContext()` で親フォームを参照するため、
 `FormProvider` 配下に置き、機体スペックを `mobile_suit` キーの下に持つフォームで使う。
@@ -298,6 +321,7 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_admin_key_12345" pytho
 - 機体追加（Issue #540）: 機体マスターのスペック・武装のコピー、NPC パイロットの性格・名前の反映、404（機体マスター / NPC が存在しない）
 - 武器スロット数（Issue #543）: 未設定機のフォールバック値、スロット数の更新、本数超過・スロット数だけの引き下げ・武器ID重複の422、
   ビームジェネレータLv 条件を適用しないこと、機体マスターからの追加時のスロット数コピー
+- マスターID（Issue #545）: 機体マスターから追加した機体に `master_mobile_suit_id` を記録し、武器マスターにある武器だけ `master_weapon_id` を記録すること
 - 出撃機体（Issue #542）: 所有機への切り替え、他パイロットの機体・存在しない機体の422、
   機体追加時に未設定なら追加機体が出撃機体になること・設定済みなら変わらないこと
 
@@ -316,6 +340,8 @@ npx vitest run tests/unit/npcMobileSuitEditFormValidation.test.ts
 `toNpcMobileSuitPayload()`（フォーム外の武器項目の引き継ぎ）、`masterToSpecValues()`、`masterMobileSuitLabel()` を検証する。
 Issue #543 で、武器スロット数・武器ID重複のバリデーション、`uniqueWeaponId()`、`weaponSlotLabel()`、
 武器マスターから追加した武器のフォーム外項目の引き継ぎを追加した。
+Issue #545 で、機体マスターIDのフォーム値への引き継ぎ、武器マスターIDの記録（接尾辞付きの ID でも元の ID を送る・
+機体マスター取り込み時は武器マスターにある武器だけ記録する）、`masterMobileSuitValue()` を追加した。
 
 ---
 
@@ -326,6 +352,7 @@ Issue #543 で、武器スロット数・武器ID重複のバリデーション�
 - `backend/app/services/mobile_suit_service.py` — `update_npc_mobile_suit()` / `create_npc_mobile_suit_from_master()` / `validate_npc_weapons()`
 - `backend/app/core/npc_data.py` — `build_npc_tactics()`（性格に応じた戦術設定）
 - `backend/alembic/versions/g1b2c3d4e5f6_add_weapon_slot_count_to_mobile_suits.py` — `mobile_suits.weapon_slot_count` の追加と NPC 機のバックフィル
+- `backend/alembic/versions/h2c3d4e5f6a7_add_master_mobile_suit_id_to_mobile_suits.py` — `mobile_suits.master_mobile_suit_id` の追加
 - `backend/app/models/models.py` — `resolve_weapon_slot_count()` / `NpcPilotEntry` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuitEntry` / `NpcMobileSuitUpdate` / `NpcMobileSuitCreate`
 - `backend/app/core/gamedata.py` — `get_ace_pilots()`（エース識別の名前一致元データ。`ace_pilots` テーブル）
 - `backend/main.py` — `app.include_router(admin.npc_router)`

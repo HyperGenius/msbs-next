@@ -8,6 +8,7 @@ import { z } from "zod";
 import { NpcMobileSuit, NpcMobileSuitUpdate, NpcPilotDetail, NpcPersonality } from "@/types/admin";
 import MasterMobileSuitSelect from "@/components/admin/MasterMobileSuitSelect";
 import NpcMobileSuitEditForm from "@/components/admin/NpcMobileSuitEditForm";
+import { MasterSourceBadge, useMasterMobileSuit } from "@/components/admin/MobileSuitSpecFields";
 
 // ============================================================
 // Zod バリデーションスキーマ
@@ -204,6 +205,7 @@ function MobileSuitCard({
 }) {
   const [open, setOpen] = useState(false);
   const [isSettingActive, setIsSettingActive] = useState(false);
+  const master = useMasterMobileSuit(mobileSuit.master_mobile_suit_id);
 
   async function handleSetActive() {
     setIsSettingActive(true);
@@ -219,6 +221,7 @@ function MobileSuitCard({
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-bold text-[#00ff41]">
           {mobileSuit.name}
+          <MasterSourceBadge label="機体マスター" name={master?.name} />
           {mobileSuit.is_ace && (
             <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-[#ffb000]/20 text-[#ffb000] border border-[#ffb000]/50">
               ACE

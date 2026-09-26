@@ -163,6 +163,8 @@ export interface NpcMobileSuit {
     weapons: Weapon[];
     /** 武器スロット数（未設定の機体は装備数と2の大きい方に解決済み） */
     weapon_slot_count: number;
+    /** 元になった機体マスターのID。機体マスターから追加していない機体は null */
+    master_mobile_suit_id: string | null;
     personality: NpcPersonality | null;
     is_ace: boolean;
     ace_id: string | null;
@@ -264,6 +266,8 @@ export interface AcePilotMobileSuitSpec {
     en_recovery: number;
     /** 武器スロット数。未設定（null）の雛形はマッチング時に装備数と2の大きい方になる */
     weapon_slot_count?: number | null;
+    /** 取り込んだ機体マスターのID。取り込んでいない雛形は null または未設定 */
+    master_mobile_suit_id?: string | null;
     weapons: Weapon[];
     tactics: Tactics;
     missing_parts: string[];

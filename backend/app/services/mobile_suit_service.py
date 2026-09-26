@@ -3,7 +3,7 @@ import re
 import uuid
 from datetime import UTC, datetime
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.npc_data import build_npc_tactics
 from app.models.models import (
@@ -11,6 +11,7 @@ from app.models.models import (
     MasterMobileSuit,
     MasterMobileSuitCreate,
     MasterMobileSuitUpdate,
+    MasterWeapon,
     MobileSuit,
     MobileSuitUpdate,
     NpcMobileSuitUpdate,
@@ -186,13 +187,26 @@ class MobileSuitService:
             return None
 
         specs = master.specs
+        weapons = [Weapon(**w) for w in specs["weapons"]]
+        # 機体マスターの武器は武器マスターにない ID も持てるため、存在する ID だけ記録する。
+        existing_weapon_ids = set(
+            session.exec(
+                select(MasterWeapon.id).where(
+                    col(MasterWeapon.id).in_([w.id for w in weapons])
+                )
+            ).all()
+        )
+        for weapon in weapons:
+            if weapon.id in existing_weapon_ids:
+                weapon.master_weapon_id = weapon.id
         personality = pilot.npc_personality or "AGGRESSIVE"
         ms = MobileSuit(
             **{k: specs[k] for k in _MASTER_SPEC_FIELDS if k in specs},
             name=f"{master.name} (NPC)",
             current_hp=specs["max_hp"],
-            weapons=[Weapon(**w) for w in specs["weapons"]],
+            weapons=weapons,
             weapon_slot_count=master.weapon_slot_count,
+            master_mobile_suit_id=master.id,
             user_id=pilot.user_id,
             side="ENEMY",
             tactics=build_npc_tactics(personality),
