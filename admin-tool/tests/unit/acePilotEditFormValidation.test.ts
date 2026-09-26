@@ -28,7 +28,7 @@ const validFormValues: AcePilotFormValues = {
     physical_resistance: 0.25,
     max_en: 1500,
     en_recovery: 150,
-    tactics: { priority: "WEAKEST", range: "MELEE" },
+    tactics: { priority: "WEAKEST", range: "MELEE", weapon_switch_policy: "RACK_ONLY" },
     missing_parts: [],
     weapon_slot_count: 2,
     weapons: [
@@ -44,6 +44,7 @@ const validFormValues: AcePilotFormValues = {
         is_melee: false,
         en_cost: 0,
         master_weapon_id: null,
+        aim_distribution: { HEAD: 10, TORSO: 50, RIGHT_ARM: 10, LEFT_ARM: 10, RIGHT_LEG: 10, LEFT_LEG: 10 },
       },
     ],
   },
@@ -209,5 +210,48 @@ describe("toAcePilotPayload (マスターID)", () => {
     const payload = toAcePilotPayload(values, null);
     expect(payload.mobile_suit.master_mobile_suit_id).toBe("ms_06s");
     expect(payload.mobile_suit.weapons[0].master_weapon_id).toBe("zaku_mg");
+  });
+});
+
+// ============================================================
+// 武装持ち替えポリシー・狙う部位配分
+// ============================================================
+
+describe("toAcePilotPayload (戦術・狙う部位配分)", () => {
+  it("持ち替えポリシーを送り、フォームで扱わない tactics のキーは残す", () => {
+    const original = {
+      ...validFormValues,
+      skills: {},
+      mobile_suit: {
+        ...validFormValues.mobile_suit,
+        tactics: { priority: "CLOSEST", range: "RANGED", custom_key: "kept" },
+      },
+    } as unknown as AcePilot;
+    const payload = toAcePilotPayload(validFormValues, original);
+    expect(payload.mobile_suit.tactics).toEqual({
+      priority: "WEAKEST",
+      range: "MELEE",
+      weapon_switch_policy: "RACK_ONLY",
+      custom_key: "kept",
+    });
+  });
+
+  it("配分を割合に変換して送る", () => {
+    const payload = toAcePilotPayload(validFormValues, null);
+    expect(payload.mobile_suit.weapons[0].aim_distribution).toEqual({
+      HEAD: 0.1,
+      TORSO: 0.5,
+      RIGHT_ARM: 0.1,
+      LEFT_ARM: 0.1,
+      RIGHT_LEG: 0.1,
+      LEFT_LEG: 0.1,
+    });
+  });
+
+  it("配分の合計が 100% でない場合はエラー", () => {
+    const result = acePilotSchema.safeParse(
+      withOverride((v) => (v.mobile_suit.weapons[0].aim_distribution.TORSO = 30))
+    );
+    expect(result.success).toBe(false);
   });
 });

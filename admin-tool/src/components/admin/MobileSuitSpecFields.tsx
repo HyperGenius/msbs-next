@@ -16,7 +16,38 @@ import { useAdminWeapons } from "@/hooks/useAdminWeapons";
 
 export const TACTICS_PRIORITIES = ["CLOSEST", "WEAKEST", "RANDOM", "STRONGEST", "THREAT"] as const;
 export const TACTICS_RANGES = ["MELEE", "RANGED", "BALANCED", "FLEE"] as const;
+export const WEAPON_SWITCH_POLICIES = ["NEVER", "RACK_ONLY", "BALANCED", "AGGRESSIVE"] as const;
+/** 未設定の機体の持ち替えポリシー（backend の DEFAULT_WEAPON_SWITCH_POLICY と同じ） */
+export const DEFAULT_WEAPON_SWITCH_POLICY = "BALANCED";
+/** Garage の TacticsSelector と同じ表示ラベル */
+const WEAPON_SWITCH_POLICY_LABELS: Record<(typeof WEAPON_SWITCH_POLICIES)[number], string> = {
+  NEVER: "NEVER - 持ち替えない",
+  RACK_ONLY: "RACK_ONLY - 使用不能時のみ強制持ち替え",
+  BALANCED: "BALANCED - おまかせ（期待効果で判断）",
+  AGGRESSIVE: "AGGRESSIVE - 積極的に持ち替える",
+};
+/** 並び順は Garage の AimDistributionEditor の表示順と同じ */
 export const PART_NAMES = ["HEAD", "TORSO", "RIGHT_ARM", "LEFT_ARM", "RIGHT_LEG", "LEFT_LEG"] as const;
+type PartName = (typeof PART_NAMES)[number];
+const PART_LABELS: Record<PartName, string> = {
+  HEAD: "頭部",
+  TORSO: "胴体",
+  RIGHT_ARM: "右腕",
+  LEFT_ARM: "左腕",
+  RIGHT_LEG: "右脚",
+  LEFT_LEG: "左脚",
+};
+/** backend の DEFAULT_AIM_DISTRIBUTION を % にした値 */
+export const DEFAULT_AIM_DISTRIBUTION_PERCENT: Record<PartName, number> = {
+  HEAD: 10,
+  TORSO: 50,
+  RIGHT_ARM: 10,
+  LEFT_ARM: 10,
+  RIGHT_LEG: 10,
+  LEFT_LEG: 10,
+};
+/** 配分合計の許容誤差 (%)。backend の validate_aim_distribution と同じ */
+const AIM_TOTAL_TOLERANCE_PERCENT = 1;
 /** スロット数が未設定の機体の既定値（backend の MAX_WEAPON_SLOTS と同じ） */
 export const DEFAULT_WEAPON_SLOT_COUNT = 2;
 
@@ -24,8 +55,37 @@ export const DEFAULT_WEAPON_SLOT_COUNT = 2;
 // Zod バリデーションスキーマ
 // ============================================================
 
-/** エース機・NPC機の武装。武器マスターから作った武器は元の武器マスターIDを持つ */
-const specWeaponSchema = weaponSchema.extend({
+const aimPercentSchema = z.number({ message: "Must be a number" }).nonnegative("Must be ≥ 0");
+
+export function sumAimPercent(values: Partial<Record<PartName, number>>): number {
+  const total = PART_NAMES.reduce((sum, p) => sum + (Number.isFinite(values[p]) ? values[p]! : 0), 0);
+  // 小数の足し算の誤差を表示に出さないため
+  return Math.round(total * 100) / 100;
+}
+
+/** 狙う部位配分（%）。API へは割合に直して送る */
+export const aimDistributionSchema = z
+  .object({
+    HEAD: aimPercentSchema,
+    TORSO: aimPercentSchema,
+    RIGHT_ARM: aimPercentSchema,
+    LEFT_ARM: aimPercentSchema,
+    RIGHT_LEG: aimPercentSchema,
+    LEFT_LEG: aimPercentSchema,
+  })
+  .superRefine((d, ctx) => {
+    const total = sumAimPercent(d);
+    if (Math.abs(total - 100) > AIM_TOTAL_TOLERANCE_PERCENT) {
+      ctx.addIssue({ code: "custom", message: `Total must be 100% (current: ${total}%)` });
+    }
+  });
+
+/**
+ * NPC機・エース機の武装。機体マスターの武装と違い、狙う部位配分も編集する。
+ * 武器マスターから作った武器は元の武器マスターIDを持つ。
+ */
+export const specWeaponSchema = weaponSchema.extend({
+  aim_distribution: aimDistributionSchema,
   master_weapon_id: z.string().nullable(),
 });
 
@@ -44,6 +104,7 @@ export const mobileSuitSpecSchema = z.object({
   tactics: z.object({
     priority: z.enum(TACTICS_PRIORITIES),
     range: z.enum(TACTICS_RANGES),
+    weapon_switch_policy: z.enum(WEAPON_SWITCH_POLICIES),
   }),
   missing_parts: z.array(z.enum(PART_NAMES)),
   weapon_slot_count: z.number({ message: "Must be a number" }).int().min(1, "Must be ≥ 1"),
@@ -77,6 +138,7 @@ export function refineWeaponSlots(
 
 export type MobileSuitSpecFormValues = z.infer<typeof mobileSuitSpecSchema>;
 export type WeaponFormValues = MobileSuitSpecFormValues["weapons"][number];
+export type AimDistributionFormValues = WeaponFormValues["aim_distribution"];
 
 /** 共通セクションを載せるフォームの形。機体スペックは mobile_suit 配下に置く。 */
 type SpecFormHost = { mobile_suit: MobileSuitSpecFormValues };
@@ -99,7 +161,25 @@ export const defaultWeapon: WeaponFormValues = {
   cool_down_turn: 0,
   required_beam_generator_lv: 0,
   master_weapon_id: null,
+  aim_distribution: { ...DEFAULT_AIM_DISTRIBUTION_PERCENT },
 };
+
+/**
+ * 割合（0〜1）の配分を % のフォーム値に変換する。
+ * 空の配分は既定値として扱う。バトルエンジンも空なら既定値を使うため。
+ */
+export function aimDistributionToFormValues(
+  distribution: Record<string, number> | undefined
+): AimDistributionFormValues {
+  if (!distribution || Object.keys(distribution).length === 0) return { ...DEFAULT_AIM_DISTRIBUTION_PERCENT };
+  // 0.1 * 100 のような誤差を小数第2位で丸める
+  const toPercent = (ratio: number | undefined) => Math.round((ratio ?? 0) * 10000) / 100;
+  return Object.fromEntries(PART_NAMES.map((p) => [p, toPercent(distribution[p])])) as AimDistributionFormValues;
+}
+
+export function aimDistributionToRatio(values: AimDistributionFormValues): Record<string, number> {
+  return Object.fromEntries(PART_NAMES.map((p) => [p, values[p] / 100]));
+}
 
 export function weaponToFormValues(w: Weapon): WeaponFormValues {
   return {
@@ -117,6 +197,7 @@ export function weaponToFormValues(w: Weapon): WeaponFormValues {
     cool_down_turn: w.cool_down_turn ?? 0,
     required_beam_generator_lv: w.required_beam_generator_lv ?? 0,
     master_weapon_id: w.master_weapon_id ?? null,
+    aim_distribution: aimDistributionToFormValues(w.aim_distribution),
   };
 }
 
@@ -149,7 +230,17 @@ export function masterWeaponToWeapon(master: MasterWeapon, existingIds: string[]
 export function tacticsToFormValues(tactics: Partial<Tactics> | undefined): MobileSuitSpecFormValues["tactics"] {
   const priority = TACTICS_PRIORITIES.find((p) => p === tactics?.priority) ?? "CLOSEST";
   const range = TACTICS_RANGES.find((r) => r === tactics?.range) ?? "BALANCED";
-  return { priority, range };
+  const weapon_switch_policy =
+    WEAPON_SWITCH_POLICIES.find((p) => p === tactics?.weapon_switch_policy) ?? DEFAULT_WEAPON_SWITCH_POLICY;
+  return { priority, range, weapon_switch_policy };
+}
+
+/** フォームの戦術に、フォームで扱わない既存のキーを足す。保存で消さないため */
+export function mergeTactics(
+  tactics: MobileSuitSpecFormValues["tactics"],
+  source: Partial<Tactics> | undefined
+): Tactics {
+  return { ...source, ...tactics };
 }
 
 export function missingPartsToFormValues(parts: string[] | undefined): MobileSuitSpecFormValues["missing_parts"] {
@@ -158,13 +249,17 @@ export function missingPartsToFormValues(parts: string[] | undefined): MobileSui
 
 /**
  * フォームの武装を API に送る Weapon に変換する。
- * フォームで扱わない項目（weapon_type / cooldown_sec / fire_arc_deg / aim_distribution 等）は
+ * フォームで扱わない項目（weapon_type / cooldown_sec / fire_arc_deg 等）は
  * 同じ武器IDの取り込み元から引き継ぐ。編集によって既定値へ巻き戻さないため。
  * sources に同じIDが複数あるときは後ろの要素を使う。
  */
 export function mergeWeaponSources(weapons: WeaponFormValues[], sources: Weapon[]): Weapon[] {
   const byId = new Map(sources.map((w) => [w.id, w]));
-  return weapons.map((w) => ({ ...byId.get(w.id), ...w }));
+  return weapons.map((w) => ({
+    ...byId.get(w.id),
+    ...w,
+    aim_distribution: aimDistributionToRatio(w.aim_distribution),
+  }));
 }
 
 /**
@@ -388,6 +483,16 @@ export function MobileSuitSpecSection({ namePlaceholder }: { namePlaceholder?: s
               ))}
             </select>
           </div>
+          <div className="col-span-2">
+            <Label>武装持ち替え</Label>
+            <select {...register("mobile_suit.tactics.weapon_switch_policy")} className={inputCls}>
+              {WEAPON_SWITCH_POLICIES.map((p) => (
+                <option key={p} value={p}>
+                  {WEAPON_SWITCH_POLICY_LABELS[p]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -585,10 +690,62 @@ export function WeaponListSection({ idPrefix, onImportWeapon }: WeaponListSectio
                   </label>
                 </div>
               </div>
+              <AimDistributionFields index={index} />
             </div>
           );
         })}
       </div>
     </>
+  );
+}
+
+/** 1 本の武器の狙う部位配分の入力欄。既定では閉じておく */
+function AimDistributionFields({ index }: { index: number }) {
+  "use no memo";
+  const {
+    register,
+    control,
+    setValue,
+    formState: { errors },
+  } = useFormContext<SpecFormHost>();
+  const name = `mobile_suit.weapons.${index}.aim_distribution` as const;
+  const values = useWatch({ control, name });
+  const total = sumAimPercent(values ?? {});
+  const isValidTotal = Math.abs(total - 100) <= AIM_TOTAL_TOLERANCE_PERCENT;
+  const aimErrors = errors.mobile_suit?.weapons?.[index]?.aim_distribution;
+
+  return (
+    <details className="mt-3 border-t border-[#00ff41]/10 pt-2">
+      <summary className="cursor-pointer text-xs text-[#ffb000]/80">
+        狙う部位配分
+        <span className={`ml-2 font-mono ${isValidTotal ? "text-[#00ff41]/70" : "text-red-400"}`}>
+          合計: {total}%
+        </span>
+        {aimErrors && <span className="ml-1 text-red-400">!</span>}
+      </summary>
+      <div className="grid grid-cols-3 gap-2 mt-2">
+        {PART_NAMES.map((part) => (
+          <div key={part}>
+            <Label>{PART_LABELS[part]} (%)</Label>
+            {/* min / step を付けない。閉じた欄でブラウザの検証に掛かると、エラーを表示できず送信が止まるため */}
+            <Input type="number" step="any" {...register(`${name}.${part}`, { valueAsNumber: true })} />
+            <FieldError msg={aimErrors?.[part]?.message} />
+          </div>
+        ))}
+      </div>
+      <FieldError msg={aimErrors?.message ?? aimErrors?.root?.message} />
+      <div className="flex items-center justify-between mt-2">
+        <p className="text-xs text-[#00ff41]/40">※ 合計 100% にしてください（許容誤差 ±1%）</p>
+        <button
+          type="button"
+          onClick={() =>
+            setValue(name, { ...DEFAULT_AIM_DISTRIBUTION_PERCENT }, { shouldDirty: true, shouldValidate: true })
+          }
+          className="text-xs text-[#00ff41]/50 hover:text-[#00ff41] underline"
+        >
+          既定値に戻す
+        </button>
+      </div>
+    </details>
   );
 }

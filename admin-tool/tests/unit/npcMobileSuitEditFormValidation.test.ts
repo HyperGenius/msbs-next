@@ -6,6 +6,7 @@ import {
   toNpcMobileSuitPayload,
 } from "@/components/admin/NpcMobileSuitEditForm";
 import {
+  DEFAULT_AIM_DISTRIBUTION_PERCENT,
   masterMobileSuitValue,
   masterToSpecValues,
   masterWeaponToWeapon,
@@ -102,7 +103,11 @@ describe("toNpcMobileSuitFormValues", () => {
 
   it("戦術が未設定の機体は既定値で補完する", () => {
     const values = toNpcMobileSuitFormValues({ ...npcSuit, tactics: {} });
-    expect(values.mobile_suit.tactics).toEqual({ priority: "CLOSEST", range: "BALANCED" });
+    expect(values.mobile_suit.tactics).toEqual({
+      priority: "CLOSEST",
+      range: "BALANCED",
+      weapon_switch_policy: "BALANCED",
+    });
   });
 });
 
@@ -138,7 +143,7 @@ describe("toNpcMobileSuitPayload", () => {
     values.mobile_suit.accuracy_bonus = 5;
     const payload = toNpcMobileSuitPayload(values, npcSuit);
     expect(payload.accuracy_bonus).toBe(5);
-    expect(payload.tactics).toEqual({ priority: "WEAKEST", range: "MELEE" });
+    expect(payload.tactics).toEqual({ priority: "WEAKEST", range: "MELEE", weapon_switch_policy: "BALANCED" });
   });
 });
 
@@ -307,5 +312,87 @@ describe("masterMobileSuitValue", () => {
 
   it("機体マスターが無い（未記録・削除済み）ときは undefined", () => {
     expect(masterMobileSuitValue(undefined, "max_hp")).toBeUndefined();
+  });
+});
+
+// ============================================================
+// 武装持ち替えポリシー
+// ============================================================
+
+describe("武装持ち替えポリシー", () => {
+  it("機体の設定値をフォームに読み込み、そのまま送る", () => {
+    const suit: NpcMobileSuit = { ...npcSuit, tactics: { ...npcSuit.tactics, weapon_switch_policy: "NEVER" } };
+    const values = toNpcMobileSuitFormValues(suit);
+    expect(values.mobile_suit.tactics.weapon_switch_policy).toBe("NEVER");
+    values.mobile_suit.tactics.weapon_switch_policy = "AGGRESSIVE";
+    expect(toNpcMobileSuitPayload(values, suit).tactics?.weapon_switch_policy).toBe("AGGRESSIVE");
+  });
+
+  it("フォームで扱わない tactics のキーは保存時に残す", () => {
+    const suit = { ...npcSuit, tactics: { ...npcSuit.tactics, custom_key: "kept" } } as NpcMobileSuit;
+    const payload = toNpcMobileSuitPayload(toNpcMobileSuitFormValues(suit), suit);
+    expect(payload.tactics).toMatchObject({ priority: "WEAKEST", custom_key: "kept" });
+  });
+});
+
+// ============================================================
+// 狙う部位配分
+// ============================================================
+
+const customAim = { HEAD: 0.3, TORSO: 0.3, RIGHT_ARM: 0.1, LEFT_ARM: 0.1, RIGHT_LEG: 0.1, LEFT_LEG: 0.1 };
+
+function npcValuesWithAim(aim: Record<string, number>) {
+  const values = toNpcMobileSuitFormValues(npcSuit);
+  values.mobile_suit.weapons[0].aim_distribution = { ...DEFAULT_AIM_DISTRIBUTION_PERCENT, ...aim };
+  return values;
+}
+
+describe("狙う部位配分", () => {
+  it("未設定の武器は既定値を % で表示する", () => {
+    const values = toNpcMobileSuitFormValues(npcSuit);
+    expect(values.mobile_suit.weapons[0].aim_distribution).toEqual(DEFAULT_AIM_DISTRIBUTION_PERCENT);
+  });
+
+  it("武器の配分を % に変換して読み込み、割合に戻して送る", () => {
+    const suit: NpcMobileSuit = {
+      ...npcSuit,
+      weapons: [{ ...npcSuit.weapons[0], aim_distribution: customAim }],
+    };
+    const values = toNpcMobileSuitFormValues(suit);
+    expect(values.mobile_suit.weapons[0].aim_distribution).toMatchObject({ HEAD: 30, TORSO: 30, LEFT_LEG: 10 });
+    expect(toNpcMobileSuitPayload(values, suit).weapons![0].aim_distribution).toEqual(customAim);
+  });
+
+  it("フォームで編集した配分を既存値より優先して送る", () => {
+    const suit: NpcMobileSuit = {
+      ...npcSuit,
+      weapons: [{ ...npcSuit.weapons[0], aim_distribution: customAim }],
+    };
+    const values = toNpcMobileSuitFormValues(suit);
+    values.mobile_suit.weapons[0].aim_distribution = { ...DEFAULT_AIM_DISTRIBUTION_PERCENT };
+    expect(toNpcMobileSuitPayload(values, suit).weapons![0].aim_distribution).toMatchObject({ TORSO: 0.5 });
+  });
+
+  it("合計が 100% ±1% を外れる場合は配分の欄にエラー", () => {
+    const result = npcMobileSuitSchema.safeParse(npcValuesWithAim({ HEAD: 12 }));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["mobile_suit", "weapons", 0, "aim_distribution"]);
+    expect(result.error?.issues[0].message).toBe("Total must be 100% (current: 102%)");
+  });
+
+  it("合計が許容誤差内なら通過する", () => {
+    expect(npcMobileSuitSchema.safeParse(npcValuesWithAim({ HEAD: 10.5, TORSO: 50.4 })).success).toBe(true);
+  });
+
+  it("負の値はエラー", () => {
+    const result = npcMobileSuitSchema.safeParse(npcValuesWithAim({ HEAD: -10, TORSO: 70 }));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["mobile_suit", "weapons", 0, "aim_distribution", "HEAD"]);
+  });
+
+  it("欠損部位に配分が残っていても通過する", () => {
+    const values = npcValuesWithAim({});
+    values.mobile_suit.missing_parts = ["HEAD"];
+    expect(npcMobileSuitSchema.safeParse(values).success).toBe(true);
   });
 });

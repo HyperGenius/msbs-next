@@ -15,7 +15,11 @@ from app.models.models import (
     AcePilotMobileSuitSpec,
     AcePilotUpdate,
 )
-from app.services.mobile_suit_service import validate_npc_weapons
+from app.services.mobile_suit_service import (
+    validate_npc_weapons,
+    validate_tactics,
+    validate_weapon_aim_distributions,
+)
 
 
 class AcePilotService:
@@ -52,6 +56,8 @@ class AcePilotService:
             raise ValueError("mobile_suit.weapons must have at least one weapon.")
         # スロット数が未設定の雛形はマッチング時に装備数以上になるため、本数は検証しない
         validate_npc_weapons(spec.weapons, spec.weapon_slot_count or len(spec.weapons))
+        validate_weapon_aim_distributions(spec.weapons)
+        validate_tactics(spec.tactics)
         invalid_parts = [p for p in spec.missing_parts if p not in ALL_PART_NAMES]
         if invalid_parts:
             raise ValueError(

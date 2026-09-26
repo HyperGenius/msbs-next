@@ -156,6 +156,18 @@ def test_create_duplicate_id_returns_409(client_admin):
         ({"skills": {"flanking": 4}}, None),
         ({"weapons": []}, "mobile_suit"),
         ({"missing_parts": ["TAIL"]}, "mobile_suit"),
+        ({"tactics": {"priority": "NEAREST", "range": "RANGED"}}, "mobile_suit"),
+        ({"tactics": {"priority": "CLOSEST", "range": "CLOSE"}}, "mobile_suit"),
+        (
+            {
+                "tactics": {
+                    "priority": "CLOSEST",
+                    "range": "RANGED",
+                    "weapon_switch_policy": "ALWAYS",
+                }
+            },
+            "mobile_suit",
+        ),
     ],
 )
 def test_create_invalid_returns_422(client_admin, override, path):
@@ -334,3 +346,62 @@ def test_matching_falls_back_ace_weapon_slot_count(client_admin, session):
     payload = _ace_with_weapons(["w1", "w2", "w3"], weapon_slot_count=None)
     ace = _spawn_only_ace(client_admin, session, payload)
     assert ace.weapon_slot_count == 3
+
+
+# ===================== 武装持ち替えポリシー・狙い部位配分 =====================
+
+CUSTOM_AIM = {
+    "HEAD": 0.3,
+    "TORSO": 0.3,
+    "RIGHT_ARM": 0.1,
+    "LEFT_ARM": 0.1,
+    "RIGHT_LEG": 0.1,
+    "LEFT_LEG": 0.1,
+}
+
+
+def _ace_with_aim(aim_distribution: dict) -> dict:
+    payload = copy.deepcopy(SAMPLE_ACE)
+    payload["mobile_suit"]["weapons"][0]["aim_distribution"] = aim_distribution
+    return payload
+
+
+def test_matching_copies_ace_switch_policy_and_aim(client_admin, session):
+    """雛形の持ち替えポリシーと狙い部位配分がマッチング時の機体に反映されること."""
+    payload = _ace_with_aim(CUSTOM_AIM)
+    payload["mobile_suit"]["tactics"] = {
+        "priority": "STRONGEST",
+        "range": "RANGED",
+        "weapon_switch_policy": "NEVER",
+    }
+    ace = _spawn_only_ace(client_admin, session, payload)
+    assert ace.tactics["weapon_switch_policy"] == "NEVER"
+    assert ace.weapons[0].aim_distribution == CUSTOM_AIM
+
+
+@pytest.mark.parametrize(
+    "aim_distribution",
+    [
+        {**CUSTOM_AIM, "TAIL": 0.0},
+        {**CUSTOM_AIM, "HEAD": -0.1, "TORSO": 0.7},
+        {**CUSTOM_AIM, "HEAD": 0.5},
+    ],
+)
+def test_create_ace_rejects_invalid_aim_distribution(client_admin, aim_distribution):
+    """部位名・負値・合計が不正な配分のエースは 422 になること."""
+    response = client_admin.post(
+        ENDPOINT, json=_ace_with_aim(aim_distribution), headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def test_update_ace_rejects_invalid_tactics(client_admin):
+    """不正な戦術で更新すると 422 が返ること."""
+    mobile_suit = copy.deepcopy(SAMPLE_ACE["mobile_suit"])
+    mobile_suit["tactics"] = {"priority": "CLOSEST", "range": "FAR"}
+    response = client_admin.put(
+        f"{ENDPOINT}/ace_char_aznable",
+        json={"mobile_suit": mobile_suit},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY

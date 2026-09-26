@@ -118,6 +118,11 @@ NPC の出撃機体（`active_mobile_suit_id`）が未設定の場合は、作�
 
 - `ms_id` が `pilot_id` の所有機体でない場合は `404` を返す（他NPC・プレイヤーの機体を誤って編集できないようにするため）
 - `weapons` を空にした場合、`missing_parts` に不正な部位名を含めた場合は `422`
+- `tactics` の `priority` / `range` / `weapon_switch_policy` が許容値に無い場合は `422`（Issue #544。`validate_tactics()`）。
+  許容値は `app/engine/constants.py` の `TACTICS_PRIORITIES` / `TACTICS_RANGES` / `WEAPON_SWITCH_POLICIES`。
+  未設定のキーはエンジンの既定値で動くため検証しない。それ以外のキーも検証せず、そのまま保存する
+- 武器の `aim_distribution` の部位名が `ALL_PART_NAMES` に無い、負の値がある、合計が 1.0 ±0.01 でない場合は `422`
+  （Issue #544。Garage と共通の `validate_aim_distribution()`（`weapon_service.py`））。欠損部位に配分が残っていてもエラーにしない
 - 武装の本数が武器スロット数を超える場合、同じ武器 ID の武装が2本以上ある場合は `422`（Issue #543）。
   `weapon_slot_count` だけを送った場合も、既存の武装の本数と比べる。
   バトル中の弾数・クールダウン（`weapon_states`）は武器 ID をキーに持つため、同じ ID の武器は状態を共有してしまう。
@@ -270,6 +275,9 @@ admin-tool/src/
 
 - 「機体 / 武装」のタブに分割。バリデーションエラーを含むタブには `!` を表示し、保存時にエラーのある最初のタブへ切り替える
 - 機体タブ: スペック・武器スロット数・戦術・欠損部位（エース用フォームと共通の `MobileSuitSpecSection`）と、NPC 機だけが持つ適性・補正
+  - 戦術には武装持ち替えポリシー（`weapon_switch_policy`）を含む（Issue #544）。選択肢と表示ラベルは Garage の `TacticsSelector` と同じ。
+    未設定の機体は `BALANCED`（`DEFAULT_WEAPON_SWITCH_POLICY`）として表示する
+  - `tactics` のうちフォームで扱わないキーは、保存時に既存値とマージして残す（`mergeTactics()`）
 - 武装タブ: 武器の追加・削除・編集（エース用フォームと共通の `WeaponListSection`）
   - 各武器の見出しは Garage と同じスロット名（右腕 / 左腕 / ラックN）で表示する（`weaponSlotLabel()`。Issue #543）
   - 武器マスターをプルダウンで選んで「追加」すると、武器マスターの `id` / `name` / スペックをコピーして末尾に追加する。
@@ -277,7 +285,11 @@ admin-tool/src/
   - 武装の本数がスロット数に達すると「+ 追加」と武器マスターからの追加を無効にする
   - 武装の本数がスロット数を超える場合（スロット数の欄）、武器IDが重複する場合（2本目以降の ID 欄）はフォームでエラーにする
     （`refineWeaponSlots()`）
-- 武装フォームで扱わない項目（`weapon_type` / `cooldown_sec` / `fire_arc_deg` / `aim_distribution` 等）は、
+  - 各武器の「狙う部位配分」で、部位ごと（頭部・胴体・右腕・左腕・右脚・左脚）の配分を % で編集する（Issue #544）。
+    武器ごとに折りたたみ、既定では閉じておく。見出しに合計を表示し、100% ±1% を外れると赤くする。
+    初期表示は武器の `aim_distribution`（未設定・空なら既定値）。「既定値に戻す」で `DEFAULT_AIM_DISTRIBUTION` に戻す。
+    負値・合計のずれはフォームでエラーにする（`aimDistributionSchema`）。送信時は割合（0〜1）に直す
+- 武装フォームで扱わない項目（`weapon_type` / `cooldown_sec` / `fire_arc_deg` 等）は、
   同じ武器IDの既存値・武器マスターから追加した武器の値を引き継いで送信する（`mergeWeaponSources()`）
 - マスター値の併記（Issue #545）: 機体・武器が元のマスター ID を持つ場合、数値項目のラベルに現在のマスター値を `最大 HP (1100)` の形で併記する
   （`MasterValueLabel`）。現在の値がマスター値と異なる項目はラベルを水色にする
@@ -318,6 +330,8 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_admin_key_12345" pytho
 - 所有機体更新: ステータス反映、他NPC所有機体を編集しようとした場合の404
 - 所有機体更新（Issue #540）: 武装・耐性・戦術・欠損部位を含む全項目の反映、`max_hp` 変更時の `current_hp`/`parts` 再計算、
   武装0件・不正な欠損部位の422、プレイヤー所有機の404
+- 持ち替えポリシー・狙う部位配分（Issue #544）: 持ち替えポリシー・配分の保存、`tactics` の未知のキーが残ること、
+  欠損部位に配分が残っていても保存できること、不正な戦術値・配分（部位名・負値・合計）の422
 - 機体追加（Issue #540）: 機体マスターのスペック・武装のコピー、NPC パイロットの性格・名前の反映、404（機体マスター / NPC が存在しない）
 - 武器スロット数（Issue #543）: 未設定機のフォールバック値、スロット数の更新、本数超過・スロット数だけの引き下げ・武器ID重複の422、
   ビームジェネレータLv 条件を適用しないこと、機体マスターからの追加時のスロット数コピー
@@ -340,6 +354,8 @@ npx vitest run tests/unit/npcMobileSuitEditFormValidation.test.ts
 `toNpcMobileSuitPayload()`（フォーム外の武器項目の引き継ぎ）、`masterToSpecValues()`、`masterMobileSuitLabel()` を検証する。
 Issue #543 で、武器スロット数・武器ID重複のバリデーション、`uniqueWeaponId()`、`weaponSlotLabel()`、
 武器マスターから追加した武器のフォーム外項目の引き継ぎを追加した。
+Issue #544 で、持ち替えポリシーの読み込み・送信、`tactics` のフォーム外キーの保持、配分の %⇔割合の変換、
+配分のバリデーション（合計・許容誤差・負値・欠損部位）を追加した。
 Issue #545 で、機体マスターIDのフォーム値への引き継ぎ、武器マスターIDの記録（接尾辞付きの ID でも元の ID を送る・
 機体マスター取り込み時は武器マスターにある武器だけ記録する）、`masterMobileSuitValue()` を追加した。
 
@@ -349,7 +365,8 @@ Issue #545 で、機体マスターIDのフォーム値への引き継ぎ、武�
 
 - `backend/app/routers/admin.py` — `npc_router`（NPC CRUD API）
 - `backend/app/services/pilot_service.py` — NPC管理者用メソッド・`get_ace_pilot_names()`
-- `backend/app/services/mobile_suit_service.py` — `update_npc_mobile_suit()` / `create_npc_mobile_suit_from_master()` / `validate_npc_weapons()`
+- `backend/app/services/mobile_suit_service.py` — `update_npc_mobile_suit()` / `create_npc_mobile_suit_from_master()` / `validate_npc_weapons()` / `validate_tactics()` / `validate_weapon_aim_distributions()`
+- `backend/app/services/weapon_service.py` — `validate_aim_distribution()`（Garage の `update_aim_distribution()` と共通の配分検証）
 - `backend/app/core/npc_data.py` — `build_npc_tactics()`（性格に応じた戦術設定）
 - `backend/alembic/versions/g1b2c3d4e5f6_add_weapon_slot_count_to_mobile_suits.py` — `mobile_suits.weapon_slot_count` の追加と NPC 機のバックフィル
 - `backend/alembic/versions/h2c3d4e5f6a7_add_master_mobile_suit_id_to_mobile_suits.py` — `mobile_suits.master_mobile_suit_id` の追加

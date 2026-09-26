@@ -22,6 +22,29 @@ from app.models.models import (
 )
 
 
+def validate_aim_distribution(aim_distribution: dict[str, float]) -> None:
+    """武器の狙う部位配分を検証する.
+
+    欠損部位に配分が残っていてもエラーにしない。命中部位の決定時に除外されるため。
+
+    Args:
+        aim_distribution: 部位名→配分割合の辞書。合計 1.0 を許容誤差 0.01 で要求する。
+
+    Raises:
+        ValueError: 部位名が ALL_PART_NAMES に無い、負の値がある、または合計が 1.0 でない場合
+    """
+    invalid_keys = sorted(set(aim_distribution) - set(ALL_PART_NAMES))
+    if invalid_keys:
+        raise ValueError(f"不正な部位名です: {invalid_keys}")
+    if any(v < 0 for v in aim_distribution.values()):
+        raise ValueError("配分の値は0以上で指定してください")
+    total = sum(aim_distribution.values())
+    if not math.isclose(total, 1.0, abs_tol=0.01):
+        raise ValueError(
+            f"配分の合計は100%にしてください（現在の合計: {total * 100:.1f}%）"
+        )
+
+
 class WeaponService:
     """武器インスタンスを操作するサービス."""
 
@@ -357,21 +380,10 @@ class WeaponService:
         Raises:
             HTTPException: 権限エラー・不正な部位名・配分不正（負値/合計不一致）
         """
-        invalid_keys = sorted(set(aim_distribution) - set(ALL_PART_NAMES))
-        if invalid_keys:
-            raise HTTPException(
-                status_code=400, detail=f"不正な部位名です: {invalid_keys}"
-            )
-        if any(v < 0 for v in aim_distribution.values()):
-            raise HTTPException(
-                status_code=400, detail="配分の値は0以上で指定してください"
-            )
-        total = sum(aim_distribution.values())
-        if not math.isclose(total, 1.0, abs_tol=0.01):
-            raise HTTPException(
-                status_code=400,
-                detail=f"配分の合計は100%にしてください（現在の合計: {total * 100:.1f}%）",
-            )
+        try:
+            validate_aim_distribution(aim_distribution)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
         player_weapon = session.get(PlayerWeapon, player_weapon_id)
         if not player_weapon:

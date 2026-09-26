@@ -6,6 +6,11 @@ from datetime import UTC, datetime
 from sqlmodel import Session, col, select
 
 from app.core.npc_data import build_npc_tactics
+from app.engine.constants import (
+    TACTICS_PRIORITIES,
+    TACTICS_RANGES,
+    WEAPON_SWITCH_POLICIES,
+)
 from app.models.models import (
     ALL_PART_NAMES,
     MasterMobileSuit,
@@ -19,6 +24,7 @@ from app.models.models import (
     Weapon,
     resolve_weapon_slot_count,
 )
+from app.services.weapon_service import validate_aim_distribution
 
 # 機体マスターの specs から MobileSuit へそのままコピーする項目（weapons は別途変換する）。
 _MASTER_SPEC_FIELDS = (
@@ -68,6 +74,39 @@ def validate_npc_weapons(weapons: list[Weapon], weapon_slot_count: int) -> None:
         seen.add(w.id)
     if duplicated:
         raise ValueError(f"Duplicate weapon ids: {duplicated}.")
+
+
+def validate_tactics(tactics: dict) -> None:
+    """戦術設定の priority / range / weapon_switch_policy が許容値かを検証する.
+
+    未設定のキーはエンジン側の既定値で動くため、検証しない。
+    それ以外のキーも保存時に消さないため、検証しない。
+
+    Raises:
+        ValueError: いずれかの値が許容値に無い場合
+    """
+    for key, allowed in (
+        ("priority", TACTICS_PRIORITIES),
+        ("range", TACTICS_RANGES),
+        ("weapon_switch_policy", WEAPON_SWITCH_POLICIES),
+    ):
+        if key in tactics and tactics[key] not in allowed:
+            raise ValueError(
+                f"Invalid tactics.{key}: {tactics[key]!r}. Must be one of {allowed}."
+            )
+
+
+def validate_weapon_aim_distributions(weapons: list[Weapon]) -> None:
+    """各武器の狙う部位配分を検証する.
+
+    Raises:
+        ValueError: いずれかの武器の配分が不正な場合
+    """
+    for w in weapons:
+        try:
+            validate_aim_distribution(w.aim_distribution)
+        except ValueError as e:
+            raise ValueError(f"Invalid aim_distribution of weapon '{w.id}': {e}") from e
 
 
 class MobileSuitService:
@@ -135,12 +174,16 @@ class MobileSuitService:
 
         Raises:
             ValueError: 武装が空、武装がスロット数を超える、武器 ID が重複する、
-                または欠損部位名が不正な場合
+                欠損部位名・戦術・狙う部位配分が不正な場合
         """
-        if update_data.weapons is not None and not update_data.weapons:
-            raise ValueError("weapons must have at least one weapon.")
+        if update_data.weapons is not None:
+            if not update_data.weapons:
+                raise ValueError("weapons must have at least one weapon.")
+            validate_weapon_aim_distributions(update_data.weapons)
         if update_data.missing_parts is not None:
             _validate_missing_parts(update_data.missing_parts)
+        if update_data.tactics is not None:
+            validate_tactics(update_data.tactics)
         if update_data.weapons is not None or update_data.weapon_slot_count is not None:
             validate_npc_weapons(
                 update_data.weapons

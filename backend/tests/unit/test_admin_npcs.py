@@ -802,3 +802,101 @@ def test_create_npc_mobile_suit_copies_weapon_slot_count(
     )
     assert response.status_code == status.HTTP_201_CREATED
     assert response.json()["weapon_slot_count"] == 3
+
+
+# ===================== 武装持ち替えポリシー・狙い部位配分 =====================
+
+CUSTOM_AIM = {
+    "HEAD": 0.3,
+    "TORSO": 0.3,
+    "RIGHT_ARM": 0.1,
+    "LEFT_ARM": 0.1,
+    "RIGHT_LEG": 0.1,
+    "LEFT_LEG": 0.1,
+}
+
+
+def test_update_npc_mobile_suit_saves_switch_policy_and_aim(
+    client_admin, npc_pilot_with_suit, session
+):
+    """武装持ち替えポリシーと狙い部位配分を保存できること."""
+    pilot, suit = npc_pilot_with_suit
+    tactics = {
+        "priority": "WEAKEST",
+        "range": "MELEE",
+        "weapon_switch_policy": "AGGRESSIVE",
+        "custom_key": "kept",
+    }
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={
+            "tactics": tactics,
+            "weapons": [_weapon_payload(aim_distribution=CUSTOM_AIM)],
+        },
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    session.refresh(suit)
+    assert suit.tactics == tactics
+    assert suit.weapons[0]["aim_distribution"] == CUSTOM_AIM
+
+
+def test_update_npc_mobile_suit_allows_aim_on_missing_parts(
+    client_admin, npc_pilot_with_suit
+):
+    """欠損部位に配分が残っていても保存できること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={
+            "missing_parts": ["HEAD"],
+            "weapons": [_weapon_payload(aim_distribution=CUSTOM_AIM)],
+        },
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.parametrize(
+    "tactics",
+    [
+        {"priority": "NEAREST", "range": "MELEE"},
+        {"priority": "CLOSEST", "range": "CLOSE"},
+        {"priority": "CLOSEST", "range": "MELEE", "weapon_switch_policy": "ALWAYS"},
+    ],
+)
+def test_update_npc_mobile_suit_rejects_invalid_tactics(
+    client_admin, npc_pilot_with_suit, tactics
+):
+    """戦術の値が許容値に無い更新は 422 になること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"tactics": tactics},
+    )
+    assert response.status_code == 422
+    assert "Invalid tactics" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "aim_distribution",
+    [
+        {**CUSTOM_AIM, "TAIL": 0.0},
+        {**CUSTOM_AIM, "HEAD": -0.1, "TORSO": 0.7},
+        {**CUSTOM_AIM, "HEAD": 0.5},
+    ],
+)
+def test_update_npc_mobile_suit_rejects_invalid_aim_distribution(
+    client_admin, npc_pilot_with_suit, aim_distribution
+):
+    """部位名・負値・合計が不正な配分の更新は 422 になること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"weapons": [_weapon_payload(aim_distribution=aim_distribution)]},
+    )
+    assert response.status_code == 422
+    assert "npc_beam_rifle" in response.json()["detail"]
