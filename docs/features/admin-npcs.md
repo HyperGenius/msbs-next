@@ -90,6 +90,7 @@ admin-tool から一覧・閲覧・編集できる管理画面。#171（NPC自�
 |---|---|
 | `max_hp` / `armor` / `mobility` / `sensor_range` / 耐性 / 適性・補正 / `missing_parts` | 機体マスターの `specs` からコピー |
 | `weapons` | 機体マスターの `specs.weapons`（既定値との差分で保存されていても `Weapon` として補完する） |
+| `weapon_slot_count` | 機体マスターの `weapon_slot_count`（Issue #543） |
 | `name` | `"{機体マスター名} (NPC)"`（マッチングで生成される NPC 機体の命名に合わせる） |
 | `current_hp` | `max_hp` と同じ |
 | `user_id` / `side` | NPC パイロットの `user_id` / `"ENEMY"` |
@@ -108,19 +109,24 @@ NPC の出撃機体（`active_mobile_suit_id`）が未設定の場合は、作�
 
 - 基本: `name` / `max_hp` / `armor` / `mobility` / `sensor_range` / `beam_resistance` / `physical_resistance` / `max_en` / `en_recovery`
 - 適性・補正: `melee_aptitude` / `shooting_aptitude` / `accuracy_bonus` / `evasion_bonus` / `acceleration_bonus` / `turning_bonus`
-- `tactics` / `missing_parts` / `weapons`
+- `tactics` / `missing_parts` / `weapons` / `weapon_slot_count`（Issue #543）
 
 プレイヤー向けの `MobileSuitUpdate` は流用しない。`MobileSuitUpdate` に武装などを足すと、プレイヤーが
 `PUT /api/mobile_suits/{ms_id}` で自機の武装を任意に書き換えられるようになるため。
 
 - `ms_id` が `pilot_id` の所有機体でない場合は `404` を返す（他NPC・プレイヤーの機体を誤って編集できないようにするため）
 - `weapons` を空にした場合、`missing_parts` に不正な部位名を含めた場合は `422`
+- 武装の本数が武器スロット数を超える場合、同じ武器 ID の武装が2本以上ある場合は `422`（Issue #543）。
+  `weapon_slot_count` だけを送った場合も、既存の武装の本数と比べる。
+  バトル中の弾数・クールダウン（`weapon_states`）は武器 ID をキーに持つため、同じ ID の武器は状態を共有してしまう。
+  ビームジェネレータLv の条件は NPC 機には適用しない。検証は `validate_npc_weapons()`（`mobile_suit_service.py`）
 - `max_hp` を変更すると `current_hp` も新しい `max_hp` に揃える（バトル投入時に全快されるため実害はないが、表示の不整合を避ける）
 - `max_hp` / `armor` / `missing_parts` のいずれかを変更すると `parts` を空にする（`normalize_parts()` が次回参照時に再生成する）
 - 更新ロジックは `MobileSuitService.update_npc_mobile_suit()`
 
 レスポンスの `NpcMobileSuitEntry` は、上記の編集対象項目すべてと `current_hp` / `personality` / `is_ace` /
 `ace_id` / `pilot_name` / `bounty_exp` / `bounty_credits` を返す。
+`weapon_slot_count` は `resolve_weapon_slot_count()` で解決した値を返す（未設定の機体は装備数と `MAX_WEAPON_SLOTS` の大きい方）。
 
 ### ステータスコード
 
@@ -168,6 +174,26 @@ NPCの所有機体は `MobileSuit.user_id == Pilot.user_id` で紐づく。エ�
 `user_id=None` の使い捨てレコードとして生成されるため、通常は管理画面のNPC一覧・詳細には現れない
 （`select_npcs_for_room()` で永続化NPCとして再利用されたエース以外）。
 
+#### 武器スロット数 `weapon_slot_count`（Issue #543）
+
+`mobile_suits.weapon_slot_count`（nullable int）で機体ごとに武器スロット数を持つ。
+NPC 機は機体名が `"{機体マスター名} (NPC)"` のため、プレイヤー機と同じ「機体名で機体マスターを引く」方法では解決できないため。
+
+スロット数は `resolve_weapon_slot_count()`（`models.py`）で次の順に解決する。
+`MobileSuitResponse.from_mobile_suit()` と `WeaponService` の装備時チェックもこの関数を使う。
+
+1. `mobile_suits.weapon_slot_count`
+2. 機体名で引いた機体マスターの `weapon_slot_count`
+3. `max(装備数, MAX_WEAPON_SLOTS)`
+
+| 機体 | `weapon_slot_count` |
+|---|---|
+| プレイヤー機 | NULL のまま（機体マスターから解決する。従来どおり） |
+| 既存の NPC 機（`side = 'ENEMY'`） | マイグレーション `g1b2c3d4e5f6` で `max(装備数, 2)` をバックフィル |
+| マッチングで新規生成する NPC 機 | `MAX_WEAPON_SLOTS`（武装は1〜2本） |
+| 機体マスターから追加した NPC 機 | 機体マスターの値 |
+| エース機 | 雛形（`ace_pilots.mobile_suit.weapon_slot_count`）の値。未設定なら `max(装備数, MAX_WEAPON_SLOTS)` |
+
 ### `app/services/pilot_service.py` に追加した管理者用メソッド
 
 - `PilotService.list_npc_pilots(session, personality, min_level, max_level, ace_only)` — 一覧取得（フィルタ対応）
@@ -200,7 +226,8 @@ admin-tool/src/
 │       ├── NpcEditForm.tsx            # ステータス編集フォーム + 所有機体一覧・機体追加
 │       ├── NpcMobileSuitEditForm.tsx  # NPC機体の編集フォーム（機体 / 武装タブ）
 │       ├── MobileSuitSpecFields.tsx   # エース機・NPC機で共通の機体スペック / 武装入力欄
-│       └── MasterMobileSuitSelect.tsx # 機体マスター選択プルダウン
+│       ├── MasterMobileSuitSelect.tsx # 機体マスター選択プルダウン
+│       └── MasterWeaponSelect.tsx     # 武器マスター選択プルダウン（Issue #543）
 └── hooks/
     └── useAdminNpcs.ts            # 一覧/詳細取得・更新フック（SWR）
 ```
@@ -226,10 +253,16 @@ admin-tool/src/
 ### NPC機体編集フォーム（`NpcMobileSuitEditForm`、Issue #540）
 
 - 「機体 / 武装」のタブに分割。バリデーションエラーを含むタブには `!` を表示し、保存時にエラーのある最初のタブへ切り替える
-- 機体タブ: スペック・戦術・欠損部位（エース用フォームと共通の `MobileSuitSpecSection`）と、NPC 機だけが持つ適性・補正
+- 機体タブ: スペック・武器スロット数・戦術・欠損部位（エース用フォームと共通の `MobileSuitSpecSection`）と、NPC 機だけが持つ適性・補正
 - 武装タブ: 武器の追加・削除・編集（エース用フォームと共通の `WeaponListSection`）
+  - 各武器の見出しは Garage と同じスロット名（右腕 / 左腕 / ラックN）で表示する（`weaponSlotLabel()`。Issue #543）
+  - 武器マスターをプルダウンで選んで「追加」すると、武器マスターの `id` / `name` / スペックをコピーして末尾に追加する。
+    同じ武器IDがすでにある場合は `{id}_2`、`{id}_3` … と接尾辞を付ける（`masterWeaponToWeapon()`。Issue #543）
+  - 武装の本数がスロット数に達すると「+ 追加」と武器マスターからの追加を無効にする
+  - 武装の本数がスロット数を超える場合（スロット数の欄）、武器IDが重複する場合（2本目以降の ID 欄）はフォームでエラーにする
+    （`refineWeaponSlots()`）
 - 武装フォームで扱わない項目（`weapon_type` / `cooldown_sec` / `fire_arc_deg` / `aim_distribution` 等）は、
-  同じ武器IDの既存値を引き継いで送信する（`mergeWeaponSources()`）
+  同じ武器IDの既存値・武器マスターから追加した武器の値を引き継いで送信する（`mergeWeaponSources()`）
 
 `MobileSuitSpecSection` / `WeaponListSection` は `useFormContext()` で親フォームを参照するため、
 `FormProvider` 配下に置き、機体スペックを `mobile_suit` キーの下に持つフォームで使う。
@@ -263,6 +296,8 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_admin_key_12345" pytho
 - 所有機体更新（Issue #540）: 武装・耐性・戦術・欠損部位を含む全項目の反映、`max_hp` 変更時の `current_hp`/`parts` 再計算、
   武装0件・不正な欠損部位の422、プレイヤー所有機の404
 - 機体追加（Issue #540）: 機体マスターのスペック・武装のコピー、NPC パイロットの性格・名前の反映、404（機体マスター / NPC が存在しない）
+- 武器スロット数（Issue #543）: 未設定機のフォールバック値、スロット数の更新、本数超過・スロット数だけの引き下げ・武器ID重複の422、
+  ビームジェネレータLv 条件を適用しないこと、機体マスターからの追加時のスロット数コピー
 - 出撃機体（Issue #542）: 所有機への切り替え、他パイロットの機体・存在しない機体の422、
   機体追加時に未設定なら追加機体が出撃機体になること・設定済みなら変わらないこと
 
@@ -279,6 +314,8 @@ npx vitest run tests/unit/npcMobileSuitEditFormValidation.test.ts
 
 `npcMobileSuitSchema` のバリデーション、`toNpcMobileSuitFormValues()`（戦術未設定の補完）、
 `toNpcMobileSuitPayload()`（フォーム外の武器項目の引き継ぎ）、`masterToSpecValues()`、`masterMobileSuitLabel()` を検証する。
+Issue #543 で、武器スロット数・武器ID重複のバリデーション、`uniqueWeaponId()`、`weaponSlotLabel()`、
+武器マスターから追加した武器のフォーム外項目の引き継ぎを追加した。
 
 ---
 
@@ -286,9 +323,10 @@ npx vitest run tests/unit/npcMobileSuitEditFormValidation.test.ts
 
 - `backend/app/routers/admin.py` — `npc_router`（NPC CRUD API）
 - `backend/app/services/pilot_service.py` — NPC管理者用メソッド・`get_ace_pilot_names()`
-- `backend/app/services/mobile_suit_service.py` — `update_npc_mobile_suit()` / `create_npc_mobile_suit_from_master()`
+- `backend/app/services/mobile_suit_service.py` — `update_npc_mobile_suit()` / `create_npc_mobile_suit_from_master()` / `validate_npc_weapons()`
 - `backend/app/core/npc_data.py` — `build_npc_tactics()`（性格に応じた戦術設定）
-- `backend/app/models/models.py` — `NpcPilotEntry` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuitEntry` / `NpcMobileSuitUpdate` / `NpcMobileSuitCreate`
+- `backend/alembic/versions/g1b2c3d4e5f6_add_weapon_slot_count_to_mobile_suits.py` — `mobile_suits.weapon_slot_count` の追加と NPC 機のバックフィル
+- `backend/app/models/models.py` — `resolve_weapon_slot_count()` / `NpcPilotEntry` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuitEntry` / `NpcMobileSuitUpdate` / `NpcMobileSuitCreate`
 - `backend/app/core/gamedata.py` — `get_ace_pilots()`（エース識別の名前一致元データ。`ace_pilots` テーブル）
 - `backend/main.py` — `app.include_router(admin.npc_router)`
 - `backend/tests/unit/test_admin_npcs.py` — NPC管理APIテスト
@@ -299,5 +337,6 @@ npx vitest run tests/unit/npcMobileSuitEditFormValidation.test.ts
 - `admin-tool/src/components/admin/NpcMobileSuitEditForm.tsx` — NPC機体編集フォーム
 - `admin-tool/src/components/admin/MobileSuitSpecFields.tsx` — 機体スペック / 武装の共通入力欄・変換ヘルパー
 - `admin-tool/src/components/admin/MasterMobileSuitSelect.tsx` — 機体マスター選択プルダウン
+- `admin-tool/src/components/admin/MasterWeaponSelect.tsx` — 武器マスター選択プルダウン
 - `admin-tool/src/types/admin.ts` — `NpcPilot` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuit` / `NpcMobileSuitUpdate` / `NpcMobileSuitCreate` 型定義
 - `admin-tool/src/app/page.tsx` — トップナビへのリンク追加

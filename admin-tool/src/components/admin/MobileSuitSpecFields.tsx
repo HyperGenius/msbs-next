@@ -1,11 +1,12 @@
 /* admin-tool/src/components/admin/MobileSuitSpecFields.tsx */
 "use client";
 
-import { Controller, useFieldArray, useFormContext } from "react-hook-form";
+import { Controller, useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { z } from "zod";
-import { MasterMobileSuit, NpcMobileSuit } from "@/types/admin";
+import { MasterMobileSuit, MasterWeapon, NpcMobileSuit } from "@/types/admin";
 import { Tactics, Weapon } from "@/types/weapon";
 import { weaponSchema } from "@/components/admin/MobileSuitEditForm";
+import MasterWeaponSelect from "@/components/admin/MasterWeaponSelect";
 
 // ============================================================
 // 定数
@@ -14,6 +15,8 @@ import { weaponSchema } from "@/components/admin/MobileSuitEditForm";
 export const TACTICS_PRIORITIES = ["CLOSEST", "WEAKEST", "RANDOM", "STRONGEST", "THREAT"] as const;
 export const TACTICS_RANGES = ["MELEE", "RANGED", "BALANCED", "FLEE"] as const;
 export const PART_NAMES = ["HEAD", "TORSO", "RIGHT_ARM", "LEFT_ARM", "RIGHT_LEG", "LEFT_LEG"] as const;
+/** スロット数が未設定の機体の既定値（backend の MAX_WEAPON_SLOTS と同じ） */
+export const DEFAULT_WEAPON_SLOT_COUNT = 2;
 
 // ============================================================
 // Zod バリデーションスキーマ
@@ -35,8 +38,34 @@ export const mobileSuitSpecSchema = z.object({
     range: z.enum(TACTICS_RANGES),
   }),
   missing_parts: z.array(z.enum(PART_NAMES)),
+  weapon_slot_count: z.number({ message: "Must be a number" }).int().min(1, "Must be ≥ 1"),
   weapons: z.array(weaponSchema).min(1, "At least one weapon is required"),
 });
+
+/**
+ * 武装の本数がスロット数以下で、武器IDが重複しないことを検証する。
+ * バトル中の弾数・クールダウンは武器IDをキーに持つため、同じIDの武器は状態を共有してしまう。
+ * mobileSuitSpecSchema を extend した後に superRefine で使う（refine 済みの schema は extend できないため）。
+ */
+export function refineWeaponSlots(
+  data: { weapon_slot_count: number; weapons: { id: string }[] },
+  ctx: z.RefinementCtx
+) {
+  if (data.weapons.length > data.weapon_slot_count) {
+    ctx.addIssue({
+      code: "custom",
+      message: `Number of weapons (${data.weapons.length}) exceeds weapon slot count (${data.weapon_slot_count})`,
+      path: ["weapon_slot_count"],
+    });
+  }
+  const seen = new Set<string>();
+  data.weapons.forEach((w, index) => {
+    if (seen.has(w.id)) {
+      ctx.addIssue({ code: "custom", message: "Duplicate weapon ID", path: ["weapons", index, "id"] });
+    }
+    seen.add(w.id);
+  });
+}
 
 export type MobileSuitSpecFormValues = z.infer<typeof mobileSuitSpecSchema>;
 export type WeaponFormValues = MobileSuitSpecFormValues["weapons"][number];
@@ -81,6 +110,27 @@ export function weaponToFormValues(w: Weapon): WeaponFormValues {
   };
 }
 
+/** スロット番号の表示名。Garage（frontend/src/app/garage/constants.ts の getWeaponSlotLabel）と同じ対応 */
+export function weaponSlotLabel(index: number): string {
+  if (index === 0) return "右腕";
+  if (index === 1) return "左腕";
+  return `ラック${index - 1}`;
+}
+
+/** 既存の武器IDと重ならないよう、必要なら `{id}_2`、`{id}_3` … と接尾辞を付ける */
+export function uniqueWeaponId(baseId: string, existingIds: string[]): string {
+  const used = new Set(existingIds);
+  if (!used.has(baseId)) return baseId;
+  let n = 2;
+  while (used.has(`${baseId}_${n}`)) n++;
+  return `${baseId}_${n}`;
+}
+
+/** 武器マスターを機体の武装に変換する。フォーム外の項目も含めてスペックをコピーする */
+export function masterWeaponToWeapon(master: MasterWeapon, existingIds: string[]): Weapon {
+  return { ...master.weapon, id: uniqueWeaponId(master.id, existingIds), name: master.name };
+}
+
 export function tacticsToFormValues(tactics: Partial<Tactics> | undefined): MobileSuitSpecFormValues["tactics"] {
   const priority = TACTICS_PRIORITIES.find((p) => p === tactics?.priority) ?? "CLOSEST";
   const range = TACTICS_RANGES.find((r) => r === tactics?.range) ?? "BALANCED";
@@ -121,6 +171,7 @@ export function masterToSpecValues(
     beam_resistance: specs.beam_resistance,
     physical_resistance: specs.physical_resistance,
     missing_parts: missingPartsToFormValues(specs.missing_parts),
+    weapon_slot_count: master.weapon_slot_count,
     weapons: specs.weapons.map(weaponToFormValues),
   };
 }
@@ -138,6 +189,7 @@ export function npcMobileSuitToSpecValues(ms: NpcMobileSuit): MobileSuitSpecForm
     en_recovery: ms.en_recovery,
     tactics: tacticsToFormValues(ms.tactics),
     missing_parts: missingPartsToFormValues(ms.missing_parts),
+    weapon_slot_count: ms.weapon_slot_count,
     weapons: ms.weapons.map(weaponToFormValues),
   };
 }
@@ -202,6 +254,7 @@ export function MobileSuitSpecSection({ namePlaceholder }: { namePlaceholder?: s
               ["mobile_suit.physical_resistance", "実弾耐性 (0-1)", "0.01", msErrors?.physical_resistance?.message],
               ["mobile_suit.max_en", "最大 EN", "1", msErrors?.max_en?.message],
               ["mobile_suit.en_recovery", "EN 回復量", "1", msErrors?.en_recovery?.message],
+              ["mobile_suit.weapon_slot_count", "武器スロット数", "1", msErrors?.weapon_slot_count?.message],
             ] as const
           ).map(([name, label, step, error]) => (
             <div key={name}>
@@ -269,37 +322,67 @@ export function MobileSuitSpecSection({ namePlaceholder }: { namePlaceholder?: s
   );
 }
 
-/** 武装リストの入力欄。idPrefix は同一ページ内でチェックボックスの id を重複させないために使う。 */
-export function WeaponListSection({ idPrefix }: { idPrefix: string }) {
+interface WeaponListSectionProps {
+  /** 同一ページ内でチェックボックスの id を重複させないために使う */
+  idPrefix: string;
+  /** 武器マスターから追加した武器。送信時に mergeWeaponSources() の取り込み元に加える */
+  onImportWeapon: (weapon: Weapon) => void;
+}
+
+/** 武装リストの入力欄 */
+export function WeaponListSection({ idPrefix, onImportWeapon }: WeaponListSectionProps) {
   "use no memo";
   const {
     register,
     control,
+    getValues,
     formState: { errors },
   } = useFormContext<SpecFormHost>();
   const weaponArray = useFieldArray({ control, name: "mobile_suit.weapons" });
   const weaponErrors = errors.mobile_suit?.weapons;
+  const slotCount = useWatch({ control, name: "mobile_suit.weapon_slot_count" });
+  const isFull = Number.isFinite(slotCount) && weaponArray.fields.length >= slotCount;
+
+  function handleImportWeapon(master: MasterWeapon) {
+    const existingIds = getValues("mobile_suit.weapons").map((w) => w.id);
+    const weapon = masterWeaponToWeapon(master, existingIds);
+    weaponArray.append(weaponToFormValues(weapon));
+    onImportWeapon(weapon);
+  }
 
   return (
     <>
       <div className="flex items-center justify-between mb-2">
-        <p className={`${sectionTitle} flex-1`}>武装</p>
+        <p className={`${sectionTitle} flex-1`}>
+          武装 ({weaponArray.fields.length} / {Number.isFinite(slotCount) ? slotCount : "-"})
+        </p>
         <button
           type="button"
+          disabled={isFull}
           onClick={() => weaponArray.append({ ...defaultWeapon })}
-          className="text-xs text-[#00ff41] border border-[#00ff41]/40 px-2 py-0.5 hover:border-[#00ff41] ml-4"
+          className="text-xs text-[#00ff41] border border-[#00ff41]/40 px-2 py-0.5 hover:border-[#00ff41] ml-4 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           + 追加
         </button>
       </div>
-      {weaponErrors?.message && <p className="text-xs text-red-400 mb-2">{weaponErrors.message}</p>}
+      <div className="mb-3">
+        <MasterWeaponSelect buttonLabel="追加" onApply={handleImportWeapon} disabled={isFull} />
+        <p className="mt-1 text-xs text-[#00ff41]/40">
+          {isFull
+            ? "※ 武器スロットが埋まっています。機体タブでスロット数を増やすと追加できます"
+            : "※ 武器マスターのスペックをコピーして末尾に追加します。同じ武器IDがある場合は接尾辞を付けます"}
+        </p>
+      </div>
+      {(weaponErrors?.message || weaponErrors?.root?.message) && (
+        <p className="text-xs text-red-400 mb-2">{weaponErrors.message ?? weaponErrors.root?.message}</p>
+      )}
       <div className="space-y-4">
         {weaponArray.fields.map((field, index) => {
           const wErrors = weaponErrors?.[index];
           return (
             <div key={field.id} className="border border-[#00ff41]/20 p-3 bg-[#080808]">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs text-[#ffb000]/60">武器 #{index + 1}</span>
+                <span className="text-xs text-[#ffb000]/60">{weaponSlotLabel(index)}</span>
                 {weaponArray.fields.length > 1 && (
                   <button
                     type="button"

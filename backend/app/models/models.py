@@ -276,6 +276,14 @@ class MobileSuit(SQLModel, table=True):
     )
 
     active_weapon_index: int = Field(default=0)
+    weapon_slot_count: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "武器スロット数。NULL の場合は機体名で引いた機体マスターの値を使う"
+            "（プレイヤー機は NULL。NPC 機・エース機は機体ごとに保持する。Issue #543）"
+        ),
+    )
 
     # Part-based HP/Armor (Issue #503, Phase 2 of #501)
     missing_parts: list[str] = Field(
@@ -353,6 +361,27 @@ class MobileSuit(SQLModel, table=True):
         return None
 
 
+def resolve_weapon_slot_count(
+    ms: "MobileSuit", master_weapon_slot_count: int | None = None
+) -> int:
+    """機体の武器スロット数を解決する.
+
+    機体自身の値 → 機体マスターの値 → 装備数と MAX_WEAPON_SLOTS の大きい方、の順に使う。
+
+    Args:
+        ms: 対象の機体
+        master_weapon_slot_count: 機体名で引いた機体マスターの武器スロット数。
+            引けなかった場合は None
+    """
+    from app.engine.constants import MAX_WEAPON_SLOTS
+
+    if ms.weapon_slot_count is not None:
+        return ms.weapon_slot_count
+    if master_weapon_slot_count is not None:
+        return master_weapon_slot_count
+    return max(len(ms.weapons or []), MAX_WEAPON_SLOTS)
+
+
 class MobileSuitUpdate(SQLModel):
     """機体更新用データモデル (Request Body)."""
 
@@ -426,7 +455,7 @@ class MobileSuitResponse(SQLModel):
     armor_rank: str = "C"
     mobility_rank: str = "C"
 
-    # マスター機体由来の武器スロット数 (Issue #392)
+    # 武器スロット数 (Issue #392, #543)。解決順は resolve_weapon_slot_count() を参照
     weapon_slot_count: int = 1
     # マスター機体由来のビームジェネレータLv (Issue #392)
     beam_generator_lv: int = 0
@@ -444,18 +473,13 @@ class MobileSuitResponse(SQLModel):
             ms: 変換元の機体データ
             weapon_slot_count: マスター機体から引いた武器スロット数。
                 呼び出し側で解決できない場合は None を渡す
-                （既存の装備数と MAX_WEAPON_SLOTS の大きい方に後方互換的にフォールバックする）。
+                （解決順は resolve_weapon_slot_count() を参照）。
             beam_generator_lv: マスター機体から引いたビームジェネレータLv。
                 呼び出し側で解決できない場合は None を渡す（0 にフォールバックする）。
         """
         from app.core.rank_utils import get_rank
-        from app.engine.constants import MAX_WEAPON_SLOTS
 
-        resolved_weapon_slot_count = (
-            weapon_slot_count
-            if weapon_slot_count is not None
-            else max(len(ms.weapons), MAX_WEAPON_SLOTS)
-        )
+        resolved_weapon_slot_count = resolve_weapon_slot_count(ms, weapon_slot_count)
         resolved_beam_generator_lv = (
             beam_generator_lv if beam_generator_lv is not None else 0
         )
@@ -801,6 +825,11 @@ class AcePilotMobileSuitSpec(SQLModel):
     physical_resistance: float = Field(default=0.0, ge=0, le=1)
     max_en: int = Field(default=1000, ge=0)
     en_recovery: int = Field(default=100, ge=0)
+    weapon_slot_count: int | None = Field(
+        default=None,
+        ge=1,
+        description="武器スロット数。未設定の場合は装備数と MAX_WEAPON_SLOTS の大きい方",
+    )
     weapons: list[Weapon]
     tactics: dict = Field(
         default_factory=lambda: {"priority": "CLOSEST", "range": "BALANCED"},
@@ -1267,6 +1296,7 @@ class NpcMobileSuitEntry(SQLModel):
     tactics: dict = Field(default_factory=dict)
     missing_parts: list[str] = Field(default_factory=list)
     weapons: list[Weapon] = Field(default_factory=list)
+    weapon_slot_count: int = 1
     personality: str | None = None
     is_ace: bool = False
     ace_id: str | None = None
@@ -1300,6 +1330,7 @@ class NpcMobileSuitUpdate(SQLModel):
     tactics: dict | None = None
     missing_parts: list[str] | None = None
     weapons: list[Weapon] | None = None
+    weapon_slot_count: int | None = Field(default=None, ge=1)
 
 
 class NpcMobileSuitCreate(SQLModel):

@@ -275,3 +275,54 @@ def test_npc_ace_flag_follows_master(client_admin, session):
     assert is_ace() is False
     client_admin.post(ENDPOINT, json=SAMPLE_ACE, headers=HEADERS)
     assert is_ace() is True
+
+
+# ===================== 武器スロット数 (Issue #543) =====================
+
+
+def _ace_with_weapons(weapon_ids: list[str], weapon_slot_count: int | None) -> dict:
+    payload = copy.deepcopy(SAMPLE_ACE)
+    base_weapon = payload["mobile_suit"]["weapons"][0]
+    payload["mobile_suit"]["weapons"] = [{**base_weapon, "id": w} for w in weapon_ids]
+    payload["mobile_suit"]["weapon_slot_count"] = weapon_slot_count
+    return payload
+
+
+def test_create_ace_rejects_weapons_over_slot_count(client_admin):
+    """武装の本数がスロット数を超えるエースは 422 になること."""
+    payload = _ace_with_weapons(["w1", "w2"], weapon_slot_count=1)
+    response = client_admin.post(ENDPOINT, json=payload, headers=HEADERS)
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def test_create_ace_rejects_duplicate_weapon_ids(client_admin):
+    """同じ武器 ID を2本持つエースは 422 になること."""
+    payload = _ace_with_weapons(["w1", "w1"], weapon_slot_count=2)
+    response = client_admin.post(ENDPOINT, json=payload, headers=HEADERS)
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def _spawn_only_ace(client_admin, session, payload: dict) -> MobileSuit:
+    session.exec(delete(AcePilot))
+    session.commit()
+    assert (
+        client_admin.post(ENDPOINT, json=payload, headers=HEADERS).status_code
+        == status.HTTP_201_CREATED
+    )
+    ace = MatchingService(session)._create_ace_pilot()
+    assert ace is not None
+    return ace
+
+
+def test_matching_copies_ace_weapon_slot_count(client_admin, session):
+    """マッチングで生成するエース機に雛形のスロット数をコピーすること."""
+    payload = _ace_with_weapons(["w1", "w2", "w3"], weapon_slot_count=4)
+    ace = _spawn_only_ace(client_admin, session, payload)
+    assert ace.weapon_slot_count == 4
+
+
+def test_matching_falls_back_ace_weapon_slot_count(client_admin, session):
+    """スロット数が未設定の雛形は装備数と MAX_WEAPON_SLOTS の大きい方になること."""
+    payload = _ace_with_weapons(["w1", "w2", "w3"], weapon_slot_count=None)
+    ace = _spawn_only_ace(client_admin, session, payload)
+    assert ace.weapon_slot_count == 3

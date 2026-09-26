@@ -650,3 +650,115 @@ def test_create_npc_mobile_suit_keeps_existing_active(
     assert response.status_code == status.HTTP_201_CREATED
     session.refresh(pilot)
     assert pilot.active_mobile_suit_id == suit.id
+
+
+# ===================== 武器スロット数テスト (Issue #543) =====================
+
+
+def test_npc_detail_resolves_weapon_slot_count_fallback(
+    client_admin, npc_pilot_with_suit
+):
+    """スロット数が未設定の NPC 機は装備数と MAX_WEAPON_SLOTS の大きい方を返すこと."""
+    pilot, _suit = npc_pilot_with_suit
+    response = client_admin.get(f"/api/admin/npcs/{pilot.id}", headers=HEADERS)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["mobile_suits"][0]["weapon_slot_count"] == 2
+
+
+def test_update_npc_mobile_suit_weapon_slot_count(
+    client_admin, npc_pilot_with_suit, session
+):
+    """スロット数を更新でき、その本数まで武装を登録できること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={
+            "weapon_slot_count": 3,
+            "weapons": [_weapon_payload(f"w{i}") for i in range(3)],
+        },
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["weapon_slot_count"] == 3
+
+    session.refresh(suit)
+    assert suit.weapon_slot_count == 3
+    assert len(suit.weapons) == 3
+
+
+def test_update_npc_mobile_suit_rejects_weapons_over_slot_count(
+    client_admin, npc_pilot_with_suit
+):
+    """武装の本数がスロット数を超える更新は 422 になること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={
+            "weapon_slot_count": 1,
+            "weapons": [_weapon_payload("w1"), _weapon_payload("w2")],
+        },
+    )
+    assert response.status_code == 422
+    assert "weapon_slot_count" in response.json()["detail"]
+
+
+def test_update_npc_mobile_suit_rejects_slot_count_below_current_weapons(
+    client_admin, npc_pilot_with_suit, session
+):
+    """スロット数だけを既存の装備数より少なくする更新は 422 になること."""
+    pilot, suit = npc_pilot_with_suit
+    suit.weapons = [_weapon_payload("w1"), _weapon_payload("w2")]
+    session.add(suit)
+    session.commit()
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"weapon_slot_count": 1},
+    )
+    assert response.status_code == 422
+
+
+def test_update_npc_mobile_suit_rejects_duplicate_weapon_ids(
+    client_admin, npc_pilot_with_suit
+):
+    """同じ武器 ID を2本持たせる更新は 422 になること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"weapons": [_weapon_payload("w1"), _weapon_payload("w1")]},
+    )
+    assert response.status_code == 422
+    assert "Duplicate weapon ids" in response.json()["detail"]
+
+
+def test_update_npc_mobile_suit_ignores_beam_generator_lv(
+    client_admin, npc_pilot_with_suit
+):
+    """ビームジェネレータLv の条件は NPC 機には適用しないこと."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"weapons": [_weapon_payload(required_beam_generator_lv=5)]},
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+
+def test_create_npc_mobile_suit_copies_weapon_slot_count(
+    client_admin, npc_pilot, master_suit, session
+):
+    """機体マスターから追加した NPC 機は機体マスターのスロット数を持つこと."""
+    master_suit.weapon_slot_count = 3
+    session.add(master_suit)
+    session.commit()
+
+    response = client_admin.post(
+        f"/api/admin/npcs/{npc_pilot.id}/mobile-suits",
+        headers=HEADERS,
+        json={"master_mobile_suit_id": "test_dom"},
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["weapon_slot_count"] == 3

@@ -5,9 +5,15 @@ import {
   toNpcMobileSuitFormValues,
   toNpcMobileSuitPayload,
 } from "@/components/admin/NpcMobileSuitEditForm";
-import { masterToSpecValues } from "@/components/admin/MobileSuitSpecFields";
+import {
+  masterToSpecValues,
+  masterWeaponToWeapon,
+  uniqueWeaponId,
+  weaponSlotLabel,
+  weaponToFormValues,
+} from "@/components/admin/MobileSuitSpecFields";
 import { masterMobileSuitLabel } from "@/components/admin/MasterMobileSuitSelect";
-import { MasterMobileSuit, NpcMobileSuit } from "@/types/admin";
+import { MasterMobileSuit, MasterWeapon, NpcMobileSuit } from "@/types/admin";
 
 // ============================================================
 // テストデータ
@@ -45,6 +51,7 @@ const npcSuit: NpcMobileSuit = {
       fire_arc_deg: 360,
     },
   ],
+  weapon_slot_count: 2,
   personality: "AGGRESSIVE",
   is_ace: false,
   ace_id: null,
@@ -145,6 +152,7 @@ describe("masterToSpecValues", () => {
     expect(next.max_hp).toBe(1100);
     expect(next.missing_parts).toEqual(["HEAD"]);
     expect(next.weapons.map((w) => w.id)).toEqual(["beam_rifle"]);
+    expect(next.weapon_slot_count).toBe(2);
     expect(next.max_en).toBe(current.max_en);
     expect(next.tactics).toEqual(current.tactics);
   });
@@ -157,5 +165,98 @@ describe("masterMobileSuitLabel", () => {
 
   it("日本語名が無ければ英語名を表示する", () => {
     expect(masterMobileSuitLabel({ ...master, name_ja: "" })).toBe("Gelgoog");
+  });
+});
+
+// ============================================================
+// 武器スロット数・武器マスターからの追加 (Issue #543)
+// ============================================================
+
+const masterWeapon: MasterWeapon = {
+  id: "zaku_mg",
+  name: "Zaku Machine Gun",
+  price: 500,
+  description: "",
+  flavor_text: null,
+  weapon: {
+    power: 120,
+    range: 400,
+    accuracy: 70,
+    type: "PHYSICAL",
+    weapon_type: "RANGED",
+    cooldown_sec: 0.5,
+    fire_arc_deg: 45,
+    max_ammo: 60,
+  },
+};
+
+describe("npcMobileSuitSchema (武器スロット数)", () => {
+  it("武装の本数がスロット数を超える場合はエラー", () => {
+    const values = toNpcMobileSuitFormValues({ ...npcSuit, weapon_slot_count: 1 });
+    values.mobile_suit.weapons.push({ ...values.mobile_suit.weapons[0], id: "heat_hawk" });
+    const result = npcMobileSuitSchema.safeParse(values);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["mobile_suit", "weapon_slot_count"]);
+  });
+
+  it("武装の本数がスロット数と同じなら通過する", () => {
+    const values = toNpcMobileSuitFormValues(npcSuit);
+    values.mobile_suit.weapons.push({ ...values.mobile_suit.weapons[0], id: "heat_hawk" });
+    expect(npcMobileSuitSchema.safeParse(values).success).toBe(true);
+  });
+
+  it("同じ武器IDが2本ある場合はエラー", () => {
+    const values = toNpcMobileSuitFormValues(npcSuit);
+    values.mobile_suit.weapons.push({ ...values.mobile_suit.weapons[0] });
+    expect(npcMobileSuitSchema.safeParse(values).success).toBe(false);
+  });
+
+  it("ビームジェネレータLv の条件は適用しない", () => {
+    const values = toNpcMobileSuitFormValues(npcSuit);
+    values.mobile_suit.weapons[0] = { ...values.mobile_suit.weapons[0], type: "BEAM", required_beam_generator_lv: 5 };
+    expect(npcMobileSuitSchema.safeParse(values).success).toBe(true);
+  });
+
+  it("スロット数を送る", () => {
+    const values = toNpcMobileSuitFormValues(npcSuit);
+    values.mobile_suit.weapon_slot_count = 4;
+    expect(toNpcMobileSuitPayload(values, npcSuit).weapon_slot_count).toBe(4);
+  });
+});
+
+describe("uniqueWeaponId", () => {
+  it("重複しなければそのまま返す", () => {
+    expect(uniqueWeaponId("zaku_mg", ["heat_hawk"])).toBe("zaku_mg");
+  });
+
+  it("重複する場合は _2, _3 … と接尾辞を付ける", () => {
+    expect(uniqueWeaponId("zaku_mg", ["zaku_mg"])).toBe("zaku_mg_2");
+    expect(uniqueWeaponId("zaku_mg", ["zaku_mg", "zaku_mg_2"])).toBe("zaku_mg_3");
+  });
+});
+
+describe("weaponSlotLabel", () => {
+  it("Garage と同じく右腕・左腕・ラックN で表示する", () => {
+    expect([0, 1, 2, 3].map(weaponSlotLabel)).toEqual(["右腕", "左腕", "ラック1", "ラック2"]);
+  });
+});
+
+describe("武器マスターからの追加", () => {
+  it("武器マスターの id / name / スペックをコピーする", () => {
+    const weapon = masterWeaponToWeapon(masterWeapon, ["npc_weapon_abcd1234"]);
+    expect(weapon).toMatchObject({ id: "zaku_mg", name: "Zaku Machine Gun", power: 120, cooldown_sec: 0.5 });
+  });
+
+  it("フォーム外の項目（cooldown_sec 等）は武器マスターの値で送信する", () => {
+    const imported = masterWeaponToWeapon(masterWeapon, ["zaku_mg"]);
+    const values = toNpcMobileSuitFormValues(npcSuit);
+    values.mobile_suit.weapons.push(weaponToFormValues(imported));
+    const payload = toNpcMobileSuitPayload(values, npcSuit, [imported]);
+    const sent = payload.weapons![1];
+    expect(sent.id).toBe("zaku_mg_2");
+    expect(sent.weapon_type).toBe("RANGED");
+    expect(sent.cooldown_sec).toBe(0.5);
+    expect(sent.fire_arc_deg).toBe(45);
+    expect(sent.max_ammo).toBe(60);
   });
 });

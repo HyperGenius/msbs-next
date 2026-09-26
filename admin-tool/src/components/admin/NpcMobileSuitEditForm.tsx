@@ -6,6 +6,7 @@ import { FieldErrors, FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { NpcMobileSuit, NpcMobileSuitUpdate } from "@/types/admin";
+import { Weapon } from "@/types/weapon";
 import {
   FieldError,
   Input,
@@ -15,6 +16,7 @@ import {
   mergeWeaponSources,
   mobileSuitSpecSchema,
   npcMobileSuitToSpecValues,
+  refineWeaponSlots,
   sectionTitle,
 } from "@/components/admin/MobileSuitSpecFields";
 
@@ -23,14 +25,16 @@ import {
 // ============================================================
 
 export const npcMobileSuitSchema = z.object({
-  mobile_suit: mobileSuitSpecSchema.extend({
-    melee_aptitude: z.number({ message: "Must be a number" }).positive("Must be > 0"),
-    shooting_aptitude: z.number({ message: "Must be a number" }).positive("Must be > 0"),
-    accuracy_bonus: z.number({ message: "Must be a number" }),
-    evasion_bonus: z.number({ message: "Must be a number" }),
-    acceleration_bonus: z.number({ message: "Must be a number" }).positive("Must be > 0"),
-    turning_bonus: z.number({ message: "Must be a number" }).positive("Must be > 0"),
-  }),
+  mobile_suit: mobileSuitSpecSchema
+    .extend({
+      melee_aptitude: z.number({ message: "Must be a number" }).positive("Must be > 0"),
+      shooting_aptitude: z.number({ message: "Must be a number" }).positive("Must be > 0"),
+      accuracy_bonus: z.number({ message: "Must be a number" }),
+      evasion_bonus: z.number({ message: "Must be a number" }),
+      acceleration_bonus: z.number({ message: "Must be a number" }).positive("Must be > 0"),
+      turning_bonus: z.number({ message: "Must be a number" }).positive("Must be > 0"),
+    })
+    .superRefine(refineWeaponSlots),
 });
 
 export type NpcMobileSuitFormValues = z.infer<typeof npcMobileSuitSchema>;
@@ -53,10 +57,18 @@ export function toNpcMobileSuitFormValues(ms: NpcMobileSuit): NpcMobileSuitFormV
   };
 }
 
-export function toNpcMobileSuitPayload(values: NpcMobileSuitFormValues, original: NpcMobileSuit): NpcMobileSuitUpdate {
+/**
+ * フォーム値を API リクエストに変換する。
+ * 武装の取り込み元は既存機体の武装と、武器マスターから追加した武装の2つ。
+ */
+export function toNpcMobileSuitPayload(
+  values: NpcMobileSuitFormValues,
+  original: NpcMobileSuit,
+  importedWeapons: Weapon[] = []
+): NpcMobileSuitUpdate {
   return {
     ...values.mobile_suit,
-    weapons: mergeWeaponSources(values.mobile_suit.weapons, original.weapons),
+    weapons: mergeWeaponSources(values.mobile_suit.weapons, [...original.weapons, ...importedWeapons]),
   };
 }
 
@@ -96,6 +108,13 @@ interface NpcMobileSuitEditFormProps {
 export default function NpcMobileSuitEditForm({ mobileSuit, onSubmit, onClose }: NpcMobileSuitEditFormProps) {
   "use no memo";
   const [tab, setTab] = useState<Tab>("mobile_suit");
+  // 追加した武装は、追加した時点の編集対象に紐付ける。
+  // mobileSuit が変わったら（保存後の再取得など）空として扱い、次の保存に混ぜない。
+  const [imported, setImported] = useState<{ source: NpcMobileSuit; weapons: Weapon[] }>({
+    source: mobileSuit,
+    weapons: [],
+  });
+  const importedWeapons = imported.source === mobileSuit ? imported.weapons : [];
   const methods = useForm<NpcMobileSuitFormValues>({
     resolver: zodResolver(npcMobileSuitSchema),
     defaultValues: toNpcMobileSuitFormValues(mobileSuit),
@@ -117,7 +136,7 @@ export default function NpcMobileSuitEditForm({ mobileSuit, onSubmit, onClose }:
   }
 
   async function submit(values: NpcMobileSuitFormValues) {
-    await onSubmit(mobileSuit.id, toNpcMobileSuitPayload(values, mobileSuit));
+    await onSubmit(mobileSuit.id, toNpcMobileSuitPayload(values, mobileSuit, importedWeapons));
   }
 
   return (
@@ -159,7 +178,12 @@ export default function NpcMobileSuitEditForm({ mobileSuit, onSubmit, onClose }:
         </div>
 
         <div className={tab === "weapons" ? "" : "hidden"}>
-          <WeaponListSection idPrefix={`npc_${mobileSuit.id}`} />
+          <WeaponListSection
+            idPrefix={`npc_${mobileSuit.id}`}
+            onImportWeapon={(weapon) =>
+              setImported({ source: mobileSuit, weapons: [...importedWeapons, weapon] })
+            }
+          />
         </div>
 
         <div className="flex gap-3">

@@ -9,6 +9,7 @@ import { AcePilot, AcePilotCreate, MasterMobileSuit } from "@/types/admin";
 import { Weapon } from "@/types/weapon";
 import MasterMobileSuitSelect from "@/components/admin/MasterMobileSuitSelect";
 import {
+  DEFAULT_WEAPON_SLOT_COUNT,
   FieldError,
   Input,
   Label,
@@ -20,6 +21,7 @@ import {
   mergeWeaponSources,
   missingPartsToFormValues,
   mobileSuitSpecSchema,
+  refineWeaponSlots,
   sectionTitle,
   tacticsToFormValues,
   weaponToFormValues,
@@ -81,7 +83,7 @@ export const acePilotSchema = z
         level: z.number({ message: "Must be a number" }).int().nonnegative("Must be ≥ 0"),
       })
     ),
-    mobile_suit: mobileSuitSpecSchema,
+    mobile_suit: mobileSuitSpecSchema.superRefine(refineWeaponSlots),
   })
   .superRefine((data, ctx) => {
     const seen = new Set<string>();
@@ -129,6 +131,7 @@ const defaultValues: AcePilotFormValues = {
     en_recovery: 150,
     tactics: { priority: "CLOSEST", range: "BALANCED" },
     missing_parts: [],
+    weapon_slot_count: DEFAULT_WEAPON_SLOT_COUNT,
     weapons: [{ ...defaultWeapon }],
   },
 };
@@ -157,6 +160,8 @@ function toFormValues(ace: AcePilot): AcePilotFormValues {
       en_recovery: ms.en_recovery,
       tactics: tacticsToFormValues(ms.tactics),
       missing_parts: missingPartsToFormValues(ms.missing_parts),
+      // 未設定の雛形はマッチング時と同じく装備数と既定値の大きい方を表示する
+      weapon_slot_count: ms.weapon_slot_count ?? Math.max(ms.weapons.length, DEFAULT_WEAPON_SLOT_COUNT),
       weapons: ms.weapons.map(weaponToFormValues),
     },
   };
@@ -164,7 +169,7 @@ function toFormValues(ace: AcePilot): AcePilotFormValues {
 
 /**
  * フォーム値を API リクエストに変換する。
- * 武装の取り込み元は既存エースの武装と、機体マスターから取り込んだ武装の2つ。
+ * 武装の取り込み元は既存エースの武装と、機体マスター・武器マスターから取り込んだ武装。
  */
 export function toAcePilotPayload(
   values: AcePilotFormValues,
@@ -220,7 +225,7 @@ interface AcePilotEditFormProps {
   initialData: AcePilot | null;
   /** idフィールドを編集不可にする（既存エースの更新時） */
   lockId?: boolean;
-  /** importedWeapons は機体マスターから取り込んだ武装。toAcePilotPayload に渡す。 */
+  /** importedWeapons は機体マスター・武器マスターから取り込んだ武装。toAcePilotPayload に渡す。 */
   onSubmit: (values: AcePilotFormValues, importedWeapons: Weapon[]) => Promise<void>;
   onCancel: () => void;
   isSubmitting?: boolean;
@@ -364,7 +369,7 @@ export default function AcePilotEditForm({
             <p className={sectionTitle}>機体マスターから取り込み</p>
             <MasterMobileSuitSelect buttonLabel="取り込み" onApply={handleImportMaster} />
             <p className="mt-1 text-xs text-[#00ff41]/40">
-              ※ 機体名・スペック・欠損部位・武装を上書きします。EN と戦術は機体マスターに無いため現在の値を残します
+              ※ 機体名・スペック・欠損部位・武器スロット数・武装を上書きします。EN と戦術は機体マスターに無いため現在の値を残します
             </p>
           </div>
           <MobileSuitSpecSection namePlaceholder="High Mobility Zaku II (Red)" />
@@ -372,7 +377,12 @@ export default function AcePilotEditForm({
 
         {/* 武装 */}
         <div className={tab === "weapons" ? "" : "hidden"}>
-          <WeaponListSection idPrefix="ace" />
+          <WeaponListSection
+            idPrefix="ace"
+            onImportWeapon={(weapon) =>
+              setImported({ source: initialData, weapons: [...importedWeapons, weapon] })
+            }
+          />
         </div>
 
         {/* パイロット */}
