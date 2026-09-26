@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAdminDropTable } from "@/hooks/useAdminDropTable";
 import DropTableForm from "@/components/admin/DropTableForm";
@@ -16,10 +16,19 @@ export default function AdminDropTablesPage() {
   const { dropTable, isLoading, isError, saveDropTable } = useAdminDropTable();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   function showToast(message: string, type: "success" | "error") {
+    // 連続して保存したとき、前のトーストのタイマーで新しいトーストが消えないようにする。
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
   }
 
   async function handleSubmit(values: DropTableFormValues) {
