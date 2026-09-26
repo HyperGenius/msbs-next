@@ -1224,6 +1224,15 @@ class Pilot(SQLModel, table=True):
         sa_column=Column(JSON),
         description="所持武器インベントリ（武器ID: 所持数）",
     )
+    active_mobile_suit_id: uuid.UUID | None = Field(
+        default=None,
+        foreign_key="mobile_suits.id",
+        ondelete="SET NULL",
+        description=(
+            "NPC の出撃機体ID。プレイヤーは battle_entries.mobile_suit_id で"
+            "出撃機体を指定するため NULL のまま"
+        ),
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )
@@ -1320,6 +1329,7 @@ class NpcPilotEntry(SQLModel):
     luk: int
     awq: int
     mobile_suit_count: int = 0
+    active_mobile_suit_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -1346,6 +1356,7 @@ class NpcPilotUpdate(SQLModel):
     tou: int | None = Field(default=None, ge=0)
     luk: int | None = Field(default=None, ge=0)
     awq: int | None = Field(default=None, ge=0)
+    active_mobile_suit_id: uuid.UUID | None = None
 
 
 class Season(SQLModel, table=True):

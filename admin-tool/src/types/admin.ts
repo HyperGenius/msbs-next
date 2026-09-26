@@ -190,6 +190,8 @@ export interface NpcPilot {
     luk: number;
     awq: number;
     mobile_suit_count: number;
+    /** 出撃機体ID（未設定なら次回マッチング時に所有機から1機が選ばれて保存される） */
+    active_mobile_suit_id: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -214,6 +216,8 @@ export interface NpcPilotUpdate {
     tou?: number;
     luk?: number;
     awq?: number;
+    /** そのパイロットの所有機でない ID は 422 になる */
+    active_mobile_suit_id?: string;
 }
 
 /** NPC所有機体の部分更新リクエスト */

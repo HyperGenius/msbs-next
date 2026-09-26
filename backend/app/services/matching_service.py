@@ -233,6 +233,11 @@ class MatchingService:
         if new_npcs:
             self.session.flush()
 
+        # pilots.active_mobile_suit_id も relationship() がなく INSERT 順序が保証されないため、
+        # 機体の INSERT 後に設定する（次回 flush で UPDATE される）
+        for npc_suit, npc_pilot in new_npcs:
+            npc_pilot.active_mobile_suit_id = npc_suit.id
+
         new_entries: list[BattleEntry] = []
         for npc_suit, npc_pilot in new_npcs:
             _coerce_suit_json_fields(npc_suit)
@@ -253,6 +258,10 @@ class MatchingService:
 
     def select_npcs_for_room(self, count: int) -> list[tuple[MobileSuit, Pilot]]:
         """DBから既存の永続化NPCをランダムに選択する.
+
+        各NPCは `Pilot.active_mobile_suit_id` の機体で出撃する。未設定または
+        所有機（side='ENEMY'）を指していない場合は所有機から1機を選んで保存する。
+        所有機が0機のNPCは選ばれない。
 
         Args:
             count: 取得するNPC数
@@ -282,17 +291,26 @@ class MatchingService:
         )
         suits = list(self.session.exec(suit_statement).all())
 
-        # user_id ごとに最初の1体を対応付ける（従来の .first() と同じ選定結果）
-        suit_by_user_id: dict[str | None, MobileSuit] = {}
+        suits_by_user_id: dict[str | None, list[MobileSuit]] = {}
         for suit in suits:
-            if suit.user_id not in suit_by_user_id:
-                suit_by_user_id[suit.user_id] = suit
+            suits_by_user_id.setdefault(suit.user_id, []).append(suit)
 
         result: list[tuple[MobileSuit, Pilot]] = []
         for pilot in selected_pilots:
-            found_suit = suit_by_user_id.get(pilot.user_id)
-            if found_suit:
-                result.append((found_suit, pilot))
+            owned_suits = suits_by_user_id.get(pilot.user_id)
+            if not owned_suits:
+                continue
+            active_suit = next(
+                (s for s in owned_suits if s.id == pilot.active_mobile_suit_id), None
+            )
+            if active_suit is None:
+                # 出撃機体が未設定・無効な場合は所有機から1機を選んで固定する（Issue #542）。
+                # 保存しておかないと ORDER BY なしの取得順に依存して出撃機体が毎回変わりうる
+                active_suit = owned_suits[0]
+                pilot.active_mobile_suit_id = active_suit.id
+                pilot.updated_at = datetime.now(UTC)
+                self.session.add(pilot)
+            result.append((active_suit, pilot))
 
         return result
 

@@ -327,6 +327,7 @@ def _pilot_to_entry(pilot: Pilot) -> NpcPilotEntry:
         luk=pilot.luk,
         awq=pilot.awq,
         mobile_suit_count=0,
+        active_mobile_suit_id=pilot.active_mobile_suit_id,
         created_at=pilot.created_at,
         updated_at=pilot.updated_at,
     )
@@ -396,8 +397,16 @@ def update_npc(
     data: NpcPilotUpdate,
     session: Session = Depends(get_session),
 ) -> NpcPilotDetail:
-    """NPCパイロットのステータス（レベル/exp/credits/各種能力値等）を更新する."""
-    updated = PilotService.update_npc_pilot(session, pilot_id, data)
+    """NPCパイロットのステータス（レベル/exp/credits/各種能力値等）と出撃機体を更新する.
+
+    - `active_mobile_suit_id` がそのパイロットの所有機でない場合は 422 を返す
+    """
+    try:
+        updated = PilotService.update_npc_pilot(session, pilot_id, data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
     if updated is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

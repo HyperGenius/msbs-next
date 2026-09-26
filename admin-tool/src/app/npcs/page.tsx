@@ -72,6 +72,17 @@ export default function AdminNpcsPage() {
     }
   }
 
+  async function handleSetActiveMobileSuit(msId: string) {
+    if (!selectedNpc) return;
+    try {
+      await updateNpc(selectedNpc.id, { active_mobile_suit_id: msId });
+      await mutateDetail();
+      showToast("出撃機体を変更しました", "success");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "エラーが発生しました", "error");
+    }
+  }
+
   if (isError) {
     return (
       <div className="min-h-screen bg-[#050505] text-[#00ff41] p-8 font-mono">
@@ -133,6 +144,7 @@ export default function AdminNpcsPage() {
                       onSubmitPilot={handleSubmitPilot}
                       onSubmitMobileSuit={handleSubmitMobileSuit}
                       onAddMobileSuit={handleAddMobileSuit}
+                      onSetActiveMobileSuit={handleSetActiveMobileSuit}
                       isSubmitting={isSubmitting}
                     />
                   )}

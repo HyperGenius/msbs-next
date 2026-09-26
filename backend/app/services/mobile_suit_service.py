@@ -1,6 +1,7 @@
 # backend/app/services/mobile_suit_service.py
 import re
 import uuid
+from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
@@ -142,6 +143,8 @@ class MobileSuitService:
     ) -> MobileSuit | None:
         """機体マスターのスペックをコピーして NPC 機体を作成する.
 
+        NPC の出撃機体が未設定の場合は、作成した機体を出撃機体に設定する。
+
         Returns:
             作成した機体。機体マスターが存在しない場合は None
         """
@@ -163,6 +166,12 @@ class MobileSuitService:
             pilot_name=pilot.name,
         )
         session.add(ms)
+        # flush で機体を先に INSERT してから出撃機体に設定する（FK 違反防止）
+        session.flush()
+        if pilot.active_mobile_suit_id is None:
+            pilot.active_mobile_suit_id = ms.id
+            pilot.updated_at = datetime.now(UTC)
+            session.add(pilot)
         session.commit()
         session.refresh(ms)
         return ms

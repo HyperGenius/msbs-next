@@ -212,12 +212,30 @@ class PilotService:
 
         Returns:
             Pilot | None: 更新後のパイロット。見つからない場合は None
+
+        Raises:
+            ValueError: active_mobile_suit_id がそのパイロットの所有機でない場合
         """
         pilot = PilotService.get_npc_pilot_by_id(session, pilot_id)
         if pilot is None:
             return None
 
         update_dict = update_data.model_dump(exclude_unset=True)
+        active_ms_id = update_dict.get("active_mobile_suit_id")
+        if active_ms_id is not None:
+            ms = session.get(MobileSuit, active_ms_id)
+            if ms is None:
+                raise ValueError(f"Mobile suit '{active_ms_id}' not found.")
+            if ms.user_id != pilot.user_id:
+                raise ValueError(
+                    f"Mobile suit '{active_ms_id}' is not owned by NPC pilot '{pilot_id}'."
+                )
+            # マッチングは side='ENEMY' の所有機のみを出撃させるため、同じ条件で検証する
+            if ms.side != "ENEMY":
+                raise ValueError(
+                    f"Mobile suit '{active_ms_id}' is not an ENEMY-side suit "
+                    f"(side='{ms.side}') and cannot be sortied by an NPC."
+                )
         for key, value in update_dict.items():
             setattr(pilot, key, value)
         pilot.updated_at = datetime.now(UTC)

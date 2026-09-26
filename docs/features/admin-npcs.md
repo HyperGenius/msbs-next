@@ -75,8 +75,11 @@ admin-tool から一覧・閲覧・編集できる管理画面。#171（NPC自�
 ### PUT /api/admin/npcs/{pilot_id}
 
 `NpcPilotUpdate`（`npc_personality` / `level` / `exp` / `credits` / `skill_points` / `status_points` /
-`sht` / `mel` / `intel` / `ref` / `tou` / `luk` / `awq`、すべて省略可）を受け取り、指定フィールドのみ更新する。
-更新後の `NpcPilotDetail` を返す。存在しない場合は `404`。
+`sht` / `mel` / `intel` / `ref` / `tou` / `luk` / `awq` / `active_mobile_suit_id`、すべて省略可）を受け取り、
+指定フィールドのみ更新する。更新後の `NpcPilotDetail` を返す。存在しない場合は `404`。
+
+`active_mobile_suit_id`（Issue #542）はそのパイロットの所有機（`user_id` が一致し `side='ENEMY'`）でなければ `422`。
+所有機の判定条件はマッチングで出撃させる機体の条件と揃えている。
 
 ### POST /api/admin/npcs/{pilot_id}/mobile-suits（Issue #540）
 
@@ -95,9 +98,8 @@ admin-tool から一覧・閲覧・編集できる管理画面。#171（NPC自�
 
 NPC パイロットまたは機体マスターが存在しない場合は `404`。
 
-> [!NOTE]
-> `MatchingService.select_npcs_for_room()` は NPC 1人につき所有機体の先頭1機しか使わず、取得順も指定していない。
-> 複数の機体を追加した場合にどの機体が出撃するかは保証されない（管理画面にもその旨を表示している）。
+NPC の出撃機体（`active_mobile_suit_id`）が未設定の場合は、作成した機体を出撃機体に設定する（Issue #542）。
+設定済みの場合は変更しない。
 
 ### PUT /api/admin/npcs/{pilot_id}/mobile-suits/{ms_id}
 
@@ -140,6 +142,25 @@ NPCは `is_npc=True` の `Pilot` レコードとして永続化される。`user
 本Issueで新たに管理画面から編集可能になったフィールド: `npc_personality` / `level` / `exp` / `credits` /
 `skill_points` / `status_points` / `sht` / `mel` / `intel` / `ref` / `tou` / `luk` / `awq`。
 
+#### 出撃機体 `active_mobile_suit_id`（Issue #542）
+
+NPC がマッチングでどの所有機に乗って出撃するかを保持する（nullable、`mobile_suits.id` への FK、`ON DELETE SET NULL`）。
+プレイヤーは `battle_entries.mobile_suit_id` で出撃機体を指定するため NULL のまま。
+
+以前の `MatchingService.select_npcs_for_room()` は所有機を `ORDER BY` なしで取得して先頭の1機を出撃させていたため、
+複数機所有の NPC では出撃機体が不定だった（`mobile_suits` に作成日時カラムがなく、並び順で決定的に選ぶ手段もない）。
+現在の選択ルールは以下の通り（所有機の一括取得による N+1 回避は維持）:
+
+1. `active_mobile_suit_id` が所有機（`side='ENEMY'`）を指していれば、その機体で出撃する
+2. NULL、または所有機を指していない場合は所有機から1機を選び、`active_mobile_suit_id` に保存してから出撃する（以降は同じ機体で出撃）
+3. 所有機が0機の NPC は再利用対象にしない
+
+マッチングで新規生成される NPC は、生成した機体がそのまま出撃機体に設定される。`pilots` → `mobile_suits` の FK は
+`relationship()` を定義しておらず flush 時の INSERT 順序が保証されないため、機体・パイロットを flush した後に設定している
+（`_fill_with_new_npcs()`。`battle_entries` の FK 違反を防いだ Issue #461 と同じ理由）。
+
+マイグレーション `f0a1b2c3d4e5` で、所有機がちょうど1機の既存 NPC パイロットにその機体 ID をバックフィルしている。
+
 ### `MobileSuit`（既存テーブル）
 
 NPCの所有機体は `MobileSuit.user_id == Pilot.user_id` で紐づく。エース機体は `is_ace=True` /
@@ -153,7 +174,7 @@ NPCの所有機体は `MobileSuit.user_id == Pilot.user_id` で紐づく。エ�
 - `PilotService.get_npc_pilot_by_id(session, pilot_id)` — idによる単体取得（`is_npc=True` のみ）
 - `PilotService.get_npc_owned_mobile_suits(session, user_id)` — 所有機体一覧取得
 - `PilotService.is_ace_pilot(pilot)` — `ace_pilots` 由来かどうかの best-effort 判定（名前一致）
-- `PilotService.update_npc_pilot(session, pilot_id, update_data)` — ステータス更新
+- `PilotService.update_npc_pilot(session, pilot_id, update_data)` — ステータス・出撃機体の更新（所有機でない出撃機体は `ValueError`）
 
 既存の `PilotService` はインスタンスメソッド中心（`__init__(self, session)`）だが、上記の管理者用メソッドは
 `MobileSuitService` の管理者用CRUDメソッドと同じ `@staticmethod` パターンに揃えている。
@@ -198,6 +219,9 @@ admin-tool/src/
 - 所有機体一覧を下部に表示する。機体ごとの「編集」で `NpcMobileSuitEditForm` を開き、個別に保存する
   （`PUT /api/admin/npcs/{pilot_id}/mobile-suits/{ms_id}` を機体単位で呼び出す）
 - 一覧の下の「機体を追加」で機体マスターをプルダウンから選ぶと、`POST /api/admin/npcs/{pilot_id}/mobile-suits` で追加する
+- 出撃機体には「出撃中」バッジを表示する。他の機体の「出撃機体にする」を押すと、確認なしで即時に
+  `PUT /api/admin/npcs/{pilot_id}`（`active_mobile_suit_id`）を呼び出して切り替える（元に戻すのも同じ操作でできるため）。
+  次回マッチングから反映される
 
 ### NPC機体編集フォーム（`NpcMobileSuitEditForm`、Issue #540）
 
@@ -239,6 +263,12 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_admin_key_12345" pytho
 - 所有機体更新（Issue #540）: 武装・耐性・戦術・欠損部位を含む全項目の反映、`max_hp` 変更時の `current_hp`/`parts` 再計算、
   武装0件・不正な欠損部位の422、プレイヤー所有機の404
 - 機体追加（Issue #540）: 機体マスターのスペック・武装のコピー、NPC パイロットの性格・名前の反映、404（機体マスター / NPC が存在しない）
+- 出撃機体（Issue #542）: 所有機への切り替え、他パイロットの機体・存在しない機体の422、
+  機体追加時に未設定なら追加機体が出撃機体になること・設定済みなら変わらないこと
+
+マッチング時の出撃機体選択は `tests/unit/test_npc_persistence.py` でテストしている
+（`active_mobile_suit_id` の機体で出撃すること、NULL / 他パイロットの機体 / `side='PLAYER'` の機体を指す場合に所有機が選ばれて保存されること、
+所有機0機の NPC が選ばれないこと、新規生成 NPC の出撃機体設定）。
 
 ### admin-tool
 

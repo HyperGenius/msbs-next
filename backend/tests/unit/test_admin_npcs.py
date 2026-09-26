@@ -529,3 +529,124 @@ def test_create_npc_mobile_suit_pilot_not_found(client_admin, master_suit):
         json={"master_mobile_suit_id": "test_dom"},
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ===================== 出撃機体テスト (Issue #542) =====================
+
+
+def _add_enemy_suit(session, user_id: str, name: str) -> MobileSuit:
+    suit = MobileSuit(
+        user_id=user_id,
+        name=name,
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],
+        side="ENEMY",
+        personality="AGGRESSIVE",
+    )
+    session.add(suit)
+    session.commit()
+    session.refresh(suit)
+    return suit
+
+
+def test_update_npc_active_mobile_suit(client_admin, npc_pilot_with_suit, session):
+    """所有機を出撃機体に設定でき、詳細レスポンスに反映されること."""
+    pilot, _suit = npc_pilot_with_suit
+    second = _add_enemy_suit(session, pilot.user_id, "Second Suit")
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}",
+        headers=HEADERS,
+        json={"active_mobile_suit_id": str(second.id)},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["active_mobile_suit_id"] == str(second.id)
+
+    list_response = client_admin.get("/api/admin/npcs", headers=HEADERS)
+    entry = next(e for e in list_response.json() if e["id"] == str(pilot.id))
+    assert entry["active_mobile_suit_id"] == str(second.id)
+
+
+def test_update_npc_active_mobile_suit_rejects_other_pilot_suit(
+    client_admin, npc_pilot, session
+):
+    """他パイロットの機体を出撃機体に指定すると 422 になること."""
+    other = PilotService(session).create_npc_pilot("Other NPC", "SNIPER")
+    other_suit = _add_enemy_suit(session, other.user_id, "Other Suit")
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{npc_pilot.id}",
+        headers=HEADERS,
+        json={"active_mobile_suit_id": str(other_suit.id)},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "is not owned by" in response.json()["detail"]
+    session.refresh(npc_pilot)
+    assert npc_pilot.active_mobile_suit_id is None
+
+
+def test_update_npc_active_mobile_suit_rejects_unknown_id(client_admin, npc_pilot):
+    """存在しない機体IDを出撃機体に指定すると 422 になること."""
+    import uuid
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{npc_pilot.id}",
+        headers=HEADERS,
+        json={"active_mobile_suit_id": str(uuid.uuid4())},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "not found" in response.json()["detail"]
+
+
+def test_update_npc_active_mobile_suit_rejects_non_enemy_suit(
+    client_admin, npc_pilot, session
+):
+    """side='ENEMY' 以外の所有機を出撃機体に指定すると 422 になること."""
+    suit = _add_enemy_suit(session, npc_pilot.user_id, "Player Side Suit")
+    suit.side = "PLAYER"
+    session.add(suit)
+    session.commit()
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{npc_pilot.id}",
+        headers=HEADERS,
+        json={"active_mobile_suit_id": str(suit.id)},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "ENEMY" in response.json()["detail"]
+
+
+def test_create_npc_mobile_suit_sets_active_when_unset(
+    client_admin, npc_pilot, master_suit, session
+):
+    """出撃機体が未設定の NPC に機体を追加すると、その機体が出撃機体になること."""
+    response = client_admin.post(
+        f"/api/admin/npcs/{npc_pilot.id}/mobile-suits",
+        headers=HEADERS,
+        json={"master_mobile_suit_id": "test_dom"},
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    session.refresh(npc_pilot)
+    assert str(npc_pilot.active_mobile_suit_id) == response.json()["id"]
+
+
+def test_create_npc_mobile_suit_keeps_existing_active(
+    client_admin, npc_pilot_with_suit, master_suit, session
+):
+    """出撃機体が設定済みの NPC に機体を追加しても出撃機体は変わらないこと."""
+    pilot, suit = npc_pilot_with_suit
+    pilot.active_mobile_suit_id = suit.id
+    session.add(pilot)
+    session.commit()
+
+    response = client_admin.post(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits",
+        headers=HEADERS,
+        json={"master_mobile_suit_id": "test_dom"},
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    session.refresh(pilot)
+    assert pilot.active_mobile_suit_id == suit.id
