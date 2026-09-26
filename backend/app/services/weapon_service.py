@@ -133,7 +133,7 @@ class WeaponService:
             PlayerWeapon: 作成された武器インスタンス
 
         Raises:
-            HTTPException: 武器が存在しない、パイロット情報がない、所持金不足などのエラー
+            HTTPException: 武器が存在しない、パイロット情報がない、設計図が無い、所持金不足などのエラー
         """
         listing = get_weapon_listing_by_id(weapon_id)
         if not listing:
@@ -144,6 +144,13 @@ class WeaponService:
         if not pilot:
             raise HTTPException(
                 status_code=404, detail="パイロット情報が見つかりません"
+            )
+
+        if not BlueprintService.can_purchase(
+            session, user_id, BlueprintTargetType.WEAPON, weapon_id
+        ):
+            raise HTTPException(
+                status_code=403, detail="この武器の設計図を所持していません"
             )
 
         if pilot.credits < listing["price"]:

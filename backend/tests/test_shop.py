@@ -3,10 +3,39 @@
 import uuid
 
 from fastapi import status
+from sqlmodel import select
 
 from app.core.auth import get_current_user
-from app.models.models import MobileSuit, Pilot
+from app.models.models import (
+    BlueprintSource,
+    MasterBlueprint,
+    MobileSuit,
+    Pilot,
+)
+from app.services.blueprint_service import DEFAULT_UNLOCK_HINT, BlueprintService
 from main import app
+
+
+def _make_restricted(session, blueprint_id: str) -> None:
+    blueprint = session.get(MasterBlueprint, blueprint_id)
+    assert blueprint is not None
+    blueprint.is_standard_issue = False
+    session.add(blueprint)
+    session.commit()
+
+
+def _create_pilot(session, user_id: str, credits: int, faction: str = "") -> Pilot:
+    pilot = Pilot(
+        user_id=user_id,
+        name="Test Pilot",
+        level=1,
+        exp=0,
+        credits=credits,
+        faction=faction,
+    )
+    session.add(pilot)
+    session.commit()
+    return pilot
 
 
 def test_get_shop_listings(client, session):
@@ -45,6 +74,9 @@ def test_get_shop_listings(client, session):
         assert "beam_generator_lv" in first_item
         assert "flavor_text" in first_item
         assert "specs" in first_item
+        assert first_item["is_standard_issue"] is True
+        assert first_item["is_unlocked"] is True
+        assert first_item["unlock_hint"] is None
 
         # specsの構造をチェック
         specs = first_item["specs"]
@@ -240,3 +272,108 @@ def test_purchase_faction_mismatch(client, session):
         assert "購入できません" in response.json()["detail"]
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_shop_listings_unlock_states(client, session):
+    """機体一覧で、標準配備・設計図所持・未解放の状態が返ることをテスト."""
+    test_user_id = "test_user_listing_unlock"
+    _create_pilot(session, test_user_id, credits=10000)
+    _make_restricted(session, "mobile_suit:gundam")
+    _make_restricted(session, "mobile_suit:gelgoog")
+    BlueprintService.grant_blueprint(
+        session, test_user_id, "mobile_suit:gundam", BlueprintSource.DROP
+    )
+    session.commit()
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.get("/api/shop/listings")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_200_OK
+    listings = {item["id"]: item for item in response.json()}
+    assert listings["zaku_ii"]["is_standard_issue"] is True
+    assert listings["zaku_ii"]["is_unlocked"] is True
+    assert listings["zaku_ii"]["unlock_hint"] is None
+    assert listings["gundam"]["is_standard_issue"] is False
+    assert listings["gundam"]["is_unlocked"] is True
+    assert listings["gundam"]["unlock_hint"] is None
+    assert listings["gelgoog"]["is_standard_issue"] is False
+    assert listings["gelgoog"]["is_unlocked"] is False
+    assert listings["gelgoog"]["unlock_hint"] == DEFAULT_UNLOCK_HINT
+
+
+def test_purchase_mobile_suit_without_blueprint_forbidden(client, session):
+    """設計図の無い非標準配備の機体は購入できず、クレジットが減らないことをテスト."""
+    test_user_id = "test_user_purchase_locked_ms"
+    pilot = _create_pilot(session, test_user_id, credits=10000)
+    _make_restricted(session, "mobile_suit:gundam")
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.post("/api/shop/purchase/gundam")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["detail"] == "この機体の設計図を所持していません"
+    session.refresh(pilot)
+    assert pilot.credits == 10000
+    owned = session.exec(
+        select(MobileSuit).where(MobileSuit.user_id == test_user_id)
+    ).all()
+    assert owned == []
+
+
+def test_purchase_mobile_suit_with_blueprint(client, session):
+    """設計図を所持していれば、非標準配備の機体を購入できることをテスト."""
+    test_user_id = "test_user_purchase_unlocked_ms"
+    pilot = _create_pilot(session, test_user_id, credits=10000)
+    _make_restricted(session, "mobile_suit:gundam")
+    BlueprintService.grant_blueprint(
+        session, test_user_id, "mobile_suit:gundam", BlueprintSource.DROP
+    )
+    session.commit()
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.post("/api/shop/purchase/gundam")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_200_OK
+    session.refresh(pilot)
+    assert pilot.credits == 5000
+
+
+def test_purchase_mobile_suit_faction_checked_before_blueprint(client, session):
+    """勢力の判定が設計図の判定より先に行われることをテスト."""
+    test_user_id = "test_user_faction_before_blueprint"
+    _create_pilot(session, test_user_id, credits=10000, faction="ZEON")
+    _make_restricted(session, "mobile_suit:gundam")
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.post("/api/shop/purchase/gundam")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert "勢力" in response.json()["detail"]
+
+
+def test_purchase_mobile_suit_blueprint_checked_before_credits(client, session):
+    """設計図の判定が所持金の判定より先に行われることをテスト."""
+    test_user_id = "test_user_blueprint_before_credits"
+    _create_pilot(session, test_user_id, credits=0)
+    _make_restricted(session, "mobile_suit:gundam")
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.post("/api/shop/purchase/gundam")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["detail"] == "この機体の設計図を所持していません"

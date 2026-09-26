@@ -5,6 +5,7 @@ import { SciFiCard } from "@/components/ui";
 import { ShopListing } from "@/types/battle";
 import { getRank, getRankColor } from "@/utils/rankUtils";
 import { STATUS_LABELS, getMobileSuitShopLabel } from "@/utils/displayUtils";
+import BlueprintBadge from "./BlueprintBadge";
 
 interface MobileSuitCardProps {
   listing: ShopListing;
@@ -28,16 +29,19 @@ export default function MobileSuitCard({
 
   return (
     <SciFiCard
-      variant={isSelected ? "accent" : affordable ? "secondary" : "primary"}
+      variant={isSelected ? "accent" : affordable && listing.is_unlocked ? "secondary" : "primary"}
       interactive
       onClick={() => onSelect(listing.id)}
-      className={`${affordable ? "" : "opacity-60"} cursor-pointer`}
+      className={`${!listing.is_unlocked ? "opacity-50 grayscale" : affordable ? "" : "opacity-60"} cursor-pointer`}
     >
       <div className="py-1">
         {/* 行1: ラベル({model_number} {name_ja}) + 購入クレジット数 */}
         <div className="flex items-center justify-between mb-1">
-          <span className="font-bold text-[#ffb000] text-sm truncate mr-2">
-            {getMobileSuitShopLabel(listing)}
+          <span className="flex items-center gap-2 min-w-0 mr-2">
+            <span className="font-bold text-[#ffb000] text-sm truncate">
+              {getMobileSuitShopLabel(listing)}
+            </span>
+            <BlueprintBadge listing={listing} />
           </span>
           <span className={`font-bold text-xs shrink-0 ${affordable ? "text-[#ffb000]" : "text-red-400"}`}>
             {listing.price.toLocaleString()} C

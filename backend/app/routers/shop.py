@@ -16,7 +16,8 @@ from app.core.gamedata import (
     get_weapon_listing_by_id,
 )
 from app.db import get_session
-from app.models.models import MobileSuit, Pilot, Weapon
+from app.models.models import BlueprintTargetType, MobileSuit, Pilot, Weapon
+from app.services.blueprint_service import BlueprintService
 from app.services.weapon_service import WeaponService
 
 router = APIRouter(prefix="/api/shop", tags=["shop"])
@@ -35,6 +36,9 @@ class ShopListingResponse(BaseModel):
     beam_generator_lv: int = 0
     flavor_text: str | None = None
     specs: dict
+    is_standard_issue: bool
+    is_unlocked: bool
+    unlock_hint: str | None
 
 
 class PurchaseResponse(BaseModel):
@@ -54,6 +58,9 @@ class WeaponListingResponse(BaseModel):
     description: str
     flavor_text: str | None = None
     weapon: dict
+    is_standard_issue: bool
+    is_unlocked: bool
+    unlock_hint: str | None
 
 
 class WeaponPurchaseResponse(BaseModel):
@@ -80,7 +87,7 @@ async def get_shop_listings(
     pilot = session.exec(statement).first()
     pilot_faction = pilot.faction if pilot else ""
 
-    listings = []
+    items = []
     for item in SHOP_LISTINGS:
         # 型チェックのためのキャスト
         item = cast(dict[str, Any], item)
@@ -89,6 +96,18 @@ async def get_shop_listings(
         item_faction = cast(str, item.get("faction", ""))
         if pilot_faction and item_faction and item_faction != pilot_faction:
             continue
+        items.append(item)
+
+    unlock_states = BlueprintService.get_unlock_states(
+        session,
+        user_id,
+        BlueprintTargetType.MOBILE_SUIT,
+        [cast(str, item["id"]) for item in items],
+    )
+
+    listings = []
+    for item in items:
+        unlock_state = unlock_states[cast(str, item["id"])]
 
         # Weaponオブジェクトをdictに変換
         specs = cast(dict[str, Any], item["specs"]).copy()
@@ -106,6 +125,9 @@ async def get_shop_listings(
                 beam_generator_lv=cast(int, item.get("beam_generator_lv", 0)),
                 flavor_text=cast(str | None, item.get("flavor_text")),
                 specs=specs,
+                is_standard_issue=unlock_state.is_standard_issue,
+                is_unlocked=unlock_state.is_unlocked,
+                unlock_hint=unlock_state.unlock_hint,
             )
         )
 
@@ -129,7 +151,7 @@ async def purchase_mobile_suit(
         PurchaseResponse: 購入結果
 
     Raises:
-        HTTPException: 商品が存在しない、所持金不足などのエラー
+        HTTPException: 商品が存在しない、設計図が無い、所持金不足などのエラー
     """
     # 1. 商品データを取得
     listing = get_shop_listing_by_id(item_id)
@@ -151,18 +173,26 @@ async def purchase_mobile_suit(
             detail=f"この機体はあなたの勢力（{pilot.faction}）では購入できません",
         )
 
-    # 4. 所持金チェック
+    # 4. 設計図チェック
+    if not BlueprintService.can_purchase(
+        session, user_id, BlueprintTargetType.MOBILE_SUIT, item_id
+    ):
+        raise HTTPException(
+            status_code=403, detail="この機体の設計図を所持していません"
+        )
+
+    # 5. 所持金チェック
     if pilot.credits < listing["price"]:
         raise HTTPException(
             status_code=400,
             detail=f"所持金が不足しています。必要: {listing['price']} Credits, 所持: {pilot.credits} Credits",
         )
 
-    # 5. 所持金を減算
+    # 6. 所持金を減算
     pilot.credits -= listing["price"]
     pilot.updated_at = datetime.now(UTC)
 
-    # 6. 機体を生成
+    # 7. 機体を生成
     specs = listing["specs"]
     new_mobile_suit = MobileSuit(
         user_id=user_id,
@@ -199,17 +229,27 @@ async def purchase_mobile_suit(
 
 
 @router.get("/weapons", response_model=list[WeaponListingResponse])
-async def get_weapon_listings() -> list[WeaponListingResponse]:
+async def get_weapon_listings(
+    session: Session = Depends(get_session),
+    user_id: str = Depends(get_current_user),
+) -> list[WeaponListingResponse]:
     """武器ショップの商品一覧を取得する.
 
     Returns:
         list[WeaponListingResponse]: 武器商品一覧
     """
+    items = [cast(dict[str, Any], item) for item in WEAPON_SHOP_LISTINGS]
+    unlock_states = BlueprintService.get_unlock_states(
+        session,
+        user_id,
+        BlueprintTargetType.WEAPON,
+        [cast(str, item["id"]) for item in items],
+    )
+
     listings = []
-    for item in WEAPON_SHOP_LISTINGS:
-        # 型チェックのためのキャスト
-        item = cast(dict[str, Any], item)
+    for item in items:
         weapon = cast(Weapon, item["weapon"])
+        unlock_state = unlock_states[cast(str, item["id"])]
 
         listings.append(
             WeaponListingResponse(
@@ -219,6 +259,9 @@ async def get_weapon_listings() -> list[WeaponListingResponse]:
                 description=cast(str, item["description"]),
                 flavor_text=cast(str | None, item.get("flavor_text")),
                 weapon=weapon.model_dump(),
+                is_standard_issue=unlock_state.is_standard_issue,
+                is_unlocked=unlock_state.is_unlocked,
+                unlock_hint=unlock_state.unlock_hint,
             )
         )
 
@@ -242,7 +285,7 @@ async def purchase_weapon(
         WeaponPurchaseResponse: 購入結果
 
     Raises:
-        HTTPException: 武器が存在しない、所持金不足などのエラー
+        HTTPException: 武器が存在しない、設計図が無い、所持金不足などのエラー
     """
     player_weapon = WeaponService.purchase_weapon(session, user_id, weapon_id)
 

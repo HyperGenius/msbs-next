@@ -18,8 +18,18 @@ export interface ShopItemSpecs {
     turning_bonus?: number;
 }
 
+/** 設計図によるショップ商品の解放状態 */
+export interface BlueprintUnlockState {
+    /** 標準配備品か（設計図なしで購入できる） */
+    is_standard_issue: boolean;
+    /** 購入できるか（標準配備品、または設計図を所持している） */
+    is_unlocked: boolean;
+    /** 未解放のときに表示する入手方法のヒント。解放済みなら null */
+    unlock_hint: string | null;
+}
+
 /** ショップに陳列された機体商品 */
-export interface ShopListing {
+export interface ShopListing extends BlueprintUnlockState {
     id: string;
     name: string;
     /** 日本語表示名（未設定の場合は空文字） */
@@ -84,7 +94,7 @@ export interface BulkUpgradeResponse {
 }
 
 /** 武器ショップに陳列された武器商品 */
-export interface WeaponListing {
+export interface WeaponListing extends BlueprintUnlockState {
     id: string;
     name: string;
     price: number;

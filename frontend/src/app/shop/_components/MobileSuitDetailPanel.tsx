@@ -3,6 +3,7 @@
 
 import { SciFiPanel, SciFiHeading } from "@/components/ui";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
+import BlueprintBadge from "./BlueprintBadge";
 import MobileSuitStatRadar from "./MobileSuitStatRadar";
 import { ShopListing } from "@/types/battle";
 import { getMobileSuitShopLabel } from "@/utils/displayUtils";
@@ -35,9 +36,12 @@ export default function MobileSuitDetailPanel({
     <div className="flex flex-col h-full">
       {/* ヘッダー */}
       <div className="flex items-start justify-between mb-4">
-        <SciFiHeading level={3} variant="secondary" className="text-lg">
-          {label}
-        </SciFiHeading>
+        <div className="flex items-center gap-2 min-w-0">
+          <SciFiHeading level={3} variant="secondary" className="text-lg">
+            {label}
+          </SciFiHeading>
+          <BlueprintBadge listing={listing} />
+        </div>
         {isModal && onClose && (
           <button
             onClick={onClose}
@@ -93,23 +97,38 @@ export default function MobileSuitDetailPanel({
 
       {/* 購入ボタン（スペーサーで下部に押し出す） */}
       <div className="mt-auto">
-        {!affordable && (
-          <p className="text-xs text-red-400 text-center mb-2">
-            所持金不足（-{shortage.toLocaleString()} C）
-          </p>
-        )}
-        {affordable ? (
-          <HoldSciFiButton
-            onHoldComplete={() => onPurchase(listing.id)}
-            disabled={isPurchasing && purchasingId !== listing.id}
-            loading={purchasingId === listing.id}
-            label="長押しで購入 (HOLD TO BUY)"
-            className="w-full"
-          />
+        {!listing.is_unlocked ? (
+          <>
+            {listing.unlock_hint && (
+              <p className="text-xs text-[#00ff41]/60 text-center mb-2">
+                {listing.unlock_hint}
+              </p>
+            )}
+            <div className="w-full py-3 text-center text-sm font-mono bg-[#0a0a0a] border border-[#00ff41]/30 text-[#00ff41]/50">
+              未解放 (LOCKED)
+            </div>
+          </>
         ) : (
-          <div className="w-full py-3 text-center text-sm font-mono bg-[#0a0a0a] border border-red-900/50 text-red-500">
-            購入不可 (INSUFFICIENT FUNDS)
-          </div>
+          <>
+            {!affordable && (
+              <p className="text-xs text-red-400 text-center mb-2">
+                所持金不足（-{shortage.toLocaleString()} C）
+              </p>
+            )}
+            {affordable ? (
+              <HoldSciFiButton
+                onHoldComplete={() => onPurchase(listing.id)}
+                disabled={isPurchasing && purchasingId !== listing.id}
+                loading={purchasingId === listing.id}
+                label="長押しで購入 (HOLD TO BUY)"
+                className="w-full"
+              />
+            ) : (
+              <div className="w-full py-3 text-center text-sm font-mono bg-[#0a0a0a] border border-red-900/50 text-red-500">
+                購入不可 (INSUFFICIENT FUNDS)
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

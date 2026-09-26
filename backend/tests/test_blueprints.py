@@ -1,9 +1,12 @@
 """設計図サービス・設計図APIのテスト."""
 
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 from fastapi import status
+from sqlalchemy import event
 from sqlmodel import Session, select
 
 from app.core.auth import get_current_user
@@ -16,7 +19,11 @@ from app.models.models import (
     Pilot,
     PlayerBlueprint,
 )
-from app.services.blueprint_service import BlueprintService
+from app.services.blueprint_service import (
+    DEFAULT_UNLOCK_HINT,
+    BlueprintService,
+    UnlockState,
+)
 from main import app
 
 USER_ID = "test_blueprint_user"
@@ -237,3 +244,96 @@ def test_get_my_blueprints_api(client, session: Session, pilot: Pilot) -> None:
     assert data[0]["source"] == "MIGRATION"
     assert data[0]["source_battle_id"] is None
     assert "acquired_at" in data[0]
+
+
+@contextmanager
+def _recorded_queries(session: Session) -> Iterator[list[str]]:
+    statements: list[str] = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany) -> None:  # type: ignore[no-untyped-def]
+        statements.append(statement)
+
+    engine = session.get_bind()
+    event.listen(engine, "before_cursor_execute", _record)
+    try:
+        yield statements
+    finally:
+        event.remove(engine, "before_cursor_execute", _record)
+
+
+def test_get_unlock_states(session: Session, pilot: Pilot) -> None:
+    """解放状態が標準配備・設計図所持・未解放・設計図マスター無しで区別されること."""
+    _make_restricted(session, GUNDAM_BLUEPRINT_ID)
+    _make_restricted(session, "mobile_suit:gelgoog")
+    _make_restricted(session, "mobile_suit:dom")
+    BlueprintService.grant_blueprint(
+        session, USER_ID, GUNDAM_BLUEPRINT_ID, BlueprintSource.DROP
+    )
+    session.add(
+        PlayerBlueprint(
+            user_id="other_user", blueprint_id="mobile_suit:dom", source="DROP"
+        )
+    )
+    session.commit()
+
+    states = BlueprintService.get_unlock_states(
+        session,
+        USER_ID,
+        BlueprintTargetType.MOBILE_SUIT,
+        ["zaku_ii", "gundam", "gelgoog", "dom", "no_such_ms"],
+    )
+
+    assert states["zaku_ii"] == UnlockState(
+        is_standard_issue=True, is_unlocked=True, unlock_hint=None
+    )
+    assert states["gundam"] == UnlockState(
+        is_standard_issue=False, is_unlocked=True, unlock_hint=None
+    )
+    assert states["gelgoog"] == UnlockState(
+        is_standard_issue=False, is_unlocked=False, unlock_hint=DEFAULT_UNLOCK_HINT
+    )
+    # 他のプレイヤーの設計図では解放されない。
+    assert states["dom"].is_unlocked is False
+    assert states["no_such_ms"] == UnlockState(
+        is_standard_issue=True, is_unlocked=True, unlock_hint=None
+    )
+
+
+def test_get_unlock_states_ignores_other_target_type(
+    session: Session, pilot: Pilot
+) -> None:
+    """同じ対象IDでも、別の種別の設計図は解放状態に影響しないこと."""
+    _make_restricted(session, BEAM_RIFLE_BLUEPRINT_ID)
+    session.add(
+        MasterBlueprint(
+            id="mobile_suit:beam_rifle",
+            target_type=BlueprintTargetType.MOBILE_SUIT.value,
+            target_id="beam_rifle",
+            is_standard_issue=False,
+        )
+    )
+    session.commit()
+    BlueprintService.grant_blueprint(
+        session, USER_ID, "mobile_suit:beam_rifle", BlueprintSource.DROP
+    )
+    session.commit()
+
+    states = BlueprintService.get_unlock_states(
+        session, USER_ID, BlueprintTargetType.WEAPON, ["beam_rifle"]
+    )
+
+    assert states["beam_rifle"].is_unlocked is False
+
+
+def test_get_unlock_states_query_count_is_constant(
+    session: Session, pilot: Pilot
+) -> None:
+    """解放状態の取得が商品数によらず2回のクエリで済むこと."""
+    target_ids = [m.id for m in session.exec(select(MasterMobileSuit)).all()]
+    with _recorded_queries(session) as statements:
+        BlueprintService.get_unlock_states(
+            session, USER_ID, BlueprintTargetType.MOBILE_SUIT, target_ids
+        )
+
+    assert len(target_ids) > 2
+    assert len(statements) == 2

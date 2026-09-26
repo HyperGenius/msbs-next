@@ -5,6 +5,7 @@ import { SciFiCard } from "@/components/ui";
 import { WeaponListing } from "@/types/battle";
 import { getWeaponRank, getRankColor } from "@/utils/rankUtils";
 import { WEAPON_LABELS } from "@/utils/displayUtils";
+import BlueprintBadge from "./BlueprintBadge";
 
 interface WeaponCardProps {
   listing: WeaponListing;
@@ -28,20 +29,23 @@ export default function WeaponCard({
 
   return (
     <SciFiCard
-      variant={isSelected ? "accent" : affordable ? "secondary" : "primary"}
+      variant={isSelected ? "accent" : affordable && listing.is_unlocked ? "secondary" : "primary"}
       interactive={affordable}
       onClick={affordable ? () => onSelect(listing.id) : undefined}
       className={
         affordable
-          ? "cursor-pointer"
+          ? `cursor-pointer ${listing.is_unlocked ? "" : "opacity-50 grayscale"}`
           : "opacity-50 grayscale cursor-not-allowed"
       }
     >
       <div className="py-1">
         {/* 行1: 武器名 + 購入クレジット数 */}
         <div className="flex items-center justify-between mb-1">
-          <span className="font-bold text-[#ffb000] text-sm truncate mr-2">
-            {listing.name}
+          <span className="flex items-center gap-2 min-w-0 mr-2">
+            <span className="font-bold text-[#ffb000] text-sm truncate">
+              {listing.name}
+            </span>
+            <BlueprintBadge listing={listing} />
           </span>
           <span className={`font-bold text-xs shrink-0 ${affordable ? "text-[#ffb000]" : "text-red-400"}`}>
             {listing.price.toLocaleString()} C

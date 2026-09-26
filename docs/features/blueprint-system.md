@@ -7,8 +7,8 @@ Epic #550「戦利品ドロップと設計図システム」のデータ基盤�
 設計図を1度入手すれば、以降はクレジットで何度でも購入できる。
 設計図なしで購入できるアイテムは **標準配備品** とする。
 
-データ基盤とサービス層（Issue #551）と、admin-tool での設計図設定の編集（Issue #554）を実装済み。
-いずれも **ゲームの挙動は変えていない**。ショップの購入制限・ドロップ抽選は後続のSub-Issueで行う。
+データ基盤とサービス層（Issue #551）、admin-tool での設計図設定の編集（Issue #554）、ショップの購入制限と「未解放」表示（Issue #556）を実装済み。
+ドロップ抽選は後続のSub-Issueで行う。現状は設計図を入手する手段がマイグレーションでの付与のみのため、標準配備を外したアイテムは、それを所持していたプレイヤー以外は購入できない。
 
 ---
 
@@ -81,6 +81,7 @@ player_blueprints (所持設計図)
 | メソッド | 内容 |
 |---|---|
 | `can_purchase(session, user_id, target_type, target_id)` | 購入できるかを返す。標準配備品、または設計図を所持していれば `True`。設計図マスターが無いアイテムは導入前と同じく `True` |
+| `get_unlock_states(session, user_id, target_type, target_ids)` | ショップ一覧用に、対象アイテムごとの解放状態（`UnlockState(is_standard_issue, is_unlocked, unlock_hint)`）を返す。判定は `can_purchase` と同じ。設計図マスターと所持設計図をそれぞれ1回のクエリで取得し、商品数によらずクエリは2回 |
 | `grant_blueprint(session, user_id, blueprint_id, source, source_battle_id=None)` | 設計図を付与する。未所持なら所持記録を作り、所持済みなら `duplicate_credit_value` 分のクレジットを `Pilot.credits` に加算する。結果を `BlueprintGrantResult(blueprint_id, is_new, credits_awarded)` で返す |
 | `get_player_blueprints(session, user_id)` | 所持設計図の一覧を入手日時の古い順に返す |
 | `ensure_master_blueprint(session, target_type, target_id, price)` | 設計図マスターが無ければ標準配備で作成する。既存の設定は上書きしない |
@@ -114,6 +115,51 @@ player_blueprints (所持設計図)
 
 ---
 
+## ショップの購入制限と「未解放」表示（Issue #556）
+
+### 購入 API
+
+`POST /api/shop/purchase/{item_id}`（機体）・`POST /api/shop/purchase/weapon/{weapon_id}`（武器）で、`can_purchase()` が `False` のアイテムは `403` を返す。クレジットは減らない。
+
+| 順序 | 判定 | エラー |
+|---|---|---|
+| 1 | 商品の存在 | `404` |
+| 2 | パイロット | `404` |
+| 3 | 勢力（機体のみ） | `403`「この機体はあなたの勢力（…）では購入できません」 |
+| 4 | 設計図 | `403`「この機体の設計図を所持していません」／「この武器の設計図を所持していません」 |
+| 5 | 所持金 | `400` |
+
+* 機体は `purchase_mobile_suit()`（`app/routers/shop.py`）、武器は `WeaponService.purchase_weapon()` で判定する
+* 標準配備品と、設計図マスターが無いアイテムは設計図なしで購入できる
+
+### ショップ一覧 API
+
+`GET /api/shop/listings`（機体）・`GET /api/shop/weapons`（武器）の各商品に次の項目を追加した。
+
+| 項目 | 内容 |
+|---|---|
+| `is_standard_issue` | 標準配備品か。設計図マスターが無いアイテムは `true` |
+| `is_unlocked` | 購入できるか（標準配備品、または設計図を所持している） |
+| `unlock_hint` | 未解放のときに表示する入手方法のヒント。解放済みなら `null` |
+
+* `GET /api/shop/weapons` はプレイヤーごとの解放状態を返すため、**認証必須** に変更した（未認証は `401`）
+* `unlock_hint` はサーバー側で組み立てる。ドロップテーブルができるまでは固定の文言（`DEFAULT_UNLOCK_HINT`「バトルで設計図を入手すると購入できます」）
+* 解放状態はプレイヤーごとに異なるため、`SHOP_LISTINGS` / `WEAPON_SHOP_LISTINGS` の TTL キャッシュには入れない
+
+### ショップ画面
+
+画面側の仕様は `shop-ui-improvement.md` の「12. 設計図による購入制限と「未解放」表示」を参照。
+
+### 着手前のデータ確認（2026-09-26）
+
+#551 のマイグレーションでは、`mobile_suits.master_mobile_suit_id` が `NULL` で、機体名でも機体マスターを引けない所持機体に設計図を付与していない。
+本番DB（Neon）を読み取り専用のクエリで確認した結果は次のとおり。
+
+* 該当する所持機体（NPC・エース機を除く）は1件。練習機（`MS-06T Zaku II Trainer`）で、改名した機体ではなかった
+* 練習機は機体マスターに存在せずショップでも販売していないため、設計図の付与は不要。データ修正は行っていない
+
+---
+
 ## admin-tool での設計図設定の編集（Issue #554）
 
 機体マスター（`/mobile-suits`）・武器マスター（`/weapons`）の画面で、アイテムごとの設計図設定を確認・編集できる。
@@ -136,7 +182,7 @@ player_blueprints (所持設計図)
 
 ## 後続のSub-Issueで対応する事項
 
-* ショップでの購入制限と「未解放」表示（`can_purchase` の組み込み）
 * ドロップテーブル・抽選（`grant_blueprint` の組み込み、入手経路 `DROP`）
 * レア機体向けの技術断片・技術Lv。設計図マスターに必要技術Lvのカラムを追加する想定
 * 戦場（フィールド）ごとの標準配備設定。現状はアイテム単位の真偽値のみ
+* `unlock_hint` に、設計図を入手できるミッション名を出す（ドロップテーブル・図鑑のSub-Issue）
