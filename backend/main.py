@@ -98,6 +98,7 @@ app.include_router(admin.weapon_router)
 app.include_router(admin.simulation_router)
 app.include_router(admin.npc_router)
 app.include_router(admin.ace_pilot_router)
+app.include_router(admin.drop_table_router)
 app.include_router(player_weapons.router)
 app.include_router(blueprints.router)
 

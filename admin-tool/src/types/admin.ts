@@ -316,3 +316,51 @@ export type AcePilotCreate = AcePilot;
 
 /** エースパイロットの部分更新リクエスト */
 export type AcePilotUpdate = Partial<Omit<AcePilot, "id">>;
+
+/** 設計図と、その対象の機体・武器の表示情報 */
+export interface BlueprintTargetSummary {
+    blueprint_id: string;
+    target_type: "MOBILE_SUIT" | "WEAPON";
+    target_id: string;
+    /** 対象の表示名。対象のマスターが無ければ target_id */
+    target_name: string;
+    /** 機体の勢力。武器と共通機体は空文字 */
+    faction: string;
+    is_standard_issue: boolean;
+}
+
+/** ドロップテーブルのエントリー */
+export interface DropTableEntryDetail extends BlueprintTargetSummary {
+    /** 抽選の重み (1以上の整数) */
+    weight: number;
+    /** true なら勝利時だけ抽選対象になる */
+    requires_win: boolean;
+}
+
+/** ドロップテーブルの設定とエントリー */
+export interface DropTableDetail {
+    /** テーブルID。テーブルが未作成なら null */
+    id: number | null;
+    name: string;
+    /** 1回のバトルで何かがドロップする確率 (0〜1) */
+    drop_rate: number;
+    /** 勝利時に drop_rate に掛ける倍率 (1以上)。掛けた結果は1を上限とする */
+    win_rate_multiplier: number;
+    entries: DropTableEntryDetail[];
+    /** 要設計図なのに、このテーブルに入っていない設計図 */
+    unobtainable_blueprints: BlueprintTargetSummary[];
+}
+
+export interface DropTableEntryInput {
+    blueprint_id: string;
+    weight: number;
+    requires_win: boolean;
+}
+
+/** ドロップテーブルの保存リクエスト。エントリーは entries の内容で置き換える */
+export interface DropTableUpdate {
+    name: string;
+    drop_rate: number;
+    win_rate_multiplier: number;
+    entries: DropTableEntryInput[];
+}
