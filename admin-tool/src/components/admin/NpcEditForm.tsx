@@ -74,6 +74,7 @@ interface NpcEditFormProps {
   onSubmitPilot: (values: NpcPilotFormValues) => Promise<void>;
   onSubmitMobileSuit: (msId: string, payload: NpcMobileSuitUpdate) => Promise<void>;
   onAddMobileSuit: (masterMobileSuitId: string) => Promise<void>;
+  onSetActiveMobileSuit: (msId: string) => Promise<void>;
   isSubmitting?: boolean;
 }
 
@@ -82,6 +83,7 @@ export default function NpcEditForm({
   onSubmitPilot,
   onSubmitMobileSuit,
   onAddMobileSuit,
+  onSetActiveMobileSuit,
   isSubmitting,
 }: NpcEditFormProps) {
   "use no memo";
@@ -168,15 +170,16 @@ export default function NpcEditForm({
       <div className="border-t border-[#00ff41]/20 pt-4 space-y-3">
         <p className="text-xs text-[#ffb000]/80 font-bold">所属機体（{npc.mobile_suits.length}）</p>
         {npc.mobile_suits.map((ms) => (
-          <MobileSuitCard key={ms.id} mobileSuit={ms} onSubmit={onSubmitMobileSuit} />
+          <MobileSuitCard
+            key={ms.id}
+            mobileSuit={ms}
+            isActive={ms.id === npc.active_mobile_suit_id}
+            onSubmit={onSubmitMobileSuit}
+            onSetActive={onSetActiveMobileSuit}
+          />
         ))}
         {npc.mobile_suits.length === 0 && (
           <p className="text-xs text-[#00ff41]/40 text-center py-4">所属機体がありません</p>
-        )}
-        {npc.mobile_suits.length > 1 && (
-          <p className="text-xs text-[#ffb000]/60">
-            ※ 複数の機体を所有している場合、マッチングでどの機体が出撃するかは保証されません
-          </p>
         )}
 
         <div>
@@ -190,12 +193,26 @@ export default function NpcEditForm({
 
 function MobileSuitCard({
   mobileSuit,
+  isActive,
   onSubmit,
+  onSetActive,
 }: {
   mobileSuit: NpcMobileSuit;
+  isActive: boolean;
   onSubmit: (msId: string, payload: NpcMobileSuitUpdate) => Promise<void>;
+  onSetActive: (msId: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const [isSettingActive, setIsSettingActive] = useState(false);
+
+  async function handleSetActive() {
+    setIsSettingActive(true);
+    try {
+      await onSetActive(mobileSuit.id);
+    } finally {
+      setIsSettingActive(false);
+    }
+  }
 
   return (
     <div className="border border-[#00ff41]/20 p-3 space-y-3">
@@ -207,11 +224,26 @@ function MobileSuitCard({
               ACE
             </span>
           )}
+          {isActive && (
+            <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-[#00ff41]/20 text-[#00ff41] border border-[#00ff41]/50">
+              出撃中
+            </span>
+          )}
         </p>
         <div className="flex items-center gap-3 shrink-0">
           <span className="text-xs text-[#00ff41]/50">
             HP {mobileSuit.current_hp}/{mobileSuit.max_hp} ・ 装甲 {mobileSuit.armor} ・ 武装 {mobileSuit.weapons.length}
           </span>
+          {!isActive && (
+            <button
+              type="button"
+              onClick={handleSetActive}
+              disabled={isSettingActive}
+              className="text-xs text-[#ffb000] border border-[#ffb000]/40 px-2 py-0.5 hover:border-[#ffb000] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              出撃機体にする
+            </button>
+          )}
           {!open && (
             <button
               type="button"

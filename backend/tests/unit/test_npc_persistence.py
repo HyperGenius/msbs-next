@@ -191,6 +191,76 @@ def test_select_npcs_for_room_with_existing_npcs(in_memory_session):
     assert pilot.is_npc is True
 
 
+def _create_npc_suit(user_id: str, name: str) -> MobileSuit:
+    return MobileSuit(
+        name=name,
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.2,
+        position=Vector3(x=0, y=0, z=0),
+        weapons=[],
+        side="ENEMY",
+        tactics={"priority": "CLOSEST", "range": "BALANCED"},
+        user_id=user_id,
+        personality="AGGRESSIVE",
+    )
+
+
+def test_select_npcs_for_room_uses_active_mobile_suit(in_memory_session):
+    """複数機所有の NPC は active_mobile_suit_id の機体で出撃することをテスト."""
+    npc_pilot = PilotService(in_memory_session).create_npc_pilot("Multi", "AGGRESSIVE")
+    suits = [_create_npc_suit(npc_pilot.user_id, f"Suit {i}") for i in range(3)]
+    in_memory_session.add_all(suits)
+    in_memory_session.commit()
+    npc_pilot.active_mobile_suit_id = suits[2].id
+    in_memory_session.add(npc_pilot)
+    in_memory_session.commit()
+
+    matching_service = MatchingService(in_memory_session)
+    for _ in range(3):
+        [(suit, _pilot)] = matching_service.select_npcs_for_room(1)
+        assert suit.id == suits[2].id
+
+
+@pytest.mark.parametrize("invalid", ["none", "other_pilot", "player_side"])
+def test_select_npcs_for_room_assigns_active_when_invalid(in_memory_session, invalid):
+    """出撃機体が NULL / 無効な NPC は所有機が選ばれて保存され、以降固定されることをテスト."""
+    pilot_service = PilotService(in_memory_session)
+    npc_pilot = pilot_service.create_npc_pilot("Unset", "AGGRESSIVE")
+    owned = [_create_npc_suit(npc_pilot.user_id, f"Owned {i}") for i in range(2)]
+    in_memory_session.add_all(owned)
+    if invalid == "other_pilot":
+        stray = _create_npc_suit("npc-other", "Other Pilot Suit")
+    else:
+        stray = _create_npc_suit(npc_pilot.user_id, "Player Side Suit")
+        stray.side = "PLAYER"
+    in_memory_session.add(stray)
+    in_memory_session.commit()
+    if invalid != "none":
+        npc_pilot.active_mobile_suit_id = stray.id
+        in_memory_session.add(npc_pilot)
+        in_memory_session.commit()
+
+    matching_service = MatchingService(in_memory_session)
+    [(first_suit, _pilot)] = matching_service.select_npcs_for_room(1)
+    in_memory_session.commit()
+
+    assert first_suit.id in {s.id for s in owned}
+    in_memory_session.refresh(npc_pilot)
+    assert npc_pilot.active_mobile_suit_id == first_suit.id
+
+    [(second_suit, _pilot)] = matching_service.select_npcs_for_room(1)
+    assert second_suit.id == first_suit.id
+
+
+def test_select_npcs_for_room_skips_npc_without_suits(in_memory_session):
+    """所有機が0機の NPC は選ばれないことをテスト."""
+    PilotService(in_memory_session).create_npc_pilot("No Suit", "AGGRESSIVE")
+    matching_service = MatchingService(in_memory_session)
+    assert matching_service.select_npcs_for_room(1) == []
+
+
 def test_create_rooms_creates_npc_pilots(in_memory_session):
     """create_rooms が NPC パイロットを DB に保存することをテスト."""
     # ルームを作成
@@ -232,6 +302,10 @@ def test_create_rooms_creates_npc_pilots(in_memory_session):
     for pilot in npc_pilots:
         assert pilot.user_id.startswith("npc-")
         assert pilot.npc_personality is not None
+        # 新規 NPC は生成した機体が出撃機体に設定される（Issue #542）
+        active_suit = in_memory_session.get(MobileSuit, pilot.active_mobile_suit_id)
+        assert active_suit is not None
+        assert active_suit.user_id == pilot.user_id
 
 
 def test_create_rooms_npc_snapshot_includes_pilot_level(in_memory_session):
