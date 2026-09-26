@@ -180,6 +180,10 @@ TTL キャッシュ方式で `gamedata.py` から提供する。
   - 武装フォームで扱わない項目（`weapon_type` / `cooldown_sec` / `fire_arc_deg` / `aim_distribution` 等）は、
     同じ武器IDの既存値を引き継いで送信する（編集で既定値に巻き戻らないようにするため）
   - スキルは `SKILL_MASTER_DATA` と同じ選択肢から追加する（重複・レベル上限をクライアント側でも検証）
+  - 機体タブの「機体マスターから取り込み」で `master_mobile_suits` の機体をプルダウンで選ぶと、機体名・スペック・欠損部位・武装を
+    フォームに流し込む（Issue #540）。EN（`max_en` / `en_recovery`）と戦術は機体マスターに無いため、フォームの現在値を残す。
+    既存エースの編集中、または入力済みのフォームでは、上書き前に確認ダイアログを出す。
+    取り込んだ武装のフォーム外項目（`weapon_type` 等）は、保存時に同じ武器IDの取り込み元から引き継ぐ
 - 新規追加・削除（確認ダイアログ付き）。SWR による楽観的更新
 
 ### コンポーネント構成
@@ -192,7 +196,9 @@ admin-tool/src/
 ├── components/
 │   └── admin/
 │       ├── AcePilotTable.tsx      # 一覧テーブル（ソート・フィルタ付き）
-│       └── AcePilotEditForm.tsx   # タブ分割の編集フォーム・zod スキーマ・送信値変換
+│       ├── AcePilotEditForm.tsx   # タブ分割の編集フォーム・zod スキーマ・送信値変換
+│       ├── MobileSuitSpecFields.tsx   # NPC機と共通の機体スペック / 武装入力欄（Issue #540）
+│       └── MasterMobileSuitSelect.tsx # 機体マスター選択プルダウン（Issue #540）
 ├── hooks/
 │   └── useAdminAcePilots.ts       # 一覧取得・作成・更新・削除フック（SWR + 楽観的更新）
 └── types/
@@ -201,6 +207,8 @@ admin-tool/src/
 
 `AcePilotEditForm` は `MobileSuitEditForm` と同じく `"use no memo"` を付与している（Issue #388 と同じ理由）。
 武器の zod スキーマは `MobileSuitEditForm` の `weaponSchema` を再利用している。
+機体タブ・武装タブの入力欄と機体スペックの zod スキーマ（`mobileSuitSpecSchema`）は、NPC 機体編集フォームと共通の
+`MobileSuitSpecFields.tsx` に置いている（[admin-npcs.md](./admin-npcs.md) 参照）。
 
 環境変数・起動方法は [admin-mobile-suits.md](./admin-mobile-suits.md) の「Frontend」セクションと共通。
 
@@ -253,4 +261,4 @@ npx vitest run tests/unit/acePilotEditFormValidation.test.ts
 ```
 
 `acePilotSchema` のバリデーション（ID形式・武器0件・耐性範囲・スキル上限/重複）と、
-`toAcePilotPayload()` の変換（skills 配列→辞書、フォーム外の武器項目の引き継ぎ）を検証する。
+`toAcePilotPayload()` の変換（skills 配列→辞書、フォーム外の武器項目の引き継ぎ、機体マスターから取り込んだ武装の引き継ぎ）を検証する。

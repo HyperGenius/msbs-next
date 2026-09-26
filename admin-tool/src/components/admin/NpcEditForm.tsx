@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { NpcMobileSuit, NpcPilotDetail, NpcPersonality } from "@/types/admin";
+import { NpcMobileSuit, NpcMobileSuitUpdate, NpcPilotDetail, NpcPersonality } from "@/types/admin";
+import MasterMobileSuitSelect from "@/components/admin/MasterMobileSuitSelect";
+import NpcMobileSuitEditForm from "@/components/admin/NpcMobileSuitEditForm";
 
 // ============================================================
 // Zod バリデーションスキーマ
@@ -70,11 +72,18 @@ const inputClass =
 interface NpcEditFormProps {
   npc: NpcPilotDetail;
   onSubmitPilot: (values: NpcPilotFormValues) => Promise<void>;
-  onSubmitMobileSuit: (msId: string, payload: { name?: string; max_hp?: number; armor?: number; mobility?: number }) => Promise<void>;
+  onSubmitMobileSuit: (msId: string, payload: NpcMobileSuitUpdate) => Promise<void>;
+  onAddMobileSuit: (masterMobileSuitId: string) => Promise<void>;
   isSubmitting?: boolean;
 }
 
-export default function NpcEditForm({ npc, onSubmitPilot, onSubmitMobileSuit, isSubmitting }: NpcEditFormProps) {
+export default function NpcEditForm({
+  npc,
+  onSubmitPilot,
+  onSubmitMobileSuit,
+  onAddMobileSuit,
+  isSubmitting,
+}: NpcEditFormProps) {
   "use no memo";
   const {
     register,
@@ -156,53 +165,41 @@ export default function NpcEditForm({ npc, onSubmitPilot, onSubmitMobileSuit, is
         </div>
       </form>
 
-      <div className="border-t border-[#00ff41]/20 pt-4">
-        <p className="text-xs text-[#ffb000]/80 mb-3 font-bold">所属機体（{npc.mobile_suits.length}）</p>
-        <div className="space-y-3">
-          {npc.mobile_suits.map((ms) => (
-            <MobileSuitInlineEditor key={ms.id} mobileSuit={ms} onSubmit={onSubmitMobileSuit} />
-          ))}
-          {npc.mobile_suits.length === 0 && (
-            <p className="text-xs text-[#00ff41]/40 text-center py-4">所属機体がありません</p>
-          )}
+      <div className="border-t border-[#00ff41]/20 pt-4 space-y-3">
+        <p className="text-xs text-[#ffb000]/80 font-bold">所属機体（{npc.mobile_suits.length}）</p>
+        {npc.mobile_suits.map((ms) => (
+          <MobileSuitCard key={ms.id} mobileSuit={ms} onSubmit={onSubmitMobileSuit} />
+        ))}
+        {npc.mobile_suits.length === 0 && (
+          <p className="text-xs text-[#00ff41]/40 text-center py-4">所属機体がありません</p>
+        )}
+        {npc.mobile_suits.length > 1 && (
+          <p className="text-xs text-[#ffb000]/60">
+            ※ 複数の機体を所有している場合、マッチングでどの機体が出撃するかは保証されません
+          </p>
+        )}
+
+        <div>
+          <p className="text-xs text-[#00ff41]/60 mb-1">機体を追加（機体マスターからコピー）</p>
+          <MasterMobileSuitSelect buttonLabel="追加" onApply={(master) => onAddMobileSuit(master.id)} />
         </div>
       </div>
     </div>
   );
 }
 
-function MobileSuitInlineEditor({
+function MobileSuitCard({
   mobileSuit,
   onSubmit,
 }: {
   mobileSuit: NpcMobileSuit;
-  onSubmit: (msId: string, payload: { name?: string; max_hp?: number; armor?: number; mobility?: number }) => Promise<void>;
+  onSubmit: (msId: string, payload: NpcMobileSuitUpdate) => Promise<void>;
 }) {
-  const [maxHp, setMaxHp] = useState(mobileSuit.max_hp);
-  const [armor, setArmor] = useState(mobileSuit.armor);
-  const [mobility, setMobility] = useState(mobileSuit.mobility);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    setMaxHp(mobileSuit.max_hp);
-    setArmor(mobileSuit.armor);
-    setMobility(mobileSuit.mobility);
-  }, [mobileSuit]);
-
-  const dirty = maxHp !== mobileSuit.max_hp || armor !== mobileSuit.armor || mobility !== mobileSuit.mobility;
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await onSubmit(mobileSuit.id, { max_hp: maxHp, armor, mobility });
-    } finally {
-      setSaving(false);
-    }
-  }
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="border border-[#00ff41]/20 p-3 space-y-2">
-      <div className="flex items-center justify-between">
+    <div className="border border-[#00ff41]/20 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-bold text-[#00ff41]">
           {mobileSuit.name}
           {mobileSuit.is_ace && (
@@ -211,47 +208,22 @@ function MobileSuitInlineEditor({
             </span>
           )}
         </p>
-        <span className="text-xs text-[#00ff41]/50">
-          HP {mobileSuit.current_hp}/{mobileSuit.max_hp}
-        </span>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <Label>最大HP</Label>
-          <input
-            type="number"
-            value={maxHp}
-            onChange={(e) => setMaxHp(Number(e.target.value))}
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <Label>装甲</Label>
-          <input
-            type="number"
-            value={armor}
-            onChange={(e) => setArmor(Number(e.target.value))}
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <Label>機動性</Label>
-          <input
-            type="number"
-            step="0.1"
-            value={mobility}
-            onChange={(e) => setMobility(Number(e.target.value))}
-            className={inputClass}
-          />
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs text-[#00ff41]/50">
+            HP {mobileSuit.current_hp}/{mobileSuit.max_hp} ・ 装甲 {mobileSuit.armor} ・ 武装 {mobileSuit.weapons.length}
+          </span>
+          {!open && (
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="text-xs text-[#00ff41] border border-[#00ff41]/40 px-2 py-0.5 hover:border-[#00ff41]"
+            >
+              編集
+            </button>
+          )}
         </div>
       </div>
-      <button
-        onClick={handleSave}
-        disabled={!dirty || saving}
-        className="w-full border border-[#00ff41]/40 text-[#00ff41]/80 py-1.5 text-xs font-bold hover:bg-[#00ff41]/10 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {saving ? "保存中..." : "この機体を保存"}
-      </button>
+      {open && <NpcMobileSuitEditForm mobileSuit={mobileSuit} onSubmit={onSubmit} onClose={() => setOpen(false)} />}
     </div>
   );
 }

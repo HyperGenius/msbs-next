@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useAdminAcePilots } from "@/hooks/useAdminAcePilots";
 import { AcePilot } from "@/types/admin";
+import { Weapon } from "@/types/weapon";
 import AcePilotTable from "@/components/admin/AcePilotTable";
 import AcePilotEditForm, { AcePilotFormValues, toAcePilotPayload } from "@/components/admin/AcePilotEditForm";
 import { SciFiPanel, SciFiHeading, SciFiButton } from "@/components/ui";
@@ -39,16 +40,16 @@ export default function AdminAcePilotsPage() {
     setMode("create");
   }
 
-  async function handleSubmit(values: AcePilotFormValues) {
+  async function handleSubmit(values: AcePilotFormValues, importedWeapons: Weapon[]) {
     setIsSubmitting(true);
     try {
       if (mode === "create") {
-        await createAcePilot(toAcePilotPayload(values, null));
+        await createAcePilot(toAcePilotPayload(values, null, importedWeapons));
         showToast(`${values.name} を新規追加しました`, "success");
         setMode("idle");
         setSelectedAce(null);
       } else if (mode === "edit" && selectedAce) {
-        const updated = await updateAcePilot(selectedAce.id, toAcePilotPayload(values, selectedAce));
+        const updated = await updateAcePilot(selectedAce.id, toAcePilotPayload(values, selectedAce, importedWeapons));
         setSelectedAce(updated);
         showToast(`${values.name} を更新しました`, "success");
       }

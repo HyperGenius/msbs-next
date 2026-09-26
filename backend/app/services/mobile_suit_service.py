@@ -4,13 +4,43 @@ import uuid
 
 from sqlmodel import Session, select
 
+from app.core.npc_data import build_npc_tactics
 from app.models.models import (
+    ALL_PART_NAMES,
     MasterMobileSuit,
     MasterMobileSuitCreate,
     MasterMobileSuitUpdate,
     MobileSuit,
     MobileSuitUpdate,
+    NpcMobileSuitUpdate,
+    Pilot,
+    Weapon,
 )
+
+# 機体マスターの specs から MobileSuit へそのままコピーする項目（weapons は別途変換する）。
+_MASTER_SPEC_FIELDS = (
+    "max_hp",
+    "armor",
+    "mobility",
+    "sensor_range",
+    "beam_resistance",
+    "physical_resistance",
+    "melee_aptitude",
+    "shooting_aptitude",
+    "accuracy_bonus",
+    "evasion_bonus",
+    "acceleration_bonus",
+    "turning_bonus",
+    "missing_parts",
+)
+
+
+def _validate_missing_parts(missing_parts: list[str]) -> None:
+    invalid_parts = [p for p in missing_parts if p not in ALL_PART_NAMES]
+    if invalid_parts:
+        raise ValueError(
+            f"Invalid missing_parts: {invalid_parts}. Must be any of {ALL_PART_NAMES}."
+        )
 
 
 class MobileSuitService:
@@ -66,6 +96,72 @@ class MobileSuitService:
         session.commit()
         session.refresh(ms)
 
+        return ms
+
+    # --- NPC 機体（管理者用） ---
+
+    @staticmethod
+    def update_npc_mobile_suit(
+        session: Session, ms: MobileSuit, update_data: NpcMobileSuitUpdate
+    ) -> MobileSuit:
+        """NPC 機体を更新する.
+
+        Raises:
+            ValueError: 武装が空、または欠損部位名が不正な場合
+        """
+        if update_data.weapons is not None and not update_data.weapons:
+            raise ValueError("weapons must have at least one weapon.")
+        if update_data.missing_parts is not None:
+            _validate_missing_parts(update_data.missing_parts)
+
+        update_dict = update_data.model_dump(exclude_unset=True)
+        for key, value in update_dict.items():
+            # None は「未指定」として扱う。NOT NULL 列を壊さないため。
+            if value is not None:
+                setattr(ms, key, value)
+        if update_data.weapons is not None:
+            ms.weapons = update_data.weapons
+
+        if update_data.max_hp is not None:
+            ms.current_hp = ms.max_hp
+        # parts は max_hp/armor/missing_parts から派生する。空にすると normalize_parts() が再生成する。
+        if {"max_hp", "armor", "missing_parts"} & update_dict.keys():
+            ms.parts = {}
+
+        session.add(ms)
+        session.commit()
+        session.refresh(ms)
+        return ms
+
+    @staticmethod
+    def create_npc_mobile_suit_from_master(
+        session: Session, pilot: Pilot, master_id: str
+    ) -> MobileSuit | None:
+        """機体マスターのスペックをコピーして NPC 機体を作成する.
+
+        Returns:
+            作成した機体。機体マスターが存在しない場合は None
+        """
+        master = session.get(MasterMobileSuit, master_id)
+        if master is None:
+            return None
+
+        specs = master.specs
+        personality = pilot.npc_personality or "AGGRESSIVE"
+        ms = MobileSuit(
+            **{k: specs[k] for k in _MASTER_SPEC_FIELDS if k in specs},
+            name=f"{master.name} (NPC)",
+            current_hp=specs["max_hp"],
+            weapons=[Weapon(**w) for w in specs["weapons"]],
+            user_id=pilot.user_id,
+            side="ENEMY",
+            tactics=build_npc_tactics(personality),
+            personality=personality,
+            pilot_name=pilot.name,
+        )
+        session.add(ms)
+        session.commit()
+        session.refresh(ms)
         return ms
 
     # --- マスター機体データ CRUD ---

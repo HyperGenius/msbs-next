@@ -286,3 +286,225 @@ def test_update_npc_mobile_suit_not_owned(client_admin, npc_pilot, session):
         json={"max_hp": 1200},
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def _weapon_payload(weapon_id: str = "npc_beam_rifle", **overrides) -> dict:
+    return {
+        "id": weapon_id,
+        "name": "Beam Rifle",
+        "power": 200,
+        "range": 500,
+        "accuracy": 80,
+        "type": "BEAM",
+        **overrides,
+    }
+
+
+def test_get_npc_detail_includes_full_spec(client_admin, npc_pilot_with_suit):
+    """NPC詳細の機体に武装・耐性・戦術などの全項目が含まれること."""
+    pilot, _suit = npc_pilot_with_suit
+    response = client_admin.get(f"/api/admin/npcs/{pilot.id}", headers=HEADERS)
+    assert response.status_code == status.HTTP_200_OK
+    ms = response.json()["mobile_suits"][0]
+    for key in (
+        "sensor_range",
+        "beam_resistance",
+        "physical_resistance",
+        "max_en",
+        "en_recovery",
+        "melee_aptitude",
+        "accuracy_bonus",
+        "tactics",
+        "missing_parts",
+        "weapons",
+    ):
+        assert key in ms
+
+
+def test_update_npc_mobile_suit_full_spec(client_admin, npc_pilot_with_suit, session):
+    """武装・耐性・戦術・欠損部位を含めて更新でき、DBに反映されること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={
+            "name": "Custom Dom",
+            "beam_resistance": 0.2,
+            "max_en": 1500,
+            "melee_aptitude": 1.3,
+            "tactics": {"priority": "WEAKEST", "range": "MELEE"},
+            "missing_parts": ["LEFT_ARM"],
+            "weapons": [_weapon_payload(cooldown_sec=2.5)],
+        },
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["name"] == "Custom Dom"
+    assert data["beam_resistance"] == 0.2
+    assert data["max_en"] == 1500
+    assert data["melee_aptitude"] == 1.3
+    assert data["tactics"] == {"priority": "WEAKEST", "range": "MELEE"}
+    assert data["missing_parts"] == ["LEFT_ARM"]
+    assert data["weapons"][0]["id"] == "npc_beam_rifle"
+    assert data["weapons"][0]["cooldown_sec"] == 2.5
+
+    session.refresh(suit)
+    assert suit.name == "Custom Dom"
+    assert suit.missing_parts == ["LEFT_ARM"]
+    assert suit.weapons[0]["name"] == "Beam Rifle"
+
+
+def test_update_npc_mobile_suit_max_hp_resets_current_hp_and_parts(
+    client_admin, npc_pilot_with_suit, session
+):
+    """最大HPを変更すると current_hp が揃い、parts が再生成対象になること."""
+    pilot, suit = npc_pilot_with_suit
+    suit.current_hp = 300
+    suit.normalize_parts()
+    session.add(suit)
+    session.commit()
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"max_hp": 1000},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["current_hp"] == 1000
+
+    session.refresh(suit)
+    assert suit.parts == {}
+
+
+def test_update_npc_mobile_suit_rejects_empty_weapons(
+    client_admin, npc_pilot_with_suit
+):
+    """武装を空にする更新は 422 になること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"weapons": []},
+    )
+    assert response.status_code == 422
+
+
+def test_update_npc_mobile_suit_rejects_invalid_missing_parts(
+    client_admin, npc_pilot_with_suit
+):
+    """不正な部位名を欠損部位に指定すると 422 になること."""
+    pilot, suit = npc_pilot_with_suit
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"missing_parts": ["TAIL"]},
+    )
+    assert response.status_code == 422
+
+
+def test_update_npc_mobile_suit_rejects_player_suit(client_admin, npc_pilot, session):
+    """プレイヤー所有機は NPC API から更新できないこと."""
+    player_suit = MobileSuit(
+        user_id="player-1",
+        name="Player Suit",
+        max_hp=800,
+        current_hp=800,
+        armor=50,
+        mobility=1.0,
+        weapons=[],
+        side="PLAYER",
+    )
+    session.add(player_suit)
+    session.commit()
+    session.refresh(player_suit)
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{npc_pilot.id}/mobile-suits/{player_suit.id}",
+        headers=HEADERS,
+        json={"weapons": [_weapon_payload()]},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# ===================== 機体追加テスト =====================
+
+
+@pytest.fixture(name="master_suit")
+def master_suit_fixture(session):
+    """テスト用の機体マスターを1件作成する."""
+    from app.models.models import MasterMobileSuit
+
+    master = MasterMobileSuit(
+        id="test_dom",
+        name="Dom",
+        price=1000,
+        description="test",
+        specs={
+            "max_hp": 950,
+            "armor": 60,
+            "mobility": 1.2,
+            "beam_resistance": 0.05,
+            "melee_aptitude": 1.2,
+            "missing_parts": [],
+            "weapons": [
+                {
+                    "id": "giant_bazooka",
+                    "name": "Giant Bazooka",
+                    "power": 250,
+                    "range": 450,
+                    "accuracy": 70,
+                }
+            ],
+        },
+    )
+    session.add(master)
+    session.commit()
+    return master
+
+
+def test_create_npc_mobile_suit_from_master(
+    client_admin, npc_pilot, master_suit, session
+):
+    """機体マスターを指定して NPC に機体を追加できること."""
+    response = client_admin.post(
+        f"/api/admin/npcs/{npc_pilot.id}/mobile-suits",
+        headers=HEADERS,
+        json={"master_mobile_suit_id": "test_dom"},
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["name"] == "Dom (NPC)"
+    assert data["max_hp"] == 950
+    assert data["current_hp"] == 950
+    assert data["beam_resistance"] == 0.05
+    assert data["melee_aptitude"] == 1.2
+    assert data["weapons"][0]["id"] == "giant_bazooka"
+    assert data["personality"] == "AGGRESSIVE"
+    assert data["pilot_name"] == npc_pilot.name
+    assert data["tactics"]["range"] == "MELEE"
+
+    owned = PilotService.get_npc_owned_mobile_suits(session, npc_pilot.user_id)
+    assert len(owned) == 1
+    assert owned[0].side == "ENEMY"
+
+
+def test_create_npc_mobile_suit_master_not_found(client_admin, npc_pilot):
+    """存在しない機体マスターを指定すると 404 になること."""
+    response = client_admin.post(
+        f"/api/admin/npcs/{npc_pilot.id}/mobile-suits",
+        headers=HEADERS,
+        json={"master_mobile_suit_id": "no_such_suit"},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_create_npc_mobile_suit_pilot_not_found(client_admin, master_suit):
+    """存在しない NPC を指定すると 404 になること."""
+    import uuid
+
+    response = client_admin.post(
+        f"/api/admin/npcs/{uuid.uuid4()}/mobile-suits",
+        headers=HEADERS,
+        json={"master_mobile_suit_id": "test_dom"},
+    )
+    assert response.status_code == status.HTTP_404_NOT_FOUND

@@ -2,7 +2,14 @@
 "use client";
 
 import useSWR from "swr";
-import { NpcPilot, NpcPilotDetail, NpcPilotUpdate, NpcMobileSuitUpdate, NpcMobileSuit } from "@/types/admin";
+import {
+  NpcPilot,
+  NpcPilotDetail,
+  NpcPilotUpdate,
+  NpcMobileSuitCreate,
+  NpcMobileSuitUpdate,
+  NpcMobileSuit,
+} from "@/types/admin";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const ADMIN_API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY || "";
@@ -80,6 +87,25 @@ export function useAdminNpcs() {
     return res.json();
   }
 
+  /**
+   * 機体マスターのスペックをコピーして NPC に機体を追加する
+   */
+  async function addNpcMobileSuit(pilotId: string, payload: NpcMobileSuitCreate): Promise<NpcMobileSuit> {
+    const res = await fetch(`${ENDPOINT}/${pilotId}/mobile-suits`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": ADMIN_API_KEY,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.detail || `Create failed: ${res.status}`);
+    }
+    return res.json();
+  }
+
   return {
     npcs: data,
     isLoading,
@@ -87,6 +113,7 @@ export function useAdminNpcs() {
     mutate,
     updateNpc,
     updateNpcMobileSuit,
+    addNpcMobileSuit,
   };
 }
 

@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useAdminNpcs, useAdminNpcDetail } from "@/hooks/useAdminNpcs";
-import { NpcPilot } from "@/types/admin";
+import { NpcMobileSuitUpdate, NpcPilot } from "@/types/admin";
 import NpcTable from "@/components/admin/NpcTable";
 import NpcEditForm, { NpcPilotFormValues } from "@/components/admin/NpcEditForm";
 import { SciFiPanel, SciFiHeading } from "@/components/ui";
@@ -14,7 +14,7 @@ interface Toast {
 }
 
 export default function AdminNpcsPage() {
-  const { npcs, isLoading, isError, updateNpc, updateNpcMobileSuit, mutate } = useAdminNpcs();
+  const { npcs, isLoading, isError, updateNpc, updateNpcMobileSuit, addNpcMobileSuit, mutate } = useAdminNpcs();
 
   const [selectedNpc, setSelectedNpc] = useState<NpcPilot | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,16 +47,26 @@ export default function AdminNpcsPage() {
     }
   }
 
-  async function handleSubmitMobileSuit(
-    msId: string,
-    payload: { name?: string; max_hp?: number; armor?: number; mobility?: number }
-  ) {
+  async function handleSubmitMobileSuit(msId: string, payload: NpcMobileSuitUpdate) {
     if (!selectedNpc) return;
     try {
       await updateNpcMobileSuit(selectedNpc.id, msId, payload);
       await mutateDetail();
       await mutate();
       showToast("機体ステータスを更新しました", "success");
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "エラーが発生しました", "error");
+    }
+  }
+
+  async function handleAddMobileSuit(masterMobileSuitId: string) {
+    if (!selectedNpc) return;
+    try {
+      const created = await addNpcMobileSuit(selectedNpc.id, { master_mobile_suit_id: masterMobileSuitId });
+      await mutateDetail();
+      // 一覧の所有機体数が変わるため再取得する
+      await mutate();
+      showToast(`${created.name} を追加しました`, "success");
     } catch (e) {
       showToast(e instanceof Error ? e.message : "エラーが発生しました", "error");
     }
@@ -122,6 +132,7 @@ export default function AdminNpcsPage() {
                       npc={npcDetail}
                       onSubmitPilot={handleSubmitPilot}
                       onSubmitMobileSuit={handleSubmitMobileSuit}
+                      onAddMobileSuit={handleAddMobileSuit}
                       isSubmitting={isSubmitting}
                     />
                   )}

@@ -50,7 +50,8 @@ admin-tool から一覧・閲覧・編集できる管理画面。#171（NPC自�
 | `GET` | `/api/admin/npcs` | NPCパイロット一覧取得（性格/レベル範囲/エースで絞り込み可） |
 | `GET` | `/api/admin/npcs/{pilot_id}` | NPCパイロット詳細取得（所有機体一覧付き） |
 | `PUT` | `/api/admin/npcs/{pilot_id}` | NPCパイロットのステータス更新 |
-| `PUT` | `/api/admin/npcs/{pilot_id}/mobile-suits/{ms_id}` | NPC所有機体のステータス更新 |
+| `POST` | `/api/admin/npcs/{pilot_id}/mobile-suits` | 機体マスターから NPC に機体を追加（Issue #540） |
+| `PUT` | `/api/admin/npcs/{pilot_id}/mobile-suits/{ms_id}` | NPC所有機体のスペック（武装含む）更新 |
 
 ### GET /api/admin/npcs
 
@@ -77,20 +78,54 @@ admin-tool から一覧・閲覧・編集できる管理画面。#171（NPC自�
 `sht` / `mel` / `intel` / `ref` / `tou` / `luk` / `awq`、すべて省略可）を受け取り、指定フィールドのみ更新する。
 更新後の `NpcPilotDetail` を返す。存在しない場合は `404`。
 
+### POST /api/admin/npcs/{pilot_id}/mobile-suits（Issue #540）
+
+リクエストボディ `NpcMobileSuitCreate`（`master_mobile_suit_id`）で指定した機体マスター（`master_mobile_suits`）の
+`specs` をコピーし、NPC の所有機体として `mobile_suits` に作成する。作成した機体を `NpcMobileSuitEntry` で返す（`201`）。
+
+| 項目 | 設定値 |
+|---|---|
+| `max_hp` / `armor` / `mobility` / `sensor_range` / 耐性 / 適性・補正 / `missing_parts` | 機体マスターの `specs` からコピー |
+| `weapons` | 機体マスターの `specs.weapons`（既定値との差分で保存されていても `Weapon` として補完する） |
+| `name` | `"{機体マスター名} (NPC)"`（マッチングで生成される NPC 機体の命名に合わせる） |
+| `current_hp` | `max_hp` と同じ |
+| `user_id` / `side` | NPC パイロットの `user_id` / `"ENEMY"` |
+| `personality` / `pilot_name` | NPC パイロットの `npc_personality`（未設定なら `AGGRESSIVE`）/ `name` |
+| `tactics` | `build_npc_tactics(personality)`（`npc_data.py`。マッチング時の NPC 機体生成と共通） |
+
+NPC パイロットまたは機体マスターが存在しない場合は `404`。
+
+> [!NOTE]
+> `MatchingService.select_npcs_for_room()` は NPC 1人につき所有機体の先頭1機しか使わず、取得順も指定していない。
+> 複数の機体を追加した場合にどの機体が出撃するかは保証されない（管理画面にもその旨を表示している）。
+
 ### PUT /api/admin/npcs/{pilot_id}/mobile-suits/{ms_id}
 
-指定したNPCが所有する機体（`MobileSuit`）のステータスを更新する。リクエストボディは既存の
-`MobileSuitUpdate`（`app/models/models.py`）をそのまま流用しており、`name` / `max_hp` / `armor` /
-`mobility` / `tactics` / 各種適性・補正値などを部分更新できる。
+指定したNPCが所有する機体（`MobileSuit`）を部分更新する。リクエストボディは NPC 専用の
+`NpcMobileSuitUpdate`（`app/models/models.py`）で、以下を更新できる。
 
-- `ms_id` が `pilot_id` の所有機体でない場合は `404` を返す（他NPCの機体を誤って編集できないようにするため）
-- 更新ロジックは `MobileSuitService.update_mobile_suit()`（プレイヤー機体編集用の既存メソッド）をそのまま再利用
+- 基本: `name` / `max_hp` / `armor` / `mobility` / `sensor_range` / `beam_resistance` / `physical_resistance` / `max_en` / `en_recovery`
+- 適性・補正: `melee_aptitude` / `shooting_aptitude` / `accuracy_bonus` / `evasion_bonus` / `acceleration_bonus` / `turning_bonus`
+- `tactics` / `missing_parts` / `weapons`
+
+プレイヤー向けの `MobileSuitUpdate` は流用しない。`MobileSuitUpdate` に武装などを足すと、プレイヤーが
+`PUT /api/mobile_suits/{ms_id}` で自機の武装を任意に書き換えられるようになるため。
+
+- `ms_id` が `pilot_id` の所有機体でない場合は `404` を返す（他NPC・プレイヤーの機体を誤って編集できないようにするため）
+- `weapons` を空にした場合、`missing_parts` に不正な部位名を含めた場合は `422`
+- `max_hp` を変更すると `current_hp` も新しい `max_hp` に揃える（バトル投入時に全快されるため実害はないが、表示の不整合を避ける）
+- `max_hp` / `armor` / `missing_parts` のいずれかを変更すると `parts` を空にする（`normalize_parts()` が次回参照時に再生成する）
+- 更新ロジックは `MobileSuitService.update_npc_mobile_suit()`
+
+レスポンスの `NpcMobileSuitEntry` は、上記の編集対象項目すべてと `current_hp` / `personality` / `is_ace` /
+`ace_id` / `pilot_name` / `bounty_exp` / `bounty_credits` を返す。
 
 ### ステータスコード
 
 | コード | 意味 |
 |---|---|
 | `200` | 成功 |
+| `201` | 機体追加成功 |
 | `401` | APIキー不正 |
 | `404` | 対象NPC / 所有機体が見つからない |
 | `422` | バリデーションエラー |
@@ -140,8 +175,11 @@ admin-tool/src/
 │       └── page.tsx               # NPC管理画面エントリーポイント
 ├── components/
 │   └── admin/
-│       ├── NpcTable.tsx           # NPC一覧テーブル（ソート・フィルタ付き）
-│       └── NpcEditForm.tsx        # ステータス編集フォーム + 所有機体インライン編集
+│       ├── NpcTable.tsx               # NPC一覧テーブル（ソート・フィルタ付き）
+│       ├── NpcEditForm.tsx            # ステータス編集フォーム + 所有機体一覧・機体追加
+│       ├── NpcMobileSuitEditForm.tsx  # NPC機体の編集フォーム（機体 / 武装タブ）
+│       ├── MobileSuitSpecFields.tsx   # エース機・NPC機で共通の機体スペック / 武装入力欄
+│       └── MasterMobileSuitSelect.tsx # 機体マスター選択プルダウン
 └── hooks/
     └── useAdminNpcs.ts            # 一覧/詳細取得・更新フック（SWR）
 ```
@@ -157,8 +195,20 @@ admin-tool/src/
 ### 詳細編集フォーム（`NpcEditForm`）
 
 - `react-hook-form` + `zod` によるバリデーション（性格・レベル・EXP・クレジット・各種ポイント・SHT/MEL/INT/REF/TOU/LUK/AWQ）
-- 所有機体一覧を下部に表示し、機体ごとに最大HP・装甲・機動性をインライン編集して個別に保存可能
+- 所有機体一覧を下部に表示する。機体ごとの「編集」で `NpcMobileSuitEditForm` を開き、個別に保存する
   （`PUT /api/admin/npcs/{pilot_id}/mobile-suits/{ms_id}` を機体単位で呼び出す）
+- 一覧の下の「機体を追加」で機体マスターをプルダウンから選ぶと、`POST /api/admin/npcs/{pilot_id}/mobile-suits` で追加する
+
+### NPC機体編集フォーム（`NpcMobileSuitEditForm`、Issue #540）
+
+- 「機体 / 武装」のタブに分割。バリデーションエラーを含むタブには `!` を表示し、保存時にエラーのある最初のタブへ切り替える
+- 機体タブ: スペック・戦術・欠損部位（エース用フォームと共通の `MobileSuitSpecSection`）と、NPC 機だけが持つ適性・補正
+- 武装タブ: 武器の追加・削除・編集（エース用フォームと共通の `WeaponListSection`）
+- 武装フォームで扱わない項目（`weapon_type` / `cooldown_sec` / `fire_arc_deg` / `aim_distribution` 等）は、
+  同じ武器IDの既存値を引き継いで送信する（`mergeWeaponSources()`）
+
+`MobileSuitSpecSection` / `WeaponListSection` は `useFormContext()` で親フォームを参照するため、
+`FormProvider` 配下に置き、機体スペックを `mobile_suit` キーの下に持つフォームで使う。
 
 > [!NOTE]
 > `NpcEditForm` は `MobileSuitEditForm` と同様、React Compiler の自動メモ化が `react-hook-form` の
@@ -186,6 +236,19 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_admin_key_12345" pytho
 - 詳細取得: 所有機体一覧の反映、404（存在しないid / `is_npc=False`）
 - 更新: ステータス更新の反映、404（存在しないid）
 - 所有機体更新: ステータス反映、他NPC所有機体を編集しようとした場合の404
+- 所有機体更新（Issue #540）: 武装・耐性・戦術・欠損部位を含む全項目の反映、`max_hp` 変更時の `current_hp`/`parts` 再計算、
+  武装0件・不正な欠損部位の422、プレイヤー所有機の404
+- 機体追加（Issue #540）: 機体マスターのスペック・武装のコピー、NPC パイロットの性格・名前の反映、404（機体マスター / NPC が存在しない）
+
+### admin-tool
+
+```bash
+cd admin-tool
+npx vitest run tests/unit/npcMobileSuitEditFormValidation.test.ts
+```
+
+`npcMobileSuitSchema` のバリデーション、`toNpcMobileSuitFormValues()`（戦術未設定の補完）、
+`toNpcMobileSuitPayload()`（フォーム外の武器項目の引き継ぎ）、`masterToSpecValues()`、`masterMobileSuitLabel()` を検証する。
 
 ---
 
@@ -193,13 +256,18 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_admin_key_12345" pytho
 
 - `backend/app/routers/admin.py` — `npc_router`（NPC CRUD API）
 - `backend/app/services/pilot_service.py` — NPC管理者用メソッド・`get_ace_pilot_names()`
-- `backend/app/models/models.py` — `NpcPilotEntry` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuitEntry`
+- `backend/app/services/mobile_suit_service.py` — `update_npc_mobile_suit()` / `create_npc_mobile_suit_from_master()`
+- `backend/app/core/npc_data.py` — `build_npc_tactics()`（性格に応じた戦術設定）
+- `backend/app/models/models.py` — `NpcPilotEntry` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuitEntry` / `NpcMobileSuitUpdate` / `NpcMobileSuitCreate`
 - `backend/app/core/gamedata.py` — `get_ace_pilots()`（エース識別の名前一致元データ。`ace_pilots` テーブル）
 - `backend/main.py` — `app.include_router(admin.npc_router)`
 - `backend/tests/unit/test_admin_npcs.py` — NPC管理APIテスト
 - `admin-tool/src/app/npcs/page.tsx` — 管理画面
 - `admin-tool/src/hooks/useAdminNpcs.ts` — 一覧/詳細取得・更新フック
 - `admin-tool/src/components/admin/NpcTable.tsx` — NPC一覧テーブル
-- `admin-tool/src/components/admin/NpcEditForm.tsx` — ステータス編集フォーム
-- `admin-tool/src/types/admin.ts` — `NpcPilot` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuit` 型定義
+- `admin-tool/src/components/admin/NpcEditForm.tsx` — ステータス編集フォーム・所有機体一覧・機体追加
+- `admin-tool/src/components/admin/NpcMobileSuitEditForm.tsx` — NPC機体編集フォーム
+- `admin-tool/src/components/admin/MobileSuitSpecFields.tsx` — 機体スペック / 武装の共通入力欄・変換ヘルパー
+- `admin-tool/src/components/admin/MasterMobileSuitSelect.tsx` — 機体マスター選択プルダウン
+- `admin-tool/src/types/admin.ts` — `NpcPilot` / `NpcPilotDetail` / `NpcPilotUpdate` / `NpcMobileSuit` / `NpcMobileSuitUpdate` / `NpcMobileSuitCreate` 型定義
 - `admin-tool/src/app/page.tsx` — トップナビへのリンク追加

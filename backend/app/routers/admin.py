@@ -26,8 +26,10 @@ from app.models.models import (
     MasterWeaponEntry,
     MasterWeaponSpec,
     MasterWeaponUpdate,
-    MobileSuitUpdate,
+    MobileSuit,
+    NpcMobileSuitCreate,
     NpcMobileSuitEntry,
+    NpcMobileSuitUpdate,
     NpcPilotDetail,
     NpcPilotEntry,
     NpcPilotUpdate,
@@ -91,6 +93,7 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
         acceleration_bonus=specs_raw.get("acceleration_bonus", 1.0),
         turning_bonus=specs_raw.get("turning_bonus", 1.0),
         weapons=weapons,
+        missing_parts=specs_raw.get("missing_parts", []),
     )
     return MasterMobileSuitEntry(
         id=raw["id"],
@@ -329,6 +332,11 @@ def _pilot_to_entry(pilot: Pilot) -> NpcPilotEntry:
     )
 
 
+def _mobile_suit_to_npc_entry(ms: MobileSuit) -> NpcMobileSuitEntry:
+    """MobileSuit モデルを NpcMobileSuitEntry レスポンスに変換する."""
+    return NpcMobileSuitEntry.model_validate(ms, from_attributes=True)
+
+
 @npc_router.get("", response_model=list[NpcPilotEntry])
 def list_npcs(
     personality: str | None = None,
@@ -378,23 +386,7 @@ def get_npc(
     return NpcPilotDetail(
         **entry.model_dump(exclude={"mobile_suit_count"}),
         mobile_suit_count=len(mobile_suits),
-        mobile_suits=[
-            NpcMobileSuitEntry(
-                id=ms.id,
-                name=ms.name,
-                max_hp=ms.max_hp,
-                current_hp=ms.current_hp,
-                armor=ms.armor,
-                mobility=ms.mobility,
-                personality=ms.personality,
-                is_ace=ms.is_ace,
-                ace_id=ms.ace_id,
-                pilot_name=ms.pilot_name,
-                bounty_exp=ms.bounty_exp,
-                bounty_credits=ms.bounty_credits,
-            )
-            for ms in mobile_suits
-        ],
+        mobile_suits=[_mobile_suit_to_npc_entry(ms) for ms in mobile_suits],
     )
 
 
@@ -414,52 +406,76 @@ def update_npc(
     return get_npc(pilot_id, session)
 
 
-@npc_router.put("/{pilot_id}/mobile-suits/{ms_id}", response_model=NpcMobileSuitEntry)
-def update_npc_mobile_suit(
-    pilot_id: uuid.UUID,
-    ms_id: uuid.UUID,
-    data: MobileSuitUpdate,
-    session: Session = Depends(get_session),
-) -> NpcMobileSuitEntry:
-    """NPCパイロットが所有する機体のステータスを更新する.
-
-    - `ms_id` が `pilot_id` の所有機体でない場合は 404 を返す
-    """
+def _get_npc_pilot_or_404(session: Session, pilot_id: uuid.UUID) -> Pilot:
     pilot = PilotService.get_npc_pilot_by_id(session, pilot_id)
     if pilot is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"NPC pilot '{pilot_id}' not found.",
         )
-    owned_ids = {
-        ms.id for ms in PilotService.get_npc_owned_mobile_suits(session, pilot.user_id)
-    }
-    if ms_id not in owned_ids:
+    return pilot
+
+
+@npc_router.post(
+    "/{pilot_id}/mobile-suits",
+    response_model=NpcMobileSuitEntry,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_npc_mobile_suit(
+    pilot_id: uuid.UUID,
+    data: NpcMobileSuitCreate,
+    session: Session = Depends(get_session),
+) -> NpcMobileSuitEntry:
+    """機体マスターのスペックをコピーして NPC に機体を追加する.
+
+    - NPC パイロットまたは機体マスターが存在しない場合は 404 を返す
+    """
+    pilot = _get_npc_pilot_or_404(session, pilot_id)
+    created = MobileSuitService.create_npc_mobile_suit_from_master(
+        session, pilot, data.master_mobile_suit_id
+    )
+    if created is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Master mobile suit '{data.master_mobile_suit_id}' not found.",
+        )
+    return _mobile_suit_to_npc_entry(created)
+
+
+@npc_router.put("/{pilot_id}/mobile-suits/{ms_id}", response_model=NpcMobileSuitEntry)
+def update_npc_mobile_suit(
+    pilot_id: uuid.UUID,
+    ms_id: uuid.UUID,
+    data: NpcMobileSuitUpdate,
+    session: Session = Depends(get_session),
+) -> NpcMobileSuitEntry:
+    """NPCパイロットが所有する機体のスペック（武装含む）を更新する.
+
+    - `ms_id` が `pilot_id` の所有機体でない場合は 404 を返す
+    - 武装が空、または欠損部位名が不正な場合は 422 を返す
+    """
+    pilot = _get_npc_pilot_or_404(session, pilot_id)
+    ms = next(
+        (
+            owned
+            for owned in PilotService.get_npc_owned_mobile_suits(session, pilot.user_id)
+            if owned.id == ms_id
+        ),
+        None,
+    )
+    if ms is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Mobile suit '{ms_id}' not owned by NPC pilot '{pilot_id}'.",
         )
 
-    updated = MobileSuitService.update_mobile_suit(session, ms_id, data)
-    if updated is None:
+    try:
+        updated = MobileSuitService.update_npc_mobile_suit(session, ms, data)
+    except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Mobile suit '{ms_id}' not found.",
-        )
-    return NpcMobileSuitEntry(
-        id=updated.id,
-        name=updated.name,
-        max_hp=updated.max_hp,
-        current_hp=updated.current_hp,
-        armor=updated.armor,
-        mobility=updated.mobility,
-        personality=updated.personality,
-        is_ace=updated.is_ace,
-        ace_id=updated.ace_id,
-        pilot_name=updated.pilot_name,
-        bounty_exp=updated.bounty_exp,
-        bounty_credits=updated.bounty_credits,
-    )
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+    return _mobile_suit_to_npc_entry(updated)
 
 
 # ===========================================================
