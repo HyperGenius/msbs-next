@@ -44,7 +44,7 @@
 | `max_en` / `en_recovery` | EN 最大値・回復量 |
 | `weapons` | 武装リスト（`Weapon`、最低1件） |
 | `weapon_slot_count` | 武器スロット数（任意、1以上。Issue #543）。マッチング時に生成する `mobile_suits` の行へコピーする。未設定なら `max(装備数, MAX_WEAPON_SLOTS)` |
-| `tactics` | 戦術設定（`priority` / `range`） |
+| `tactics` | 戦術設定（`priority` / `range` / `weapon_switch_policy`。Issue #544）。`weapon_switch_policy` が未設定なら `DEFAULT_WEAPON_SWITCH_POLICY` で動く |
 | `missing_parts` | 欠損部位（任意。部位 HP/装甲 `parts` は `max_hp`/`armor` から自動生成） |
 
 `MasterMobileSuitSpec` にある適性・ボーナス系（`melee_aptitude` 等）はエース機体では持たない。
@@ -136,6 +136,8 @@ TTL キャッシュ方式で `gamedata.py` から提供する。
 | `mobile_suit.weapons` の本数が `mobile_suit.weapon_slot_count` を超える（Issue #543） | 422 |
 | `mobile_suit.weapons` に同じ武器 ID が2本以上ある（Issue #543） | 422 |
 | `mobile_suit.missing_parts` に未知の部位名 | 422 |
+| `mobile_suit.tactics` の `priority` / `range` / `weapon_switch_policy` が許容値以外（Issue #544） | 422 |
+| `mobile_suit.weapons[].aim_distribution` の部位名が `ALL_PART_NAMES` 以外、負値、合計が 1.0 ±0.01 以外（Issue #544） | 422 |
 | `skills` に未知のスキルID、またはレベルが 0〜`max_level` の範囲外 | 422 |
 | `id` が重複（POST） | 409 |
 | 対象が存在しない（PUT / DELETE） | 404 |
@@ -180,8 +182,10 @@ TTL キャッシュ方式で `gamedata.py` から提供する。
 - エース一覧テーブル: ID・二つ名・パイロット名（機体名）・性格・HP・機動性・賞金を表示。列ヘッダーでソート、テキストフィルタ
 - 編集フォーム: 入力項目が多いため「基本情報 / 機体 / 武装 / パイロット」のタブに分割
   - バリデーションエラーを含むタブには `!` を表示し、保存時にエラーのある最初のタブへ自動で切り替える
-  - 武装フォームで扱わない項目（`weapon_type` / `cooldown_sec` / `fire_arc_deg` / `aim_distribution` 等）は、
+  - 武装フォームで扱わない項目（`weapon_type` / `cooldown_sec` / `fire_arc_deg` 等）は、
     同じ武器IDの既存値を引き継いで送信する（編集で既定値に巻き戻らないようにするため）
+  - 機体タブで武装持ち替えポリシー、武装タブで武器ごとの狙う部位配分を編集する（Issue #544。NPC 機体編集フォームと共通。
+    詳細は [admin-npcs.md](./admin-npcs.md) の「NPC機体編集フォーム」）。`tactics` のフォームで扱わないキーは保存時に残す
   - スキルは `SKILL_MASTER_DATA` と同じ選択肢から追加する（重複・レベル上限をクライアント側でも検証）
   - 機体タブの「機体マスターから取り込み」で `master_mobile_suits` の機体をプルダウンで選ぶと、機体名・スペック・欠損部位・武装を
     フォームに流し込む（Issue #540）。EN（`max_en` / `en_recovery`）と戦術は機体マスターに無いため、フォームの現在値を残す。
@@ -259,6 +263,7 @@ python -m pytest tests/unit/test_admin_ace_pilots.py --tb=short
 - マスターが空の場合 `_create_ace_pilot()` が `None` を返すこと
 - NPC 一覧の `is_ace` 判定がマスターの `pilot_name` に追従すること
 - 武器スロット数（Issue #543）: 本数超過・武器ID重複の422、マッチングで生成するエース機へのスロット数のコピーと未設定時のフォールバック
+- 持ち替えポリシー・狙う部位配分（Issue #544）: 不正な戦術値・配分（部位名・負値・合計）の422、マッチングで生成するエース機への反映
 
 既存の `test_npc_personality_and_ace.py` / `test_phase_e35_flanking.py` は、`ACE_PILOTS` の代わりに
 `get_ace_pilots()`（`conftest.py` が `ace_pilots.json` からシード）を参照するよう変更した。
@@ -272,4 +277,5 @@ npx vitest run tests/unit/acePilotEditFormValidation.test.ts
 
 `acePilotSchema` のバリデーション（ID形式・武器0件・耐性範囲・スキル上限/重複）と、
 `toAcePilotPayload()` の変換（skills 配列→辞書、フォーム外の武器項目の引き継ぎ、機体マスターから取り込んだ武装の引き継ぎ）、
-武器スロット数・武器ID重複のバリデーション（Issue #543）を検証する。
+武器スロット数・武器ID重複のバリデーション（Issue #543）、
+持ち替えポリシーの送信・`tactics` のフォーム外キーの保持・配分の割合への変換と合計のバリデーション（Issue #544）を検証する。

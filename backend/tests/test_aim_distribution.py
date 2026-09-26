@@ -88,6 +88,7 @@ def test_update_aim_distribution_rejects_invalid_part_name(
             session, pilot.user_id, player_weapon.id, {"UNKNOWN_PART": 1.0}
         )
     assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "不正な部位名です: ['UNKNOWN_PART']"
 
 
 def test_update_aim_distribution_rejects_negative_value(
@@ -100,6 +101,7 @@ def test_update_aim_distribution_rejects_negative_value(
             session, pilot.user_id, player_weapon.id, invalid
         )
     assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "配分の値は0以上で指定してください"
 
 
 def test_update_aim_distribution_rejects_sum_not_100_percent(
@@ -112,6 +114,9 @@ def test_update_aim_distribution_rejects_sum_not_100_percent(
             session, pilot.user_id, player_weapon.id, invalid
         )
     assert exc_info.value.status_code == 400
+    assert (
+        exc_info.value.detail == "配分の合計は100%にしてください（現在の合計: 170.0%）"
+    )
 
 
 def test_update_aim_distribution_rejects_wrong_owner(
