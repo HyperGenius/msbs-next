@@ -9,8 +9,10 @@
 """
 
 import os
+import random
 import sys
 import traceback
+import uuid
 from datetime import UTC, datetime, timedelta
 
 # パスを通す
@@ -28,11 +30,13 @@ from app.models.models import (
     BattleLogRecord,
     BattleResult,
     BattleRoom,
+    LootItem,
     MobileSuit,
     Vector3,
     Weapon,
 )
 from app.services.battle_digest_service import compute_battle_digest_fields
+from app.services.drop_service import DropScope, DropService
 from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
@@ -228,6 +232,7 @@ def _save_battle_results(
     player_unit: MobileSuit,
     enemy_units: list[MobileSuit],
     steps_used: int = 0,
+    rng: random.Random | None = None,
 ) -> None:
     """戦闘結果を保存し報酬を付与.
 
@@ -243,8 +248,10 @@ def _save_battle_results(
         enemy_units: 敵ユニットリスト（スナップショット保存用。同上）
         steps_used: シミュレーションが消費したステップ数（ダイジェストの
             長期戦判定に使用。テスト等でシミュレーションを行わない場合は0のままでよい）
+        rng: 戦利品の抽選に使う乱数生成器。省略時はシードなしで生成する
     """
     pilot_service = PilotService(session)
+    drop_rng = rng or random.Random()
     # entry.mobile_suit_snapshot はエントリー時点（バトル前）のHPしか持たないため、
     # ダイジェスト集計にはシミュレーションで実際に更新された live なユニットを使う
     live_units_by_id = {str(u.id): u for u in [player_unit, *enemy_units]}
@@ -285,6 +292,9 @@ def _save_battle_results(
         level_before = 0
         level_after = 0
         level_up = False
+        # 所持設計図の source_battle_id に使うため、バトル結果IDを先に決める。
+        battle_result_id = uuid.uuid4()
+        loot: list[LootItem] = []
 
         if entry.user_id:
             try:
@@ -308,6 +318,21 @@ def _save_battle_results(
 
             except Exception as e:
                 print(f"  警告: 報酬付与エラー ({entry.user_id}): {e}")
+                traceback.print_exc()
+
+            try:
+                loot = DropService.roll(
+                    session,
+                    entry.user_id,
+                    DropScope.batch(),
+                    is_win=individual_win_loss == "WIN",
+                    battle_result_id=battle_result_id,
+                    rng=drop_rng,
+                )
+                for item in loot:
+                    print(f"  戦利品 ({entry.user_id}): {item.blueprint_id}")
+            except Exception as e:
+                print(f"  警告: 戦利品の抽選エラー ({entry.user_id}): {e}")
                 traceback.print_exc()
 
         # そのエントリーのユニットを player_info、残りを enemies_info として保存
@@ -340,6 +365,7 @@ def _save_battle_results(
         )
 
         battle_result = BattleResult(
+            id=battle_result_id,
             user_id=entry.user_id,
             room_id=room.id,
             battle_log_id=battle_log_record.id,
@@ -356,6 +382,7 @@ def _save_battle_results(
             level_after=level_after,
             level_up=level_up,
             is_read=False,
+            loot=[item.model_dump() for item in loot],
             **digest_fields,
         )
         session.add(battle_result)

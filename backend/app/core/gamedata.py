@@ -147,6 +147,14 @@ def get_starter_kit_by_faction(faction: str) -> dict[str, Any] | None:
     return STARTER_KITS.get(faction)
 
 
+def is_available_to_faction(pilot_faction: str, item_faction: str) -> bool:
+    """パイロットの勢力で機体を扱えるかを返す.
+
+    どちらかの勢力が空文字（未所属・共通機体）なら扱える。
+    """
+    return not pilot_faction or not item_faction or item_faction == pilot_faction
+
+
 # --- TTL キャッシュ補助関数 ---
 
 

@@ -20,7 +20,7 @@ from app.models.models import (
     PlayerBlueprint,
 )
 from app.services.blueprint_service import (
-    DEFAULT_UNLOCK_HINT,
+    UNAVAILABLE_UNLOCK_HINT,
     BlueprintService,
     UnlockState,
 )
@@ -290,7 +290,7 @@ def test_get_unlock_states(session: Session, pilot: Pilot) -> None:
         is_standard_issue=False, is_unlocked=True, unlock_hint=None
     )
     assert states["gelgoog"] == UnlockState(
-        is_standard_issue=False, is_unlocked=False, unlock_hint=DEFAULT_UNLOCK_HINT
+        is_standard_issue=False, is_unlocked=False, unlock_hint=UNAVAILABLE_UNLOCK_HINT
     )
     # 他のプレイヤーの設計図では解放されない。
     assert states["dom"].is_unlocked is False
@@ -328,12 +328,14 @@ def test_get_unlock_states_ignores_other_target_type(
 def test_get_unlock_states_query_count_is_constant(
     session: Session, pilot: Pilot
 ) -> None:
-    """解放状態の取得が商品数によらず2回のクエリで済むこと."""
+    """解放状態の取得が商品数によらず3回のクエリで済むこと."""
     target_ids = [m.id for m in session.exec(select(MasterMobileSuit)).all()]
+    for target_id in target_ids:
+        _make_restricted(session, f"mobile_suit:{target_id}")
     with _recorded_queries(session) as statements:
         BlueprintService.get_unlock_states(
             session, USER_ID, BlueprintTargetType.MOBILE_SUIT, target_ids
         )
 
-    assert len(target_ids) > 2
-    assert len(statements) == 2
+    assert len(target_ids) > 3
+    assert len(statements) == 3

@@ -110,6 +110,8 @@ def setup_master_data_db() -> Generator[None, None, None]:
         BattleLogRecord,
         BattleResult,
         BattleRoom,
+        DropTable,
+        DropTableEntry,
         Friendship,
         Leaderboard,
         MasterBlueprint,
@@ -141,6 +143,8 @@ def setup_master_data_db() -> Generator[None, None, None]:
         seed_session.exec(delete(BattleResult))
         seed_session.exec(delete(BattleLogRecord))
         seed_session.exec(delete(PlayerWeapon))
+        seed_session.exec(delete(DropTableEntry))
+        seed_session.exec(delete(DropTable))
         seed_session.exec(delete(PlayerBlueprint))
         seed_session.exec(delete(MasterBlueprint))
         seed_session.exec(delete(MobileSuit))

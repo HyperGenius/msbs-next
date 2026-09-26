@@ -12,7 +12,7 @@ from app.models.models import (
     Pilot,
     PlayerWeapon,
 )
-from app.services.blueprint_service import DEFAULT_UNLOCK_HINT, BlueprintService
+from app.services.blueprint_service import UNAVAILABLE_UNLOCK_HINT, BlueprintService
 from main import app
 
 
@@ -1160,7 +1160,7 @@ def test_get_weapon_listings_unlock_states(client, session):
     assert listings["beam_saber"]["unlock_hint"] is None
     assert listings["beam_rifle"]["is_standard_issue"] is False
     assert listings["beam_rifle"]["is_unlocked"] is False
-    assert listings["beam_rifle"]["unlock_hint"] == DEFAULT_UNLOCK_HINT
+    assert listings["beam_rifle"]["unlock_hint"] == UNAVAILABLE_UNLOCK_HINT
 
 
 def test_purchase_weapon_without_blueprint_forbidden(client, session):
