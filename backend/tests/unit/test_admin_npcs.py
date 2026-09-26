@@ -583,6 +583,7 @@ def test_update_npc_active_mobile_suit_rejects_other_pilot_suit(
         json={"active_mobile_suit_id": str(other_suit.id)},
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "is not owned by" in response.json()["detail"]
     session.refresh(npc_pilot)
     assert npc_pilot.active_mobile_suit_id is None
 
@@ -597,6 +598,25 @@ def test_update_npc_active_mobile_suit_rejects_unknown_id(client_admin, npc_pilo
         json={"active_mobile_suit_id": str(uuid.uuid4())},
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "not found" in response.json()["detail"]
+
+
+def test_update_npc_active_mobile_suit_rejects_non_enemy_suit(
+    client_admin, npc_pilot, session
+):
+    """side='ENEMY' 以外の所有機を出撃機体に指定すると 422 になること."""
+    suit = _add_enemy_suit(session, npc_pilot.user_id, "Player Side Suit")
+    suit.side = "PLAYER"
+    session.add(suit)
+    session.commit()
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{npc_pilot.id}",
+        headers=HEADERS,
+        json={"active_mobile_suit_id": str(suit.id)},
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert "ENEMY" in response.json()["detail"]
 
 
 def test_create_npc_mobile_suit_sets_active_when_unset(

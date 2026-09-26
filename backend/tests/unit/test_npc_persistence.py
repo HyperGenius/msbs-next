@@ -242,6 +242,8 @@ def test_select_npcs_for_room_assigns_active_when_invalid(in_memory_session, inv
         in_memory_session.add(npc_pilot)
         in_memory_session.commit()
 
+    updated_at_before = npc_pilot.updated_at
+
     matching_service = MatchingService(in_memory_session)
     [(first_suit, _pilot)] = matching_service.select_npcs_for_room(1)
     in_memory_session.commit()
@@ -249,6 +251,7 @@ def test_select_npcs_for_room_assigns_active_when_invalid(in_memory_session, inv
     assert first_suit.id in {s.id for s in owned}
     in_memory_session.refresh(npc_pilot)
     assert npc_pilot.active_mobile_suit_id == first_suit.id
+    assert npc_pilot.updated_at > updated_at_before
 
     [(second_suit, _pilot)] = matching_service.select_npcs_for_room(1)
     assert second_suit.id == first_suit.id

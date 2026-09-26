@@ -1,6 +1,7 @@
 # backend/app/services/mobile_suit_service.py
 import re
 import uuid
+from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
@@ -169,6 +170,7 @@ class MobileSuitService:
         session.flush()
         if pilot.active_mobile_suit_id is None:
             pilot.active_mobile_suit_id = ms.id
+            pilot.updated_at = datetime.now(UTC)
             session.add(pilot)
         session.commit()
         session.refresh(ms)

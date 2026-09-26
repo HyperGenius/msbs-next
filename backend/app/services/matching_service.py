@@ -308,6 +308,7 @@ class MatchingService:
                 # 保存しておかないと ORDER BY なしの取得順に依存して出撃機体が毎回変わりうる
                 active_suit = owned_suits[0]
                 pilot.active_mobile_suit_id = active_suit.id
+                pilot.updated_at = datetime.now(UTC)
                 self.session.add(pilot)
             result.append((active_suit, pilot))
 
