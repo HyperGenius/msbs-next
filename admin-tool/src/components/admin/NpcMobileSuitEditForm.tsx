@@ -110,6 +110,8 @@ export default function NpcMobileSuitEditForm({ mobileSuit, onSubmit, onClose }:
   const [tab, setTab] = useState<Tab>("mobile_suit");
   // 追加した武装は、追加した時点の編集対象に紐付ける。
   // mobileSuit が変わったら（保存後の再取得など）空として扱い、次の保存に混ぜない。
+  // ID ではなく参照で比べるのは、下の useEffect の reset() と同じ契機にそろえるため。
+  // reset() で追加した武装もフォームから消えるので、取り込み元だけが残ることはない。
   const [imported, setImported] = useState<{ source: NpcMobileSuit; weapons: Weapon[] }>({
     source: mobileSuit,
     weapons: [],
