@@ -13,6 +13,7 @@ import {
   Label,
   MobileSuitSpecSection,
   WeaponListSection,
+  mergeTactics,
   mergeWeaponSources,
   mobileSuitSpecSchema,
   npcMobileSuitToSpecValues,
@@ -68,6 +69,7 @@ export function toNpcMobileSuitPayload(
 ): NpcMobileSuitUpdate {
   return {
     ...values.mobile_suit,
+    tactics: mergeTactics(values.mobile_suit.tactics, original.tactics),
     weapons: mergeWeaponSources(values.mobile_suit.weapons, [...original.weapons, ...importedWeapons]),
   };
 }

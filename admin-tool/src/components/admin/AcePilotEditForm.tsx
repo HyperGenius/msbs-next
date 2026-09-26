@@ -10,6 +10,7 @@ import { Weapon } from "@/types/weapon";
 import MasterMobileSuitSelect from "@/components/admin/MasterMobileSuitSelect";
 import {
   DEFAULT_WEAPON_SLOT_COUNT,
+  DEFAULT_WEAPON_SWITCH_POLICY,
   FieldError,
   Input,
   Label,
@@ -18,6 +19,7 @@ import {
   defaultWeapon,
   inputCls,
   masterToSpecValues,
+  mergeTactics,
   mergeWeaponSources,
   missingPartsToFormValues,
   mobileSuitSpecSchema,
@@ -129,7 +131,7 @@ const defaultValues: AcePilotFormValues = {
     physical_resistance: 0.1,
     max_en: 1500,
     en_recovery: 150,
-    tactics: { priority: "CLOSEST", range: "BALANCED" },
+    tactics: { priority: "CLOSEST", range: "BALANCED", weapon_switch_policy: DEFAULT_WEAPON_SWITCH_POLICY },
     missing_parts: [],
     weapon_slot_count: DEFAULT_WEAPON_SLOT_COUNT,
     weapons: [{ ...defaultWeapon }],
@@ -181,6 +183,7 @@ export function toAcePilotPayload(
     skills: Object.fromEntries(values.skills.map((s) => [s.id, s.level])),
     mobile_suit: {
       ...values.mobile_suit,
+      tactics: mergeTactics(values.mobile_suit.tactics, original?.mobile_suit.tactics),
       weapons: mergeWeaponSources(values.mobile_suit.weapons, [
         ...(original?.mobile_suit.weapons ?? []),
         ...importedWeapons,

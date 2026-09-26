@@ -15,6 +15,8 @@ export interface WeaponSpec {
     is_melee?: boolean;
     /** 装備に必要なビームジェネレータLv (BEAM属性武器のみ有効) */
     required_beam_generator_lv?: number;
+    /** 狙う部位配分（部位名→割合、合計1.0）。未設定なら backend の DEFAULT_AIM_DISTRIBUTION */
+    aim_distribution?: Record<string, number>;
     /** 威力ランク (S〜E) - APIから付与される */
     power_rank?: string;
     /** 射程ランク (S〜E) - APIから付与される */
@@ -29,8 +31,10 @@ export interface Weapon extends WeaponSpec {
     name: string;
 }
 
-/** 機体の戦術設定（ターゲット優先度と交戦距離の方針） */
+/** 機体の戦術設定（ターゲット優先度・交戦距離・武装持ち替えの方針） */
 export interface Tactics {
     priority: "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT";
     range: "MELEE" | "RANGED" | "BALANCED" | "FLEE";
+    /** 未設定なら backend の DEFAULT_WEAPON_SWITCH_POLICY で動く */
+    weapon_switch_policy?: "NEVER" | "RACK_ONLY" | "BALANCED" | "AGGRESSIVE";
 }
