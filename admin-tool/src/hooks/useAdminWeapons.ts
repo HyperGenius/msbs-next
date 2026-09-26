@@ -3,6 +3,7 @@
 
 import useSWR from "swr";
 import { MasterWeapon, MasterWeaponCreate, MasterWeaponUpdate } from "@/types/admin";
+import { applyBlueprintInput, defaultBlueprintSettings } from "@/lib/blueprint";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const ADMIN_API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY || "";
@@ -35,7 +36,11 @@ export function useAdminWeapons() {
    * 新規武器を追加する（楽観的更新）
    */
   async function createWeapon(payload: MasterWeaponCreate): Promise<MasterWeapon> {
-    const optimisticData = data ? [...data, payload as MasterWeapon] : [payload as MasterWeapon];
+    const optimisticItem: MasterWeapon = {
+      ...payload,
+      blueprint: applyBlueprintInput(defaultBlueprintSettings(payload.price), payload.blueprint),
+    };
+    const optimisticData = data ? [...data, optimisticItem] : [optimisticItem];
 
     return mutate(
       async () => {
@@ -67,7 +72,14 @@ export function useAdminWeapons() {
    */
   async function updateWeapon(weaponId: string, payload: MasterWeaponUpdate): Promise<MasterWeapon> {
     const optimisticData = data?.map((w) =>
-      w.id === weaponId ? { ...w, ...payload, weapon: payload.weapon ?? w.weapon } : w
+      w.id === weaponId
+        ? {
+            ...w,
+            ...payload,
+            weapon: payload.weapon ?? w.weapon,
+            blueprint: applyBlueprintInput(w.blueprint, payload.blueprint),
+          }
+        : w
     );
 
     return mutate(

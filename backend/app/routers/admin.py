@@ -18,6 +18,7 @@ from app.models.models import (
     AcePilotUpdate,
     CombatSimulationRequest,
     CombatSimulationResponse,
+    MasterBlueprintSettings,
     MasterMobileSuitCreate,
     MasterMobileSuitEntry,
     MasterMobileSuitSpec,
@@ -108,6 +109,7 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
         beam_generator_lv=raw.get("beam_generator_lv", 0),
         flavor_text=raw.get("flavor_text"),
         specs=specs,
+        blueprint=MasterBlueprintSettings(**raw["blueprint"]),
     )
 
 
@@ -208,6 +210,7 @@ def _raw_weapon_to_entry(raw: dict) -> MasterWeaponEntry:
         description=raw["description"],
         flavor_text=raw.get("flavor_text"),
         weapon=weapon,
+        blueprint=MasterBlueprintSettings(**raw["blueprint"]),
     )
 
 

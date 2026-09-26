@@ -3,6 +3,7 @@
 
 import useSWR from "swr";
 import { MasterMobileSuit, MasterMobileSuitCreate, MasterMobileSuitUpdate } from "@/types/admin";
+import { applyBlueprintInput, defaultBlueprintSettings } from "@/lib/blueprint";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 const ADMIN_API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY || "";
@@ -35,7 +36,11 @@ export function useAdminMobileSuits() {
    * 新規機体を追加する（楽観的更新）
    */
   async function createMobileSuit(payload: MasterMobileSuitCreate): Promise<MasterMobileSuit> {
-    const optimisticData = data ? [...data, payload as MasterMobileSuit] : [payload as MasterMobileSuit];
+    const optimisticItem: MasterMobileSuit = {
+      ...payload,
+      blueprint: applyBlueprintInput(defaultBlueprintSettings(payload.price), payload.blueprint),
+    };
+    const optimisticData = data ? [...data, optimisticItem] : [optimisticItem];
 
     return mutate(
       async () => {
@@ -67,7 +72,14 @@ export function useAdminMobileSuits() {
    */
   async function updateMobileSuit(msId: string, payload: MasterMobileSuitUpdate): Promise<MasterMobileSuit> {
     const optimisticData = data?.map((ms) =>
-      ms.id === msId ? { ...ms, ...payload, specs: payload.specs ?? ms.specs } : ms
+      ms.id === msId
+        ? {
+            ...ms,
+            ...payload,
+            specs: payload.specs ?? ms.specs,
+            blueprint: applyBlueprintInput(ms.blueprint, payload.blueprint),
+          }
+        : ms
     );
 
     return mutate(

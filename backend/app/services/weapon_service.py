@@ -6,12 +6,15 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, and_, col, select
 
 from app.core.gamedata import get_weapon_listing_by_id
 from app.models.models import (
     ALL_PART_NAMES,
     BlueprintTargetType,
+    MasterBlueprint,
+    MasterBlueprintSettings,
+    MasterWeapon,
     MasterWeaponCreate,
     MasterWeaponUpdate,
     MobileSuit,
@@ -22,6 +25,20 @@ from app.models.models import (
     resolve_weapon_slot_count,
 )
 from app.services.blueprint_service import BlueprintService
+
+
+def _master_weapon_to_dict(
+    record: MasterWeapon, blueprint: MasterBlueprintSettings
+) -> dict:
+    return {
+        "id": record.id,
+        "name": record.name,
+        "price": record.price,
+        "description": record.description,
+        "flavor_text": record.flavor_text,
+        "weapon": record.weapon,
+        "blueprint": blueprint.model_dump(),
+    }
 
 
 def validate_aim_distribution(aim_distribution: dict[str, float]) -> None:
@@ -438,10 +455,23 @@ class WeaponService:
 
     @staticmethod
     def get_master_weapons(session: Session) -> list[dict]:
-        """マスター武器データを全件返す（生JSON辞書形式）."""
-        from app.core.gamedata import get_master_weapons
-
-        return get_master_weapons(session)
+        """マスター武器データを設計図設定付きで全件返す（生JSON辞書形式）."""
+        rows = session.exec(
+            select(MasterWeapon, MasterBlueprint).outerjoin(
+                MasterBlueprint,
+                and_(
+                    col(MasterBlueprint.target_type)
+                    == BlueprintTargetType.WEAPON.value,
+                    col(MasterBlueprint.target_id) == col(MasterWeapon.id),
+                ),
+            )
+        ).all()
+        return [
+            _master_weapon_to_dict(
+                record, BlueprintService.settings_of(blueprint, record.price)
+            )
+            for record, blueprint in rows
+        ]
 
     @staticmethod
     def create_master_weapon(session: Session, data: MasterWeaponCreate) -> dict:
@@ -459,7 +489,6 @@ class WeaponService:
             ValueError: id の形式が不正な場合
         """
         from app.core import gamedata as gd
-        from app.models.models import MasterWeapon
 
         # id バリデーション: スネークケース英数字のみ
         if not re.fullmatch(r"[a-z0-9_]+", data.id):
@@ -483,8 +512,8 @@ class WeaponService:
             weapon=weapon_dict,
         )
         session.add(record)
-        BlueprintService.ensure_master_blueprint(
-            session, BlueprintTargetType.WEAPON, data.id, data.price
+        blueprint = BlueprintService.save_master_blueprint_settings(
+            session, BlueprintTargetType.WEAPON, data.id, data.price, data.blueprint
         )
         session.commit()
 
@@ -492,14 +521,9 @@ class WeaponService:
         gd._weapon_shop_listings_cache = None
         gd._cache_expires_at = None
 
-        return {
-            "id": data.id,
-            "name": data.name,
-            "price": data.price,
-            "description": data.description,
-            "flavor_text": data.flavor_text,
-            "weapon": weapon_dict,
-        }
+        return _master_weapon_to_dict(
+            record, BlueprintService.settings_of(blueprint, record.price)
+        )
 
     @staticmethod
     def update_master_weapon(
@@ -518,13 +542,13 @@ class WeaponService:
         from datetime import UTC, datetime
 
         from app.core import gamedata as gd
-        from app.models.models import MasterWeapon
 
         record = session.get(MasterWeapon, weapon_id)
         if record is None:
             return None
 
         update_dict = data.model_dump(exclude_unset=True)
+        update_dict.pop("blueprint", None)
 
         if "weapon" in update_dict and update_dict["weapon"] is not None:
             record.weapon = data.weapon.model_dump()  # type: ignore[union-attr]
@@ -535,20 +559,19 @@ class WeaponService:
 
         record.updated_at = datetime.now(UTC)
         session.add(record)
+        # 換金額は価格に追従させない。運用者が明示的に決める値のため。
+        blueprint = BlueprintService.save_master_blueprint_settings(
+            session, BlueprintTargetType.WEAPON, weapon_id, record.price, data.blueprint
+        )
         session.commit()
 
         # キャッシュを無効化
         gd._weapon_shop_listings_cache = None
         gd._cache_expires_at = None
 
-        return {
-            "id": record.id,
-            "name": record.name,
-            "price": record.price,
-            "description": record.description,
-            "flavor_text": record.flavor_text,
-            "weapon": record.weapon,
-        }
+        return _master_weapon_to_dict(
+            record, BlueprintService.settings_of(blueprint, record.price)
+        )
 
     @staticmethod
     def delete_master_weapon(weapon_id: str, session: Session) -> bool:
@@ -565,7 +588,6 @@ class WeaponService:
             LookupError: player_weapons テーブルで参照されている場合
         """
         from app.core import gamedata as gd
-        from app.models.models import MasterWeapon
 
         record = session.get(MasterWeapon, weapon_id)
         if record is None:

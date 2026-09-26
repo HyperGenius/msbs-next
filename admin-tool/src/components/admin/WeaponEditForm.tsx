@@ -6,6 +6,12 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { MasterWeapon } from "@/types/admin";
+import { defaultBlueprintSettings } from "@/lib/blueprint";
+import BlueprintSettingsFields, {
+  blueprintFormSchema,
+  nullableNumberOptions,
+  toBlueprintFormValues,
+} from "./BlueprintSettingsFields";
 
 // ============================================================
 // Zod バリデーションスキーマ
@@ -35,6 +41,7 @@ export const masterWeaponSchema = z.object({
     fire_arc_deg: z.number({ message: "Must be a number" }).nonnegative().optional(),
     required_beam_generator_lv: z.number({ message: "Must be a number" }).int().nonnegative().optional(),
   }),
+  blueprint: blueprintFormSchema,
 });
 
 export type WeaponFormValues = z.infer<typeof masterWeaponSchema>;
@@ -74,6 +81,7 @@ const defaultValues: WeaponFormValues = {
     fire_arc_deg: 30.0,
     required_beam_generator_lv: 0,
   },
+  blueprint: toBlueprintFormValues(null),
 };
 
 function toFormValues(w: MasterWeapon): WeaponFormValues {
@@ -98,6 +106,7 @@ function toFormValues(w: MasterWeapon): WeaponFormValues {
       fire_arc_deg: w.weapon.fire_arc_deg ?? 30.0,
       required_beam_generator_lv: w.weapon.required_beam_generator_lv ?? 0,
     },
+    blueprint: toBlueprintFormValues(w.blueprint),
   };
 }
 
@@ -132,6 +141,7 @@ export default function WeaponEditForm({
   onCancel,
   isSubmitting = false,
 }: WeaponEditFormProps) {
+  "use no memo";
   const {
     register,
     handleSubmit,
@@ -150,6 +160,7 @@ export default function WeaponEditForm({
   }, [initialData, reset]);
 
   const weaponType = watch("weapon.type");
+  const price = watch("price");
   const isPhysical = weaponType === "PHYSICAL";
 
   useEffect(() => {
@@ -353,6 +364,19 @@ export default function WeaponEditForm({
             <FieldError msg={errors.weapon?.required_beam_generator_lv?.message} />
           </div>
         </div>
+      </div>
+
+      {/* 設計図 */}
+      <div>
+        <p className={sectionTitle}>設計図</p>
+        <BlueprintSettingsFields
+          standardIssueField={register("blueprint.is_standard_issue")}
+          creditValueField={register("blueprint.duplicate_credit_value", nullableNumberOptions)}
+          creditValueError={errors.blueprint?.duplicate_credit_value?.message}
+          defaultCreditValue={
+            initialData ? null : defaultBlueprintSettings(Number.isFinite(price) ? price : 0).duplicate_credit_value
+          }
+        />
       </div>
 
       {/* ボタン */}

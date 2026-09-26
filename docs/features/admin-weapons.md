@@ -37,10 +37,16 @@
       "en_cost": 0,
       "cooldown_sec": 1.0,
       "fire_arc_deg": 30.0
+    },
+    "blueprint": {
+      "is_standard_issue": true,
+      "duplicate_credit_value": 160
     }
   }
 ]
 ```
+
+`blueprint` は設計図設定（Issue #554）。`is_standard_issue` が `true` なら設計図なしで購入できる。`duplicate_credit_value` は入手済みの設計図を再入手したときのクレジット。仕様は `blueprint-system.md` を参照。
 
 ### POST /api/admin/weapons
 
@@ -49,10 +55,12 @@
 **リクエスト:** `MasterWeaponCreate` オブジェクト（`id`, `name`, `price`, `description`, `flavor_text`, `weapon` を含む）
 - `weapon`(`MasterWeaponSpec`) は `id`/`name` を含まない。武器の `id`/`name` は `master_weapons` テーブルのカラム（トップレベルの `id`/`name`）を正とする（Issue #400）
 - `flavor_text`（購入画面用フレーバーテキスト、1〜2行程度）は nullable。省略・`null` の場合、購入画面では非表示になる（Issue #480）
+- `blueprint`（`{"is_standard_issue": bool, "duplicate_credit_value": int}`、各項目とも省略可）は設計図設定。省略した項目は初期値（標準配備・換金額は価格の20%）になる（Issue #554）
 
 **バリデーション:**
 - `id` はスネークケース英数字のみ許可（`^[a-z0-9_]+$`）
 - `id` が重複する場合は `409 Conflict` を返す
+- `blueprint.duplicate_credit_value` が負の場合は `422` を返す
 
 **レスポンス:** `201 Created` + 作成された `MasterWeaponEntry`
 
@@ -61,7 +69,10 @@
 既存マスター武器を更新する。
 
 **リクエスト:** `MasterWeaponUpdate` オブジェクト（全フィールド Optional）
-- `name`, `price`, `description`, `flavor_text`, `weapon` を部分的に更新可能
+- `name`, `price`, `description`, `flavor_text`, `weapon`, `blueprint` を部分的に更新可能
+- `blueprint` で省略した項目は変更しない。`price` を変更しても換金額は変わらない
+- 設計図マスターが無い武器を保存すると、設計図マスターを作成する（Issue #554）
+- `blueprint.duplicate_credit_value` が負の場合は `422 Unprocessable Content`
 
 **レスポンス:**
 - `200 OK` + 更新された `MasterWeaponEntry`
@@ -154,8 +165,9 @@ cd admin-tool && npm run dev   # http://localhost:3100
 
 | 機能 | 説明 |
 |------|------|
-| **武器一覧テーブル** | 名前・価格・武器種別（BEAM/PHYSICAL）・近接フラグ・威力・射程・命中率・要求ビームジェネレータLvを表示。ソート・フィルタ対応 |
+| **武器一覧テーブル** | 名前・価格・設計図（標準配備／要設計図）・換金額・武器種別（BEAM/PHYSICAL）・近接フラグ・威力・射程・命中率・要求ビームジェネレータLvを表示。ソート・フィルタ対応。設計図の種別で絞り込める（Issue #554） |
 | **詳細編集フォーム** | 全パラメータ（`power`, `range`, `accuracy`, `type`, `weapon_type`, `optimal_range`, `decay_rate`, `is_melee`, `max_ammo`, `en_cost`, `cooldown_sec`, `fire_arc_deg`, `required_beam_generator_lv`）を編集。`required_beam_generator_lv` は `type` が `BEAM` の武器のみ意味を持つため、`PHYSICAL` 選択時は入力欄を無効化し値を0にリセットする（Issue #399） |
+| **設計図設定** | 編集フォームの「設計図」欄で標準配備フラグと重複時の換金額を編集する。換金額の空欄は、新規作成では初期値（価格の20%）、編集では変更なしとして送る（Issue #554） |
 | **新規追加フォーム** | 新規武器の追加。`id`/`name` は基本情報欄のみで入力し、`weapon`(スペック)側には持たせない（Issue #400） |
 | **Clone & Edit** | 選択中の武器をベースに新しい ID でコピーを作成 |
 | **バランス比較チャート** | 選択中の武器と全武器平均を **レーダーチャート（威力・射程・命中率・最適射程・減衰率の5軸）** で表示。全武器最大値で正規化し、減衰率は反転表示 |
@@ -171,6 +183,7 @@ admin-tool/src/
 └── components/admin/
     ├── WeaponTable.tsx                 # 武器一覧テーブル
     ├── WeaponEditForm.tsx              # 全パラメータ編集フォーム（react-hook-form + zod）
+    ├── BlueprintSettingsFields.tsx     # 設計図設定の入力欄・一覧用バッジ・絞り込み（機体マスターと共用）
     ├── WeaponRadarChart.tsx            # バランス比較レーダーチャート（recharts）
     └── WeaponCloneDialog.tsx           # Clone & Edit ダイアログ
 ```
@@ -216,6 +229,7 @@ cd backend && NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" \
 - `PUT` 更新・スペック更新・存在しない ID 404
 - `DELETE` 削除・存在しない ID 404・参照あり 409
 - DB 永続化確認
+- 設計図設定の取得・作成時の指定・更新・換金額の省略、価格変更で換金額が変わらないこと、負の換金額 422、設計図マスターが無い武器の保存（Issue #554）
 
 ### admin-tool
 
@@ -226,4 +240,5 @@ cd admin-tool && npx vitest run tests/unit/weaponEditFormValidation.test.ts
 テスト項目:
 - エントリー ID・名前・価格のバリデーション
 - weapon スペック（power・range・accuracy・type・weapon_type・is_melee・required_beam_generator_lv など）のバリデーション
+- 設計図設定のバリデーション・初期値・絞り込み（`tests/unit/blueprintSettings.test.ts`、Issue #554）
 

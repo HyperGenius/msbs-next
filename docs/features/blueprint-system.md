@@ -7,8 +7,8 @@ Epic #550「戦利品ドロップと設計図システム」のデータ基盤�
 設計図を1度入手すれば、以降はクレジットで何度でも購入できる。
 設計図なしで購入できるアイテムは **標準配備品** とする。
 
-本Issueではデータ基盤とサービス層のみを実装しており、**ゲームの挙動は変えていない**。
-ショップの購入制限・ドロップ抽選・admin-tool での編集は後続のSub-Issueで行う。
+データ基盤とサービス層（Issue #551）と、admin-tool での設計図設定の編集（Issue #554）を実装済み。
+いずれも **ゲームの挙動は変えていない**。ショップの購入制限・ドロップ抽選は後続のSub-Issueで行う。
 
 ---
 
@@ -45,10 +45,11 @@ player_blueprints (所持設計図)
 | 契機 | 処理 | 初期値 |
 |---|---|---|
 | マイグレーション（`i3d4e5f6a7b8`） | 既存の全機体・武器マスター分を作成 | 標準配備、換金額 = 価格の20% |
-| admin の機体・武器マスター新規作成 | `MobileSuitService.create_master_mobile_suit` / `WeaponService.create_master_weapon` から作成 | 同上 |
+| admin の機体・武器マスター新規作成 | `MobileSuitService.create_master_mobile_suit` / `WeaponService.create_master_weapon` から作成 | 同上。リクエストの `blueprint` で指定した項目はその値にする |
+| admin の機体・武器マスター更新 | 設計図マスターが無いアイテム（データ不整合）を保存したときに作成 | 同上 |
 | シードスクリプト（`scripts/seed/seed_master_data.py`） | 新規投入した機体・武器分を作成 | 同上 |
 
-* 導入直後にショップの挙動を変えないため、**全件を標準配備で作成する**。運用者が admin-tool（後続Sub-Issue）から標準配備を外していく
+* 導入直後にショップの挙動を変えないため、**全件を標準配備で作成する**。運用者が admin-tool から標準配備を外していく
 * 換金額の初期値（価格の20%、`DUPLICATE_CREDIT_RATIO`）は暫定値。アイテムごとに admin-tool から調整する前提で、固定の計算式にはしない
 * 機体・武器マスターを削除すると、対応する設計図マスターと全プレイヤーの所持記録も削除する
 
@@ -83,9 +84,11 @@ player_blueprints (所持設計図)
 | `grant_blueprint(session, user_id, blueprint_id, source, source_battle_id=None)` | 設計図を付与する。未所持なら所持記録を作り、所持済みなら `duplicate_credit_value` 分のクレジットを `Pilot.credits` に加算する。結果を `BlueprintGrantResult(blueprint_id, is_new, credits_awarded)` で返す |
 | `get_player_blueprints(session, user_id)` | 所持設計図の一覧を入手日時の古い順に返す |
 | `ensure_master_blueprint(session, target_type, target_id, price)` | 設計図マスターが無ければ標準配備で作成する。既存の設定は上書きしない |
+| `save_master_blueprint_settings(session, target_type, target_id, price, settings)` | 設計図マスターが無ければ作成してから、`settings`（`MasterBlueprintSettingsInput`）で指定した項目を保存する。未指定（`None`）の項目は変更しない |
+| `settings_of(blueprint, price)` | 設計図マスターの設定を `MasterBlueprintSettings` で返す。設計図マスターが無ければ作成時と同じ初期値を返す（`can_purchase` と同じく標準配備扱い） |
 | `delete_master_blueprint(session, target_type, target_id)` | 設計図マスターと所持記録を削除する |
 
-* `grant_blueprint` / `ensure_master_blueprint` / `delete_master_blueprint` は **コミットしない**。バトル終了時に複数プレイヤーへまとめて付与する処理（後続Sub-Issue）で、報酬付与と同じトランザクションに載せるため
+* `grant_blueprint` / `ensure_master_blueprint` / `save_master_blueprint_settings` / `delete_master_blueprint` は **コミットしない**。バトル終了時に複数プレイヤーへまとめて付与する処理（後続Sub-Issue）で、報酬付与と同じトランザクションに載せるため
 * `grant_blueprint` は、設計図マスターが無い場合と、所持済みでクレジットを加算するパイロットが無い場合に `LookupError` を送出する
 
 ---
@@ -111,9 +114,28 @@ player_blueprints (所持設計図)
 
 ---
 
+## admin-tool での設計図設定の編集（Issue #554）
+
+機体マスター（`/mobile-suits`）・武器マスター（`/weapons`）の画面で、アイテムごとの設計図設定を確認・編集できる。
+新規エンドポイントは作らず、既存の admin API に `blueprint` を追加した。
+
+| API | `blueprint` |
+|---|---|
+| `GET /api/admin/mobile-suits`・`/api/admin/weapons` | 各アイテムの設定（`MasterBlueprintSettings`: `is_standard_issue` / `duplicate_credit_value`）。機体・武器マスターと設計図マスターを外部結合の1クエリで取得する |
+| `POST`（新規作成） | 任意（`MasterBlueprintSettingsInput`）。省略した項目は初期値（標準配備・価格の20%） |
+| `PUT`（更新） | 任意（`MasterBlueprintSettingsInput`）。省略した項目は変更しない |
+
+* 価格を変更しても、換金額は自動で追従させない。換金額は運用者が明示的に決める値のため
+* 換金額に負の値を指定すると `422`
+* 設計図マスターが無いアイテム（#551 以前のデータ不整合など）は、一覧では初期値で表示する。保存したときに設計図マスターを作成する
+* admin-tool の一覧に「設計図（標準配備／要設計図）」「換金額」列と、標準配備・要設計図の絞り込みを追加した
+* 編集フォームの「設計図」欄で標準配備フラグと換金額を編集する。換金額の空欄は、新規作成では初期値、編集では変更なしとして送る
+* Clone & Edit では、コピー元の設計図設定を引き継ぐ
+
+---
+
 ## 後続のSub-Issueで対応する事項
 
-* admin-tool からの標準配備フラグ・換金額の編集
 * ショップでの購入制限と「未解放」表示（`can_purchase` の組み込み）
 * ドロップテーブル・抽選（`grant_blueprint` の組み込み、入手経路 `DROP`）
 * レア機体向けの技術断片・技術Lv。設計図マスターに必要技術Lvのカラムを追加する想定

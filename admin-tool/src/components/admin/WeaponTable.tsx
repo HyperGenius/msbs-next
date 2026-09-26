@@ -3,6 +3,8 @@
 
 import { useState } from "react";
 import { MasterWeapon } from "@/types/admin";
+import { BlueprintFilter, matchesBlueprintFilter } from "@/lib/blueprint";
+import { BlueprintBadge, BlueprintFilterSelect } from "./BlueprintSettingsFields";
 
 interface WeaponTableProps {
   weapons: MasterWeapon[];
@@ -11,8 +13,21 @@ interface WeaponTableProps {
   onDelete: (weapon: MasterWeapon) => void;
 }
 
-type SortKey = "id" | "name" | "price" | "type" | "power" | "range" | "accuracy";
+type SortKey =
+  | "id"
+  | "name"
+  | "price"
+  | "duplicate_credit_value"
+  | "type"
+  | "power"
+  | "range"
+  | "accuracy";
 type SortDir = "asc" | "desc";
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <span className="text-[#00ff41]/30 ml-1">⇅</span>;
+  return <span className="text-[#ffb000] ml-1">{dir === "asc" ? "↑" : "↓"}</span>;
+}
 
 export default function WeaponTable({
   weapons,
@@ -23,6 +38,7 @@ export default function WeaponTable({
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filter, setFilter] = useState("");
+  const [blueprintFilter, setBlueprintFilter] = useState<BlueprintFilter>("all");
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -35,15 +51,19 @@ export default function WeaponTable({
 
   const filtered = weapons.filter(
     (w) =>
-      w.name.toLowerCase().includes(filter.toLowerCase()) ||
-      w.id.toLowerCase().includes(filter.toLowerCase()) ||
-      (w.weapon.type ?? "").toLowerCase().includes(filter.toLowerCase())
+      matchesBlueprintFilter(w.blueprint, blueprintFilter) &&
+      (w.name.toLowerCase().includes(filter.toLowerCase()) ||
+        w.id.toLowerCase().includes(filter.toLowerCase()) ||
+        (w.weapon.type ?? "").toLowerCase().includes(filter.toLowerCase()))
   );
 
   const sorted = [...filtered].sort((a, b) => {
     let av: string | number;
     let bv: string | number;
-    if (sortKey === "power") {
+    if (sortKey === "duplicate_credit_value") {
+      av = a.blueprint.duplicate_credit_value;
+      bv = b.blueprint.duplicate_credit_value;
+    } else if (sortKey === "power") {
       av = a.weapon.power;
       bv = b.weapon.power;
     } else if (sortKey === "range") {
@@ -64,46 +84,48 @@ export default function WeaponTable({
     return 0;
   });
 
-  function SortIcon({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="text-[#00ff41]/30 ml-1">⇅</span>;
-    return <span className="text-[#ffb000] ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
-  }
-
   const thClass =
     "px-3 py-2 text-left text-xs font-bold uppercase tracking-wider cursor-pointer select-none text-[#ffb000]/80 hover:text-[#ffb000] whitespace-nowrap";
   const tdClass = "px-3 py-2 text-sm whitespace-nowrap";
 
   return (
     <div className="space-y-3">
-      <input
-        type="text"
-        placeholder="Filter by name / id / type..."
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        className="w-full bg-[#0a0a0a] border border-[#00ff41]/30 text-[#00ff41] placeholder-[#00ff41]/40 px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#00ff41]"
-      />
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Filter by name / id / type..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="flex-1 min-w-0 bg-[#0a0a0a] border border-[#00ff41]/30 text-[#00ff41] placeholder-[#00ff41]/40 px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#00ff41]"
+        />
+        <BlueprintFilterSelect value={blueprintFilter} onChange={setBlueprintFilter} />
+      </div>
       <div className="overflow-x-auto border border-[#00ff41]/20">
         <table className="min-w-full text-[#00ff41] font-mono">
           <thead className="bg-[#0a0a0a] border-b border-[#00ff41]/20">
             <tr>
               <th className={thClass} onClick={() => handleSort("name")}>
-                名前 <SortIcon k="name" />
+                名前 <SortIcon active={sortKey === "name"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("price")}>
-                価格 <SortIcon k="price" />
+                価格 <SortIcon active={sortKey === "price"} dir={sortDir} />
+              </th>
+              <th className={`${thClass} cursor-default`}>設計図</th>
+              <th className={thClass} onClick={() => handleSort("duplicate_credit_value")}>
+                換金額 <SortIcon active={sortKey === "duplicate_credit_value"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("type")}>
-                種別 <SortIcon k="type" />
+                種別 <SortIcon active={sortKey === "type"} dir={sortDir} />
               </th>
               <th className={`${thClass} cursor-default`}>近接</th>
               <th className={thClass} onClick={() => handleSort("power")}>
-                威力 <SortIcon k="power" />
+                威力 <SortIcon active={sortKey === "power"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("range")}>
-                射程 <SortIcon k="range" />
+                射程 <SortIcon active={sortKey === "range"} dir={sortDir} />
               </th>
               <th className={thClass} onClick={() => handleSort("accuracy")}>
-                命中 <SortIcon k="accuracy" />
+                命中 <SortIcon active={sortKey === "accuracy"} dir={sortDir} />
               </th>
               <th className={`${thClass} cursor-default`}>要求Lv</th>
               <th className={`${thClass} cursor-default`}>操作</th>
@@ -127,6 +149,10 @@ export default function WeaponTable({
                     <div className="text-xs text-[#00ff41]/40 font-normal">{w.id}</div>
                   </td>
                   <td className={tdClass}>{w.price.toLocaleString()} C</td>
+                  <td className={tdClass}>
+                    <BlueprintBadge blueprint={w.blueprint} />
+                  </td>
+                  <td className={tdClass}>{w.blueprint.duplicate_credit_value.toLocaleString()} C</td>
                   <td className={tdClass}>
                     <span
                       className={`px-2 py-0.5 text-xs font-bold ${
@@ -170,7 +196,7 @@ export default function WeaponTable({
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={9} className="text-center text-[#00ff41]/40 py-8 text-sm">
+                <td colSpan={11} className="text-center text-[#00ff41]/40 py-8 text-sm">
                   武器データが見つかりません
                 </td>
               </tr>

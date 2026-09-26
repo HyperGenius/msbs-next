@@ -28,6 +28,7 @@ const validMasterWeapon = {
   price: 800,
   description: "ガンダム用ビームライフル。",
   weapon: validWeaponSpec,
+  blueprint: { is_standard_issue: true, duplicate_credit_value: 160 },
 };
 
 // ============================================================
