@@ -16,6 +16,7 @@ from app.models.models import (
     NpcMobileSuitUpdate,
     Pilot,
     Weapon,
+    resolve_weapon_slot_count,
 )
 
 # 機体マスターの specs から MobileSuit へそのままコピーする項目（weapons は別途変換する）。
@@ -42,6 +43,30 @@ def _validate_missing_parts(missing_parts: list[str]) -> None:
         raise ValueError(
             f"Invalid missing_parts: {invalid_parts}. Must be any of {ALL_PART_NAMES}."
         )
+
+
+def validate_npc_weapons(weapons: list[Weapon], weapon_slot_count: int) -> None:
+    """NPC 機・エース機の武装が武器スロット数に収まり、武器 ID が重複しないことを検証する.
+
+    バトル中の弾数・クールダウンは武器 ID をキーに持つため、同じ ID の武器は状態を共有してしまう。
+    ビームジェネレータLv の条件は NPC 機・エース機には適用しない。
+
+    Raises:
+        ValueError: 武装の本数がスロット数を超える、または武器 ID が重複する場合
+    """
+    if len(weapons) > weapon_slot_count:
+        raise ValueError(
+            f"Number of weapons ({len(weapons)}) exceeds weapon_slot_count "
+            f"({weapon_slot_count})."
+        )
+    seen: set[str] = set()
+    duplicated: list[str] = []
+    for w in weapons:
+        if w.id in seen and w.id not in duplicated:
+            duplicated.append(w.id)
+        seen.add(w.id)
+    if duplicated:
+        raise ValueError(f"Duplicate weapon ids: {duplicated}.")
 
 
 class MobileSuitService:
@@ -108,12 +133,20 @@ class MobileSuitService:
         """NPC 機体を更新する.
 
         Raises:
-            ValueError: 武装が空、または欠損部位名が不正な場合
+            ValueError: 武装が空、武装がスロット数を超える、武器 ID が重複する、
+                または欠損部位名が不正な場合
         """
         if update_data.weapons is not None and not update_data.weapons:
             raise ValueError("weapons must have at least one weapon.")
         if update_data.missing_parts is not None:
             _validate_missing_parts(update_data.missing_parts)
+        if update_data.weapons is not None or update_data.weapon_slot_count is not None:
+            validate_npc_weapons(
+                update_data.weapons
+                if update_data.weapons is not None
+                else [Weapon.model_validate(w) for w in ms.weapons],
+                update_data.weapon_slot_count or resolve_weapon_slot_count(ms),
+            )
 
         # None は「未指定」として扱う。NOT NULL 列を壊さないため。
         update_dict = {
@@ -159,6 +192,7 @@ class MobileSuitService:
             name=f"{master.name} (NPC)",
             current_hp=specs["max_hp"],
             weapons=[Weapon(**w) for w in specs["weapons"]],
+            weapon_slot_count=master.weapon_slot_count,
             user_id=pilot.user_id,
             side="ENEMY",
             tactics=build_npc_tactics(personality),

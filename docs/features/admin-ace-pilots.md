@@ -43,6 +43,7 @@
 | `beam_resistance` / `physical_resistance` | 耐性（0〜1） |
 | `max_en` / `en_recovery` | EN 最大値・回復量 |
 | `weapons` | 武装リスト（`Weapon`、最低1件） |
+| `weapon_slot_count` | 武器スロット数（任意、1以上。Issue #543）。マッチング時に生成する `mobile_suits` の行へコピーする。未設定なら `max(装備数, MAX_WEAPON_SLOTS)` |
 | `tactics` | 戦術設定（`priority` / `range`） |
 | `missing_parts` | 欠損部位（任意。部位 HP/装甲 `parts` は `max_hp`/`armor` から自動生成） |
 
@@ -132,6 +133,8 @@ TTL キャッシュ方式で `gamedata.py` から提供する。
 | `id` がスネークケース英数字（`[a-z0-9_]+`）でない | 422 |
 | `personality` が `PERSONALITY_TYPES` 以外 | 422 |
 | `mobile_suit.weapons` が0件 | 422 |
+| `mobile_suit.weapons` の本数が `mobile_suit.weapon_slot_count` を超える（Issue #543） | 422 |
+| `mobile_suit.weapons` に同じ武器 ID が2本以上ある（Issue #543） | 422 |
 | `mobile_suit.missing_parts` に未知の部位名 | 422 |
 | `skills` に未知のスキルID、またはレベルが 0〜`max_level` の範囲外 | 422 |
 | `id` が重複（POST） | 409 |
@@ -183,7 +186,12 @@ TTL キャッシュ方式で `gamedata.py` から提供する。
   - 機体タブの「機体マスターから取り込み」で `master_mobile_suits` の機体をプルダウンで選ぶと、機体名・スペック・欠損部位・武装を
     フォームに流し込む（Issue #540）。EN（`max_en` / `en_recovery`）と戦術は機体マスターに無いため、フォームの現在値を残す。
     既存エースの編集中、または入力済みのフォームでは、上書き前に確認ダイアログを出す。
-    取り込んだ武装のフォーム外項目（`weapon_type` 等）は、保存時に同じ武器IDの取り込み元から引き継ぐ
+    取り込んだ武装のフォーム外項目（`weapon_type` 等）は、保存時に同じ武器IDの取り込み元から引き継ぐ。
+    機体マスターの武器スロット数も取り込む（Issue #543）
+  - 機体タブで武器スロット数を設定する。武装タブの見出しはスロット名（右腕 / 左腕 / ラックN）で表示し、
+    武器マスターをプルダウンで選んで武装を追加できる（Issue #543。NPC 機体編集フォームと共通の `WeaponListSection`。
+    詳細は [admin-npcs.md](./admin-npcs.md) の「NPC機体編集フォーム」）。
+    既存エースでスロット数が未設定の場合、フォームには `max(装備数, 2)` を表示し、保存時にその値を書き込む
 - 新規追加・削除（確認ダイアログ付き）。SWR による楽観的更新
 
 ### コンポーネント構成
@@ -198,7 +206,8 @@ admin-tool/src/
 │       ├── AcePilotTable.tsx      # 一覧テーブル（ソート・フィルタ付き）
 │       ├── AcePilotEditForm.tsx   # タブ分割の編集フォーム・zod スキーマ・送信値変換
 │       ├── MobileSuitSpecFields.tsx   # NPC機と共通の機体スペック / 武装入力欄（Issue #540）
-│       └── MasterMobileSuitSelect.tsx # 機体マスター選択プルダウン（Issue #540）
+│       ├── MasterMobileSuitSelect.tsx # 機体マスター選択プルダウン（Issue #540）
+│       └── MasterWeaponSelect.tsx     # 武器マスター選択プルダウン（Issue #543）
 ├── hooks/
 │   └── useAdminAcePilots.ts       # 一覧取得・作成・更新・削除フック（SWR + 楽観的更新）
 └── types/
@@ -249,6 +258,7 @@ python -m pytest tests/unit/test_admin_ace_pilots.py --tb=short
 - 削除済みエースの生成済み機体が personality ベースのフォールバックで動作すること
 - マスターが空の場合 `_create_ace_pilot()` が `None` を返すこと
 - NPC 一覧の `is_ace` 判定がマスターの `pilot_name` に追従すること
+- 武器スロット数（Issue #543）: 本数超過・武器ID重複の422、マッチングで生成するエース機へのスロット数のコピーと未設定時のフォールバック
 
 既存の `test_npc_personality_and_ace.py` / `test_phase_e35_flanking.py` は、`ACE_PILOTS` の代わりに
 `get_ace_pilots()`（`conftest.py` が `ace_pilots.json` からシード）を参照するよう変更した。
@@ -261,4 +271,5 @@ npx vitest run tests/unit/acePilotEditFormValidation.test.ts
 ```
 
 `acePilotSchema` のバリデーション（ID形式・武器0件・耐性範囲・スキル上限/重複）と、
-`toAcePilotPayload()` の変換（skills 配列→辞書、フォーム外の武器項目の引き継ぎ、機体マスターから取り込んだ武装の引き継ぎ）を検証する。
+`toAcePilotPayload()` の変換（skills 配列→辞書、フォーム外の武器項目の引き継ぎ、機体マスターから取り込んだ武装の引き継ぎ）、
+武器スロット数・武器ID重複のバリデーション（Issue #543）を検証する。

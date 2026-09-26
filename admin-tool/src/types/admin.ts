@@ -161,6 +161,8 @@ export interface NpcMobileSuit {
     tactics: Partial<Tactics>;
     missing_parts: string[];
     weapons: Weapon[];
+    /** 武器スロット数（未設定の機体は装備数と2の大きい方に解決済み） */
+    weapon_slot_count: number;
     personality: NpcPersonality | null;
     is_ace: boolean;
     ace_id: string | null;
@@ -240,6 +242,8 @@ export interface NpcMobileSuitUpdate {
     tactics?: Tactics;
     missing_parts?: string[];
     weapons?: Weapon[];
+    /** 武装の本数を下回る値は 422 になる */
+    weapon_slot_count?: number;
 }
 
 /** NPC機体の追加リクエスト（機体マスターのスペックをコピーする） */
@@ -258,6 +262,8 @@ export interface AcePilotMobileSuitSpec {
     physical_resistance: number;
     max_en: number;
     en_recovery: number;
+    /** 武器スロット数。未設定（null）の雛形はマッチング時に装備数と2の大きい方になる */
+    weapon_slot_count?: number | null;
     weapons: Weapon[];
     tactics: Tactics;
     missing_parts: string[];

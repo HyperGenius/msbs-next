@@ -15,6 +15,7 @@ from app.models.models import (
     AcePilotMobileSuitSpec,
     AcePilotUpdate,
 )
+from app.services.mobile_suit_service import validate_npc_weapons
 
 
 class AcePilotService:
@@ -49,6 +50,8 @@ class AcePilotService:
         """機体スペックを検証し、JSON列に保存する辞書形式に変換する."""
         if not spec.weapons:
             raise ValueError("mobile_suit.weapons must have at least one weapon.")
+        # スロット数が未設定の雛形はマッチング時に装備数以上になるため、本数は検証しない
+        validate_npc_weapons(spec.weapons, spec.weapon_slot_count or len(spec.weapons))
         invalid_parts = [p for p in spec.missing_parts if p not in ALL_PART_NAMES]
         if invalid_parts:
             raise ValueError(

@@ -14,6 +14,7 @@ from app.core.npc_data import (
     build_npc_tactics,
     generate_npc_pilot_name,
 )
+from app.engine.constants import MAX_WEAPON_SLOTS
 from app.models.models import (
     BattleEntry,
     BattleRoom,
@@ -424,6 +425,7 @@ class MatchingService:
             mobility=mobility,
             position=position,
             weapons=random.sample(weapons, k=random.randint(1, 2)),
+            weapon_slot_count=MAX_WEAPON_SLOTS,
             side="ENEMY",
             tactics=build_npc_tactics(personality),
             user_id=None,  # NPCはユーザーIDなし
@@ -471,6 +473,8 @@ class MatchingService:
             en_recovery=ms_data.get("en_recovery", 100),
             position=position,
             weapons=weapons_list,
+            weapon_slot_count=ms_data.get("weapon_slot_count")
+            or max(len(weapons_list), MAX_WEAPON_SLOTS),
             side="ENEMY",
             tactics=ms_data["tactics"],
             missing_parts=ms_data.get("missing_parts", []),

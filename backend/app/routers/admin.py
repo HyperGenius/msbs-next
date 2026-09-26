@@ -35,6 +35,7 @@ from app.models.models import (
     NpcPilotUpdate,
     Pilot,
     Weapon,
+    resolve_weapon_slot_count,
 )
 from app.services.ace_pilot_service import AcePilotService
 from app.services.combat_simulation_service import CombatSimulationService
@@ -335,7 +336,9 @@ def _pilot_to_entry(pilot: Pilot) -> NpcPilotEntry:
 
 def _mobile_suit_to_npc_entry(ms: MobileSuit) -> NpcMobileSuitEntry:
     """MobileSuit モデルを NpcMobileSuitEntry レスポンスに変換する."""
-    return NpcMobileSuitEntry.model_validate(ms, from_attributes=True)
+    return NpcMobileSuitEntry.model_validate(
+        {**ms.model_dump(), "weapon_slot_count": resolve_weapon_slot_count(ms)}
+    )
 
 
 @npc_router.get("", response_model=list[NpcPilotEntry])
@@ -461,7 +464,8 @@ def update_npc_mobile_suit(
     """NPCパイロットが所有する機体のスペック（武装含む）を更新する.
 
     - `ms_id` が `pilot_id` の所有機体でない場合は 404 を返す
-    - 武装が空、または欠損部位名が不正な場合は 422 を返す
+    - 武装が空、武装が武器スロット数を超える、武器 ID が重複する、
+      または欠損部位名が不正な場合は 422 を返す
     """
     pilot = _get_npc_pilot_or_404(session, pilot_id)
     ms = next(

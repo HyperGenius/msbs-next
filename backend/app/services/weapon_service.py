@@ -9,7 +9,6 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.core.gamedata import get_weapon_listing_by_id
-from app.engine.constants import MAX_WEAPON_SLOTS
 from app.models.models import (
     ALL_PART_NAMES,
     MasterWeaponCreate,
@@ -19,6 +18,7 @@ from app.models.models import (
     PlayerWeapon,
     Weapon,
     WeaponCustomStats,
+    resolve_weapon_slot_count,
 )
 
 
@@ -150,7 +150,7 @@ class WeaponService:
         """機体固有のスロット数・ビームジェネレータLvの制約を検証する.
 
         マスター機体（weapon_slot_count / beam_generator_lv）を name で引く。
-        マスターと紐づかない機体は従来通りの既定値にフォールバックする。
+        スロット数は resolve_weapon_slot_count() で解決する。
 
         Raises:
             HTTPException: スロット範囲外、装備順序不正、
@@ -161,7 +161,9 @@ class WeaponService:
         master = MobileSuitService.get_master_mobile_suit_map(
             session, [mobile_suit.name]
         ).get(mobile_suit.name)
-        weapon_slot_count = master.weapon_slot_count if master else MAX_WEAPON_SLOTS
+        weapon_slot_count = resolve_weapon_slot_count(
+            mobile_suit, master.weapon_slot_count if master else None
+        )
         beam_generator_lv = master.beam_generator_lv if master else 0
 
         if slot_index >= weapon_slot_count:

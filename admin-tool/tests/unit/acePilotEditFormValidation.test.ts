@@ -29,6 +29,7 @@ const validFormValues: AcePilotFormValues = {
     en_recovery: 150,
     tactics: { priority: "WEAKEST", range: "MELEE" },
     missing_parts: [],
+    weapon_slot_count: 2,
     weapons: [
       {
         id: "ace_zaku_mg",
@@ -158,5 +159,37 @@ describe("toAcePilotPayload (機体マスターから取り込んだ武装)", ()
     const imported = [{ ...validFormValues.mobile_suit.weapons[0], cooldown_sec: 3.0 }];
     const payload = toAcePilotPayload(validFormValues, original, imported);
     expect(payload.mobile_suit.weapons[0].cooldown_sec).toBe(3.0);
+  });
+});
+
+// ============================================================
+// 武器スロット数・武器ID重複 (Issue #543)
+// ============================================================
+
+describe("acePilotSchema (武器スロット数)", () => {
+  it("武装の本数がスロット数を超える場合はスロット数の欄にエラー", () => {
+    const values = withOverride((v) => {
+      v.mobile_suit.weapon_slot_count = 1;
+      v.mobile_suit.weapons.push({ ...v.mobile_suit.weapons[0], id: "ace_zaku_mg_2" });
+    });
+    const result = acePilotSchema.safeParse(values);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["mobile_suit", "weapon_slot_count"]);
+  });
+
+  it("スロット数が0の場合はエラー", () => {
+    const values = withOverride((v) => {
+      v.mobile_suit.weapon_slot_count = 0;
+    });
+    expect(acePilotSchema.safeParse(values).success).toBe(false);
+  });
+
+  it("同じ武器IDが2本ある場合は2本目のIDにエラー", () => {
+    const values = withOverride((v) => {
+      v.mobile_suit.weapons.push({ ...v.mobile_suit.weapons[0] });
+    });
+    const result = acePilotSchema.safeParse(values);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["mobile_suit", "weapons", 1, "id"]);
   });
 });
