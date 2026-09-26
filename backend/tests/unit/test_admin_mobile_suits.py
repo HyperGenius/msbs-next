@@ -464,3 +464,31 @@ def test_update_beam_generator_lv_below_existing_weapon_requirement_returns_422(
         headers=HEADERS,
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+# ===================== 設計図マスター =====================
+
+
+def test_create_master_mobile_suit_creates_standard_blueprint(client_admin, session):
+    """機体マスターを作成すると、標準配備の設計図マスターも作成されること."""
+    from app.models.models import MasterBlueprint
+
+    client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+
+    blueprint = session.get(MasterBlueprint, "mobile_suit:test_gm")
+    assert blueprint is not None
+    assert blueprint.target_type == "MOBILE_SUIT"
+    assert blueprint.target_id == "test_gm"
+    assert blueprint.is_standard_issue is True
+    assert blueprint.duplicate_credit_value == 100  # 500 の 20%
+
+
+def test_delete_master_mobile_suit_deletes_blueprint(client_admin, session):
+    """機体マスターを削除すると、設計図マスターも削除されること."""
+    from app.models.models import MasterBlueprint
+
+    client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+    client_admin.delete("/api/admin/mobile-suits/test_gm", headers=HEADERS)
+
+    session.expire_all()
+    assert session.get(MasterBlueprint, "mobile_suit:test_gm") is None

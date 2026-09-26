@@ -120,6 +120,7 @@ def test_purchase_mobile_suit_success(client, session):
         assert mobile_suit is not None
         assert mobile_suit.user_id == test_user_id
         assert mobile_suit.name == "Zaku II"
+        assert mobile_suit.master_mobile_suit_id == "zaku_ii"
     finally:
         # クリーンアップ
         app.dependency_overrides.pop(get_current_user, None)

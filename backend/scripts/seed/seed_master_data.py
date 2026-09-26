@@ -3,6 +3,7 @@
 
 mobile_suits.json / weapons.json / ace_pilots.json から master_mobile_suits /
 master_weapons / ace_pilots テーブルへデータを投入する。べき等に実行可能（ON CONFLICT DO NOTHING）。
+新規に投入した機体・武器には、標準配備の設計図マスターも作成する。
 
 Usage:
     python scripts/seed/seed_master_data.py [--force]
@@ -85,7 +86,8 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
         dict: 挿入/スキップ件数
     """
     # モデルは engine 生成後にインポート（循環インポート回避）
-    from app.models.models import MasterMobileSuit, MasterWeapon
+    from app.models.models import BlueprintTargetType, MasterMobileSuit, MasterWeapon
+    from app.services.blueprint_service import BlueprintService
 
     data_dir = _ROOT / "data" / "master"
     engine = _get_engine()
@@ -137,6 +139,9 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
                         specs=specs,
                     )
                     session.add(record)
+                    BlueprintService.ensure_master_blueprint(
+                        session, BlueprintTargetType.MOBILE_SUIT, item_id, item["price"]
+                    )
                     inserted_ms += 1
 
         # === weapons ===
@@ -173,6 +178,9 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
                         weapon=weapon_dict,
                     )
                     session.add(record)
+                    BlueprintService.ensure_master_blueprint(
+                        session, BlueprintTargetType.WEAPON, item_id, item["price"]
+                    )
                     inserted_w += 1
 
         inserted_ace, skipped_ace = _seed_ace_pilots(session, data_dir, force)

@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.core.gamedata import get_weapon_listing_by_id
 from app.models.models import (
     ALL_PART_NAMES,
+    BlueprintTargetType,
     MasterWeaponCreate,
     MasterWeaponUpdate,
     MobileSuit,
@@ -20,6 +21,7 @@ from app.models.models import (
     WeaponCustomStats,
     resolve_weapon_slot_count,
 )
+from app.services.blueprint_service import BlueprintService
 
 
 def validate_aim_distribution(aim_distribution: dict[str, float]) -> None:
@@ -481,6 +483,9 @@ class WeaponService:
             weapon=weapon_dict,
         )
         session.add(record)
+        BlueprintService.ensure_master_blueprint(
+            session, BlueprintTargetType.WEAPON, data.id, data.price
+        )
         session.commit()
 
         # キャッシュを無効化
@@ -577,6 +582,9 @@ class WeaponService:
             )
 
         session.delete(record)
+        BlueprintService.delete_master_blueprint(
+            session, BlueprintTargetType.WEAPON, weapon_id
+        )
         session.commit()
 
         # キャッシュを無効化
