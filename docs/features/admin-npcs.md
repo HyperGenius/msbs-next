@@ -257,6 +257,7 @@ admin-tool/src/
 
 - 名前・性格・レベル・EXP・クレジット・所属機体数を表示
 - 各列ヘッダークリックでソート（昇順/降順）
+- ソート表示用の `SortIcon` はコンポーネントの外に定義し、`active` / `dir` を props で受け取る（`MobileSuitTable` / `WeaponTable` と同じ形。レンダー中にコンポーネントを定義すると `react-hooks/static-components` の lint エラーになるため。Issue #557）
 - 名前によるテキストフィルタ、性格タイプ・レベル範囲・エース/通常NPCによる絞り込み（サーバー側フィルタではなく
   クライアント側で `npcs` 全件から絞り込む。既存の `MobileSuitTable` と同じ設計）
 - エース由来NPC（`is_ace=true`）は行内に `ACE` バッジを表示
