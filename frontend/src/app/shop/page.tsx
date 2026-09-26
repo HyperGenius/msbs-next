@@ -10,6 +10,7 @@ import MobileSuitCard from "./_components/MobileSuitCard";
 import WeaponCard from "./_components/WeaponCard";
 import MobileSuitDetailPanel from "./_components/MobileSuitDetailPanel";
 import WeaponDetailPanel from "./_components/WeaponDetailPanel";
+import { isPurchasable } from "./utils";
 
 type TabType = "mobile_suits" | "weapons";
 type FilterType = "all" | "affordable";
@@ -29,14 +30,13 @@ export default function ShopPage() {
   const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
 
   const credits = pilot?.credits ?? 0;
-  const canAfford = (price: number) => credits >= price;
 
   // フィルタリング後のアイテム一覧
   const visibleListings = filter === "affordable"
-    ? listings?.filter((item) => canAfford(item.price))
+    ? listings?.filter((item) => isPurchasable(item, credits))
     : listings;
   const visibleWeapons = filter === "affordable"
-    ? weaponListings?.filter((w) => canAfford(w.price))
+    ? weaponListings?.filter((w) => isPurchasable(w, credits))
     : weaponListings;
 
   // 選択中アイテム（PC インラインパネル用）
@@ -156,7 +156,7 @@ export default function ShopPage() {
                     </div>
                   ) : (
                     <p className="text-[#00ff41]/40 text-sm text-center py-8">
-                      {filter === "affordable" ? "現在の所持金で購入できるアイテムはありません" : "アイテムがありません"}
+                      {filter === "affordable" ? "現在購入できるアイテムはありません" : "アイテムがありません"}
                     </p>
                   )}
                 </div>
@@ -196,7 +196,7 @@ export default function ShopPage() {
                     </div>
                   ) : (
                     <p className="text-[#00ff41]/40 text-sm text-center py-8">
-                      {filter === "affordable" ? "現在の所持金で購入できるアイテムはありません" : "アイテムがありません"}
+                      {filter === "affordable" ? "現在購入できるアイテムはありません" : "アイテムがありません"}
                     </p>
                   )}
                 </div>

@@ -1,15 +1,36 @@
 """武器ショップ機能のテスト."""
 
 from fastapi import status
+from sqlmodel import select
 
 from app.core.auth import get_current_user
-from app.models.models import MasterWeapon, MobileSuit, Pilot, PlayerWeapon
+from app.models.models import (
+    BlueprintSource,
+    MasterBlueprint,
+    MasterWeapon,
+    MobileSuit,
+    Pilot,
+    PlayerWeapon,
+)
+from app.services.blueprint_service import DEFAULT_UNLOCK_HINT, BlueprintService
 from main import app
+
+
+def _make_restricted(session, blueprint_id: str) -> None:
+    blueprint = session.get(MasterBlueprint, blueprint_id)
+    assert blueprint is not None
+    blueprint.is_standard_issue = False
+    session.add(blueprint)
+    session.commit()
 
 
 def test_get_weapon_listings(client):
     """武器ショップの商品一覧を取得できることをテスト."""
-    response = client.get("/api/shop/weapons")
+    app.dependency_overrides[get_current_user] = lambda: "test_user_weapon_listings"
+    try:
+        response = client.get("/api/shop/weapons")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
     assert response.status_code == status.HTTP_200_OK
 
     listings = response.json()
@@ -22,6 +43,9 @@ def test_get_weapon_listings(client):
     assert "price" in first_item
     assert "description" in first_item
     assert "weapon" in first_item
+    assert first_item["is_standard_issue"] is True
+    assert first_item["is_unlocked"] is True
+    assert first_item["unlock_hint"] is None
 
     # weaponの構造をチェック
     weapon = first_item["weapon"]
@@ -61,7 +85,11 @@ def test_get_weapon_listings_tolerates_legacy_weapon_json_with_id_name(client, s
 
     gd._weapon_shop_listings_cache = None
 
-    response = client.get("/api/shop/weapons")
+    app.dependency_overrides[get_current_user] = lambda: "test_user_legacy_weapon"
+    try:
+        response = client.get("/api/shop/weapons")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
     assert response.status_code == status.HTTP_200_OK
 
     listings = response.json()
@@ -1098,3 +1126,103 @@ def test_equip_weapon_reflects_custom_stats_bonus_in_mobile_suit_weapons(
         assert data["weapons"][0]["power"] == base_power + 15
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_get_weapon_listings_requires_auth(client):
+    """武器一覧が認証なしでは取得できないことをテスト."""
+    response = client.get("/api/shop/weapons")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_get_weapon_listings_unlock_states(client, session):
+    """武器一覧で、設計図所持・未解放の状態が返ることをテスト."""
+    test_user_id = "test_user_weapon_unlock"
+    session.add(Pilot(user_id=test_user_id, name="Test Pilot", credits=1000))
+    session.commit()
+    _make_restricted(session, "weapon:beam_rifle")
+    _make_restricted(session, "weapon:beam_saber")
+    BlueprintService.grant_blueprint(
+        session, test_user_id, "weapon:beam_saber", BlueprintSource.DROP
+    )
+    session.commit()
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.get("/api/shop/weapons")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_200_OK
+    listings = {item["id"]: item for item in response.json()}
+    assert listings["zaku_mg"]["is_unlocked"] is True
+    assert listings["beam_saber"]["is_standard_issue"] is False
+    assert listings["beam_saber"]["is_unlocked"] is True
+    assert listings["beam_saber"]["unlock_hint"] is None
+    assert listings["beam_rifle"]["is_standard_issue"] is False
+    assert listings["beam_rifle"]["is_unlocked"] is False
+    assert listings["beam_rifle"]["unlock_hint"] == DEFAULT_UNLOCK_HINT
+
+
+def test_purchase_weapon_without_blueprint_forbidden(client, session):
+    """設計図の無い非標準配備の武器は購入できず、クレジットが減らないことをテスト."""
+    test_user_id = "test_user_purchase_locked_weapon"
+    pilot = Pilot(user_id=test_user_id, name="Test Pilot", credits=1000)
+    session.add(pilot)
+    session.commit()
+    _make_restricted(session, "weapon:beam_rifle")
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.post("/api/shop/purchase/weapon/beam_rifle")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.json()["detail"] == "この武器の設計図を所持していません"
+    session.refresh(pilot)
+    assert pilot.credits == 1000
+    owned = session.exec(
+        select(PlayerWeapon).where(PlayerWeapon.user_id == test_user_id)
+    ).all()
+    assert owned == []
+
+
+def test_purchase_weapon_with_blueprint(client, session):
+    """設計図を所持していれば、非標準配備の武器を購入できることをテスト."""
+    test_user_id = "test_user_purchase_unlocked_weapon"
+    pilot = Pilot(user_id=test_user_id, name="Test Pilot", credits=1000)
+    session.add(pilot)
+    session.commit()
+    _make_restricted(session, "weapon:beam_rifle")
+    BlueprintService.grant_blueprint(
+        session, test_user_id, "weapon:beam_rifle", BlueprintSource.DROP
+    )
+    session.commit()
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.post("/api/shop/purchase/weapon/beam_rifle")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_200_OK
+    session.refresh(pilot)
+    assert pilot.credits == 200
+
+
+def test_purchase_weapon_without_master_blueprint(client, session):
+    """設計図マスターが無い武器は、これまでどおり購入できることをテスト."""
+    test_user_id = "test_user_purchase_no_master_blueprint"
+    session.add(Pilot(user_id=test_user_id, name="Test Pilot", credits=1000))
+    blueprint = session.get(MasterBlueprint, "weapon:zaku_mg")
+    assert blueprint is not None
+    session.delete(blueprint)
+    session.commit()
+
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+    try:
+        response = client.post("/api/shop/purchase/weapon/zaku_mg")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == status.HTTP_200_OK

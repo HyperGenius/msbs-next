@@ -478,3 +478,40 @@ interface MobileSuitDetailPanelProps {
 | `frontend/src/app/shop/_components/MobileSuitCard.tsx` | 表示項目整理（ラベル/ランク/フレーバー/価格の4点） |
 | `frontend/src/app/shop/_components/MobileSuitDetailPanel.tsx` | スペックバー→レーダーチャート化、ビームジェネレータLv/武器スロット数表示追加 |
 | `admin-tool/src/types/admin.ts`, `admin-tool/src/components/admin/MobileSuitEditForm.tsx` | 管理画面に `flavor_text` 入力欄を追加 |
+
+---
+
+## 12. 設計図による購入制限と「未解放」表示（Issue #556, 2026-09-26）
+
+### 12.1 背景
+
+Epic #550（戦利品ドロップと設計図システム）の Sub-Issue 3。
+標準配備でも設計図所持でもないアイテムを購入できないようにした。購入できないアイテムは一覧から消さず「未解放」として表示し、入手方法のヒントを出す。
+API・判定ロジックの詳細は `blueprint-system.md` を参照。
+
+### 12.2 表示仕様
+
+| 状態 | 条件 | カード | 詳細パネル |
+|---|---|---|---|
+| 標準配備 | `is_standard_issue = true` | 従来どおり（バッジなし） | 従来どおり |
+| 設計図所持 | `is_standard_issue = false` かつ `is_unlocked = true` | 「設計図所持」バッジ（シアン） | 「設計図所持」バッジ。購入ボタンは従来どおり |
+| 未解放 | `is_unlocked = false` | 「未解放」バッジ。カードを暗く表示（`opacity-50 grayscale`） | 「未解放」バッジ。購入ボタンの代わりに「未解放 (LOCKED)」を表示し、その上に `unlock_hint` を表示 |
+
+* 未解放のアイテムも、スペック・価格は従来どおり詳細パネルで見られる
+* 「購入可能のみ」の絞り込みは、所持金が足りていて、かつ解放済みのアイテムだけを表示する（`isPurchasable()`）。該当なしのときは「現在購入できるアイテムはありません」と表示する
+* 全アイテムが標準配備の状態では、表示・挙動は従来と変わらない
+
+### 12.3 影響範囲
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `backend/app/services/blueprint_service.py` | `get_unlock_states()`・`UnlockState`・`DEFAULT_UNLOCK_HINT` を追加 |
+| `backend/app/routers/shop.py` | 一覧レスポンスに `is_standard_issue`/`is_unlocked`/`unlock_hint` を追加。機体購入に設計図チェックを追加。`GET /api/shop/weapons` を認証必須に変更 |
+| `backend/app/services/weapon_service.py` | `purchase_weapon()` に設計図チェックを追加 |
+| `frontend/src/types/shop.ts` | `BlueprintUnlockState` を追加し、`ShopListing`/`WeaponListing` に継承させる |
+| `frontend/src/services/shop.ts` | `useWeaponListings()` を認証付きの取得（`useAuthFetcher`/`authKey`）に変更 |
+| `frontend/src/app/shop/utils.ts`（新規） | `getBlueprintBadgeKind()`・`isPurchasable()` |
+| `frontend/src/app/shop/_components/BlueprintBadge.tsx`（新規） | 「未解放」「設計図所持」バッジ |
+| `frontend/src/app/shop/_components/MobileSuitCard.tsx`, `WeaponCard.tsx` | バッジと未解放時の表示 |
+| `frontend/src/app/shop/_components/MobileSuitDetailPanel.tsx`, `WeaponDetailPanel.tsx` | バッジ、未解放時の購入ボタン無効化と `unlock_hint` 表示 |
+| `frontend/src/app/shop/page.tsx` | 「購入可能のみ」の絞り込みに `is_unlocked` を追加 |

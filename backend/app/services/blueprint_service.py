@@ -20,6 +20,9 @@ from app.models.models import (
 # 換金額はアイテムごとに admin-tool で調整する前提の暫定値。
 DUPLICATE_CREDIT_RATIO = 0.2
 
+# ドロップテーブルができたら、入手できるミッション名を含む文言に置き換える。
+DEFAULT_UNLOCK_HINT = "バトルで設計図を入手すると購入できます"
+
 
 @dataclass(frozen=True)
 class BlueprintGrantResult:
@@ -28,6 +31,20 @@ class BlueprintGrantResult:
     blueprint_id: str
     is_new: bool
     credits_awarded: int
+
+
+@dataclass(frozen=True)
+class UnlockState:
+    """ショップでのアイテムの解放状態."""
+
+    is_standard_issue: bool
+    is_unlocked: bool
+    unlock_hint: str | None
+
+
+STANDARD_ISSUE_UNLOCK_STATE = UnlockState(
+    is_standard_issue=True, is_unlocked=True, unlock_hint=None
+)
 
 
 class BlueprintService:
@@ -167,6 +184,50 @@ class BlueprintService:
         if blueprint is None or blueprint.is_standard_issue:
             return True
         return BlueprintService._find_owned(session, user_id, blueprint_id) is not None
+
+    @staticmethod
+    def get_unlock_states(
+        session: Session,
+        user_id: str,
+        target_type: BlueprintTargetType,
+        target_ids: list[str],
+    ) -> dict[str, UnlockState]:
+        """対象アイテムごとの解放状態を返す.
+
+        判定は `can_purchase` と同じ。設計図マスターが無いアイテムは標準配備として扱う。
+        """
+        standard_issue_by_target = dict(
+            session.exec(
+                select(MasterBlueprint.target_id, MasterBlueprint.is_standard_issue)
+                .where(MasterBlueprint.target_type == target_type.value)
+                .where(col(MasterBlueprint.target_id).in_(target_ids))
+            ).all()
+        )
+        owned_targets = set(
+            session.exec(
+                select(MasterBlueprint.target_id)
+                .join(
+                    PlayerBlueprint,
+                    col(PlayerBlueprint.blueprint_id) == col(MasterBlueprint.id),
+                )
+                .where(PlayerBlueprint.user_id == user_id)
+                .where(MasterBlueprint.target_type == target_type.value)
+                .where(col(MasterBlueprint.target_id).in_(target_ids))
+            ).all()
+        )
+
+        states: dict[str, UnlockState] = {}
+        for target_id in target_ids:
+            if standard_issue_by_target.get(target_id, True):
+                states[target_id] = STANDARD_ISSUE_UNLOCK_STATE
+                continue
+            is_unlocked = target_id in owned_targets
+            states[target_id] = UnlockState(
+                is_standard_issue=False,
+                is_unlocked=is_unlocked,
+                unlock_hint=None if is_unlocked else DEFAULT_UNLOCK_HINT,
+            )
+        return states
 
     @staticmethod
     def grant_blueprint(

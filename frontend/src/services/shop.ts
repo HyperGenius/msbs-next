@@ -1,7 +1,7 @@
 import useSWR from "swr";
 import { useAuth } from "@clerk/nextjs";
 import { MobileSuit, ShopListing, PurchaseResponse, WeaponListing, WeaponPurchaseResponse, EquipWeaponRequest } from "@/types/battle";
-import { API_BASE_URL, getAuthToken, fetcher, useAuthFetcher, authKey } from "./auth";
+import { API_BASE_URL, getAuthToken, useAuthFetcher, authKey } from "./auth";
 
 /** ショップに陳列されている機体一覧を取得するSWRフック */
 export function useShopListings() {
@@ -43,16 +43,18 @@ export async function purchaseMobileSuit(itemId: string): Promise<PurchaseRespon
   return res.json();
 }
 
-/** 武器ショップの商品一覧を取得するSWRフック（認証不要・パブリック） */
+/** 武器ショップの商品一覧を取得するSWRフック */
 export function useWeaponListings() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const authFetcher = useAuthFetcher();
   const { data, error, isLoading } = useSWR<WeaponListing[]>(
-    `${API_BASE_URL}/api/shop/weapons`,
-    fetcher
+    authKey(`${API_BASE_URL}/api/shop/weapons`, isLoaded, isSignedIn),
+    authFetcher
   );
 
   return {
     weaponListings: data,
-    isLoading,
+    isLoading: !isLoaded || isLoading,
     isError: error,
   };
 }
