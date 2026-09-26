@@ -557,6 +557,30 @@ class MobileSuitResponse(SQLModel):
         )
 
 
+# --- Master Blueprint Admin Models ---
+
+
+class MasterBlueprintSettings(SQLModel):
+    """機体・武器マスターの設計図設定（管理者用）."""
+
+    is_standard_issue: bool = Field(
+        default=True, description="標準配備品か。true なら設計図なしで購入できる"
+    )
+    duplicate_credit_value: int = Field(
+        ge=0, description="入手済みの設計図を再入手したときに付与するクレジット"
+    )
+
+
+class MasterBlueprintSettingsInput(SQLModel):
+    """機体・武器マスターの設計図設定の保存リクエスト（管理者用）.
+
+    未指定の項目は変更しない。設計図マスターを新規作成するときは初期値になる。
+    """
+
+    is_standard_issue: bool | None = None
+    duplicate_credit_value: int | None = Field(default=None, ge=0)
+
+
 # --- Master Mobile Suit Admin Models ---
 
 
@@ -596,6 +620,7 @@ class MasterMobileSuitEntry(SQLModel):
     beam_generator_lv: int = 0
     flavor_text: str | None = None
     specs: MasterMobileSuitSpec
+    blueprint: MasterBlueprintSettings
 
 
 class MasterMobileSuitCreate(SQLModel):
@@ -612,6 +637,7 @@ class MasterMobileSuitCreate(SQLModel):
     beam_generator_lv: int = Field(default=0, ge=0)
     flavor_text: str | None = None
     specs: MasterMobileSuitSpec
+    blueprint: MasterBlueprintSettingsInput | None = None
 
 
 class MasterMobileSuitUpdate(SQLModel):
@@ -627,6 +653,7 @@ class MasterMobileSuitUpdate(SQLModel):
     beam_generator_lv: int | None = Field(default=None, ge=0)
     flavor_text: str | None = None
     specs: MasterMobileSuitSpec | None = None
+    blueprint: MasterBlueprintSettingsInput | None = None
 
 
 # --- Master Weapon Admin Models ---
@@ -641,6 +668,7 @@ class MasterWeaponEntry(SQLModel):
     description: str
     flavor_text: str | None = None
     weapon: MasterWeaponSpec
+    blueprint: MasterBlueprintSettings
 
 
 class MasterWeaponCreate(SQLModel):
@@ -652,6 +680,7 @@ class MasterWeaponCreate(SQLModel):
     description: str
     flavor_text: str | None = None
     weapon: MasterWeaponSpec
+    blueprint: MasterBlueprintSettingsInput | None = None
 
 
 class MasterWeaponUpdate(SQLModel):
@@ -662,6 +691,7 @@ class MasterWeaponUpdate(SQLModel):
     description: str | None = None
     flavor_text: str | None = None
     weapon: MasterWeaponSpec | None = None
+    blueprint: MasterBlueprintSettingsInput | None = None
 
 
 # --- Combat Simulation Models (管理画面用 1対1 攻撃シミュレーション, Issue #381) ---

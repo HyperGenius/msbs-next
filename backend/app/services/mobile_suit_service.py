@@ -3,7 +3,7 @@ import re
 import uuid
 from datetime import UTC, datetime
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, and_, col, select
 
 from app.core.npc_data import build_npc_tactics
 from app.engine.constants import (
@@ -14,6 +14,8 @@ from app.engine.constants import (
 from app.models.models import (
     ALL_PART_NAMES,
     BlueprintTargetType,
+    MasterBlueprint,
+    MasterBlueprintSettings,
     MasterMobileSuit,
     MasterMobileSuitCreate,
     MasterMobileSuitUpdate,
@@ -44,6 +46,25 @@ _MASTER_SPEC_FIELDS = (
     "turning_bonus",
     "missing_parts",
 )
+
+
+def _master_mobile_suit_to_dict(
+    record: MasterMobileSuit, blueprint: MasterBlueprintSettings
+) -> dict:
+    return {
+        "id": record.id,
+        "name": record.name,
+        "name_ja": record.name_ja,
+        "model_number": record.model_number,
+        "price": record.price,
+        "faction": record.faction,
+        "description": record.description,
+        "weapon_slot_count": record.weapon_slot_count,
+        "beam_generator_lv": record.beam_generator_lv,
+        "flavor_text": record.flavor_text,
+        "specs": record.specs,
+        "blueprint": blueprint.model_dump(),
+    }
 
 
 def _validate_missing_parts(missing_parts: list[str]) -> None:
@@ -273,10 +294,23 @@ class MobileSuitService:
 
     @staticmethod
     def get_master_mobile_suits(session: Session) -> list[dict]:
-        """マスター機体データを全件返す（生JSON辞書形式）."""
-        from app.core.gamedata import get_master_mobile_suits
-
-        return get_master_mobile_suits(session)
+        """マスター機体データを設計図設定付きで全件返す（生JSON辞書形式）."""
+        rows = session.exec(
+            select(MasterMobileSuit, MasterBlueprint).outerjoin(
+                MasterBlueprint,
+                and_(
+                    col(MasterBlueprint.target_type)
+                    == BlueprintTargetType.MOBILE_SUIT.value,
+                    col(MasterBlueprint.target_id) == col(MasterMobileSuit.id),
+                ),
+            )
+        ).all()
+        return [
+            _master_mobile_suit_to_dict(
+                record, BlueprintService.settings_of(blueprint, record.price)
+            )
+            for record, blueprint in rows
+        ]
 
     @staticmethod
     def create_master_mobile_suit(
@@ -295,7 +329,6 @@ class MobileSuitService:
             ValueError: idが重複している / idの形式が不正 / weaponsが空の場合
         """
         from app.core import gamedata as gd
-        from app.models.models import MasterMobileSuit
 
         # idバリデーション: スネークケース英数字のみ
         if not re.fullmatch(r"[a-z0-9_]+", data.id):
@@ -335,8 +368,12 @@ class MobileSuitService:
             specs=specs_dict,
         )
         session.add(record)
-        BlueprintService.ensure_master_blueprint(
-            session, BlueprintTargetType.MOBILE_SUIT, data.id, data.price
+        blueprint = BlueprintService.save_master_blueprint_settings(
+            session,
+            BlueprintTargetType.MOBILE_SUIT,
+            data.id,
+            data.price,
+            data.blueprint,
         )
         session.commit()
 
@@ -344,19 +381,9 @@ class MobileSuitService:
         gd._shop_listings_cache = None
         gd._cache_expires_at = None
 
-        return {
-            "id": data.id,
-            "name": data.name,
-            "name_ja": data.name_ja,
-            "model_number": data.model_number,
-            "price": data.price,
-            "faction": data.faction,
-            "description": data.description,
-            "weapon_slot_count": data.weapon_slot_count,
-            "beam_generator_lv": data.beam_generator_lv,
-            "flavor_text": data.flavor_text,
-            "specs": specs_dict,
-        }
+        return _master_mobile_suit_to_dict(
+            record, BlueprintService.settings_of(blueprint, record.price)
+        )
 
     @staticmethod
     def _validate_weapon_constraints(
@@ -413,13 +440,13 @@ class MobileSuitService:
         from datetime import UTC, datetime
 
         from app.core import gamedata as gd
-        from app.models.models import MasterMobileSuit
 
         record = session.get(MasterMobileSuit, ms_id)
         if record is None:
             return None
 
         update_dict = data.model_dump(exclude_unset=True)
+        update_dict.pop("blueprint", None)
 
         if "specs" in update_dict and update_dict["specs"] is not None:
             specs_data = update_dict["specs"]
@@ -451,25 +478,23 @@ class MobileSuitService:
 
         record.updated_at = datetime.now(UTC)
         session.add(record)
+        # 換金額は価格に追従させない。運用者が明示的に決める値のため。
+        blueprint = BlueprintService.save_master_blueprint_settings(
+            session,
+            BlueprintTargetType.MOBILE_SUIT,
+            ms_id,
+            record.price,
+            data.blueprint,
+        )
         session.commit()
 
         # キャッシュを無効化
         gd._shop_listings_cache = None
         gd._cache_expires_at = None
 
-        return {
-            "id": record.id,
-            "name": record.name,
-            "name_ja": record.name_ja,
-            "model_number": record.model_number,
-            "price": record.price,
-            "faction": record.faction,
-            "description": record.description,
-            "weapon_slot_count": record.weapon_slot_count,
-            "beam_generator_lv": record.beam_generator_lv,
-            "flavor_text": record.flavor_text,
-            "specs": record.specs,
-        }
+        return _master_mobile_suit_to_dict(
+            record, BlueprintService.settings_of(blueprint, record.price)
+        )
 
     @staticmethod
     def delete_master_mobile_suit(ms_id: str, session: Session) -> bool:
@@ -486,7 +511,6 @@ class MobileSuitService:
             LookupError: ショップ在庫で参照されている場合
         """
         from app.core import gamedata as gd
-        from app.models.models import MasterMobileSuit
 
         record = session.get(MasterMobileSuit, ms_id)
         if record is None:

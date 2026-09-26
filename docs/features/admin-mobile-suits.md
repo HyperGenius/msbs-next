@@ -52,7 +52,7 @@ X-API-Key: <ADMIN_API_KEY>
 | `401` | APIキー不正 |
 | `404` | 対象機体が見つからない |
 | `409` | ID重複 / ショップ在庫参照 |
-| `422` | バリデーションエラー（ID形式不正 / weapons 空など） |
+| `422` | バリデーションエラー（ID形式不正 / weapons 空 / 換金額が負など） |
 
 ### バリデーションルール
 
@@ -60,6 +60,7 @@ X-API-Key: <ADMIN_API_KEY>
 - `specs.weapons`: 最低1件必須
 - `weapon_slot_count`: 1以上の整数。`specs.weapons` の件数が `weapon_slot_count` を超える場合は `422`（Issue #383）
 - `beam_generator_lv`: 0以上の整数。`specs.weapons` 内に `type == "BEAM"` かつ `required_beam_generator_lv` が `beam_generator_lv` を超える武器が含まれる場合は `422`（Issue #383）
+- `blueprint.duplicate_credit_value`: 0以上の整数。負の場合は `422`（Issue #554）
 - DELETE 時: 同名機体がプレイヤー所有の mobile_suits テーブルに存在する場合は `409`
 
 ### リクエスト例
@@ -116,6 +117,10 @@ Content-Type: application/json
 > `name_ja` / `model_number` / `weapon_slot_count` / `beam_generator_lv` を省略した場合、それぞれ既定値
 > (`""` / `""` / `1` / `0`) が使われる（Issue #383）。`flavor_text`（購入画面用フレーバーテキスト、
 > 1〜2行程度）は nullable。省略・`null` の場合、購入画面では非表示になる（Issue #483）。
+>
+> 設計図設定 `blueprint`（`{"is_standard_issue": bool, "duplicate_credit_value": int}`、各項目とも省略可）も指定できる。
+> 省略した項目は初期値（標準配備・換金額は価格の20%）になる。GET・POST・PUT のレスポンスには常に `blueprint` が含まれる（Issue #554）。
+> 仕様は `blueprint-system.md` を参照。
 
 #### PUT — 既存機体の部分更新
 
@@ -126,9 +131,13 @@ Content-Type: application/json
 
 {
   "price": 1800,
-  "description": "改良型仕様。"
+  "description": "改良型仕様。",
+  "blueprint": { "is_standard_issue": false }
 }
 ```
+
+> `blueprint` で省略した項目は変更しない。`price` を変更しても換金額は変わらない。
+> 設計図マスターが無い機体を保存すると、設計図マスターを作成する（Issue #554）。
 
 ---
 
@@ -323,6 +332,7 @@ admin-tool/src/
 │   ├── admin/
 │   │   ├── MobileSuitTable.tsx    # 機体一覧テーブル（ソート・フィルタ付き）
 │   │   ├── MobileSuitEditForm.tsx # 全パラメータ編集フォーム（Zod バリデーション）
+│   │   ├── BlueprintSettingsFields.tsx # 設計図設定の入力欄・一覧用バッジ・絞り込み（Issue #554）
 │   │   ├── MobileSuitRadarChart.tsx # バランス比較レーダーチャート（recharts）
 │   │   ├── CombatSimulationPanel.tsx # ダメージ・命中率シミュレーションパネル（Issue #381）
 │   │   └── CloneDialog.tsx        # Clone & Edit ダイアログ
@@ -336,9 +346,10 @@ admin-tool/src/
 
 #### 機体一覧テーブル (`MobileSuitTable`)
 
-- ID・型番・名前・勢力・価格・HP・装甲・機動性を表示（型番列は Issue #383 で追加）
+- ID・型番・名前・勢力・価格・設計図・換金額・HP・装甲・機動性を表示（型番列は Issue #383、設計図・換金額列は Issue #554 で追加）
 - 各列ヘッダークリックでソート（昇順/降順）
 - テキストフィルタ（name / name_ja / model_number / id / faction で絞り込み、Issue #383 で name_ja / model_number を追加）
+- 設計図の種別（すべて / 標準配備のみ / 要設計図のみ）で絞り込み（Issue #554）
 - 編集中の機体は行がハイライト表示
 
 #### 詳細編集フォーム (`MobileSuitEditForm`)
@@ -346,6 +357,7 @@ admin-tool/src/
 - `react-hook-form` + `zod` によるバリデーション
 - 全スペック・武装パラメータを編集可能（型番・日本語名・武器スロット数・ビームジェネレータLvを含む、Issue #383）
 - 購入画面用フレーバーテキスト（`flavor_text`、1〜2行推奨）入力欄を追加（`WeaponEditForm` と同様、未入力は `null` に正規化して送信、Issue #483）
+- 「設計図」欄で標準配備フラグと重複時の換金額を編集（Issue #554）。換金額の空欄は、新規作成では初期値（価格の20%）、編集では変更なしとして送る
 - フィールド横にインラインエラーメッセージ表示
 - 武装リストの動的追加・削除
 - 武器数が武器スロット数を超える場合、およびBEAM武器の要求ビームジェネレータLvが機体のビームジェネレータLvを超える場合はクライアント側 (`zod.superRefine`) でもエラー表示（Issue #383）
@@ -469,6 +481,7 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" python -m pytest 
 - `name_ja` / `model_number` / `weapon_slot_count` / `beam_generator_lv` の保存・既定値（Issue #383）
 - 武器数が `weapon_slot_count` を超える場合の 422（新規追加・更新の両方）（Issue #383）
 - BEAM武器の `required_beam_generator_lv` が `beam_generator_lv` を超える場合の 422（Issue #383）
+- 設計図設定の取得・作成時の指定・更新、価格変更で換金額が変わらないこと、負の換金額 422、設計図マスターが無い機体の保存（Issue #554）
 
 ```bash
 cd backend
@@ -493,6 +506,10 @@ npx vitest run tests/unit/
 テスト内容 (`tests/unit/mobileSuitEditFormValidation.test.ts`):
 - `weaponSchema`: id 形式 / 必須フィールド / accuracy 範囲 / type enum など
 - `masterMobileSuitSchema`: id 形式 / 価格 / スペック値範囲 / weapons 必須 1 件以上
+
+テスト内容 (`tests/unit/blueprintSettings.test.ts`, Issue #554):
+- 設計図設定のバリデーション（負・小数の換金額はエラー、空欄は許可）
+- 新規作成時の初期値、楽観的更新での設定の重ね合わせ、標準配備・要設計図の絞り込み
 
 ---
 

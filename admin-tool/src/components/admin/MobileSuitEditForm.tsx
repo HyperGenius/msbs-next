@@ -6,6 +6,12 @@ import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { MasterMobileSuit } from "@/types/admin";
+import { defaultBlueprintSettings } from "@/lib/blueprint";
+import BlueprintSettingsFields, {
+  blueprintFormSchema,
+  nullableNumberOptions,
+  toBlueprintFormValues,
+} from "./BlueprintSettingsFields";
 
 // ============================================================
 // Zod バリデーションスキーマ
@@ -57,6 +63,7 @@ export const masterMobileSuitSchema = z
       turning_bonus: z.number({ message: "Must be a number" }).positive(),
       weapons: z.array(weaponSchema).min(1, "At least one weapon is required"),
     }),
+    blueprint: blueprintFormSchema,
   })
   .superRefine((data, ctx) => {
     if (data.specs.weapons.length > data.weapon_slot_count) {
@@ -135,6 +142,7 @@ const defaultValues: MobileSuitFormValues = {
     turning_bonus: 1.0,
     weapons: [{ ...defaultWeapon }],
   },
+  blueprint: toBlueprintFormValues(null),
 };
 
 function toFormValues(ms: MasterMobileSuit): MobileSuitFormValues {
@@ -178,6 +186,7 @@ function toFormValues(ms: MasterMobileSuit): MobileSuitFormValues {
         required_beam_generator_lv: w.required_beam_generator_lv ?? 0,
       })),
     },
+    blueprint: toBlueprintFormValues(ms.blueprint),
   };
 }
 
@@ -215,6 +224,7 @@ export default function MobileSuitEditForm({
     handleSubmit,
     control,
     reset,
+    watch,
     formState: { errors },
   } = useForm<MobileSuitFormValues>({
     resolver: zodResolver(masterMobileSuitSchema),
@@ -222,6 +232,7 @@ export default function MobileSuitEditForm({
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "specs.weapons" });
+  const price = watch("price");
 
   useEffect(() => {
     reset(initialData ? toFormValues(initialData) : defaultValues);
@@ -498,6 +509,19 @@ export default function MobileSuitEditForm({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* 設計図 */}
+      <div>
+        <p className={sectionTitle}>設計図</p>
+        <BlueprintSettingsFields
+          standardIssueField={register("blueprint.is_standard_issue")}
+          creditValueField={register("blueprint.duplicate_credit_value", nullableNumberOptions)}
+          creditValueError={errors.blueprint?.duplicate_credit_value?.message}
+          defaultCreditValue={
+            initialData ? null : defaultBlueprintSettings(Number.isFinite(price) ? price : 0).duplicate_credit_value
+          }
+        />
       </div>
 
       {/* ボタン */}

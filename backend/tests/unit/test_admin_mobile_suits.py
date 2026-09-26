@@ -492,3 +492,129 @@ def test_delete_master_mobile_suit_deletes_blueprint(client_admin, session):
 
     session.expire_all()
     assert session.get(MasterBlueprint, "mobile_suit:test_gm") is None
+
+
+def test_list_master_mobile_suits_includes_blueprint(client_admin):
+    """GET 一覧の各機体に設計図設定が含まれること."""
+    client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+
+    response = client_admin.get("/api/admin/mobile-suits", headers=HEADERS)
+
+    entry = next(ms for ms in response.json() if ms["id"] == "test_gm")
+    assert entry["blueprint"] == {
+        "is_standard_issue": True,
+        "duplicate_credit_value": 100,
+    }
+
+
+def test_list_master_mobile_suits_without_blueprint_returns_default(
+    client_admin, session
+):
+    """設計図マスターが無い機体は、作成時と同じ初期値で返ること."""
+    from app.models.models import MasterBlueprint
+
+    client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+    session.delete(session.get(MasterBlueprint, "mobile_suit:test_gm"))
+    session.commit()
+
+    response = client_admin.get("/api/admin/mobile-suits", headers=HEADERS)
+
+    entry = next(ms for ms in response.json() if ms["id"] == "test_gm")
+    assert entry["blueprint"] == {
+        "is_standard_issue": True,
+        "duplicate_credit_value": 100,
+    }
+
+
+def test_create_master_mobile_suit_with_blueprint(client_admin, session):
+    """作成時に設計図設定を指定すると、その値で設計図マスターが作成されること."""
+    from app.models.models import MasterBlueprint
+
+    payload = {
+        **SAMPLE_MS,
+        "blueprint": {"is_standard_issue": False, "duplicate_credit_value": 250},
+    }
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["blueprint"] == {
+        "is_standard_issue": False,
+        "duplicate_credit_value": 250,
+    }
+    blueprint = session.get(MasterBlueprint, "mobile_suit:test_gm")
+    assert blueprint is not None
+    assert blueprint.is_standard_issue is False
+    assert blueprint.duplicate_credit_value == 250
+
+
+def test_create_negative_duplicate_credit_value_returns_422(client_admin):
+    """作成時に換金額へ負の値を指定すると 422 が返ること."""
+    payload = {
+        **SAMPLE_MS,
+        "blueprint": {"is_standard_issue": True, "duplicate_credit_value": -10},
+    }
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def test_update_master_mobile_suit_blueprint(client_admin, session):
+    """PUT で設計図設定を更新できること."""
+    from app.models.models import MasterBlueprint
+
+    client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"blueprint": {"is_standard_issue": False, "duplicate_credit_value": 0}},
+        headers=HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["blueprint"] == {
+        "is_standard_issue": False,
+        "duplicate_credit_value": 0,
+    }
+    session.expire_all()
+    blueprint = session.get(MasterBlueprint, "mobile_suit:test_gm")
+    assert blueprint is not None
+    assert blueprint.is_standard_issue is False
+    assert blueprint.duplicate_credit_value == 0
+
+
+def test_update_price_does_not_change_duplicate_credit_value(client_admin):
+    """価格を変更しても換金額は変わらないこと."""
+    client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"price": 9000},
+        headers=HEADERS,
+    )
+
+    assert response.json()["blueprint"]["duplicate_credit_value"] == 100
+
+
+def test_update_creates_missing_blueprint(client_admin, session):
+    """設計図マスターが無い機体を保存すると、設計図マスターが作成されること."""
+    from app.models.models import MasterBlueprint
+
+    client_admin.post("/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS)
+    session.delete(session.get(MasterBlueprint, "mobile_suit:test_gm"))
+    session.commit()
+
+    client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"blueprint": {"is_standard_issue": False, "duplicate_credit_value": 70}},
+        headers=HEADERS,
+    )
+
+    session.expire_all()
+    blueprint = session.get(MasterBlueprint, "mobile_suit:test_gm")
+    assert blueprint is not None
+    assert blueprint.is_standard_issue is False
+    assert blueprint.duplicate_credit_value == 70

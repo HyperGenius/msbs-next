@@ -45,6 +45,7 @@ const validMobileSuit = {
     turning_bonus: 1.0,
     weapons: [validWeapon],
   },
+  blueprint: { is_standard_issue: true, duplicate_credit_value: 100 },
 };
 
 // ============================================================

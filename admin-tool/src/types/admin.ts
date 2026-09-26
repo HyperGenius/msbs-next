@@ -1,5 +1,19 @@
 import { Tactics, Weapon, WeaponSpec } from "./weapon";
 
+/** 機体・武器マスターの設計図設定 */
+export interface MasterBlueprintSettings {
+    /** 標準配備品か。true なら設計図なしで購入できる */
+    is_standard_issue: boolean;
+    /** 入手済みの設計図を再入手したときに付与するクレジット (0以上) */
+    duplicate_credit_value: number;
+}
+
+/** 設計図設定の保存リクエスト。未指定（null・undefined）の項目は変更しない。新規作成時は初期値になる */
+export interface MasterBlueprintSettingsInput {
+    is_standard_issue?: boolean | null;
+    duplicate_credit_value?: number | null;
+}
+
 /** 管理者用マスター機体のスペック定義 */
 export interface MasterMobileSuitSpec {
     max_hp: number;
@@ -37,10 +51,13 @@ export interface MasterMobileSuit {
     /** 購入画面用フレーバーテキスト（1〜2行程度）。未設定の場合は null */
     flavor_text: string | null;
     specs: MasterMobileSuitSpec;
+    blueprint: MasterBlueprintSettings;
 }
 
-/** マスター機体の新規追加リクエスト（MasterMobileSuitと同形） */
-export type MasterMobileSuitCreate = MasterMobileSuit;
+/** マスター機体の新規追加リクエスト */
+export type MasterMobileSuitCreate = Omit<MasterMobileSuit, "blueprint"> & {
+    blueprint?: MasterBlueprintSettingsInput;
+};
 
 /** マスター機体の部分更新リクエスト */
 export interface MasterMobileSuitUpdate {
@@ -54,6 +71,7 @@ export interface MasterMobileSuitUpdate {
     beam_generator_lv?: number;
     flavor_text?: string | null;
     specs?: MasterMobileSuitSpec;
+    blueprint?: MasterBlueprintSettingsInput;
 }
 
 /** 管理者用マスター武器エントリー（武器ショップの元データ）。
@@ -66,10 +84,13 @@ export interface MasterWeapon {
     /** 購入画面用フレーバーテキスト（1〜2行程度）。未設定の場合は null */
     flavor_text: string | null;
     weapon: WeaponSpec;
+    blueprint: MasterBlueprintSettings;
 }
 
-/** マスター武器の新規追加リクエスト（MasterWeaponと同形） */
-export type MasterWeaponCreate = MasterWeapon;
+/** マスター武器の新規追加リクエスト */
+export type MasterWeaponCreate = Omit<MasterWeapon, "blueprint"> & {
+    blueprint?: MasterBlueprintSettingsInput;
+};
 
 /** マスター武器の部分更新リクエスト */
 export interface MasterWeaponUpdate {
@@ -78,6 +99,7 @@ export interface MasterWeaponUpdate {
     description?: string;
     flavor_text?: string | null;
     weapon?: WeaponSpec;
+    blueprint?: MasterBlueprintSettingsInput;
 }
 
 /** 攻撃セクタ（正面・側面・背面） */

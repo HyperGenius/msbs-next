@@ -10,6 +10,8 @@ from app.models.models import (
     BlueprintSource,
     BlueprintTargetType,
     MasterBlueprint,
+    MasterBlueprintSettings,
+    MasterBlueprintSettingsInput,
     Pilot,
     PlayerBlueprint,
     PlayerBlueprintResponse,
@@ -74,6 +76,61 @@ class BlueprintService:
         )
         session.add(blueprint)
         return blueprint
+
+    @staticmethod
+    def save_master_blueprint_settings(
+        session: Session,
+        target_type: BlueprintTargetType,
+        target_id: str,
+        price: int,
+        settings: MasterBlueprintSettingsInput | None,
+    ) -> MasterBlueprint:
+        """対象マスターの設計図設定を保存する.
+
+        設計図マスターが無ければ作成する。`settings` で未指定の項目は変更しない。
+        コミットは呼び出し側で行う。
+
+        Args:
+            session: DBセッション
+            target_type: 対象の種別
+            target_id: 対象の機体マスターID・武器マスターID
+            price: 対象アイテムの購入価格。設計図マスターを作成するときの換金額の初期値に使う
+            settings: 保存する設計図設定
+        """
+        blueprint = BlueprintService.ensure_master_blueprint(
+            session, target_type, target_id, price
+        )
+        if settings is None:
+            return blueprint
+
+        if settings.is_standard_issue is not None:
+            blueprint.is_standard_issue = settings.is_standard_issue
+        if settings.duplicate_credit_value is not None:
+            blueprint.duplicate_credit_value = settings.duplicate_credit_value
+        blueprint.updated_at = datetime.now(UTC)
+        session.add(blueprint)
+        return blueprint
+
+    @staticmethod
+    def settings_of(
+        blueprint: MasterBlueprint | None, price: int
+    ) -> MasterBlueprintSettings:
+        """設計図マスターの設定を返す.
+
+        設計図マスターが無ければ、作成時と同じ初期値を返す。
+        `can_purchase` が設計図マスターの無いアイテムを標準配備として扱うことに合わせる。
+        """
+        if blueprint is None:
+            return MasterBlueprintSettings(
+                is_standard_issue=True,
+                duplicate_credit_value=BlueprintService.default_duplicate_credit_value(
+                    price
+                ),
+            )
+        return MasterBlueprintSettings(
+            is_standard_issue=blueprint.is_standard_issue,
+            duplicate_credit_value=blueprint.duplicate_credit_value,
+        )
 
     @staticmethod
     def delete_master_blueprint(
