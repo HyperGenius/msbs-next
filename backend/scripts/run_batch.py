@@ -275,7 +275,9 @@ def _save_battle_results(
     # 生存しているteam_idを取得
     alive_team_ids = {u.team_id for u in simulator.units if u.current_hp > 0}
 
-    for entry in player_entries:
+    # 抽選は全プレイヤーで同じ drop_rng を使う。
+    # DBの取得順は保証されないため、処理順をエントリー日時で固定する。
+    for entry in sorted(player_entries, key=lambda e: (e.created_at, str(e.id))):
         # 各プレイヤーの勝敗を判定 (team_idが生存チームに含まれているか)
         entry_unit = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
         entry_team_id = _resolve_team_id(entry_unit)

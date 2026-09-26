@@ -476,7 +476,12 @@ def _make_batch_entry(session: Session, room: BattleRoom, user_id: str) -> Battl
     return entry
 
 
-def _save_batch(session: Session, entries: list[BattleEntry], room: BattleRoom) -> None:
+def _save_batch(
+    session: Session,
+    entries: list[BattleEntry],
+    room: BattleRoom,
+    rng: random.Random | None = None,
+) -> None:
     from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
 
     units = [
@@ -498,7 +503,7 @@ def _save_batch(session: Session, entries: list[BattleEntry], room: BattleRoom) 
         primary_player_win=True,
         player_unit=units[0],
         enemy_units=units[1:],
-        rng=FixedRandom(0.0),
+        rng=rng or FixedRandom(0.0),
     )
 
 
@@ -569,6 +574,42 @@ def test_batch_drop_error_does_not_stop_others(
     }
     assert loot_by_user[USER_ID] == []
     assert [item["blueprint_id"] for item in loot_by_user["other_user"]] == [DOM]  # type: ignore[union-attr]
+
+
+def test_batch_loot_does_not_depend_on_entry_order(
+    session: Session, pilot: Pilot
+) -> None:
+    """同じ乱数なら、エントリーの並び順によらず同じ抽選結果になること."""
+    other_users = [f"user_{i}" for i in range(5)]
+    for user_id in other_users:
+        session.add(Pilot(user_id=user_id, name=user_id, faction="ZEON"))
+    session.commit()
+    _make_table(session, [(DOM, 1, False), (GELGOOG, 1, False)], drop_rate=0.5)
+
+    loot_by_order = []
+    for reverse in (False, True):
+        room = BattleRoom(status="WAITING", scheduled_at=datetime.now(UTC))
+        session.add(room)
+        session.commit()
+        entries = [
+            _make_batch_entry(session, room, user_id)
+            for user_id in [USER_ID, *other_users]
+        ]
+        if reverse:
+            entries.reverse()
+        _save_batch(session, entries, room, rng=random.Random(7))
+        loot_by_order.append(
+            {
+                # 2回目は所持済みで換金されるため、設計図IDだけを比べる。
+                result.user_id: [item["blueprint_id"] for item in result.loot or []]
+                for result in session.exec(
+                    select(BattleResult).where(BattleResult.room_id == room.id)
+                ).all()
+            }
+        )
+
+    assert loot_by_order[0] == loot_by_order[1]
+    assert any(loot_by_order[0].values())
 
 
 # --- シード ---
