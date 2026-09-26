@@ -56,7 +56,10 @@ class AcePilotService:
                 f"Must be any of {ALL_PART_NAMES}."
             )
         spec_dict = spec.model_dump()
-        spec_dict["weapons"] = [w.model_dump() for w in spec.weapons]
+        # 移行データと同じく既定値と異なる項目のみ保存する。読み出し時に Weapon(**w) で補完される。
+        spec_dict["weapons"] = [
+            w.model_dump(exclude_defaults=True) for w in spec.weapons
+        ]
         return spec_dict
 
     @staticmethod

@@ -122,6 +122,24 @@ def test_create_ace(client_admin):
     assert ace["mobile_suit"]["weapons"][0].en_cost == 90
 
 
+def test_saved_weapons_store_only_non_default_fields(client_admin, session):
+    """武器JSONは移行データと同じく既定値と異なる項目のみ保存されること."""
+    client_admin.post(ENDPOINT, json=SAMPLE_ACE, headers=HEADERS)
+    client_admin.put(
+        f"{ENDPOINT}/ace_char_aznable",
+        json={"mobile_suit": SAMPLE_ACE["mobile_suit"]},
+        headers=HEADERS,
+    )
+
+    # decay_rate=0.05 は既定値と同じため保存されない
+    expected_keys = set(SAMPLE_ACE["mobile_suit"]["weapons"][0]) - {"decay_rate"}
+    for ace_id in ("ace_test_pilot", "ace_char_aznable"):
+        record = session.get(AcePilot, ace_id)
+        assert record is not None
+        session.refresh(record)
+        assert set(record.mobile_suit["weapons"][0]) == expected_keys
+
+
 def test_create_duplicate_id_returns_409(client_admin):
     """既存IDで追加すると 409 が返ること."""
     payload = {**SAMPLE_ACE, "id": "ace_char_aznable"}
