@@ -264,13 +264,15 @@ export default function AcePilotEditForm({
   } = methods;
 
   const skillArray = useFieldArray({ control, name: "skills" });
-  const { weapons: masterWeapons } = useAdminWeapons();
+  // 取り込む武器が武器マスターにあるかを判定するため、一覧の取得前は取り込みを止める。
+  const { weapons: masterWeapons, isError: isMasterWeaponsError } = useAdminWeapons();
 
   useEffect(() => {
     reset(initialData ? toFormValues(initialData) : defaultValues);
   }, [initialData, reset]);
 
   function handleImportMaster(master: MasterMobileSuit) {
+    if (!masterWeapons) return;
     const needsConfirm = initialData !== null || isDirty;
     if (
       needsConfirm &&
@@ -285,7 +287,7 @@ export default function AcePilotEditForm({
         mobile_suit: masterToSpecValues(
           master,
           getValues("mobile_suit"),
-          new Set((masterWeapons ?? []).map((w) => w.id))
+          new Set(masterWeapons.map((w) => w.id))
         ),
       },
       { keepDefaultValues: true }
@@ -378,7 +380,14 @@ export default function AcePilotEditForm({
         <div className={tab === "mobile_suit" ? "space-y-4" : "hidden"}>
           <div>
             <p className={sectionTitle}>機体マスターから取り込み</p>
-            <MasterMobileSuitSelect buttonLabel="取り込み" onApply={handleImportMaster} />
+            <MasterMobileSuitSelect buttonLabel="取り込み" onApply={handleImportMaster} disabled={!masterWeapons} />
+            {!masterWeapons && (
+              <p className="mt-1 text-xs text-[#00ff41]/40">
+                {isMasterWeaponsError
+                  ? "※ 武器マスターを取得できないため取り込めません"
+                  : "※ 武器マスターの読み込み後に取り込めます"}
+              </p>
+            )}
             <p className="mt-1 text-xs text-[#00ff41]/40">
               ※ 機体名・スペック・欠損部位・武器スロット数・武装を上書きします。EN と戦術は機体マスターに無いため現在の値を残します。取り込んだ機体マスターを記録し、各項目にマスターの値を併記します
             </p>
