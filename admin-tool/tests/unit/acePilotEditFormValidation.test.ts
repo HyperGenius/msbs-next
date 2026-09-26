@@ -137,3 +137,26 @@ describe("toAcePilotPayload", () => {
     expect(weapon.cooldown_sec).toBe(0.5);
   });
 });
+
+describe("toAcePilotPayload (機体マスターから取り込んだ武装)", () => {
+  it("取り込んだ武装のフォーム外項目を引き継ぐ", () => {
+    const imported = [{ ...validFormValues.mobile_suit.weapons[0], weapon_type: "MELEE" as const, fire_arc_deg: 360 }];
+    const payload = toAcePilotPayload(validFormValues, null, imported);
+    expect(payload.mobile_suit.weapons[0].weapon_type).toBe("MELEE");
+    expect(payload.mobile_suit.weapons[0].fire_arc_deg).toBe(360);
+  });
+
+  it("同じ武器IDでは既存エースより取り込み元の値を優先する", () => {
+    const original = {
+      ...validFormValues,
+      skills: {},
+      mobile_suit: {
+        ...validFormValues.mobile_suit,
+        weapons: [{ ...validFormValues.mobile_suit.weapons[0], cooldown_sec: 0.5 }],
+      },
+    } as AcePilot;
+    const imported = [{ ...validFormValues.mobile_suit.weapons[0], cooldown_sec: 3.0 }];
+    const payload = toAcePilotPayload(validFormValues, original, imported);
+    expect(payload.mobile_suit.weapons[0].cooldown_sec).toBe(3.0);
+  });
+});

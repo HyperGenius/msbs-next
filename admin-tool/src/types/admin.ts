@@ -15,6 +15,8 @@ export interface MasterMobileSuitSpec {
     acceleration_bonus: number;
     turning_bonus: number;
     weapons: Weapon[];
+    /** 欠損部位（HEAD/TORSO/RIGHT_ARM/LEFT_ARM/RIGHT_LEG/LEFT_LEG） */
+    missing_parts?: string[];
 }
 
 /** 管理者用マスター機体エントリー（ショップ・初期配備の元データ） */
@@ -144,6 +146,21 @@ export interface NpcMobileSuit {
     current_hp: number;
     armor: number;
     mobility: number;
+    sensor_range: number;
+    beam_resistance: number;
+    physical_resistance: number;
+    max_en: number;
+    en_recovery: number;
+    melee_aptitude: number;
+    shooting_aptitude: number;
+    accuracy_bonus: number;
+    evasion_bonus: number;
+    acceleration_bonus: number;
+    turning_bonus: number;
+    /** 戦術設定。未設定の機体では空オブジェクトになる */
+    tactics: Partial<Tactics>;
+    missing_parts: string[];
+    weapons: Weapon[];
     personality: NpcPersonality | null;
     is_ace: boolean;
     ace_id: string | null;
@@ -205,6 +222,25 @@ export interface NpcMobileSuitUpdate {
     max_hp?: number;
     armor?: number;
     mobility?: number;
+    sensor_range?: number;
+    beam_resistance?: number;
+    physical_resistance?: number;
+    max_en?: number;
+    en_recovery?: number;
+    melee_aptitude?: number;
+    shooting_aptitude?: number;
+    accuracy_bonus?: number;
+    evasion_bonus?: number;
+    acceleration_bonus?: number;
+    turning_bonus?: number;
+    tactics?: Tactics;
+    missing_parts?: string[];
+    weapons?: Weapon[];
+}
+
+/** NPC機体の追加リクエスト（機体マスターのスペックをコピーする） */
+export interface NpcMobileSuitCreate {
+    master_mobile_suit_id: string;
 }
 
 /** エースパイロットの搭乗機体スペック（ace_pilots.mobile_suit 列） */

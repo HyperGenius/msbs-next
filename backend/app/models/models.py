@@ -1244,12 +1244,59 @@ class NpcMobileSuitEntry(SQLModel):
     current_hp: int
     armor: int
     mobility: float
+    sensor_range: float = 500.0
+    beam_resistance: float = 0.0
+    physical_resistance: float = 0.0
+    max_en: int = 1000
+    en_recovery: int = 100
+    melee_aptitude: float = 1.0
+    shooting_aptitude: float = 1.0
+    accuracy_bonus: float = 0.0
+    evasion_bonus: float = 0.0
+    acceleration_bonus: float = 1.0
+    turning_bonus: float = 1.0
+    tactics: dict = Field(default_factory=dict)
+    missing_parts: list[str] = Field(default_factory=list)
+    weapons: list[Weapon] = Field(default_factory=list)
     personality: str | None = None
     is_ace: bool = False
     ace_id: str | None = None
     pilot_name: str | None = None
     bounty_exp: int = 0
     bounty_credits: int = 0
+
+
+class NpcMobileSuitUpdate(SQLModel):
+    """NPC所有機体の更新リクエスト.
+
+    プレイヤー向けの MobileSuitUpdate とは分ける。
+    武装を書き換えられるのは管理者だけにするため。
+    """
+
+    name: str | None = Field(default=None, min_length=1)
+    max_hp: int | None = Field(default=None, gt=0)
+    armor: int | None = Field(default=None, ge=0)
+    mobility: float | None = Field(default=None, gt=0)
+    sensor_range: float | None = Field(default=None, gt=0)
+    beam_resistance: float | None = Field(default=None, ge=0, le=1)
+    physical_resistance: float | None = Field(default=None, ge=0, le=1)
+    max_en: int | None = Field(default=None, ge=0)
+    en_recovery: int | None = Field(default=None, ge=0)
+    melee_aptitude: float | None = Field(default=None, gt=0)
+    shooting_aptitude: float | None = Field(default=None, gt=0)
+    accuracy_bonus: float | None = None
+    evasion_bonus: float | None = None
+    acceleration_bonus: float | None = Field(default=None, gt=0)
+    turning_bonus: float | None = Field(default=None, gt=0)
+    tactics: dict | None = None
+    missing_parts: list[str] | None = None
+    weapons: list[Weapon] | None = None
+
+
+class NpcMobileSuitCreate(SQLModel):
+    """NPC機体の追加リクエスト（機体マスターから生成する）."""
+
+    master_mobile_suit_id: str
 
 
 class NpcPilotEntry(SQLModel):

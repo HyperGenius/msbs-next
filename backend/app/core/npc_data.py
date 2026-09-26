@@ -10,6 +10,20 @@ import random
 
 PERSONALITY_TYPES = ["AGGRESSIVE", "CAUTIOUS", "SNIPER"]
 
+
+def build_npc_tactics(personality: str) -> dict[str, str]:
+    """性格に応じた NPC の戦術設定を生成する.
+
+    Returns:
+        priority と range を持つ戦術設定。未知の性格は SNIPER として扱う。
+    """
+    if personality == "AGGRESSIVE":
+        return {"priority": random.choice(["CLOSEST", "WEAKEST"]), "range": "MELEE"}
+    if personality == "CAUTIOUS":
+        return {"priority": random.choice(["WEAKEST", "RANDOM"]), "range": "BALANCED"}
+    return {"priority": "CLOSEST", "range": "RANGED"}
+
+
 # --- NPC Pilot Name Generation ---
 # 通常NPC（非エース）のパイロット名。機体名をそのままパイロット名に流用していた
 # 問題（Issue #444）の修正用。組み合わせでランダムなパイロット名を生成する。

@@ -9,7 +9,11 @@ from typing import Any, cast
 from sqlmodel import Session, select
 
 from app.core.gamedata import get_ace_pilots
-from app.core.npc_data import PERSONALITY_TYPES, generate_npc_pilot_name
+from app.core.npc_data import (
+    PERSONALITY_TYPES,
+    build_npc_tactics,
+    generate_npc_pilot_name,
+)
 from app.models.models import (
     BattleEntry,
     BattleRoom,
@@ -393,23 +397,6 @@ class MatchingService:
         # ランダムな性格を付与
         personality = random.choice(PERSONALITY_TYPES)
 
-        # 性格に応じた戦術を設定
-        if personality == "AGGRESSIVE":
-            tactics_options = {
-                "priority": random.choice(["CLOSEST", "WEAKEST"]),
-                "range": "MELEE",
-            }
-        elif personality == "CAUTIOUS":
-            tactics_options = {
-                "priority": random.choice(["WEAKEST", "RANDOM"]),
-                "range": "BALANCED",
-            }
-        else:  # SNIPER
-            tactics_options = {
-                "priority": "CLOSEST",
-                "range": "RANGED",
-            }
-
         npc = MobileSuit(
             name=name,
             pilot_name=generate_npc_pilot_name(),
@@ -420,7 +407,7 @@ class MatchingService:
             position=position,
             weapons=random.sample(weapons, k=random.randint(1, 2)),
             side="ENEMY",
-            tactics=tactics_options,
+            tactics=build_npc_tactics(personality),
             user_id=None,  # NPCはユーザーIDなし
             personality=personality,  # 性格を設定
         )
