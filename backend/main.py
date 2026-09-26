@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -28,6 +29,7 @@ from app.models.models import (
     BattleLogRecord,
     BattleResult,
     BattleResultSummary,
+    LootItem,
     Mission,
     MobileSuit,
     Vector3,
@@ -51,6 +53,7 @@ from app.services.battle_log_storage_service import (
     offload_battle_log_to_gcs,
     stream_battle_log_chunks,
 )
+from app.services.drop_service import DropScope, DropService
 
 app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 
@@ -113,6 +116,7 @@ class BattleRewards(BaseModel):
     level_after: int
     total_exp: int
     total_credits: int
+    loot: list[LootItem] = []
 
 
 class BattleResponse(BaseModel):
@@ -330,10 +334,13 @@ async def simulate_battle(
         win_loss = "LOSE"
 
     # 7. 報酬の計算と付与（ユーザーがログインしている場合）
+    # 所持設計図の source_battle_id に使うため、バトル結果IDを先に決める。
+    battle_result_id = uuid.uuid4()
     rewards = None
     exp_gained = 0
     credits_gained = 0
     level_up = False
+    loot: list[LootItem] = []
     if user_id:
         from app.services.pilot_service import PilotService
 
@@ -356,6 +363,15 @@ async def simulate_battle(
 
         level_up = pilot.level > level_before
 
+        loot = DropService.roll(
+            session,
+            user_id,
+            DropScope.mission(mission_id),
+            is_win=win_loss == "WIN",
+            battle_result_id=battle_result_id,
+            rng=random.Random(),
+        )
+
         rewards = BattleRewards(
             exp_gained=exp_gained,
             credits_gained=credits_gained,
@@ -363,6 +379,7 @@ async def simulate_battle(
             level_after=pilot.level,
             total_exp=pilot.exp,
             total_credits=pilot.credits,
+            loot=loot,
         )
 
     # 8. バトルログをDBに保存（battle_logsテーブル）
@@ -399,6 +416,7 @@ async def simulate_battle(
     # 10. バトル結果をDBに保存（リプレイ用スナップショット・詳細情報含む）
     obstacles_data = serialize_obstacles(sim.obstacles)
     battle_result = BattleResult(
+        id=battle_result_id,
         user_id=user_id,
         mission_id=mission_id,
         battle_log_id=battle_log_record.id,
@@ -417,6 +435,7 @@ async def simulate_battle(
         level_up=level_up,
         is_read=False,
         created_at=datetime.now(UTC),
+        loot=[item.model_dump() for item in loot],
         **digest_fields,
     )
     session.add(battle_result)

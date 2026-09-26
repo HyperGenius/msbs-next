@@ -55,6 +55,18 @@ export interface PartHitSummary {
     dealt: Record<string, PartHitStat>;
 }
 
+/** バトルで得た戦利品。kind が BLUEPRINT なら設計図 */
+export interface LootItem {
+    kind: "BLUEPRINT";
+    blueprint_id: string;
+    target_type: "MOBILE_SUIT" | "WEAPON";
+    target_id: string;
+    /** 未所持の設計図を入手したか。false なら換金された */
+    is_new: boolean;
+    /** 所持済みの設計図を換金したクレジット。バトル報酬の credits_gained には含まない */
+    credits_awarded: number;
+}
+
 /** バトルで得た報酬（経験値・クレジット・レベル変化） */
 export interface BattleRewards {
     exp_gained: number;
@@ -64,6 +76,7 @@ export interface BattleRewards {
     total_exp: number;
     total_credits: number;
     kills?: number;
+    loot?: LootItem[];
 }
 
 /** バトルAPIのレスポンス全体（ログ・機体情報・報酬を含む） */
@@ -114,6 +127,8 @@ export interface BattleResult {
     digest_text?: string | null;
     /** 部位別の被弾/命中集計（Issue #504）。マイグレーション前の既存レコードは null */
     part_hit_summary?: PartHitSummary | null;
+    /** 戦利品の一覧。ドロップなしは空配列、導入前のバトルは null */
+    loot?: LootItem[] | null;
 }
 
 /** battle_logsテーブルのレコード（リプレイ用の全ログを保持） */

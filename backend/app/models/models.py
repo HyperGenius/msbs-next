@@ -1078,6 +1078,25 @@ class Mission(SQLModel, table=True):
     )
 
 
+class LootKind(StrEnum):
+    """戦利品の種別."""
+
+    BLUEPRINT = "BLUEPRINT"
+
+
+class LootItem(SQLModel):
+    """バトルで得た戦利品."""
+
+    kind: str = Field(description="戦利品の種別 (LootKind)")
+    blueprint_id: str
+    target_type: str
+    target_id: str
+    is_new: bool = Field(description="未所持の設計図を入手したか")
+    credits_awarded: int = Field(
+        description="所持済みの設計図を換金したクレジット。未所持なら 0"
+    )
+
+
 class BattleResult(SQLModel, table=True):
     """バトル結果 (DBテーブル)."""
 
@@ -1166,6 +1185,12 @@ class BattleResult(SQLModel, table=True):
         description="部位別の被弾/命中集計（taken: 被弾部位別, dealt: 使用武器スロット別）",
     )
 
+    loot: list[dict] | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="戦利品の一覧 (LootItem)。ドロップなしは空配列、導入前のバトルは null",
+    )
+
 
 class BattleResultSummary(SQLModel):
     """バトル結果サマリー (logsを含まない軽量レスポンス用)."""
@@ -1203,6 +1228,7 @@ class BattleResultSummary(SQLModel):
     digest_tag: str | None = None
     digest_text: str | None = None
     part_hit_summary: dict | None = None
+    loot: list[LootItem] | None = None
 
 
 class BattleRoom(SQLModel, table=True):
@@ -1698,3 +1724,64 @@ class PlayerBlueprintResponse(SQLModel):
     source: str
     source_battle_id: uuid.UUID | None
     acquired_at: datetime
+
+
+# --- Drop Table Models ---
+
+
+class DropScopeType(StrEnum):
+    """ドロップテーブルの適用範囲の種別."""
+
+    MISSION = "MISSION"
+    BATCH = "BATCH"
+
+
+class DropTable(SQLModel, table=True):
+    """ドロップテーブル (DBテーブル)."""
+
+    __tablename__ = "drop_tables"
+    __table_args__ = (
+        UniqueConstraint("scope_type", "scope_key", name="uq_drop_table_scope"),
+    )
+
+    id: int = Field(default=None, primary_key=True)
+    scope_type: str = Field(description="適用範囲の種別 (DropScopeType)")
+    scope_key: str = Field(
+        description="適用範囲のキー。MISSION は missions.id の文字列、BATCH は default"
+    )
+    name: str = Field(description="管理用の名前")
+    drop_rate: float = Field(
+        ge=0, le=1, description="1回のバトルで何かがドロップする確率"
+    )
+    win_rate_multiplier: float = Field(
+        default=1.0,
+        ge=1,
+        description="勝利時に drop_rate に掛ける倍率。掛けた結果は1を上限とする",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
+
+
+class DropTableEntry(SQLModel, table=True):
+    """ドロップテーブルに含まれる設計図 (DBテーブル)."""
+
+    __tablename__ = "drop_table_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "drop_table_id", "blueprint_id", name="uq_drop_table_entry_blueprint"
+        ),
+    )
+
+    id: int = Field(default=None, primary_key=True)
+    drop_table_id: int = Field(foreign_key="drop_tables.id", index=True)
+    blueprint_id: str = Field(
+        foreign_key="master_blueprints.id", index=True, description="設計図ID"
+    )
+    weight: int = Field(default=1, ge=1, description="抽選の重み")
+    requires_win: bool = Field(
+        default=False, description="true なら勝利時だけ抽選対象になる"
+    )

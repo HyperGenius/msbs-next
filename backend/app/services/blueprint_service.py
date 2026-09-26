@@ -4,14 +4,19 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from sqlalchemy import String, and_, cast
 from sqlmodel import Session, col, delete, select
 
 from app.models.models import (
     BlueprintSource,
     BlueprintTargetType,
+    DropScopeType,
+    DropTable,
+    DropTableEntry,
     MasterBlueprint,
     MasterBlueprintSettings,
     MasterBlueprintSettingsInput,
+    Mission,
     Pilot,
     PlayerBlueprint,
     PlayerBlueprintResponse,
@@ -20,8 +25,9 @@ from app.models.models import (
 # 換金額はアイテムごとに admin-tool で調整する前提の暫定値。
 DUPLICATE_CREDIT_RATIO = 0.2
 
-# ドロップテーブルができたら、入手できるミッション名を含む文言に置き換える。
-DEFAULT_UNLOCK_HINT = "バトルで設計図を入手すると購入できます"
+UNAVAILABLE_UNLOCK_HINT = "現在は入手できません"
+BATCH_DROP_SOURCE_LABEL = "定期バトル"
+WIN_ONLY_SUFFIX = "（勝利時のみ）"
 
 
 @dataclass(frozen=True)
@@ -159,6 +165,11 @@ class BlueprintService:
         """
         blueprint_id = BlueprintService.blueprint_id_for(target_type, target_id)
         session.exec(  # type: ignore[call-overload]
+            delete(DropTableEntry).where(
+                col(DropTableEntry.blueprint_id) == blueprint_id
+            )
+        )
+        session.exec(  # type: ignore[call-overload]
             delete(PlayerBlueprint).where(
                 col(PlayerBlueprint.blueprint_id) == blueprint_id
             )
@@ -195,6 +206,7 @@ class BlueprintService:
         """対象アイテムごとの解放状態を返す.
 
         判定は `can_purchase` と同じ。設計図マスターが無いアイテムは標準配備として扱う。
+        未解放のアイテムには、ドロップテーブルから組み立てた入手ヒントを付ける。
         """
         standard_issue_by_target = dict(
             session.exec(
@@ -216,6 +228,14 @@ class BlueprintService:
             ).all()
         )
 
+        locked_targets = [
+            target_id
+            for target_id in target_ids
+            if not standard_issue_by_target.get(target_id, True)
+            and target_id not in owned_targets
+        ]
+        hints = BlueprintService._unlock_hints(session, target_type, locked_targets)
+
         states: dict[str, UnlockState] = {}
         for target_id in target_ids:
             if standard_issue_by_target.get(target_id, True):
@@ -225,9 +245,75 @@ class BlueprintService:
             states[target_id] = UnlockState(
                 is_standard_issue=False,
                 is_unlocked=is_unlocked,
-                unlock_hint=None if is_unlocked else DEFAULT_UNLOCK_HINT,
+                unlock_hint=None if is_unlocked else hints[target_id],
             )
         return states
+
+    @staticmethod
+    def _unlock_hints(
+        session: Session, target_type: BlueprintTargetType, target_ids: list[str]
+    ) -> dict[str, str]:
+        """対象アイテムごとに、設計図を入手できる戦闘を示すヒントを返す."""
+        if not target_ids:
+            return {}
+
+        rows = session.exec(
+            select(
+                MasterBlueprint.target_id,
+                DropTable,
+                Mission.name,
+                DropTableEntry.requires_win,
+            )
+            .join(
+                DropTableEntry,
+                col(DropTableEntry.blueprint_id) == col(MasterBlueprint.id),
+            )
+            .join(DropTable, col(DropTable.id) == col(DropTableEntry.drop_table_id))
+            .outerjoin(
+                Mission,
+                and_(
+                    col(DropTable.scope_type) == DropScopeType.MISSION.value,
+                    cast(col(Mission.id), String) == col(DropTable.scope_key),
+                ),
+            )
+            .where(MasterBlueprint.target_type == target_type.value)
+            .where(col(MasterBlueprint.target_id).in_(target_ids))
+            # ミッションを定期バトルより先に、ミッションID順に並べる。
+            .order_by(col(DropTable.scope_type).desc(), col(Mission.id))
+        ).all()
+
+        sources_by_target: dict[str, list[tuple[str, bool]]] = {}
+        for target_id, table, mission_name, requires_win in rows:
+            if table.scope_type == DropScopeType.BATCH.value:
+                label = BATCH_DROP_SOURCE_LABEL
+            else:
+                label = f"『{mission_name or table.name}』"
+            sources_by_target.setdefault(target_id, []).append((label, requires_win))
+
+        return {
+            target_id: BlueprintService._format_unlock_hint(
+                sources_by_target.get(target_id, [])
+            )
+            for target_id in target_ids
+        }
+
+    @staticmethod
+    def _format_unlock_hint(sources: list[tuple[str, bool]]) -> str:
+        """入手できる戦闘の一覧からヒントの文言を組み立てる.
+
+        Args:
+            sources: 戦闘の表示名と、勝利時のみドロップするかの組
+        """
+        if not sources:
+            return UNAVAILABLE_UNLOCK_HINT
+        if all(requires_win for _, requires_win in sources):
+            labels = "・".join(label for label, _ in sources)
+            return f"{labels}でドロップ{WIN_ONLY_SUFFIX}"
+        labels = "・".join(
+            label + (WIN_ONLY_SUFFIX if requires_win else "")
+            for label, requires_win in sources
+        )
+        return f"{labels}でドロップ"
 
     @staticmethod
     def grant_blueprint(

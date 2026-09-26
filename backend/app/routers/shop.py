@@ -14,6 +14,7 @@ from app.core.gamedata import (
     WEAPON_SHOP_LISTINGS,
     get_shop_listing_by_id,
     get_weapon_listing_by_id,
+    is_available_to_faction,
 )
 from app.db import get_session
 from app.models.models import BlueprintTargetType, MobileSuit, Pilot, Weapon
@@ -93,8 +94,9 @@ async def get_shop_listings(
         item = cast(dict[str, Any], item)
 
         # 勢力フィルタリング: パイロットに勢力が設定されている場合、合致する機体のみ返す
-        item_faction = cast(str, item.get("faction", ""))
-        if pilot_faction and item_faction and item_faction != pilot_faction:
+        if not is_available_to_faction(
+            pilot_faction, cast(str, item.get("faction", ""))
+        ):
             continue
         items.append(item)
 
@@ -166,8 +168,7 @@ async def purchase_mobile_suit(
         raise HTTPException(status_code=404, detail="パイロット情報が見つかりません")
 
     # 3. 勢力バリデーション
-    item_faction = listing.get("faction", "")
-    if pilot.faction and item_faction and item_faction != pilot.faction:
+    if not is_available_to_faction(pilot.faction, listing.get("faction", "")):
         raise HTTPException(
             status_code=403,
             detail=f"この機体はあなたの勢力（{pilot.faction}）では購入できません",
