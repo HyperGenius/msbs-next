@@ -1,295 +1,408 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { BattleRewards, MobileSuit } from "@/types/battle";
+import { BattleRewards, LootItem, MobileSuit } from "@/types/battle";
 import MobileSuitRankBadges from "./MobileSuitRankBadges";
-import { getWeaponRank, getRankColor } from "@/utils/rankUtils";
+import LootList from "@/components/loot/LootList";
+import { getWeaponPowerRank, getRankColor } from "@/utils/rankUtils";
+
+type WinLoss = "WIN" | "LOSE" | "DRAW";
 
 interface BattleResultModalProps {
-  winLoss: "WIN" | "LOSE" | "DRAW";
+  winLoss: WinLoss;
   rewards: BattleRewards | null;
   msSnapshot?: MobileSuit | null;
   kills?: number;
+  /** 戦利品。空配列はドロップなし、null・未指定は導入前のバトルで、欄を出さない */
+  loot?: LootItem[] | null;
   onClose: () => void;
+  /** 指定したときだけ「リプレイを見る」ボタンを表示する */
+  onOpenReplay?: () => void;
+  /** false なら段階表示とカウントアップを省き、最終状態をすぐに表示する */
+  animate?: boolean;
+}
+
+const CONTENT_DELAY_MS = 300;
+const REWARDS_DELAY_MS = 900;
+const COUNT_UP_MS = 1500;
+const COUNT_UP_STEPS = 30;
+// 戦利品は報酬のカウントアップが終わってから出す。
+const LOOT_DELAY_MS = REWARDS_DELAY_MS + COUNT_UP_MS;
+// 新規入手の演出とレベルアップ演出が重ならないよう、その分だけ遅らせる。
+const NEW_LOOT_EFFECT_MS = 1000;
+
+const THEMES: Record<
+  WinLoss,
+  {
+    title: string;
+    subtitle: string;
+    color: string;
+    text: string;
+    border: string;
+    button: string;
+    outline: string;
+  }
+> = {
+  WIN: {
+    title: "MISSION COMPLETE",
+    subtitle: "勝利",
+    color: "#00ff41",
+    text: "text-[#00ff41]",
+    border: "border-[#00ff41] sf-border-glow-green",
+    button: "bg-[#00ff41] text-black border-[#00ff41] hover:bg-[#00cc33]",
+    outline: "border-[#00ff41]/60 text-[#00ff41] hover:bg-[#00ff41]/10",
+  },
+  LOSE: {
+    title: "MISSION FAILED",
+    subtitle: "敗北",
+    color: "#ffb000",
+    text: "text-[#ffb000]",
+    border: "border-[#ffb000] sf-border-glow-amber",
+    button: "bg-[#ffb000] text-black border-[#ffb000] hover:bg-[#cc8800]",
+    outline: "border-[#ffb000]/60 text-[#ffb000] hover:bg-[#ffb000]/10",
+  },
+  DRAW: {
+    title: "DRAW",
+    subtitle: "引き分け",
+    color: "#00f0ff",
+    text: "text-[#00f0ff]",
+    border: "border-[#00f0ff] sf-border-glow-cyan",
+    button: "bg-[#00f0ff] text-black border-[#00f0ff] hover:bg-[#00b8cc]",
+    outline: "border-[#00f0ff]/60 text-[#00f0ff] hover:bg-[#00f0ff]/10",
+  },
+};
+
+const STAT_GRID_COLS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+};
+
+// 描画のたびに乱数を使うと、再描画やストーリーごとに見た目が変わるため、配置を固定する。
+const LEVEL_UP_PARTICLES = Array.from({ length: 20 }, (_, i) => {
+  const angle = i * 2.39996; // 黄金角（rad）で円周上に散らす
+  const radius = 0.15 + (i % 5) * 0.08;
+  return {
+    left: 50 + Math.cos(angle) * radius * 100,
+    top: 50 + Math.sin(angle) * radius * 100,
+    rx: 0.5 + Math.cos(angle) / 2,
+    ry: 0.5 + Math.sin(angle) / 2,
+    duration: 0.8 + (i % 4) * 0.3,
+    delay: (i % 5) * 0.1,
+  };
+});
+
+/** start が true になってから、0 から target まで数値をカウントアップする */
+function useCountUp(target: number, start: boolean): number {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!start) return;
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      if (step >= COUNT_UP_STEPS) {
+        setValue(target);
+        clearInterval(interval);
+      } else {
+        setValue(Math.floor((target / COUNT_UP_STEPS) * step));
+      }
+    }, COUNT_UP_MS / COUNT_UP_STEPS);
+    return () => clearInterval(interval);
+  }, [target, start]);
+  return value;
+}
+
+/** セクションの見出し（ホーム画面の「// NEXT BATTLE」と同じ形式） */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <span className="text-[10px] tracking-widest text-gray-500">
+        {"// "}
+        {children}
+      </span>
+      <div className="flex-1 h-px bg-gray-700/60" />
+    </div>
+  );
+}
+
+/** 撃墜数・経験値・クレジットの1マス */
+function StatCell({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: string;
+  className: string;
+}) {
+  return (
+    <div className="bg-black/40 border border-gray-700/70 px-2 py-2 text-center min-w-0">
+      <p className="text-[10px] tracking-widest text-gray-500">{label}</p>
+      <p className={`text-xl sm:text-2xl font-bold truncate ${className}`}>
+        {value}
+      </p>
+    </div>
+  );
 }
 
 /**
  * BattleResultModal
- * バトル終了時に表示されるリザルト画面。
- * 勝敗結果、獲得報酬（経験値・クレジット）、レベルアップ演出、
- * および出撃時の機体ステータスのスナップショットを表示する。
+ * バトル終了時のリザルト画面。
+ * 結果タイトル → 報酬（カウントアップ）→ 戦利品 → レベルアップの順に段階表示する。
+ * 本文だけをスクロールさせ、CONTINUE ボタンは常に画面内に置く。
  */
 export default function BattleResultModal({
   winLoss,
   rewards,
   msSnapshot,
   kills,
+  loot,
   onClose,
+  onOpenReplay,
+  animate = true,
 }: BattleResultModalProps) {
-  const [showContent, setShowContent] = useState(false);
-  const [showRewards, setShowRewards] = useState(false);
-  const [showLevelUp, setShowLevelUp] = useState(false);
-  const [animatedExp, setAnimatedExp] = useState(0);
-  const [animatedCredits, setAnimatedCredits] = useState(0);
+  const [contentShown, setContentShown] = useState(false);
+  const [rewardsShown, setRewardsShown] = useState(false);
+  const [lootShown, setLootShown] = useState(false);
+  const [levelUpShown, setLevelUpShown] = useState(false);
 
-  const isWin = winLoss === "WIN";
-  const isLose = winLoss === "LOSE";
-
-  useEffect(() => {
-    // Step 1: 結果タイトル表示
-    const timer1 = setTimeout(() => setShowContent(true), 300);
-    // Step 2: 報酬表示（ステージ演出）
-    const timer2 = setTimeout(() => setShowRewards(true), 900);
-    // Step 3: レベルアップ演出（報酬表示後）
-    const timer3 = setTimeout(() => {
-      if (rewards && rewards.level_after > rewards.level_before) {
-        setShowLevelUp(true);
-      }
-    }, 2400);
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-    };
-  }, [rewards]);
+  const theme = THEMES[winLoss];
+  const isLevelUp = !!rewards && rewards.level_after > rewards.level_before;
+  const hasNewLoot = !!loot?.some((item) => item.is_new);
 
   useEffect(() => {
-    if (!rewards || !showRewards) return;
+    if (!animate) return;
+    const levelUpDelay = LOOT_DELAY_MS + (hasNewLoot ? NEW_LOOT_EFFECT_MS : 0);
+    const timers = [
+      setTimeout(() => setContentShown(true), CONTENT_DELAY_MS),
+      setTimeout(() => setRewardsShown(true), REWARDS_DELAY_MS),
+      setTimeout(() => setLootShown(true), LOOT_DELAY_MS),
+      setTimeout(() => setLevelUpShown(isLevelUp), levelUpDelay),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [animate, hasNewLoot, isLevelUp]);
 
-    // 経験値のカウントアップアニメーション
-    const expDuration = 1500;
-    const expSteps = 30;
-    const expIncrement = rewards.exp_gained / expSteps;
-    let expCount = 0;
+  const showContent = !animate || contentShown;
+  const showRewards = !animate || rewardsShown;
+  const showLoot = !animate || lootShown;
 
-    const expInterval = setInterval(() => {
-      expCount++;
-      if (expCount >= expSteps) {
-        setAnimatedExp(rewards.exp_gained);
-        clearInterval(expInterval);
-      } else {
-        setAnimatedExp(Math.floor(expIncrement * expCount));
-      }
-    }, expDuration / expSteps);
+  const animatedExp = useCountUp(
+    rewards?.exp_gained ?? 0,
+    animate && rewardsShown,
+  );
+  const animatedCredits = useCountUp(
+    rewards?.credits_gained ?? 0,
+    animate && rewardsShown,
+  );
+  const exp = animate ? animatedExp : (rewards?.exp_gained ?? 0);
+  const credits = animate ? animatedCredits : (rewards?.credits_gained ?? 0);
 
-    // クレジットのカウントアップアニメーション
-    const creditsDuration = 1500;
-    const creditsSteps = 30;
-    const creditsIncrement = rewards.credits_gained / creditsSteps;
-    let creditsCount = 0;
-
-    const creditsInterval = setInterval(() => {
-      creditsCount++;
-      if (creditsCount >= creditsSteps) {
-        setAnimatedCredits(rewards.credits_gained);
-        clearInterval(creditsInterval);
-      } else {
-        setAnimatedCredits(Math.floor(creditsIncrement * creditsCount));
-      }
-    }, creditsDuration / creditsSteps);
-
-    return () => {
-      clearInterval(expInterval);
-      clearInterval(creditsInterval);
-    };
-  }, [rewards, showRewards]);
-
-  // テーマカラー定義
-  const theme = {
-    border: isWin
-      ? "border-blue-500"
-      : isLose
-        ? "border-red-600"
-        : "border-yellow-500",
-    bg: isWin
-      ? "bg-gradient-to-br from-blue-900/90 to-slate-900/90"
-      : isLose
-        ? "bg-gradient-to-br from-red-900/90 to-gray-900/90"
-        : "bg-gradient-to-br from-yellow-900/90 to-gray-900/90",
-    resultBg: isWin
-      ? "bg-blue-500/20 text-blue-200 border-2 border-blue-400"
-      : isLose
-        ? "bg-red-600/20 text-red-200 border-2 border-red-500"
-        : "bg-yellow-500/20 text-yellow-200 border-2 border-yellow-400",
-    accent: isWin ? "text-yellow-400" : isLose ? "text-red-400" : "text-yellow-400",
-    statBorder: isWin ? "border-blue-700" : isLose ? "border-red-800" : "border-yellow-700",
-  };
+  const weapons = msSnapshot?.weapons?.slice(0, 2) ?? [];
+  const statCount = (kills !== undefined ? 1 : 0) + (rewards ? 2 : 0);
+  const hasStats = statCount > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/85 backdrop-blur-sm overflow-y-auto py-4 sm:py-0">
-      {/* レベルアップエフェクト（オーバーレイ） */}
-      {showLevelUp && (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 font-mono"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="battle-result-title"
+    >
+      {/* レベルアップ演出（一定時間で消えるオーバーレイ） */}
+      {levelUpShown && (
         <div
-          className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none"
-          style={{ animation: "levelUpFadeIn 0.5s ease-out forwards" }}
+          className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
+          style={{ animation: "levelUpOverlay 2s ease-out forwards" }}
+          aria-hidden="true"
         >
-          {/* パーティクル背景 */}
           <div className="absolute inset-0 overflow-hidden">
-            {Array.from({ length: 20 }).map((_, i) => {
-              const rx = Math.random();
-              const ry = Math.random();
-              return (
-                <div
-                  key={i}
-                  className="absolute w-2 h-2 rounded-full bg-yellow-400 opacity-0"
-                  style={{
-                    left: `${Math.random() * 100}%`,
-                    top: `${Math.random() * 100}%`,
-                    animation: `particleFly ${0.8 + Math.random() * 1.2}s ease-out ${Math.random() * 0.5}s forwards`,
-                    "--rx": String(rx),
-                    "--ry": String(ry),
-                  } as React.CSSProperties}
-                />
-              );
-            })}
+            {LEVEL_UP_PARTICLES.map((p, i) => (
+              <div
+                key={i}
+                className="absolute w-2 h-2 rounded-full bg-[#ffb000] opacity-0"
+                style={
+                  {
+                    left: `${p.left}%`,
+                    top: `${p.top}%`,
+                    animation: `particleFly ${p.duration}s ease-out ${p.delay}s forwards`,
+                    "--rx": String(p.rx),
+                    "--ry": String(p.ry),
+                  } as React.CSSProperties
+                }
+              />
+            ))}
           </div>
-          {/* LEVEL UP テキスト */}
           <div
-            className="text-5xl font-bold text-yellow-400 z-10"
+            className="text-4xl sm:text-5xl font-bold text-[#ffb000]"
             style={{
-              textShadow: "0 0 20px rgba(250, 204, 21, 0.9), 0 0 40px rgba(250, 204, 21, 0.6), 0 0 80px rgba(250, 204, 21, 0.3)",
+              textShadow:
+                "0 0 20px rgba(255, 176, 0, 0.9), 0 0 40px rgba(255, 176, 0, 0.5)",
               animation: "levelUpPulse 0.6s ease-out forwards",
             }}
           >
-            LEVEL UP!!
+            LEVEL UP
           </div>
         </div>
       )}
 
-      <div className="max-w-2xl w-full mx-4 relative">
-        {/* メインカード */}
-        <div
-          className={`rounded-lg border-4 p-4 sm:p-8 transform transition-all duration-500 ${showContent ? "scale-100 opacity-100" : "scale-75 opacity-0"
-            } ${theme.bg} ${theme.border}`}
-        >
-          {/* 結果タイトル */}
-          <div className="text-center mb-4 sm:mb-6">
-            <div className={`inline-block px-4 sm:px-8 py-3 sm:py-4 rounded-lg text-2xl sm:text-4xl font-bold animate-pulse ${theme.resultBg}`}>
-              {winLoss === "WIN" && "★ MISSION COMPLETE ★"}
-              {winLoss === "LOSE" && "✕ MISSION FAILED ✕"}
-              {winLoss === "DRAW" && "- DRAW -"}
-            </div>
+      <div
+        className={`relative w-full max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col bg-[#0a0a0a]/95 border-2 sf-chiseled transform transition-all duration-500 ${
+          theme.border
+        } ${showContent ? "scale-100 opacity-100" : "scale-90 opacity-0"}`}
+      >
+        {/* 結果タイトル */}
+        <header className="flex-none px-4 pt-4 pb-3 text-center border-b border-gray-800">
+          <p className="text-[10px] tracking-[0.3em] text-gray-500">
+            {"// BATTLE RESULT"}
+          </p>
+          <h2
+            id="battle-result-title"
+            className={`mt-1 text-2xl sm:text-3xl font-bold tracking-widest ${theme.text}`}
+            style={{ textShadow: `0 0 12px ${theme.color}80` }}
+          >
+            {theme.title}
+          </h2>
+          <p className={`text-xs tracking-widest opacity-70 ${theme.text}`}>
+            {theme.subtitle}
+          </p>
+        </header>
 
-            {/* デザイン再考のため一旦コメントアウト
-            {msSnapshot && (
-              <p className={`mt-3 text-2xl font-bold ${msSnapshot.current_hp <= 0 ? "text-red-400" : "text-green-400"}`}>
-                {msSnapshot.current_hp <= 0 ? "✕ 撃墜" : "✓ 生還"}
-              </p>
-            )}
-            */}
-
-            {winLoss === "WIN" && (
-              <div className="mt-3 sm:mt-4 text-4xl sm:text-6xl animate-bounce">🎉</div>
-            )}
-            {winLoss === "LOSE" && (
-              <div className="mt-3 sm:mt-4 text-3xl sm:text-4xl text-red-400">⚠️</div>
-            )}
-          </div>
-
-          {/* 機体スナップショット表示 */}
+        {/* 本文（ここだけスクロールする） */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
           {msSnapshot && (
-            <div className={`mb-4 sm:mb-5 rounded-lg p-3 sm:p-4 border ${theme.statBorder} bg-black/40`}>
-              <h3 className={`text-sm font-bold mb-2 sm:mb-3 uppercase tracking-wider ${theme.accent}`}>
-                出撃機体
-              </h3>
-              <div className="flex items-start gap-3 sm:gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-white font-bold text-base sm:text-lg truncate">{msSnapshot.name}</p>
-                  <MobileSuitRankBadges mobileSuit={msSnapshot} />
-                  {msSnapshot.weapons && msSnapshot.weapons.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {msSnapshot.weapons.slice(0, 2).map((weapon, i) => {
-                          const powerRank = getWeaponRank("weapon_power", weapon.power);
-                          return (
-                            <p key={i} className="text-xs text-gray-400 truncate">
-                              <span className="text-gray-500">{i === 0 ? "メイン: " : "サブ: "}</span>
-                              {weapon.name}
-                              <span className={`ml-2 font-bold ${getRankColor(powerRank)}`}>威力 {powerRank}</span>
-                            </p>
-                          );
-                        })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 戦果詳細（撃墜数） */}
-          {(kills !== undefined && kills > 0) && (
-            <div className={`mb-4 rounded-lg p-3 border ${theme.statBorder} bg-black/40 text-center`}>
-              <p className="text-xs text-gray-400 mb-1">撃墜数</p>
-              <p className={`text-2xl sm:text-3xl font-bold ${theme.accent}`}>{kills}</p>
-            </div>
-          )}
-
-          {/* 報酬表示 */}
-          {rewards && (
-            <div
-              className={`space-y-3 sm:space-y-4 mb-6 sm:mb-8 transition-all duration-700 ${showRewards ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-                }`}
-            >
-              <h3 className={`text-lg sm:text-xl font-bold text-center border-b-2 pb-2 ${theme.accent} border-current/50`}>
-                獲得報酬
-              </h3>
-
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                {/* 経験値 */}
-                <div className={`bg-black/40 rounded-lg p-4 sm:p-6 border-2 ${theme.statBorder}`}>
-                  <p className="text-xs sm:text-sm text-gray-400 mb-1 sm:mb-2">経験値</p>
-                  <p className={`text-3xl sm:text-4xl font-bold ${isWin ? "text-blue-300" : "text-gray-300"}`}>
-                    +{animatedExp}
-                  </p>
-                </div>
-
-                {/* クレジット */}
-                <div className={`bg-black/40 rounded-lg p-4 sm:p-6 border-2 ${theme.statBorder}`}>
-                  <p className="text-xs sm:text-sm text-gray-400 mb-1 sm:mb-2">クレジット</p>
-                  <p className="text-3xl sm:text-4xl font-bold text-yellow-400">
-                    +{animatedCredits.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              {/* レベルアップ表示 */}
-              {rewards.level_after > rewards.level_before && (
-                <div
-                  className={`rounded-lg p-3 sm:p-4 border-2 border-yellow-400 text-center transition-all duration-500 ${showLevelUp
-                      ? "bg-yellow-500/30 scale-105"
-                      : "bg-yellow-500/10 scale-100"
-                    }`}
-                >
-                  <p className="text-xl sm:text-2xl font-bold text-yellow-300">
-                    🎉 LEVEL UP! 🎉
-                  </p>
-                  <p className="text-lg sm:text-xl text-yellow-400 mt-1">
-                    Lv.{rewards.level_before} → Lv.{rewards.level_after}
-                  </p>
+            <section>
+              <SectionLabel>出撃機体</SectionLabel>
+              <p
+                className="text-white font-bold text-base truncate"
+                title={msSnapshot.name}
+              >
+                {msSnapshot.name}
+              </p>
+              <MobileSuitRankBadges
+                mobileSuit={msSnapshot}
+                className="text-xs sm:text-sm"
+              />
+              {weapons.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  {weapons.map((weapon, i) => {
+                    const powerRank = getWeaponPowerRank(weapon);
+                    return (
+                      <p
+                        key={i}
+                        className="flex items-center gap-2 text-xs text-gray-400 min-w-0"
+                      >
+                        <span className="shrink-0 text-gray-500">
+                          {i === 0 ? "メイン" : "サブ"}
+                        </span>
+                        <span className="truncate" title={weapon.name}>
+                          {weapon.name}
+                        </span>
+                        <span
+                          className={`shrink-0 font-bold ${getRankColor(powerRank)}`}
+                        >
+                          威力 {powerRank}
+                        </span>
+                      </p>
+                    );
+                  })}
                 </div>
               )}
-            </div>
+            </section>
           )}
 
-          {/* 閉じるボタン */}
-          <button
-            onClick={onClose}
-            className={`w-full px-6 py-3 font-bold rounded-lg transition-colors border ${isWin
-                ? "bg-blue-800 hover:bg-blue-700 text-blue-100 border-blue-600"
-                : isLose
-                  ? "bg-gray-700 hover:bg-gray-600 text-white border-gray-500"
-                  : "bg-gray-700 hover:bg-gray-600 text-white border-gray-500"
+          {hasStats && (
+            <section
+              className={`transition-all duration-700 ${
+                showRewards
+                  ? "opacity-100 translate-y-0"
+                  : "opacity-0 translate-y-4"
               }`}
+            >
+              <SectionLabel>獲得報酬</SectionLabel>
+              <div className={`grid gap-2 ${STAT_GRID_COLS[statCount]}`}>
+                {kills !== undefined && (
+                  <StatCell
+                    label="撃墜"
+                    value={String(kills)}
+                    className={kills > 0 ? theme.text : "text-gray-500"}
+                  />
+                )}
+                {rewards && (
+                  <>
+                    <StatCell
+                      label="EXP"
+                      value={`+${exp.toLocaleString()}`}
+                      className="text-[#00ff41]"
+                    />
+                    <StatCell
+                      label="CREDITS"
+                      value={`+${credits.toLocaleString()}`}
+                      className="text-[#ffb000]"
+                    />
+                  </>
+                )}
+              </div>
+
+              {isLevelUp && rewards && (
+                <div
+                  className={`mt-2 flex items-center justify-between border px-3 py-2 transition-colors duration-500 ${
+                    levelUpShown || !animate
+                      ? "border-[#ffb000] bg-[#ffb000]/20"
+                      : "border-[#ffb000]/40 bg-[#ffb000]/5"
+                  }`}
+                >
+                  <span className="text-sm font-bold tracking-widest text-[#ffb000]">
+                    LEVEL UP
+                  </span>
+                  <span className="text-sm font-bold text-[#ffb000]">
+                    Lv.{rewards.level_before} → Lv.{rewards.level_after}
+                  </span>
+                </div>
+              )}
+            </section>
+          )}
+
+          {loot != null && (
+            <section
+              className={`transition-all duration-500 ${
+                showLoot
+                  ? "opacity-100 translate-y-0"
+                  : "opacity-0 translate-y-4"
+              }`}
+            >
+              <SectionLabel>戦利品</SectionLabel>
+              <LootList loot={loot} animate={animate && lootShown} />
+            </section>
+          )}
+        </div>
+
+        {/* 操作ボタン（常に表示） */}
+        <footer className="flex-none flex gap-2 p-3 border-t border-gray-800">
+          {onOpenReplay && (
+            <button
+              type="button"
+              onClick={onOpenReplay}
+              className={`flex-1 px-3 py-3 text-sm font-bold border-2 bg-transparent transition-colors ${theme.outline}`}
+            >
+              リプレイを見る
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className={`flex-1 px-3 py-3 text-sm font-bold tracking-widest border-2 transition-colors ${theme.button}`}
           >
             CONTINUE
           </button>
-        </div>
+        </footer>
       </div>
 
-      {/* CSS アニメーション定義 */}
       <style>{`
-        @keyframes levelUpFadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+        @keyframes levelUpOverlay {
+          0% { opacity: 0; }
+          15% { opacity: 1; }
+          75% { opacity: 1; }
+          100% { opacity: 0; }
         }
         @keyframes levelUpPulse {
           0% { transform: scale(0.5); opacity: 0; }

@@ -2,13 +2,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { BattleResult, BattleRewards, MobileSuit } from "@/types/battle";
+import { BattleResult, BattleRewards, LootItem, MobileSuit } from "@/types/battle";
 
 interface ModalResult {
   winLoss: "WIN" | "LOSE" | "DRAW";
   rewards: BattleRewards | null;
   msSnapshot?: MobileSuit | null;
   kills?: number;
+  loot?: LootItem[] | null;
 }
 
 interface UseUnreadBattleQueueOptions {
@@ -80,6 +81,7 @@ export function useUnreadBattleQueue({
         rewards: rewardsFromBattle,
         msSnapshot: (next.ms_snapshot as MobileSuit | null) ?? null,
         kills: next.kills,
+        loot: next.loot ?? null,
       });
       setShowResultModal(true);
     }

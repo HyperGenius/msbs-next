@@ -2,7 +2,7 @@
 
 import { MobileSuit } from "@/types/battle";
 import { SciFiPanel, SciFiButton, SciFiHeading, SciFiCard } from "@/components/ui";
-import { getRank, getWeaponRank, getRankColor } from "@/utils/rankUtils";
+import { getMobileSuitRanks, getWeaponRank, getRankColor } from "@/utils/rankUtils";
 
 interface EntrySelectionModalProps {
   mobileSuits: MobileSuit[];
@@ -40,9 +40,11 @@ export default function EntrySelectionModal({
                 className="hover:sf-border-glow-green"
               >
                 {(() => {
-                  const hpRank = ms.hp_rank ?? getRank("hp", ms.max_hp);
-                  const armorRank = ms.armor_rank ?? getRank("armor", ms.armor);
-                  const mobilityRank = ms.mobility_rank ?? getRank("mobility", ms.mobility);
+                  const {
+                    hp: hpRank,
+                    armor: armorRank,
+                    mobility: mobilityRank,
+                  } = getMobileSuitRanks(ms);
                   return (
                     <div className="space-y-3">
                       {/* 機体名 */}
