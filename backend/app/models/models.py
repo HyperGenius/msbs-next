@@ -1097,6 +1097,14 @@ class LootItem(SQLModel):
     )
 
 
+class LootItemDetail(LootItem):
+    """表示用に対象の名前を付けた戦利品."""
+
+    target_name: str = Field(
+        description="機体・武器マスターの表示名。マスターが無ければ target_id"
+    )
+
+
 class BattleResult(SQLModel, table=True):
     """バトル結果 (DBテーブル)."""
 
@@ -1228,7 +1236,7 @@ class BattleResultSummary(SQLModel):
     digest_tag: str | None = None
     digest_text: str | None = None
     part_hit_summary: dict | None = None
-    loot: list[LootItem] | None = None
+    loot: list[LootItemDetail] | None = None
 
 
 class BattleRoom(SQLModel, table=True):

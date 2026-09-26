@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { BattleRewards, MobileSuit } from "@/types/battle";
+import { BattleResult, BattleRewards, LootItem, MobileSuit } from "@/types/battle";
 import {
   useMissions,
   useMobileSuits,
@@ -19,6 +19,7 @@ import BattleViewer from "@/components/BattleViewer";
 import CountdownTimer from "@/components/Dashboard/CountdownTimer";
 import EntryDashboard from "@/components/Dashboard/EntryDashboard";
 import BattleResultModal from "@/components/Dashboard/BattleResultModal";
+import BattleDetailModal from "@/components/history/BattleDetailModal";
 import EntrySelectionModal from "@/components/Dashboard/EntrySelectionModal";
 import OnboardingOverlay from "@/components/Tutorial/OnboardingOverlay";
 import { SciFiHeading } from "@/components/ui";
@@ -31,12 +32,14 @@ import { useOnboarding } from "@/hooks/useOnboarding";
 import { useBattleSimulation } from "@/hooks/useBattleSimulation";
 import { useUnreadBattleQueue } from "@/hooks/useUnreadBattleQueue";
 import { useEntryAction } from "@/hooks/useEntryAction";
+import { getMissionName } from "@/utils/missionName";
 
 type ModalResult = {
   winLoss: "WIN" | "LOSE" | "DRAW";
   rewards: BattleRewards | null;
   msSnapshot?: MobileSuit | null;
   kills?: number;
+  loot?: LootItem[] | null;
 };
 
 export default function Home() {
@@ -53,6 +56,8 @@ export default function Home() {
   // バトル結果モーダルの状態（シミュレーション・未読キュー共通）
   const [showResultModal, setShowResultModal] = useState(false);
   const [modalResult, setModalResult] = useState<ModalResult | null>(null);
+  // 結果モーダルから開いたリプレイ。閉じるまで未読キューを進めない
+  const [replayBattle, setReplayBattle] = useState<BattleResult | null>(null);
 
   const {
     showOnboarding,
@@ -115,6 +120,38 @@ export default function Home() {
     executeEntry,
     handleCancelEntry,
   } = useEntryAction({ mobileSuits, mutateEntryStatus, mutateEntryCount });
+
+  /** 表示中の未読バトル結果を既読にする */
+  const markCurrentUnreadAsRead = async (battle: BattleResult) => {
+    try {
+      await markBattleAsRead(battle.id);
+      await mutateUnreadBattles();
+    } catch (e) {
+      console.error("Failed to mark battle as read:", e);
+    }
+  };
+
+  const handleResultClose = async () => {
+    setShowResultModal(false);
+    // 未読バトル結果を既読にする（CONTINUE を押したタイミング）
+    if (currentUnreadBattle) {
+      await markCurrentUnreadAsRead(currentUnreadBattle);
+      setCurrentUnreadBattle(null);
+    }
+  };
+
+  const handleOpenReplay = async () => {
+    if (!currentUnreadBattle) return;
+    setShowResultModal(false);
+    setReplayBattle(currentUnreadBattle);
+    await markCurrentUnreadAsRead(currentUnreadBattle);
+  };
+
+  // currentUnreadBattle を空にすると、未読キューの次の結果が表示される
+  const handleReplayClose = () => {
+    setReplayBattle(null);
+    setCurrentUnreadBattle(null);
+  };
 
   const getNextBattleTime = (): Date | null => {
     if (!entryStatus?.next_room?.scheduled_at) return null;
@@ -211,19 +248,19 @@ export default function Home() {
             rewards={modalResult.rewards}
             msSnapshot={modalResult.msSnapshot}
             kills={modalResult.kills}
-            onClose={async () => {
-              setShowResultModal(false);
-              // 未読バトル結果を既読にする（CONTINUE を押したタイミング）
-              if (currentUnreadBattle) {
-                try {
-                  await markBattleAsRead(currentUnreadBattle.id);
-                  await mutateUnreadBattles();
-                } catch (e) {
-                  console.error("Failed to mark battle as read:", e);
-                }
-                setCurrentUnreadBattle(null);
-              }
-            }}
+            loot={modalResult.loot}
+            onClose={handleResultClose}
+            // ソロミッションはホーム画面に BattleViewer を表示しているため、リプレイ導線は出さない
+            onOpenReplay={currentUnreadBattle ? handleOpenReplay : undefined}
+          />
+        )}
+
+        {/* 結果モーダルから開いたリプレイ */}
+        {replayBattle && (
+          <BattleDetailModal
+            battle={replayBattle}
+            missionName={getMissionName(missions, replayBattle.mission_id, replayBattle.created_at)}
+            onClose={handleReplayClose}
           />
         )}
 
