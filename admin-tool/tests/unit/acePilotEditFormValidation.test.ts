@@ -18,6 +18,7 @@ const validFormValues: AcePilotFormValues = {
   stats: { sht: 10, mel: 10, intel: 9, ref: 15, tou: 7, luk: 8 },
   skills: [{ id: "flanking", level: 3 }],
   mobile_suit: {
+    master_mobile_suit_id: null,
     name: "High Mobility Zaku II (Red)",
     max_hp: 1200,
     armor: 80,
@@ -42,6 +43,7 @@ const validFormValues: AcePilotFormValues = {
         decay_rate: 0.05,
         is_melee: false,
         en_cost: 0,
+        master_weapon_id: null,
         aim_distribution: { HEAD: 10, TORSO: 50, RIGHT_ARM: 10, LEFT_ARM: 10, RIGHT_LEG: 10, LEFT_LEG: 10 },
       },
     ],
@@ -192,6 +194,22 @@ describe("acePilotSchema (武器スロット数)", () => {
     const result = acePilotSchema.safeParse(values);
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toEqual(["mobile_suit", "weapons", 1, "id"]);
+  });
+});
+
+// ============================================================
+// マスターIDの記録 (Issue #545)
+// ============================================================
+
+describe("toAcePilotPayload (マスターID)", () => {
+  it("機体マスターIDと武器マスターIDを送る", () => {
+    const values = withOverride((v) => {
+      v.mobile_suit.master_mobile_suit_id = "ms_06s";
+      v.mobile_suit.weapons[0].master_weapon_id = "zaku_mg";
+    });
+    const payload = toAcePilotPayload(values, null);
+    expect(payload.mobile_suit.master_mobile_suit_id).toBe("ms_06s");
+    expect(payload.mobile_suit.weapons[0].master_weapon_id).toBe("zaku_mg");
   });
 });
 

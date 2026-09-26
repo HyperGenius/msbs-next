@@ -100,6 +100,13 @@ class Weapon(WeaponSpecBase):
 
     id: str
     name: str
+    master_weapon_id: str | None = Field(
+        default=None,
+        description=(
+            "元になった武器マスターのID。武器IDには重複回避の接尾辞が付くため、"
+            "武器IDからは逆引きできない"
+        ),
+    )
 
 
 class WeaponResponse(Weapon):
@@ -282,6 +289,13 @@ class MobileSuit(SQLModel, table=True):
         description=(
             "武器スロット数。NULL の場合は機体名で引いた機体マスターの値を使う"
             "（プレイヤー機は NULL。NPC 機・エース機は機体ごとに保持する。Issue #543）"
+        ),
+    )
+
+    master_mobile_suit_id: str | None = Field(
+        default=None,
+        description=(
+            "元になった機体マスターのID。機体マスターを削除しても機体を残すため FK は張らない"
         ),
     )
 
@@ -830,6 +844,9 @@ class AcePilotMobileSuitSpec(SQLModel):
         ge=1,
         description="武器スロット数。未設定の場合は装備数と MAX_WEAPON_SLOTS の大きい方",
     )
+    master_mobile_suit_id: str | None = Field(
+        default=None, description="機体マスターから取り込んだ場合の機体マスターID"
+    )
     weapons: list[Weapon]
     tactics: dict = Field(
         default_factory=lambda: {"priority": "CLOSEST", "range": "BALANCED"},
@@ -1297,6 +1314,7 @@ class NpcMobileSuitEntry(SQLModel):
     missing_parts: list[str] = Field(default_factory=list)
     weapons: list[Weapon] = Field(default_factory=list)
     weapon_slot_count: int = 1
+    master_mobile_suit_id: str | None = None
     personality: str | None = None
     is_ace: bool = False
     ace_id: str | None = None

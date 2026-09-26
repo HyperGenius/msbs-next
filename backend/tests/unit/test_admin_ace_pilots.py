@@ -333,6 +333,14 @@ def test_matching_copies_ace_weapon_slot_count(client_admin, session):
     assert ace.weapon_slot_count == 4
 
 
+def test_matching_copies_ace_master_mobile_suit_id(client_admin, session):
+    """マッチングで生成するエース機に雛形の機体マスターIDをコピーすること."""
+    payload = _ace_with_weapons(["w1"], weapon_slot_count=None)
+    payload["mobile_suit"]["master_mobile_suit_id"] = "ms_06s"
+    ace = _spawn_only_ace(client_admin, session, payload)
+    assert ace.master_mobile_suit_id == "ms_06s"
+
+
 def test_matching_falls_back_ace_weapon_slot_count(client_admin, session):
     """スロット数が未設定の雛形は装備数と MAX_WEAPON_SLOTS の大きい方になること."""
     payload = _ace_with_weapons(["w1", "w2", "w3"], weapon_slot_count=None)

@@ -476,6 +476,7 @@ class MatchingService:
             weapon_slot_count=ms_data.get("weapon_slot_count")
             or max(len(weapons_list), MAX_WEAPON_SLOTS),
             side="ENEMY",
+            master_mobile_suit_id=ms_data.get("master_mobile_suit_id"),
             tactics=ms_data["tactics"],
             missing_parts=ms_data.get("missing_parts", []),
             user_id=None,

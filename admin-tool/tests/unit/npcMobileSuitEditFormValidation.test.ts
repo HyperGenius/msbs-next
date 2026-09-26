@@ -7,6 +7,7 @@ import {
 } from "@/components/admin/NpcMobileSuitEditForm";
 import {
   DEFAULT_AIM_DISTRIBUTION_PERCENT,
+  masterMobileSuitValue,
   masterToSpecValues,
   masterWeaponToWeapon,
   uniqueWeaponId,
@@ -53,6 +54,7 @@ const npcSuit: NpcMobileSuit = {
     },
   ],
   weapon_slot_count: 2,
+  master_mobile_suit_id: null,
   personality: "AGGRESSIVE",
   is_ace: false,
   ace_id: null,
@@ -263,6 +265,53 @@ describe("武器マスターからの追加", () => {
     expect(sent.cooldown_sec).toBe(0.5);
     expect(sent.fire_arc_deg).toBe(45);
     expect(sent.max_ammo).toBe(60);
+  });
+});
+
+// ============================================================
+// マスターIDの記録とマスター値 (Issue #545)
+// ============================================================
+
+describe("マスターIDの記録", () => {
+  it("機体の機体マスターIDをフォーム値に引き継ぐ", () => {
+    const values = toNpcMobileSuitFormValues({ ...npcSuit, master_mobile_suit_id: "dom" });
+    expect(values.mobile_suit.master_mobile_suit_id).toBe("dom");
+    expect(values.mobile_suit.weapons[0].master_weapon_id).toBeNull();
+  });
+
+  it("武器マスターから追加した武器は、ID に接尾辞が付いても武器マスターIDを送る", () => {
+    const imported = masterWeaponToWeapon(masterWeapon, ["zaku_mg"]);
+    const values = toNpcMobileSuitFormValues(npcSuit);
+    values.mobile_suit.weapons.push(weaponToFormValues(imported));
+    const sent = toNpcMobileSuitPayload(values, npcSuit, [imported]).weapons![1];
+    expect(sent.id).toBe("zaku_mg_2");
+    expect(sent.master_weapon_id).toBe("zaku_mg");
+  });
+
+  it("機体マスターの取り込みでは、武器マスターにある武器だけ武器マスターIDを記録する", () => {
+    const withTwoWeapons: MasterMobileSuit = {
+      ...master,
+      specs: {
+        ...master.specs,
+        weapons: [...master.specs.weapons, { id: "gelgoog_only", name: "Unique", power: 1, range: 1, accuracy: 1 }],
+      },
+    };
+    const current = toNpcMobileSuitFormValues(npcSuit).mobile_suit;
+    const next = masterToSpecValues(withTwoWeapons, current, new Set(["beam_rifle"]));
+    expect(next.master_mobile_suit_id).toBe("gelgoog");
+    expect(next.weapons.map((w) => w.master_weapon_id)).toEqual(["beam_rifle", null]);
+  });
+});
+
+describe("masterMobileSuitValue", () => {
+  it("スペックの項目と武器スロット数を返す", () => {
+    expect(masterMobileSuitValue(master, "max_hp")).toBe(1100);
+    expect(masterMobileSuitValue(master, "melee_aptitude")).toBe(1);
+    expect(masterMobileSuitValue(master, "weapon_slot_count")).toBe(2);
+  });
+
+  it("機体マスターが無い（未記録・削除済み）ときは undefined", () => {
+    expect(masterMobileSuitValue(undefined, "max_hp")).toBeUndefined();
   });
 });
 

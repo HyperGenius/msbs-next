@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FieldErrors, FormProvider, useForm } from "react-hook-form";
+import { FieldErrors, FormProvider, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { NpcMobileSuit, NpcMobileSuitUpdate } from "@/types/admin";
@@ -10,15 +10,17 @@ import { Weapon } from "@/types/weapon";
 import {
   FieldError,
   Input,
-  Label,
+  MasterValueLabel,
   MobileSuitSpecSection,
   WeaponListSection,
+  masterMobileSuitValue,
   mergeTactics,
   mergeWeaponSources,
   mobileSuitSpecSchema,
   npcMobileSuitToSpecValues,
   refineWeaponSlots,
   sectionTitle,
+  useMasterMobileSuit,
 } from "@/components/admin/MobileSuitSpecFields";
 
 // ============================================================
@@ -127,8 +129,11 @@ export default function NpcMobileSuitEditForm({ mobileSuit, onSubmit, onClose }:
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isDirty, isSubmitting },
   } = methods;
+  const current = useWatch({ control, name: "mobile_suit" });
+  const master = useMasterMobileSuit(current.master_mobile_suit_id);
 
   useEffect(() => {
     reset(toNpcMobileSuitFormValues(mobileSuit));
@@ -171,7 +176,9 @@ export default function NpcMobileSuitEditForm({ mobileSuit, onSubmit, onClose }:
             <div className="grid grid-cols-3 gap-3">
               {APTITUDE_FIELDS.map(([name, label, key]) => (
                 <div key={name}>
-                  <Label>{label}</Label>
+                  <MasterValueLabel masterValue={masterMobileSuitValue(master, key)} currentValue={current[key]}>
+                    {label}
+                  </MasterValueLabel>
                   <Input type="number" step="0.01" {...register(name, { valueAsNumber: true })} />
                   <FieldError msg={errors.mobile_suit?.[key]?.message} />
                 </div>

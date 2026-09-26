@@ -7,6 +7,8 @@ import { MasterMobileSuit, MasterWeapon, NpcMobileSuit } from "@/types/admin";
 import { Tactics, Weapon } from "@/types/weapon";
 import { weaponSchema } from "@/components/admin/MobileSuitEditForm";
 import MasterWeaponSelect from "@/components/admin/MasterWeaponSelect";
+import { useAdminMobileSuits } from "@/hooks/useAdminMobileSuits";
+import { useAdminWeapons } from "@/hooks/useAdminWeapons";
 
 // ============================================================
 // 定数
@@ -78,11 +80,18 @@ export const aimDistributionSchema = z
     }
   });
 
-/** NPC機・エース機の武装。機体マスターの武装と違い、狙う部位配分も編集する */
-export const specWeaponSchema = weaponSchema.extend({ aim_distribution: aimDistributionSchema });
+/**
+ * NPC機・エース機の武装。機体マスターの武装と違い、狙う部位配分も編集する。
+ * 武器マスターから作った武器は元の武器マスターIDを持つ。
+ */
+export const specWeaponSchema = weaponSchema.extend({
+  aim_distribution: aimDistributionSchema,
+  master_weapon_id: z.string().nullable(),
+});
 
 /** エース機・NPC機に共通する機体スペック */
 export const mobileSuitSpecSchema = z.object({
+  master_mobile_suit_id: z.string().nullable(),
   name: z.string().min(1, "Mobile suit name is required"),
   max_hp: z.number({ message: "Must be a number" }).int().positive("Must be > 0"),
   armor: z.number({ message: "Must be a number" }).int().nonnegative(),
@@ -151,6 +160,7 @@ export const defaultWeapon: WeaponFormValues = {
   en_cost: 0,
   cool_down_turn: 0,
   required_beam_generator_lv: 0,
+  master_weapon_id: null,
   aim_distribution: { ...DEFAULT_AIM_DISTRIBUTION_PERCENT },
 };
 
@@ -186,6 +196,7 @@ export function weaponToFormValues(w: Weapon): WeaponFormValues {
     en_cost: w.en_cost ?? 0,
     cool_down_turn: w.cool_down_turn ?? 0,
     required_beam_generator_lv: w.required_beam_generator_lv ?? 0,
+    master_weapon_id: w.master_weapon_id ?? null,
     aim_distribution: aimDistributionToFormValues(w.aim_distribution),
   };
 }
@@ -208,7 +219,12 @@ export function uniqueWeaponId(baseId: string, existingIds: string[]): string {
 
 /** 武器マスターを機体の武装に変換する。フォーム外の項目も含めてスペックをコピーする */
 export function masterWeaponToWeapon(master: MasterWeapon, existingIds: string[]): Weapon {
-  return { ...master.weapon, id: uniqueWeaponId(master.id, existingIds), name: master.name };
+  return {
+    ...master.weapon,
+    id: uniqueWeaponId(master.id, existingIds),
+    name: master.name,
+    master_weapon_id: master.id,
+  };
 }
 
 export function tacticsToFormValues(tactics: Partial<Tactics> | undefined): MobileSuitSpecFormValues["tactics"] {
@@ -249,14 +265,17 @@ export function mergeWeaponSources(weapons: WeaponFormValues[], sources: Weapon[
 /**
  * 機体マスターのスペックをフォーム値に変換する。
  * 機体マスターに無い項目（EN・戦術）は current の値を残す。
+ * 機体マスターの武器は武器マスターに無い ID も持てる。masterWeaponIds にある ID だけ武器マスターIDとして記録する。
  */
 export function masterToSpecValues(
   master: MasterMobileSuit,
-  current: MobileSuitSpecFormValues
+  current: MobileSuitSpecFormValues,
+  masterWeaponIds: ReadonlySet<string> = new Set()
 ): MobileSuitSpecFormValues {
   const specs = master.specs;
   return {
     ...current,
+    master_mobile_suit_id: master.id,
     name: master.name,
     max_hp: specs.max_hp,
     armor: specs.armor,
@@ -266,12 +285,16 @@ export function masterToSpecValues(
     physical_resistance: specs.physical_resistance,
     missing_parts: missingPartsToFormValues(specs.missing_parts),
     weapon_slot_count: master.weapon_slot_count,
-    weapons: specs.weapons.map(weaponToFormValues),
+    weapons: specs.weapons.map((w) => ({
+      ...weaponToFormValues(w),
+      master_weapon_id: masterWeaponIds.has(w.id) ? w.id : null,
+    })),
   };
 }
 
 export function npcMobileSuitToSpecValues(ms: NpcMobileSuit): MobileSuitSpecFormValues {
   return {
+    master_mobile_suit_id: ms.master_mobile_suit_id ?? null,
     name: ms.name,
     max_hp: ms.max_hp,
     armor: ms.armor,
@@ -315,6 +338,73 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
 }
 
 // ============================================================
+// マスター値の併記
+// ============================================================
+
+/** 機体マスターにも同じ項目があるもの。EN・戦術は機体マスターに無いため含めない */
+export type MasterMobileSuitKey =
+  | Exclude<keyof MasterMobileSuit["specs"], "weapons" | "missing_parts">
+  | "weapon_slot_count";
+
+/** 武器マスターにも同じ項目があり、フォームで編集できるもの */
+type MasterWeaponKey = "power" | "range" | "accuracy" | "type" | "optimal_range" | "decay_rate" | "en_cost";
+
+/** 機体マスターの項目の値。マスターが無い（未記録・削除済み）ときは undefined */
+export function masterMobileSuitValue(
+  master: MasterMobileSuit | undefined,
+  key: MasterMobileSuitKey
+): number | undefined {
+  if (!master) return undefined;
+  return key === "weapon_slot_count" ? master.weapon_slot_count : master.specs[key];
+}
+
+function masterWeaponValue(master: MasterWeapon | undefined, key: MasterWeaponKey): number | string | undefined {
+  return master?.weapon[key];
+}
+
+/** 現在の機体マスターを ID で引く。一覧は SWR のキャッシュを共有する */
+export function useMasterMobileSuit(id: string | null | undefined): MasterMobileSuit | undefined {
+  const { mobileSuits } = useAdminMobileSuits();
+  return id ? mobileSuits?.find((m) => m.id === id) : undefined;
+}
+
+/**
+ * マスター値を「ラベル (値)」の形で併記するラベル。
+ * 現在の値がマスター値と異なるときは色を変える。未入力（NaN）も異なるとみなす。
+ * マスター値が undefined のときは通常の Label と同じ表示になる。
+ */
+export function MasterValueLabel({
+  children,
+  masterValue,
+  currentValue,
+}: {
+  children: React.ReactNode;
+  masterValue: number | string | undefined;
+  currentValue: unknown;
+}) {
+  if (masterValue === undefined) return <Label>{children}</Label>;
+  const differs = currentValue !== masterValue;
+  return (
+    <label
+      className={`block text-xs mb-0.5 ${differs ? "text-[#00e5ff]" : "text-[#ffb000]/80"}`}
+      title={differs ? "マスターの値と異なります" : undefined}
+    >
+      {children} ({masterValue})
+    </label>
+  );
+}
+
+/** 元になったマスター名の表示。マスターが無いときは何も表示しない */
+export function MasterSourceBadge({ label, name }: { label: string; name: string | undefined }) {
+  if (name === undefined) return null;
+  return (
+    <span className="ml-2 text-[10px] font-normal normal-case text-[#00e5ff]/80">
+      {label}: {name}
+    </span>
+  );
+}
+
+// ============================================================
 // フォームセクション（FormProvider 配下で使う）
 // ============================================================
 
@@ -327,11 +417,16 @@ export function MobileSuitSpecSection({ namePlaceholder }: { namePlaceholder?: s
     formState: { errors },
   } = useFormContext<SpecFormHost>();
   const msErrors = errors.mobile_suit;
+  const current = useWatch({ control, name: "mobile_suit" });
+  const master = useMasterMobileSuit(current.master_mobile_suit_id);
 
   return (
     <>
       <div>
-        <p className={sectionTitle}>スペック</p>
+        <p className={sectionTitle}>
+          スペック
+          <MasterSourceBadge label="機体マスター" name={master?.name} />
+        </p>
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-3">
             <Label>機体名</Label>
@@ -340,21 +435,26 @@ export function MobileSuitSpecSection({ namePlaceholder }: { namePlaceholder?: s
           </div>
           {(
             [
-              ["mobile_suit.max_hp", "最大 HP", "1", msErrors?.max_hp?.message],
-              ["mobile_suit.armor", "装甲", "1", msErrors?.armor?.message],
-              ["mobile_suit.mobility", "機動性", "0.01", msErrors?.mobility?.message],
-              ["mobile_suit.sensor_range", "索敵範囲", "1", msErrors?.sensor_range?.message],
-              ["mobile_suit.beam_resistance", "ビーム耐性 (0-1)", "0.01", msErrors?.beam_resistance?.message],
-              ["mobile_suit.physical_resistance", "実弾耐性 (0-1)", "0.01", msErrors?.physical_resistance?.message],
-              ["mobile_suit.max_en", "最大 EN", "1", msErrors?.max_en?.message],
-              ["mobile_suit.en_recovery", "EN 回復量", "1", msErrors?.en_recovery?.message],
-              ["mobile_suit.weapon_slot_count", "武器スロット数", "1", msErrors?.weapon_slot_count?.message],
+              ["max_hp", "最大 HP", "1"],
+              ["armor", "装甲", "1"],
+              ["mobility", "機動性", "0.01"],
+              ["sensor_range", "索敵範囲", "1"],
+              ["beam_resistance", "ビーム耐性 (0-1)", "0.01"],
+              ["physical_resistance", "実弾耐性 (0-1)", "0.01"],
+              ["max_en", "最大 EN", "1"],
+              ["en_recovery", "EN 回復量", "1"],
+              ["weapon_slot_count", "武器スロット数", "1"],
             ] as const
-          ).map(([name, label, step, error]) => (
-            <div key={name}>
-              <Label>{label}</Label>
-              <Input type="number" step={step} {...register(name, { valueAsNumber: true })} />
-              <FieldError msg={error} />
+          ).map(([key, label, step]) => (
+            <div key={key}>
+              <MasterValueLabel
+                masterValue={key === "max_en" || key === "en_recovery" ? undefined : masterMobileSuitValue(master, key)}
+                currentValue={current[key]}
+              >
+                {label}
+              </MasterValueLabel>
+              <Input type="number" step={step} {...register(`mobile_suit.${key}`, { valueAsNumber: true })} />
+              <FieldError msg={msErrors?.[key]?.message} />
             </div>
           ))}
         </div>
@@ -445,6 +545,8 @@ export function WeaponListSection({ idPrefix, onImportWeapon }: WeaponListSectio
   const weaponArray = useFieldArray({ control, name: "mobile_suit.weapons" });
   const weaponErrors = errors.mobile_suit?.weapons;
   const slotCount = useWatch({ control, name: "mobile_suit.weapon_slot_count" });
+  const currentWeapons = useWatch({ control, name: "mobile_suit.weapons" });
+  const { weapons: masterWeapons } = useAdminWeapons();
   const isFull = Number.isFinite(slotCount) && weaponArray.fields.length >= slotCount;
 
   function handleImportWeapon(master: MasterWeapon) {
@@ -483,10 +585,21 @@ export function WeaponListSection({ idPrefix, onImportWeapon }: WeaponListSectio
       <div className="space-y-4">
         {weaponArray.fields.map((field, index) => {
           const wErrors = weaponErrors?.[index];
+          const current = currentWeapons[index];
+          const masterId = current?.master_weapon_id;
+          const master = masterId ? masterWeapons?.find((w) => w.id === masterId) : undefined;
+          const masterLabel = (key: MasterWeaponKey, label: string) => (
+            <MasterValueLabel masterValue={masterWeaponValue(master, key)} currentValue={current?.[key]}>
+              {label}
+            </MasterValueLabel>
+          );
           return (
             <div key={field.id} className="border border-[#00ff41]/20 p-3 bg-[#080808]">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs text-[#ffb000]/60">{weaponSlotLabel(index)}</span>
+                <span className="text-xs text-[#ffb000]/60">
+                  {weaponSlotLabel(index)}
+                  <MasterSourceBadge label="武器マスター" name={master?.name} />
+                </span>
                 {weaponArray.fields.length > 1 && (
                   <button
                     type="button"
@@ -509,17 +622,17 @@ export function WeaponListSection({ idPrefix, onImportWeapon }: WeaponListSectio
                   <FieldError msg={wErrors?.name?.message} />
                 </div>
                 <div>
-                  <Label>威力</Label>
+                  {masterLabel("power", "威力")}
                   <Input type="number" {...register(`mobile_suit.weapons.${index}.power`, { valueAsNumber: true })} />
                   <FieldError msg={wErrors?.power?.message} />
                 </div>
                 <div>
-                  <Label>射程</Label>
+                  {masterLabel("range", "射程")}
                   <Input type="number" {...register(`mobile_suit.weapons.${index}.range`, { valueAsNumber: true })} />
                   <FieldError msg={wErrors?.range?.message} />
                 </div>
                 <div>
-                  <Label>命中率 (%)</Label>
+                  {masterLabel("accuracy", "命中率 (%)")}
                   <Input
                     type="number"
                     {...register(`mobile_suit.weapons.${index}.accuracy`, { valueAsNumber: true })}
@@ -527,14 +640,14 @@ export function WeaponListSection({ idPrefix, onImportWeapon }: WeaponListSectio
                   <FieldError msg={wErrors?.accuracy?.message} />
                 </div>
                 <div>
-                  <Label>種別</Label>
+                  {masterLabel("type", "種別")}
                   <select {...register(`mobile_suit.weapons.${index}.type`)} className={inputCls}>
                     <option value="PHYSICAL">PHYSICAL</option>
                     <option value="BEAM">BEAM</option>
                   </select>
                 </div>
                 <div>
-                  <Label>最適射程</Label>
+                  {masterLabel("optimal_range", "最適射程")}
                   <Input
                     type="number"
                     step="0.1"
@@ -542,7 +655,7 @@ export function WeaponListSection({ idPrefix, onImportWeapon }: WeaponListSectio
                   />
                 </div>
                 <div>
-                  <Label>減衰係数</Label>
+                  {masterLabel("decay_rate", "減衰係数")}
                   <Input
                     type="number"
                     step="0.01"
@@ -550,7 +663,7 @@ export function WeaponListSection({ idPrefix, onImportWeapon }: WeaponListSectio
                   />
                 </div>
                 <div>
-                  <Label>消費 EN</Label>
+                  {masterLabel("en_cost", "消費 EN")}
                   <Input
                     type="number"
                     min={0}

@@ -509,6 +509,46 @@ def test_create_npc_mobile_suit_from_master(
     assert owned[0].side == "ENEMY"
 
 
+def test_create_npc_mobile_suit_records_master_ids(
+    client_admin, npc_pilot, master_suit, session
+):
+    """機体マスターIDと、武器マスターに存在する武器のIDを記録すること."""
+    from app.models.models import MasterWeapon
+
+    assert session.get(MasterWeapon, "giant_bazooka") is not None
+    master_suit.specs = {
+        **master_suit.specs,
+        "weapons": [
+            *master_suit.specs["weapons"],
+            {
+                "id": "dom_only_weapon",
+                "name": "Unique",
+                "power": 10,
+                "range": 100,
+                "accuracy": 50,
+            },
+        ],
+    }
+    session.add(master_suit)
+    session.commit()
+
+    response = client_admin.post(
+        f"/api/admin/npcs/{npc_pilot.id}/mobile-suits",
+        headers=HEADERS,
+        json={"master_mobile_suit_id": "test_dom"},
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    data = response.json()
+    assert data["master_mobile_suit_id"] == "test_dom"
+    assert [w["master_weapon_id"] for w in data["weapons"]] == [
+        "giant_bazooka",
+        None,
+    ]
+
+    listed = client_admin.get(f"/api/admin/npcs/{npc_pilot.id}", headers=HEADERS)
+    assert listed.json()["mobile_suits"][0]["master_mobile_suit_id"] == "test_dom"
+
+
 def test_create_npc_mobile_suit_master_not_found(client_admin, npc_pilot):
     """存在しない機体マスターを指定すると 404 になること."""
     response = client_admin.post(

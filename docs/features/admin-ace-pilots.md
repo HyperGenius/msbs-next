@@ -44,6 +44,7 @@
 | `max_en` / `en_recovery` | EN 最大値・回復量 |
 | `weapons` | 武装リスト（`Weapon`、最低1件） |
 | `weapon_slot_count` | 武器スロット数（任意、1以上。Issue #543）。マッチング時に生成する `mobile_suits` の行へコピーする。未設定なら `max(装備数, MAX_WEAPON_SLOTS)` |
+| `master_mobile_suit_id` | 取り込んだ機体マスターの ID（任意。Issue #545）。「機体マスターから取り込み」で設定し、マッチング時に生成する `mobile_suits` の行へコピーする。手入力に戻す操作はない（別の機体マスターを取り込むと上書きされる） |
 | `tactics` | 戦術設定（`priority` / `range` / `weapon_switch_policy`。Issue #544）。`weapon_switch_policy` が未設定なら `DEFAULT_WEAPON_SWITCH_POLICY` で動く |
 | `missing_parts` | 欠損部位（任意。部位 HP/装甲 `parts` は `max_hp`/`armor` から自動生成） |
 
@@ -196,6 +197,11 @@ TTL キャッシュ方式で `gamedata.py` から提供する。
     武器マスターをプルダウンで選んで武装を追加できる（Issue #543。NPC 機体編集フォームと共通の `WeaponListSection`。
     詳細は [admin-npcs.md](./admin-npcs.md) の「NPC機体編集フォーム」）。
     既存エースでスロット数が未設定の場合、フォームには `max(装備数, 2)` を表示し、保存時にその値を書き込む
+  - 機体マスターを取り込むと `mobile_suit.master_mobile_suit_id` を記録する。取り込んだ武装は、武器 ID が武器マスターにあるものだけ
+    `master_weapon_id` を記録する。武器マスターから追加した武装も `master_weapon_id` を持つ（Issue #545）
+    武器マスターにあるかを判定するため、武器マスター一覧の取得前（または取得失敗時）は取り込みボタンを無効にする
+  - マスター ID を持つ機体・武器は、数値項目のラベルに現在のマスター値を `最大 HP (1100)` の形で併記し、
+    異なる項目はラベルの色を変える（Issue #545。NPC 機体編集フォームと共通。詳細は [admin-npcs.md](./admin-npcs.md) の「NPC機体編集フォーム」）
 - 新規追加・削除（確認ダイアログ付き）。SWR による楽観的更新
 
 ### コンポーネント構成
@@ -263,6 +269,7 @@ python -m pytest tests/unit/test_admin_ace_pilots.py --tb=short
 - マスターが空の場合 `_create_ace_pilot()` が `None` を返すこと
 - NPC 一覧の `is_ace` 判定がマスターの `pilot_name` に追従すること
 - 武器スロット数（Issue #543）: 本数超過・武器ID重複の422、マッチングで生成するエース機へのスロット数のコピーと未設定時のフォールバック
+- マスターID（Issue #545）: マッチングで生成するエース機への `master_mobile_suit_id` のコピー
 - 持ち替えポリシー・狙う部位配分（Issue #544）: 不正な戦術値・配分（部位名・負値・合計）の422、マッチングで生成するエース機への反映
 
 既存の `test_npc_personality_and_ace.py` / `test_phase_e35_flanking.py` は、`ACE_PILOTS` の代わりに
@@ -278,4 +285,4 @@ npx vitest run tests/unit/acePilotEditFormValidation.test.ts
 `acePilotSchema` のバリデーション（ID形式・武器0件・耐性範囲・スキル上限/重複）と、
 `toAcePilotPayload()` の変換（skills 配列→辞書、フォーム外の武器項目の引き継ぎ、機体マスターから取り込んだ武装の引き継ぎ）、
 武器スロット数・武器ID重複のバリデーション（Issue #543）、
-持ち替えポリシーの送信・`tactics` のフォーム外キーの保持・配分の割合への変換と合計のバリデーション（Issue #544）を検証する。
+持ち替えポリシーの送信・`tactics` のフォーム外キーの保持・配分の割合への変換と合計のバリデーション（Issue #544）、機体マスターID・武器マスターIDの送信（Issue #545）を検証する。
