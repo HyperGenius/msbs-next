@@ -107,6 +107,15 @@
             }
         },
         {
+            "label": "Run Admin Tool",
+            "type": "shell",
+            "command": "npm run dev",
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}/admin-tool"
+            }
+        },
+        {
             "label": "Run Vitest",
             "type": "shell",
             "command": "npx vitest run",
