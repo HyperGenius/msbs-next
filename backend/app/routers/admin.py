@@ -1,7 +1,7 @@
 """管理者専用 API ルーター.
 
 マスター機体データ・マスター武器データ・NPC(Pilot)データ・エースパイロットの
-CRUD エンドポイントを提供する。
+CRUD エンドポイントと、ドロップテーブルの取得・保存エンドポイントを提供する。
 全エンドポイントは ADMIN_API_KEY ヘッダー (X-API-Key) による認証が必要。
 """
 
@@ -18,6 +18,8 @@ from app.models.models import (
     AcePilotUpdate,
     CombatSimulationRequest,
     CombatSimulationResponse,
+    DropTableDetail,
+    DropTableUpdate,
     MasterBlueprintSettings,
     MasterMobileSuitCreate,
     MasterMobileSuitEntry,
@@ -40,6 +42,8 @@ from app.models.models import (
 )
 from app.services.ace_pilot_service import AcePilotService
 from app.services.combat_simulation_service import CombatSimulationService
+from app.services.drop_service import DropScope
+from app.services.drop_table_service import DropTableService
 from app.services.mobile_suit_service import MobileSuitService
 from app.services.pilot_service import PilotService
 from app.services.weapon_service import WeaponService
@@ -71,6 +75,12 @@ npc_router = APIRouter(
 ace_pilot_router = APIRouter(
     prefix="/api/admin/ace-pilots",
     tags=["admin-ace-pilots"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
+drop_table_router = APIRouter(
+    prefix="/api/admin/drop-tables",
+    tags=["admin-drop-tables"],
     dependencies=[Depends(verify_admin_api_key)],
 )
 
@@ -566,3 +576,37 @@ def delete_ace_pilot(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Ace pilot '{ace_id}' not found.",
         )
+
+
+# ===========================================================
+# ドロップテーブル エンドポイント
+# ===========================================================
+
+
+@drop_table_router.get("/batch", response_model=DropTableDetail)
+def get_batch_drop_table(
+    session: Session = Depends(get_session),
+) -> DropTableDetail:
+    """定期バトルのドロップテーブルを返す.
+
+    - テーブルが無ければ、ドロップ率0・エントリー無しの既定値を返す
+    """
+    return DropTableService.get_detail(session, DropScope.batch())
+
+
+@drop_table_router.put("/batch", response_model=DropTableDetail)
+def update_batch_drop_table(
+    data: DropTableUpdate,
+    session: Session = Depends(get_session),
+) -> DropTableDetail:
+    """定期バトルのドロップテーブルを保存する.
+
+    - テーブルが無ければ作成する。エントリーは入力の内容で置き換える
+    - 重複した設計図・設計図マスターに無い設計図がある場合は 422 を返す
+    """
+    try:
+        return DropTableService.save(session, DropScope.batch(), data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e

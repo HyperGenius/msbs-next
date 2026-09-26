@@ -1785,3 +1785,58 @@ class DropTableEntry(SQLModel, table=True):
     requires_win: bool = Field(
         default=False, description="true なら勝利時だけ抽選対象になる"
     )
+
+
+class DropTableEntryInput(SQLModel):
+    """ドロップテーブルのエントリーの保存リクエスト（管理者用）."""
+
+    blueprint_id: str = Field(min_length=1)
+    weight: int = Field(ge=1, description="抽選の重み")
+    requires_win: bool = Field(
+        default=False, description="true なら勝利時だけ抽選対象になる"
+    )
+
+
+class DropTableUpdate(SQLModel):
+    """ドロップテーブルの保存リクエスト（管理者用）.
+
+    エントリーは `entries` の内容で置き換える。
+    """
+
+    name: str = Field(min_length=1)
+    drop_rate: float = Field(ge=0, le=1)
+    win_rate_multiplier: float = Field(ge=1)
+    entries: list[DropTableEntryInput] = Field(default_factory=list)
+
+
+class BlueprintTargetSummary(SQLModel):
+    """設計図と、その対象の機体・武器の表示情報（管理者用）."""
+
+    blueprint_id: str
+    target_type: str = Field(description="対象の種別 (BlueprintTargetType)")
+    target_id: str
+    target_name: str = Field(
+        description="対象の表示名。対象のマスターが無ければ target_id"
+    )
+    faction: str = Field(default="", description="機体の勢力。武器と共通機体は空文字")
+    is_standard_issue: bool
+
+
+class DropTableEntryDetail(BlueprintTargetSummary):
+    """ドロップテーブルのエントリー（管理者用）."""
+
+    weight: int
+    requires_win: bool
+
+
+class DropTableDetail(SQLModel):
+    """ドロップテーブルの設定とエントリー（管理者用）."""
+
+    id: int | None = Field(description="テーブルID。テーブルが未作成なら null")
+    name: str
+    drop_rate: float
+    win_rate_multiplier: float
+    entries: list[DropTableEntryDetail]
+    unobtainable_blueprints: list[BlueprintTargetSummary] = Field(
+        description="要設計図なのに、このテーブルに入っていない設計図"
+    )

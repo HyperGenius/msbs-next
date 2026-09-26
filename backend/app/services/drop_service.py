@@ -63,6 +63,16 @@ class DropService:
         return min(table.drop_rate * table.win_rate_multiplier, 1.0)
 
     @staticmethod
+    def find_table(session: Session, scope: DropScope) -> DropTable | None:
+        """適用範囲のドロップテーブルを返す."""
+        return session.exec(
+            select(DropTable).where(
+                DropTable.scope_type == scope.scope_type.value,
+                DropTable.scope_key == scope.scope_key,
+            )
+        ).first()
+
+    @staticmethod
     def roll(
         session: Session,
         user_id: str,
@@ -90,12 +100,7 @@ class DropService:
         if pilot is None or pilot.is_npc:
             return []
 
-        table = session.exec(
-            select(DropTable).where(
-                DropTable.scope_type == scope.scope_type.value,
-                DropTable.scope_key == scope.scope_key,
-            )
-        ).first()
+        table = DropService.find_table(session, scope)
         if table is None:
             return []
 

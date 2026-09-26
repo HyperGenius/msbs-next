@@ -30,6 +30,11 @@ export default function HomePage() {
               エースパイロット管理
             </SciFiButton>
           </Link>
+          <Link href="/drop-tables">
+            <SciFiButton className="w-full" variant="secondary">
+              ドロップテーブル管理
+            </SciFiButton>
+          </Link>
         </div>
       </SciFiPanel>
     </main>
