@@ -114,11 +114,14 @@ class MobileSuitService:
         if update_data.missing_parts is not None:
             _validate_missing_parts(update_data.missing_parts)
 
-        update_dict = update_data.model_dump(exclude_unset=True)
+        # None は「未指定」として扱う。NOT NULL 列を壊さないため。
+        update_dict = {
+            key: value
+            for key, value in update_data.model_dump(exclude_unset=True).items()
+            if value is not None
+        }
         for key, value in update_dict.items():
-            # None は「未指定」として扱う。NOT NULL 列を壊さないため。
-            if value is not None:
-                setattr(ms, key, value)
+            setattr(ms, key, value)
         if update_data.weapons is not None:
             ms.weapons = update_data.weapons
 

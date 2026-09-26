@@ -376,6 +376,27 @@ def test_update_npc_mobile_suit_max_hp_resets_current_hp_and_parts(
     assert suit.parts == {}
 
 
+def test_update_npc_mobile_suit_null_values_keep_parts(
+    client_admin, npc_pilot_with_suit, session
+):
+    """明示的に null を送った項目は未指定として扱い、parts を再生成対象にしないこと."""
+    pilot, suit = npc_pilot_with_suit
+    suit.normalize_parts()
+    session.add(suit)
+    session.commit()
+
+    response = client_admin.put(
+        f"/api/admin/npcs/{pilot.id}/mobile-suits/{suit.id}",
+        headers=HEADERS,
+        json={"armor": None, "max_hp": None, "name": "Renamed"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["armor"] == 50
+
+    session.refresh(suit)
+    assert suit.parts != {}
+
+
 def test_update_npc_mobile_suit_rejects_empty_weapons(
     client_admin, npc_pilot_with_suit
 ):

@@ -235,7 +235,13 @@ export default function AcePilotEditForm({
 }: AcePilotEditFormProps) {
   "use no memo";
   const [tab, setTab] = useState<Tab>("basic");
-  const [importedWeapons, setImportedWeapons] = useState<Weapon[]>([]);
+  // 取り込んだ武装は、取り込んだ時点の編集対象に紐付ける。
+  // initialData が変わったら（別エースへの切替・保存後の再取得）空として扱い、次の保存に混ぜない。
+  const [imported, setImported] = useState<{ source: AcePilot | null; weapons: Weapon[] }>({
+    source: initialData,
+    weapons: [],
+  });
+  const importedWeapons = imported.source === initialData ? imported.weapons : [];
   const methods = useForm<AcePilotFormValues>({
     resolver: zodResolver(acePilotSchema),
     defaultValues: initialData ? toFormValues(initialData) : defaultValues,
@@ -268,7 +274,7 @@ export default function AcePilotEditForm({
       { ...getValues(), mobile_suit: masterToSpecValues(master, getValues("mobile_suit")) },
       { keepDefaultValues: true }
     );
-    setImportedWeapons((prev) => [...prev, ...master.specs.weapons]);
+    setImported({ source: initialData, weapons: [...importedWeapons, ...master.specs.weapons] });
   }
 
   // バリデーションエラー時は、エラーを含む最初のタブへ切り替える
