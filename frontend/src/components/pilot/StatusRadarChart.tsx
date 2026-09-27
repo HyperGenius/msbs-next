@@ -37,9 +37,6 @@ interface StatusRadarChartProps {
 
 const STAT_ORDER: StatKey[] = ["sht", "mel", "intel", "ref", "tou", "luk"];
 
-/** 最大表示スケール（ランクSの閾値20より大きく設定して余白を持たせる） */
-const MAX_VALUE = 25;
-
 /** 軸ラベルのカスタムレンダラー（SF テーマに合わせた amber 色） */
 // recharts の tick props は x/y が string | number で渡されるため any を使用
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

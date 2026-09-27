@@ -1,8 +1,7 @@
 /* frontend/src/app/garage/page.tsx */
 "use client";
 
-import Link from "next/link";
-import { SciFiButton, SciFiHeading, SciFiPanel } from "@/components/ui";
+import { SciFiHeading, SciFiPanel } from "@/components/ui";
 import { useGarageEditor } from "./hooks/useGarageEditor";
 import MobileSuitList from "./components/MobileSuitList";
 import WeaponInventoryList from "./components/WeaponInventoryList";

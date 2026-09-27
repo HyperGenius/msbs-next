@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import OnboardingOverlay from './OnboardingOverlay';
 
 const meta: Meta<typeof OnboardingOverlay> = {

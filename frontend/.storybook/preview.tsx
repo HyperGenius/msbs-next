@@ -1,4 +1,4 @@
-import type { Preview } from "@storybook/react";
+import type { Preview } from "@storybook/nextjs-vite";
 import React from "react";
 import { ClerkProvider } from "./mocks/clerk"; // モックを直接インポート
 import "../src/app/globals.css"; // Tailwind CSS
@@ -31,7 +31,7 @@ const preview: Preview = {
     },
   },
   decorators: [
-    (Story: any, context: any) => {
+    (Story, context) => {
       // Storyごとのパラメータからユーザー情報を取得
       const { clerk } = context.parameters;
       

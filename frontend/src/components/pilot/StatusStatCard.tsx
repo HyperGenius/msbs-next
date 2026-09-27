@@ -31,9 +31,6 @@ export function getStatRank(value: number): string {
   return "D";
 }
 
-/** プログレスバーの最大スケール */
-const STAT_MAX = 25;
-
 interface StatusStatCardProps {
   stat: StatKey;
   /** パイロットの現在値 */
@@ -63,11 +60,6 @@ export default function StatusStatCard({
   const currentRank = getStatRank(currentValue);
   const afterRank = getStatRank(afterValue);
   const afterColor = STAT_RANK_COLORS[afterRank];
-
-  /** プログレスバーの現在値幅（%） */
-  const currentPct = Math.min((currentValue / STAT_MAX) * 100, 100);
-  /** 保留分の追加幅（%） */
-  const pendingPct = Math.min((pending / STAT_MAX) * 100, 100 - currentPct);
 
   return (
     <div className="border border-[#ffb000]/30 bg-[#ffb000]/5 p-3 flex flex-col gap-2">

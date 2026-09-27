@@ -27,12 +27,19 @@ Clerk のフック（`useUser`, `useAuth`）やコンポーネント（`SignedIn
 ```tsx
 import React, { createContext, useContext } from 'react';
 
+// ストーリーの parameters.clerk.user で渡すユーザー情報。
+type MockClerkUser = {
+  id: string;
+  fullName?: string;
+  imageUrl?: string;
+};
+
 // 認証状態を保持するコンテキスト
-const ClerkMockContext = createContext<{ user: any } | null>(null);
+const ClerkMockContext = createContext<{ user: MockClerkUser } | null>(null);
 
 // モック用の Provider
 // StorybookのDecoratorからユーザー情報を受け取ります
-export const ClerkProvider = ({ children, user }: { children: React.ReactNode; user?: any }) => {
+export const ClerkProvider = ({ children, user }: { children: React.ReactNode; user?: MockClerkUser | null }) => {
   return (
     <ClerkMockContext.Provider value={user ? { user } : null}>
       {children}
@@ -59,6 +66,7 @@ export const UserButton = () => {
   return (
     <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-white bg-gray-700">
       {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- Storybook 用のモックのため next/image を使わない。
         <img src={imageUrl} alt="User" className="w-full h-full object-cover" />
       ) : (
         <div className="flex items-center justify-center w-full h-full text-xs font-bold text-white">
@@ -154,7 +162,7 @@ Tailwind CSS の読み込みと、認証状態を注入するための Decorator
 > **注意**: JSX を含むため、ファイル拡張子は `.tsx` にしてください（`.ts` ではエラーになります）。
 
 ```tsx
-import type { Preview } from "@storybook/react";
+import type { Preview } from "@storybook/nextjs-vite";
 import React from "react";
 import { ClerkProvider } from "./mocks/clerk"; // モックを直接インポート
 import "../src/app/globals.css"; // Tailwind CSS
@@ -187,7 +195,7 @@ const preview: Preview = {
     },
   },
   decorators: [
-    (Story: any, context: any) => {
+    (Story, context) => {
       // Storyごとのパラメータからユーザー情報を取得
       const { clerk } = context.parameters;
       
@@ -221,7 +229,7 @@ export default preview;
 
 ```tsx
 // frontend/src/components/Header.stories.tsx
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import Header from './Header';
 
 const meta: Meta<typeof Header> = {
@@ -260,7 +268,7 @@ export const SignedIn: Story = {
 
 ```tsx
 // frontend/src/components/Tutorial/OnboardingOverlay.stories.tsx
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/nextjs-vite';
 import OnboardingOverlay from './OnboardingOverlay';
 
 const meta: Meta<typeof OnboardingOverlay> = {

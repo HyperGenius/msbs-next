@@ -18,11 +18,9 @@ export default function HistoryPage() {
 
   // Clerk の初期化が長時間（2秒）完了しない場合はタイムアウトとして扱う
   // スマートフォンエミュレーション時などでCDNスクリプトの読み込みが遅い場合の対策
+  // isLoaded になった後は描画側の条件で警告を消すため、フラグは戻さない。
   useEffect(() => {
-    if (isLoaded) {
-      setClerkTimedOut(false);
-      return;
-    }
+    if (isLoaded) return;
     const timer = setTimeout(() => setClerkTimedOut(true), 2000);
     return () => clearTimeout(timer);
   }, [isLoaded]);

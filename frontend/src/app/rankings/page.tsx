@@ -4,7 +4,6 @@
 import { useState } from "react";
 import { useRankings } from "@/services/api";
 import { useUser } from "@clerk/nextjs";
-import Link from "next/link";
 import PlayerProfileModal from "@/components/Social/PlayerProfileModal";
 
 export default function RankingsPage() {
