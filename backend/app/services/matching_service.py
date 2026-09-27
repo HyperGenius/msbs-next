@@ -25,6 +25,7 @@ from app.models.models import (
     Vector3,
     Weapon,
 )
+from app.services.battle_room_service import BattleRoomService
 from app.services.pilot_service import PilotService
 
 
@@ -95,7 +96,7 @@ class MatchingService:
                     # 翌日の同時刻に更新
                     new_scheduled_at = scheduled_at + timedelta(days=1)
                     room.scheduled_at = new_scheduled_at
-                    self.session.add(room)
+                    BattleRoomService.assign_theater(self.session, room)
                     print(
                         f"  エントリーがないため、スケジュールを延期しました: {new_scheduled_at}"
                     )

@@ -1,7 +1,7 @@
 # backend/app/routers/entries.py
 """エントリー関連のAPIエンドポイント."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from app.core.auth import get_current_user
 from app.db import get_session
 from app.models.models import BattleEntry, BattleRoom, MobileSuit
+from app.services.battle_room_service import BattleRoomService
 from app.services.weapon_service import WeaponService
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
@@ -60,34 +61,6 @@ def ensure_utc_timezone(dt: datetime) -> datetime:
     return dt
 
 
-def get_or_create_open_room(session: Session) -> BattleRoom:
-    """現在募集中のルームを取得、なければ作成する."""
-    # 既存のOPENなルームを探す
-    statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
-    existing_room = session.exec(statement).first()
-
-    if existing_room:
-        return existing_room
-
-    # なければ新しいルームを作成
-    # 次の21:00 JST (= 12:00 UTC) を予定時刻とする
-    # ※ JST = UTC+9 なので、21:00 JST = 12:00 UTC
-    now = datetime.now(UTC)
-    scheduled_time = now.replace(hour=12, minute=0, second=0, microsecond=0)
-    if now.hour >= 12:  # すでに12時(UTC)を過ぎていたら翌日
-        scheduled_time += timedelta(days=1)
-
-    new_room = BattleRoom(
-        status="OPEN",
-        scheduled_at=scheduled_time,
-    )
-    session.add(new_room)
-    session.commit()
-    session.refresh(new_room)
-
-    return new_room
-
-
 # --- API Endpoints ---
 
 
@@ -119,7 +92,7 @@ async def create_entry(
     session.add(mobile_suit)
 
     # 現在募集中のルームを取得または作成
-    room = get_or_create_open_room(session)
+    room, _ = BattleRoomService.get_or_create_open_room(session)
 
     # 既存のエントリーをチェック（同じルームに既にエントリー済みか）
     existing_entry_statement = (
@@ -181,7 +154,7 @@ async def get_entry_status(
 ) -> EntryStatusResponse:
     """自分のエントリー状況を確認する."""
     # 現在募集中のルームを取得または作成
-    room = get_or_create_open_room(session)
+    room, _ = BattleRoomService.get_or_create_open_room(session)
 
     # 自分のエントリーをチェック
     entry_statement = (

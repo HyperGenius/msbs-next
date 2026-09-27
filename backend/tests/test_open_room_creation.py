@@ -136,11 +136,10 @@ def test_api_always_returns_next_room(session: Session):
     assert existing_room is None, "Should start with no OPEN rooms"
     print("  No OPEN rooms exist initially")
 
-    # Import the helper function
-    from app.routers.entries import get_or_create_open_room
+    from app.services.battle_room_service import BattleRoomService
 
-    # Call get_or_create_open_room
-    room = get_or_create_open_room(session)
+    room, created = BattleRoomService.get_or_create_open_room(session)
+    assert created
 
     assert room is not None, "Should return a room"
     assert room.status == "OPEN", "Room should have OPEN status"
@@ -164,7 +163,8 @@ def test_api_always_returns_next_room(session: Session):
     print("  ✓ Scheduled time is correct")
 
     # Call again to verify it returns the same room
-    room2 = get_or_create_open_room(session)
+    room2, created2 = BattleRoomService.get_or_create_open_room(session)
+    assert not created2
     assert room2.id == room.id, "Should return same room when OPEN room already exists"
     print("  ✓ Returns existing room on second call")
 
