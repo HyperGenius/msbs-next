@@ -1,0 +1,24 @@
+[
+  {
+    "id": "SPACE",
+    "name": "宇宙",
+    "description": "遮るもののない宇宙空間。地形による索敵・射撃への影響は無い。",
+    "sensor_range_multiplier": 1.0,
+    "ranged_accuracy_penalty": 0.0,
+    "ranged_penalty_ref_distance": 400.0,
+    "default_obstacle_density": "MEDIUM",
+    "default_terrain_grade": "A",
+    "viewer_preset": "SPACE"
+  },
+  {
+    "id": "FOREST",
+    "name": "森林",
+    "description": "木々が視界と射線を遮る密林。",
+    "sensor_range_multiplier": 1.0,
+    "ranged_accuracy_penalty": 0.0,
+    "ranged_penalty_ref_distance": 400.0,
+    "default_obstacle_density": "DENSE",
+    "default_terrain_grade": "A",
+    "viewer_preset": "FOREST"
+  }
+]

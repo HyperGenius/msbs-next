@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """マスターデータシードスクリプト.
 
-mobile_suits.json / weapons.json / ace_pilots.json / technologies.json から
-master_mobile_suits / master_weapons / ace_pilots / master_technologies テーブルへ
+mobile_suits.json / weapons.json / ace_pilots.json / technologies.json /
+environments.json / theaters.json から master_mobile_suits / master_weapons /
+ace_pilots / master_technologies / master_environments / master_theaters テーブルへ
 データを投入する。べき等に実行可能（ON CONFLICT DO NOTHING）。
 新規に投入した機体・武器には、標準配備の設計図マスターも作成する。
 
@@ -111,6 +112,74 @@ def _seed_technologies(
             session.add(MasterTechnology(**item))
             inserted += 1
     return inserted, skipped
+
+
+def _seed_by_id(
+    session: Session, json_path: Path, model: type, force: bool
+) -> tuple[int, int]:
+    """JSON の各要素を id をキーにして model のテーブルへ投入する.
+
+    Returns:
+        tuple[int, int]: (挿入件数, スキップ件数)
+    """
+    if not json_path.exists():
+        print(f"[WARNING] {json_path} が見つかりません。スキップします。")
+        return 0, 0
+
+    inserted = 0
+    skipped = 0
+    for item in json.loads(json_path.read_text(encoding="utf-8")):
+        existing = session.get(model, item["id"])
+
+        if existing is not None and not force:
+            skipped += 1
+            continue
+
+        if existing is not None:
+            for key, value in item.items():
+                setattr(existing, key, value)
+            existing.updated_at = datetime.now(UTC)
+            session.add(existing)
+        else:
+            session.add(model(**item))
+            inserted += 1
+    return inserted, skipped
+
+
+def _seed_theaters(session: Session, data_dir: Path, force: bool) -> dict[str, int]:
+    """環境タイプと戦域のマスターを投入する.
+
+    Returns:
+        dict: 挿入/スキップ件数
+    """
+    from app.models.models import (
+        MasterEnvironment,
+        MasterTheater,
+        ObstacleDensity,
+        TerrainGrade,
+        ViewerPreset,
+    )
+
+    env_path = data_dir / "environments.json"
+    theater_path = data_dir / "theaters.json"
+    for item in json.loads(env_path.read_text(encoding="utf-8")):
+        ObstacleDensity(item["default_obstacle_density"])
+        TerrainGrade(item["default_terrain_grade"])
+        ViewerPreset(item["viewer_preset"])
+    for item in json.loads(theater_path.read_text(encoding="utf-8")):
+        if item.get("obstacle_density") is not None:
+            ObstacleDensity(item["obstacle_density"])
+
+    env_in, env_sk = _seed_by_id(session, env_path, MasterEnvironment, force)
+    # 戦域は環境タイプを外部キーで参照するため、先に環境タイプを書き込む。
+    session.flush()
+    theater_in, theater_sk = _seed_by_id(session, theater_path, MasterTheater, force)
+    return {
+        "environments_inserted": env_in,
+        "environments_skipped": env_sk,
+        "theaters_inserted": theater_in,
+        "theaters_skipped": theater_sk,
+    }
 
 
 def seed_master_data(force: bool = False) -> dict[str, int]:
@@ -222,6 +291,7 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
 
         inserted_ace, skipped_ace = _seed_ace_pilots(session, data_dir, force)
         inserted_tech, skipped_tech = _seed_technologies(session, data_dir, force)
+        theater_result = _seed_theaters(session, data_dir, force)
 
         session.commit()
 
@@ -234,6 +304,7 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
         "ace_pilots_skipped": skipped_ace,
         "technologies_inserted": inserted_tech,
         "technologies_skipped": skipped_tech,
+        **theater_result,
     }
 
 
@@ -241,8 +312,8 @@ def main() -> None:
     """コマンドラインエントリーポイント."""
     parser = argparse.ArgumentParser(
         description=(
-            "マスターデータ (mobile_suits / weapons / ace_pilots / technologies) を"
-            " DB へシードする"
+            "マスターデータ (mobile_suits / weapons / ace_pilots / technologies /"
+            " environments / theaters) を DB へシードする"
         )
     )
     parser.add_argument(
@@ -262,6 +333,10 @@ def main() -> None:
     print(f"[INFO] ace_pilots: {ace_in} 件挿入, {ace_sk} 件スキップ")
     tech_in, tech_sk = result["technologies_inserted"], result["technologies_skipped"]
     print(f"[INFO] technologies: {tech_in} 件挿入, {tech_sk} 件スキップ")
+    env_in, env_sk = result["environments_inserted"], result["environments_skipped"]
+    print(f"[INFO] environments: {env_in} 件挿入, {env_sk} 件スキップ")
+    th_in, th_sk = result["theaters_inserted"], result["theaters_skipped"]
+    print(f"[INFO] theaters: {th_in} 件挿入, {th_sk} 件スキップ")
     print("[INFO] シード完了")
 
 
