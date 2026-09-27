@@ -183,6 +183,18 @@ const lootLongName: LootItem = {
     "RX-78GP03 ガンダム試作3号機 デンドロビウム（オーキス装備・長距離侵攻仕様）",
 };
 
+const lootTechLevelUp: LootItem = {
+  kind: "TECH_FRAGMENT",
+  tech_id: "psycommu_tech",
+  target_name: "サイコミュ技術",
+  fragment_count: 8,
+  level: 2,
+  max_level: 3,
+  is_level_up: true,
+  fragments_to_next_level: 7,
+  credits_awarded: 0,
+};
+
 // ── 勝敗 ────────────────────────────────────────────────────
 
 /** WIN: 通常勝利（戦利品なし） */
@@ -239,6 +251,17 @@ export const LootConverted: Story = {
     msSnapshot: sampleMsZaku,
     kills: 1,
     loot: [lootConverted],
+  },
+};
+
+/** 技術断片で技術Lvが上がった（設計図の新規入手と同じ入手演出） */
+export const LootTechFragmentLevelUp: Story = {
+  args: {
+    winLoss: "WIN",
+    rewards: rewardsWin,
+    msSnapshot: sampleMs,
+    kills: 2,
+    loot: [lootTechLevelUp],
   },
 };
 

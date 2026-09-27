@@ -2,10 +2,11 @@
 "use client";
 
 import { useState } from "react";
-import { useBlueprintCollection } from "@/services/api";
+import { useBlueprintCollection, useTechnologies } from "@/services/api";
 import { BlueprintCollectionItem } from "@/types/battle";
 import { SciFiButton, SciFiPanel } from "@/components/ui";
 import BlueprintCollectionCard from "@/components/collection/BlueprintCollectionCard";
+import TechnologyProgressCard from "@/components/collection/TechnologyProgressCard";
 import {
   COLLECTION_STATUS_LABELS,
   CollectionFilter,
@@ -15,20 +16,23 @@ import {
   filterAndSortCollection,
 } from "@/utils/blueprintCollection";
 
-type TabType = BlueprintCollectionItem["target_type"];
+type TabType = BlueprintCollectionItem["target_type"] | "TECHNOLOGY";
 
 const TABS: { value: TabType; label: string }[] = [
   { value: "MOBILE_SUIT", label: "Mobile Suits" },
   { value: "WEAPON", label: "Weapons" },
+  { value: "TECHNOLOGY", label: "Tech" },
 ];
 
 const FILTERS: CollectionFilter[] = ["all", "unowned", "owned", "standard"];
 
-/** 設計図コレクション（図鑑）ページ */
+/** 設計図コレクション（図鑑）ページ。技術タブでは技術Lvの進捗を表示する */
 export default function CollectionPage() {
   const { collection, isLoading, isError } = useBlueprintCollection();
+  const technologiesState = useTechnologies();
   const [activeTab, setActiveTab] = useState<TabType>("MOBILE_SUIT");
   const [filter, setFilter] = useState<CollectionFilter>("all");
+  const isTechTab = activeTab === "TECHNOLOGY";
 
   const all = collection ?? [];
   const tabItems = all.filter((item) => item.target_type === activeTab);
@@ -61,42 +65,47 @@ export default function CollectionPage() {
             ))}
           </div>
 
-          {collection && (
-            <div className="mb-3 space-y-1">
-              <ProgressBar label="収集率" progress={collectionProgress(tabItems)} />
-              <p className="text-[10px] text-[#00ff41]/40 text-right">
-                全体 {formatProgress(collectionProgress(all))}（標準配備を除く）
-              </p>
-            </div>
-          )}
+          {isTechTab ? (
+            <p className="text-[10px] text-[#00ff41]/50">
+              技術断片はバトルでドロップします。レア機体・武器の購入には、設計図に加えて技術Lvが必要な場合があります。
+            </p>
+          ) : (
+            <>
+              {collection && (
+                <div className="mb-3 space-y-1">
+                  <ProgressBar label="収集率" progress={collectionProgress(tabItems)} />
+                  <p className="text-[10px] text-[#00ff41]/40 text-right">
+                    全体 {formatProgress(collectionProgress(all))}（標準配備を除く）
+                  </p>
+                </div>
+              )}
 
-          <div className="flex flex-wrap gap-2">
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1 text-xs border transition-colors ${
-                  filter === f
-                    ? "border-[#00f0ff] text-[#00f0ff] bg-[#00f0ff]/10"
-                    : "border-[#00ff41]/30 text-[#00ff41]/50 hover:border-[#00ff41]/60 hover:text-[#00ff41]/70"
-                }`}
-              >
-                {f === "all" ? "すべて" : COLLECTION_STATUS_LABELS[f]}
-                {collection && <span className="ml-1 opacity-70">{countOf(f)}</span>}
-              </button>
-            ))}
-          </div>
+              <div className="flex flex-wrap gap-2">
+                {FILTERS.map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={`px-3 py-1 text-xs border transition-colors ${
+                      filter === f
+                        ? "border-[#00f0ff] text-[#00f0ff] bg-[#00f0ff]/10"
+                        : "border-[#00ff41]/30 text-[#00ff41]/50 hover:border-[#00ff41]/60 hover:text-[#00ff41]/70"
+                    }`}
+                  >
+                    {f === "all" ? "すべて" : COLLECTION_STATUS_LABELS[f]}
+                    {collection && <span className="ml-1 opacity-70">{countOf(f)}</span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
-        {isError ? (
-          <SciFiPanel variant="secondary">
-            <div className="p-6">
-              <p className="text-[#ffb000] font-bold text-xl mb-2">ERROR: データ取得失敗</p>
-              <p className="text-sm">Backendが起動しているか確認してください。</p>
-            </div>
-          </SciFiPanel>
+        {isTechTab ? (
+          <TechnologyList {...technologiesState} />
+        ) : isError ? (
+          <FetchError />
         ) : isLoading ? (
           <p className="text-center py-16 text-[#ffb000] animate-pulse">LOADING COLLECTION...</p>
         ) : visibleItems.length === 0 ? (
@@ -110,6 +119,40 @@ export default function CollectionPage() {
         )}
       </div>
     </div>
+  );
+}
+
+/** 技術ごとの技術Lvの一覧 */
+function TechnologyList({
+  technologies,
+  isLoading,
+  isError,
+}: ReturnType<typeof useTechnologies>) {
+  if (isError) return <FetchError />;
+  if (isLoading) {
+    return <p className="text-center py-16 text-[#ffb000] animate-pulse">LOADING TECHNOLOGIES...</p>;
+  }
+  if (!technologies || technologies.length === 0) {
+    return <p className="text-center py-16 text-sm text-[#00ff41]/50">技術はまだありません</p>;
+  }
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {technologies.map((technology) => (
+        <TechnologyProgressCard key={technology.tech_id} technology={technology} />
+      ))}
+    </div>
+  );
+}
+
+/** データ取得に失敗したときの表示 */
+function FetchError() {
+  return (
+    <SciFiPanel variant="secondary">
+      <div className="p-6">
+        <p className="text-[#ffb000] font-bold text-xl mb-2">ERROR: データ取得失敗</p>
+        <p className="text-sm">Backendが起動しているか確認してください。</p>
+      </div>
+    </SciFiPanel>
   );
 }
 

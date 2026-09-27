@@ -56,7 +56,7 @@ export interface PartHitSummary {
 }
 
 /** バトルで得た戦利品。kind が BLUEPRINT なら設計図 */
-export interface LootItem {
+export interface BlueprintLootItem {
     kind: "BLUEPRINT";
     blueprint_id: string;
     target_type: "MOBILE_SUIT" | "WEAPON";
@@ -68,6 +68,28 @@ export interface LootItem {
     /** 機体・武器マスターの表示名。マスターが無ければ target_id */
     target_name: string;
 }
+
+/** バトルで得た技術断片。数値は入手した時点のもの */
+export interface TechFragmentLootItem {
+    kind: "TECH_FRAGMENT";
+    tech_id: string;
+    /** 入手後の累計断片数 */
+    fragment_count: number;
+    /** 入手後の技術Lv */
+    level: number;
+    max_level: number;
+    /** この断片で技術Lvが上がったか */
+    is_level_up: boolean;
+    /** 次のLvまでに必要な断片数。最大Lvなら null */
+    fragments_to_next_level: number | null;
+    /** 最大Lv後の断片を換金したクレジット。バトル報酬の credits_gained には含まない */
+    credits_awarded: number;
+    /** 技術マスターの表示名。マスターが無ければ tech_id */
+    target_name: string;
+}
+
+/** バトルで得た戦利品（設計図または技術断片） */
+export type LootItem = BlueprintLootItem | TechFragmentLootItem;
 
 /** バトルで得た報酬（経験値・クレジット・レベル変化） */
 export interface BattleRewards {

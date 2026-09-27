@@ -18,14 +18,24 @@ export interface ShopItemSpecs {
     turning_bonus?: number;
 }
 
+/** 必要な技術Lvと、プレイヤーの現在の技術Lv */
+export interface TechRequirementStatus {
+    tech_id: string;
+    tech_name: string;
+    required_lv: number;
+    current_lv: number;
+}
+
 /** 設計図によるショップ商品の解放状態 */
 export interface BlueprintUnlockState {
     /** 標準配備品か（設計図なしで購入できる） */
     is_standard_issue: boolean;
-    /** 購入できるか（標準配備品、または設計図を所持している） */
+    /** 購入できるか（標準配備品、または設計図と必要な技術Lvがそろっている） */
     is_unlocked: boolean;
-    /** 未解放のときに表示する入手方法のヒント。解放済みなら null */
+    /** 設計図の入手方法のヒント。設計図を所持していれば null */
     unlock_hint: string | null;
+    /** 足りない技術Lv。標準配備品と、技術Lvが足りている商品は空 */
+    missing_tech_requirements: TechRequirementStatus[];
 }
 
 /** ショップに陳列された機体商品 */

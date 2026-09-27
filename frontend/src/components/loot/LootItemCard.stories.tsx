@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import LootItemCard from "./LootItemCard";
 import LootList from "./LootList";
 import LootBadge from "./LootBadge";
-import { LootItem } from "@/types/battle";
+import { BlueprintLootItem, TechFragmentLootItem } from "@/types/battle";
 
 const meta: Meta<typeof LootItemCard> = {
   title: "Loot/LootItemCard",
@@ -22,7 +22,7 @@ const meta: Meta<typeof LootItemCard> = {
 export default meta;
 type Story = StoryObj<typeof LootItemCard>;
 
-const newMobileSuit: LootItem = {
+const newMobileSuit: BlueprintLootItem = {
   kind: "BLUEPRINT",
   blueprint_id: "mobile_suit:gelgoog",
   target_type: "MOBILE_SUIT",
@@ -32,7 +32,7 @@ const newMobileSuit: LootItem = {
   credits_awarded: 0,
 };
 
-const convertedWeapon: LootItem = {
+const convertedWeapon: BlueprintLootItem = {
   kind: "BLUEPRINT",
   blueprint_id: "weapon:beam_rifle",
   target_type: "WEAPON",
@@ -40,6 +40,36 @@ const convertedWeapon: LootItem = {
   target_name: "ビームライフル",
   is_new: false,
   credits_awarded: 1200,
+};
+
+const techFragment: TechFragmentLootItem = {
+  kind: "TECH_FRAGMENT",
+  tech_id: "psycommu_tech",
+  target_name: "サイコミュ技術",
+  fragment_count: 5,
+  level: 1,
+  max_level: 3,
+  is_level_up: false,
+  fragments_to_next_level: 3,
+  credits_awarded: 0,
+};
+
+const techLevelUp: TechFragmentLootItem = {
+  ...techFragment,
+  fragment_count: 8,
+  level: 2,
+  is_level_up: true,
+  fragments_to_next_level: 7,
+};
+
+const techConverted: TechFragmentLootItem = {
+  ...techFragment,
+  tech_id: "beam_generator_tech",
+  target_name: "ビームジェネレータ技術",
+  fragment_count: 15,
+  level: 3,
+  fragments_to_next_level: null,
+  credits_awarded: 500,
 };
 
 /** 機体設計図を新規入手 */
@@ -55,6 +85,28 @@ export const NewWithAnimation: Story = {
 /** 所持済みの武器設計図を換金 */
 export const ConvertedWeapon: Story = {
   args: { item: convertedWeapon },
+};
+
+/** 技術断片を入手（Lvは上がらない） */
+export const TechFragment: Story = {
+  args: { item: techFragment },
+};
+
+/** 技術断片で技術Lvが上がった（入手演出あり） */
+export const TechFragmentLevelUp: Story = {
+  args: { item: techLevelUp, animate: true },
+};
+
+/** 技術断片で最大Lvに到達した */
+export const TechFragmentReachedMax: Story = {
+  args: {
+    item: { ...techLevelUp, fragment_count: 15, level: 3, fragments_to_next_level: null },
+  },
+};
+
+/** 最大Lv後の技術断片をクレジットに換金 */
+export const TechFragmentConverted: Story = {
+  args: { item: techConverted },
 };
 
 /** 対象のマスターが削除済み（名前は target_id） */
@@ -88,6 +140,10 @@ export const ListStates: Story = {
         <LootList loot={[newMobileSuit, convertedWeapon]} />
       </div>
       <div>
+        <p className="mb-1">設計図と技術断片（導入前の戦利品と混在）</p>
+        <LootList loot={[convertedWeapon, techFragment]} />
+      </div>
+      <div>
         <p className="mb-1">ドロップなし（空配列）</p>
         <LootList loot={[]} />
       </div>
@@ -105,6 +161,9 @@ export const Badges: Story = {
     <div className="flex gap-2">
       <LootBadge loot={[newMobileSuit]} />
       <LootBadge loot={[convertedWeapon]} />
+      <LootBadge loot={[techLevelUp]} />
+      <LootBadge loot={[techConverted]} />
+      <LootBadge loot={[techFragment]} />
       <LootBadge loot={[]} />
       <LootBadge loot={null} />
     </div>

@@ -14,3 +14,4 @@ export * from "./leaderboard";
 export * from "./friends";
 export * from "./teams";
 export * from "./blueprints";
+export * from "./technologies";

@@ -1,6 +1,7 @@
 /* frontend/src/components/loot/LootList.tsx */
 import { LootItem } from "@/types/battle";
 import LootItemCard from "./LootItemCard";
+import { lootKey } from "@/utils/technology";
 
 interface LootListProps {
   /** 戦利品の一覧。空配列はドロップなし、null は導入前のバトル */
@@ -21,7 +22,7 @@ export default function LootList({ loot, animate = false }: LootListProps) {
   return (
     <div className="flex flex-col gap-2">
       {loot.map((item) => (
-        <LootItemCard key={item.blueprint_id} item={item} animate={animate} />
+        <LootItemCard key={lootKey(item)} item={item} animate={animate} />
       ))}
     </div>
   );

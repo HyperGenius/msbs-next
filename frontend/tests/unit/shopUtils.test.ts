@@ -1,12 +1,23 @@
 import { describe, it, expect } from "vitest";
 import { getBlueprintBadgeKind, isPurchasable } from "@/app/shop/utils";
 
-const standardIssue = { is_standard_issue: true, is_unlocked: true, unlock_hint: null };
-const blueprintOwned = { is_standard_issue: false, is_unlocked: true, unlock_hint: null };
+const standardIssue = {
+  is_standard_issue: true,
+  is_unlocked: true,
+  unlock_hint: null,
+  missing_tech_requirements: [],
+};
+const blueprintOwned = {
+  is_standard_issue: false,
+  is_unlocked: true,
+  unlock_hint: null,
+  missing_tech_requirements: [],
+};
 const locked = {
   is_standard_issue: false,
   is_unlocked: false,
   unlock_hint: "バトルで設計図を入手すると購入できます",
+  missing_tech_requirements: [],
 };
 
 describe("getBlueprintBadgeKind", () => {
