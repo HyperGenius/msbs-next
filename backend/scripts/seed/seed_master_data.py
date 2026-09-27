@@ -4,7 +4,7 @@
 mobile_suits.json / weapons.json / ace_pilots.json / technologies.json /
 environments.json / theaters.json から master_mobile_suits / master_weapons /
 ace_pilots / master_technologies / master_environments / master_theaters テーブルへ
-データを投入する。べき等に実行可能（ON CONFLICT DO NOTHING）。
+データを投入する。べき等に実行可能（id が既に存在するレコードはスキップする）。
 新規に投入した機体・武器には、標準配備の設計図マスターも作成する。
 
 Usage:
@@ -114,21 +114,25 @@ def _seed_technologies(
     return inserted, skipped
 
 
+def _read_items(json_path: Path) -> list[dict]:
+    """JSON ファイルの要素を返す。ファイルが無ければ警告を出して空リストを返す."""
+    if not json_path.exists():
+        print(f"[WARNING] {json_path} が見つかりません。スキップします。")
+        return []
+    return json.loads(json_path.read_text(encoding="utf-8"))
+
+
 def _seed_by_id(
-    session: Session, json_path: Path, model: type, force: bool
+    session: Session, items: list[dict], model: type, force: bool
 ) -> tuple[int, int]:
-    """JSON の各要素を id をキーにして model のテーブルへ投入する.
+    """各要素を id をキーにして model のテーブルへ投入する.
 
     Returns:
         tuple[int, int]: (挿入件数, スキップ件数)
     """
-    if not json_path.exists():
-        print(f"[WARNING] {json_path} が見つかりません。スキップします。")
-        return 0, 0
-
     inserted = 0
     skipped = 0
-    for item in json.loads(json_path.read_text(encoding="utf-8")):
+    for item in items:
         existing = session.get(model, item["id"])
 
         if existing is not None and not force:
@@ -160,20 +164,20 @@ def _seed_theaters(session: Session, data_dir: Path, force: bool) -> dict[str, i
         ViewerPreset,
     )
 
-    env_path = data_dir / "environments.json"
-    theater_path = data_dir / "theaters.json"
-    for item in json.loads(env_path.read_text(encoding="utf-8")):
+    env_items = _read_items(data_dir / "environments.json")
+    theater_items = _read_items(data_dir / "theaters.json")
+    for item in env_items:
         ObstacleDensity(item["default_obstacle_density"])
         TerrainGrade(item["default_terrain_grade"])
         ViewerPreset(item["viewer_preset"])
-    for item in json.loads(theater_path.read_text(encoding="utf-8")):
+    for item in theater_items:
         if item.get("obstacle_density") is not None:
             ObstacleDensity(item["obstacle_density"])
 
-    env_in, env_sk = _seed_by_id(session, env_path, MasterEnvironment, force)
+    env_in, env_sk = _seed_by_id(session, env_items, MasterEnvironment, force)
     # 戦域は環境タイプを外部キーで参照するため、先に環境タイプを書き込む。
     session.flush()
-    theater_in, theater_sk = _seed_by_id(session, theater_path, MasterTheater, force)
+    theater_in, theater_sk = _seed_by_id(session, theater_items, MasterTheater, force)
     return {
         "environments_inserted": env_in,
         "environments_skipped": env_sk,

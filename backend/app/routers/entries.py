@@ -83,6 +83,9 @@ async def create_entry(
     if not mobile_suit:
         raise HTTPException(status_code=404, detail="Mobile Suit not found")
 
+    # ルームの新規作成は commit を伴う。機体の変更を巻き込まないよう、先に取得する。
+    room, _ = BattleRoomService.get_or_create_open_room(session)
+
     # 装備中の武器改造差分（PlayerWeapon.custom_stats）をバトル開始前に反映する
     # （再装備なしでも改造結果がバトルエンジンに渡るようにするため。Issue #411）
     # ここでは commit しない。以降の mobile_suit_snapshot（model_dump）に
@@ -90,9 +93,6 @@ async def create_entry(
     # commit にまとめて含める（余計なトランザクションを増やさないため）。
     WeaponService.resync_mobile_suit_weapons(session, mobile_suit)
     session.add(mobile_suit)
-
-    # 現在募集中のルームを取得または作成
-    room, _ = BattleRoomService.get_or_create_open_room(session)
 
     # 既存のエントリーをチェック（同じルームに既にエントリー済みか）
     existing_entry_statement = (

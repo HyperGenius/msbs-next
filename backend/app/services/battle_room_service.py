@@ -50,6 +50,9 @@ class BattleRoomService:
     ) -> tuple[BattleRoom, bool]:
         """募集中のルームを返す。無ければ次の開催予定時刻で作成する.
 
+        作成したときは commit と refresh を行う。
+        セッションに未コミットの変更があると、それも一緒に commit される。
+
         Returns:
             ルームと、新しく作成したかどうか。
         """
