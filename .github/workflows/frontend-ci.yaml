@@ -1,0 +1,106 @@
+# .github/workflows/frontend-ci.yaml
+name: Frontend CI
+
+# 必須チェックにすると、on.paths で絞ったときに対象外の PR でチェックが待機中のまま止まる。
+# そのため常に起動し、対象外のジョブは if で飛ばす（飛ばしたジョブは成功として扱われる）。
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+# 連続してPushされた際、古いCIジョブを自動キャンセルする
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# dorny/paths-filter は pull_request で変更ファイルを API から取得するため pull-requests: read が要る
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      admin-tool: ${{ steps.filter.outputs.admin-tool }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/frontend-ci.yaml'
+            admin-tool:
+              - 'admin-tool/**'
+              - '.github/workflows/frontend-ci.yaml'
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: 'npm'
+          cache-dependency-path: 'frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (ESLint)
+        run: npm run lint -- --max-warnings=0
+
+      - name: Type Check (tsc)
+        run: ./node_modules/.bin/tsc --noEmit
+
+      # storybook プロジェクトはブラウザ（Playwright）が要るため、unit プロジェクトだけを実行する
+      - name: Run tests (Vitest)
+        run: npx vitest run --project unit
+
+  admin-tool:
+    needs: changes
+    if: needs.changes.outputs.admin-tool == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-tool
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: 'npm'
+          cache-dependency-path: 'admin-tool/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # react-hook-form の watch() で react-hooks/incompatible-library の警告が残るため、警告では失敗にしない
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Type Check (tsc)
+        run: ./node_modules/.bin/tsc --noEmit
+
+      - name: Run tests (Vitest)
+        run: npx vitest run
