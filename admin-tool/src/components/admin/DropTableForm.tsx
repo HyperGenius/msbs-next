@@ -13,7 +13,9 @@ import {
   effectiveDropRate,
   entryFromMobileSuit,
   entryFromSummary,
+  entryFromTechnology,
   entryFromWeapon,
+  entryKey,
   formatChance,
   toDropTableFormValues,
   unobtainableBlueprints,
@@ -22,6 +24,7 @@ import { DropTableDetail, DropTableEntryDetail } from "@/types/admin";
 import DropTableEntryRow, { EntryChances } from "@/components/admin/DropTableEntryRow";
 import MasterMobileSuitSelect from "@/components/admin/MasterMobileSuitSelect";
 import MasterWeaponSelect from "@/components/admin/MasterWeaponSelect";
+import MasterTechnologySelect from "@/components/admin/MasterTechnologySelect";
 import { SciFiButton, SciFiHeading } from "@/components/ui";
 
 interface DropTableFormProps {
@@ -78,11 +81,11 @@ export default function DropTableForm({ initialData, onSubmit, isSubmitting = fa
   });
   const unobtainable = unobtainableBlueprints(
     initialData,
-    watchedEntries.map((entry) => entry.blueprint_id)
+    watchedEntries.flatMap((entry) => (entry.blueprint_id ? [entry.blueprint_id] : []))
   );
 
   function addEntry(entry: DropTableEntryDetail) {
-    if (watchedEntries.some((e) => e.blueprint_id === entry.blueprint_id)) {
+    if (watchedEntries.some((e) => entryKey(e) === entryKey(entry))) {
       setAddError(`${entry.target_name} はすでにテーブルにある`);
       return;
     }
@@ -145,13 +148,13 @@ export default function DropTableForm({ initialData, onSubmit, isSubmitting = fa
           エントリー（{fields.length}件）
         </SciFiHeading>
         <p className="text-xs text-[#00ff41]/50">
-          出現率は1回のバトルでその設計図が出る確率。勢力で購入できない機体は抽選対象から外れる。「—」は抽選対象外。
+          出現率は1回のバトルでその報酬が出る確率。勢力で購入できない機体は抽選対象から外れる（技術断片は外れない）。「—」は抽選対象外。
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs font-mono">
             <thead>
               <tr className="border-b border-[#00ff41]/30 text-[#ffb000]/80">
-                <th rowSpan={2} className="px-2 py-1 text-left">設計図</th>
+                <th rowSpan={2} className="px-2 py-1 text-left">報酬</th>
                 <th rowSpan={2} className="px-2 py-1 text-left">重み</th>
                 <th rowSpan={2} className="px-2 py-1">勝利時のみ</th>
                 <th colSpan={DROP_FACTIONS.length} className="px-2 py-1">勝利時</th>
@@ -188,9 +191,13 @@ export default function DropTableForm({ initialData, onSubmit, isSubmitting = fa
             </tbody>
           </table>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <MasterMobileSuitSelect buttonLabel="機体を追加" onApply={(ms) => addEntry(entryFromMobileSuit(ms))} />
           <MasterWeaponSelect buttonLabel="武器を追加" onApply={(w) => addEntry(entryFromWeapon(w))} />
+          <MasterTechnologySelect
+            buttonLabel="技術断片を追加"
+            onApply={(tech) => addEntry(entryFromTechnology(tech))}
+          />
         </div>
         <FieldError msg={addError ?? undefined} />
       </section>

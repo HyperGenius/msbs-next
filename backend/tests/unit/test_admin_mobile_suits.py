@@ -504,6 +504,7 @@ def test_list_master_mobile_suits_includes_blueprint(client_admin):
     assert entry["blueprint"] == {
         "is_standard_issue": True,
         "duplicate_credit_value": 100,
+        "tech_requirements": [],
     }
 
 
@@ -523,6 +524,7 @@ def test_list_master_mobile_suits_without_blueprint_returns_default(
     assert entry["blueprint"] == {
         "is_standard_issue": True,
         "duplicate_credit_value": 100,
+        "tech_requirements": [],
     }
 
 
@@ -542,6 +544,7 @@ def test_create_master_mobile_suit_with_blueprint(client_admin, session):
     assert response.json()["blueprint"] == {
         "is_standard_issue": False,
         "duplicate_credit_value": 250,
+        "tech_requirements": [],
     }
     blueprint = session.get(MasterBlueprint, "mobile_suit:test_gm")
     assert blueprint is not None
@@ -578,6 +581,7 @@ def test_update_master_mobile_suit_blueprint(client_admin, session):
     assert response.json()["blueprint"] == {
         "is_standard_issue": False,
         "duplicate_credit_value": 0,
+        "tech_requirements": [],
     }
     session.expire_all()
     blueprint = session.get(MasterBlueprint, "mobile_suit:test_gm")

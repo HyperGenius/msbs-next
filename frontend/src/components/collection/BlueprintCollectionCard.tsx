@@ -13,6 +13,7 @@ import {
   formatTheater,
   obtainabilityOf,
 } from "@/utils/blueprintCollection";
+import { formatMissingTech, unmetTechRequirements } from "@/utils/technology";
 
 // 所持は LootItemCard の新規入手と同じシアンにそろえる。
 const CARD_TONES: Record<CollectionStatus, string> = {
@@ -76,7 +77,7 @@ export default function BlueprintCollectionCard({ item }: BlueprintCollectionCar
   );
 }
 
-/** 状態に応じた補足（入手日・入手経路、または入手先） */
+/** 状態に応じた補足（入手日・入手経路・足りない技術Lv、または入手先） */
 function BlueprintCollectionDetail({
   item,
   status,
@@ -89,15 +90,25 @@ function BlueprintCollectionDetail({
   }
 
   if (status === "owned") {
+    const unmet = unmetTechRequirements(item.tech_requirements);
     return (
-      <p className="text-[11px] opacity-80">
-        {item.acquired_at && (
-          <span>入手日 {new Date(item.acquired_at).toLocaleDateString("ja-JP")}</span>
+      <>
+        <p className="text-[11px] opacity-80">
+          {item.acquired_at && (
+            <span>入手日 {new Date(item.acquired_at).toLocaleDateString("ja-JP")}</span>
+          )}
+          {item.source && (
+            <span className="ml-2">{BLUEPRINT_SOURCE_LABELS[item.source] ?? item.source}</span>
+          )}
+        </p>
+        {unmet.length > 0 && (
+          <ul className="mt-0.5 text-[11px] text-[#ffb000]">
+            {unmet.map((requirement) => (
+              <li key={requirement.tech_id}>{formatMissingTech(requirement)}</li>
+            ))}
+          </ul>
         )}
-        {item.source && (
-          <span className="ml-2">{BLUEPRINT_SOURCE_LABELS[item.source] ?? item.source}</span>
-        )}
-      </p>
+      </>
     );
   }
 

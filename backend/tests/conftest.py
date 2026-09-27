@@ -41,11 +41,12 @@ _MASTER_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "master"
 
 
 def _seed_master_data(session: Session) -> None:
-    """master_mobile_suits / master_weapons / ace_pilots / master_blueprints にシードデータを投入する."""
+    """機体・武器・エースパイロット・設計図・技術の各マスターにシードデータを投入する."""
     from app.models.models import (
         AcePilot,
         BlueprintTargetType,
         MasterMobileSuit,
+        MasterTechnology,
         MasterWeapon,
     )
     from app.services.blueprint_service import BlueprintService
@@ -94,6 +95,13 @@ def _seed_master_data(session: Session) -> None:
     for item in ace_data:
         session.add(AcePilot(**item))
 
+    # --- technologies ---
+    tech_data = json.loads(
+        (_MASTER_DATA_DIR / "technologies.json").read_text(encoding="utf-8")
+    )
+    for item in tech_data:
+        session.add(MasterTechnology(**item))
+
     session.commit()
 
 
@@ -110,16 +118,19 @@ def setup_master_data_db() -> Generator[None, None, None]:
         BattleLogRecord,
         BattleResult,
         BattleRoom,
+        BlueprintTechRequirement,
         DropTable,
         DropTableEntry,
         Friendship,
         Leaderboard,
         MasterBlueprint,
         MasterMobileSuit,
+        MasterTechnology,
         MasterWeapon,
         MobileSuit,
         Pilot,
         PlayerBlueprint,
+        PlayerTechnology,
         PlayerWeapon,
         Season,
         Team,
@@ -146,7 +157,10 @@ def setup_master_data_db() -> Generator[None, None, None]:
         seed_session.exec(delete(DropTableEntry))
         seed_session.exec(delete(DropTable))
         seed_session.exec(delete(PlayerBlueprint))
+        seed_session.exec(delete(BlueprintTechRequirement))
         seed_session.exec(delete(MasterBlueprint))
+        seed_session.exec(delete(PlayerTechnology))
+        seed_session.exec(delete(MasterTechnology))
         seed_session.exec(delete(MobileSuit))
         seed_session.exec(delete(Pilot))
         seed_session.exec(delete(Season))

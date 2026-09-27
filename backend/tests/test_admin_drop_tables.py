@@ -171,7 +171,9 @@ def test_get_returns_entries_with_target_info(
     # 追加した順に並ぶ。
     assert data["entries"] == [
         {
+            "reward_type": "BLUEPRINT",
             "blueprint_id": GELGOOG,
+            "tech_id": None,
             "target_type": "MOBILE_SUIT",
             "target_id": "gelgoog",
             "target_name": "Gelgoog",
@@ -181,7 +183,9 @@ def test_get_returns_entries_with_target_info(
             "requires_win": True,
         },
         {
+            "reward_type": "BLUEPRINT",
             "blueprint_id": DOM,
+            "tech_id": None,
             "target_type": "MOBILE_SUIT",
             "target_id": "dom",
             "target_name": "Dom",
@@ -191,7 +195,9 @@ def test_get_returns_entries_with_target_info(
             "requires_win": False,
         },
         {
+            "reward_type": "BLUEPRINT",
             "blueprint_id": BEAM_RIFLE,
+            "tech_id": None,
             "target_type": "WEAPON",
             "target_id": "beam_rifle",
             "target_name": "Beam Rifle",

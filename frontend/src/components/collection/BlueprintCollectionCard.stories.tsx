@@ -32,6 +32,24 @@ const unowned: BlueprintCollectionItem = {
   source: null,
   is_available_to_faction: true,
   obtainable_theaters: [{ label: "全戦域", requires_win: false }],
+  tech_requirements: [],
+};
+
+/** 所持しているが、技術Lvが足りない（ショップでまだ購入できない） */
+export const OwnedLackingTechLevel: Story = {
+  args: {
+    item: {
+      ...unowned,
+      is_owned: true,
+      acquired_at: "2026-09-26T12:00:00Z",
+      source: "DROP",
+      obtainable_theaters: [],
+      tech_requirements: [
+        { tech_id: "psycommu_tech", tech_name: "サイコミュ技術", required_lv: 2, current_lv: 1 },
+        { tech_id: "beam_generator_tech", tech_name: "ビームジェネレータ技術", required_lv: 1, current_lv: 3 },
+      ],
+    },
+  },
 };
 
 /** 所持（ドロップで入手） */

@@ -4,8 +4,8 @@ from enum import StrEnum
 from typing import Any
 
 import numpy as np
-from pydantic import field_validator
-from sqlalchemy import JSON, UniqueConstraint
+from pydantic import field_validator, model_validator
+from sqlalchemy import JSON, CheckConstraint, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Column, Field, SQLModel
 
@@ -560,6 +560,22 @@ class MobileSuitResponse(SQLModel):
 # --- Master Blueprint Admin Models ---
 
 
+class TechRequirement(SQLModel):
+    """設計図の購入に必要な技術Lv."""
+
+    tech_id: str = Field(min_length=1)
+    required_lv: int = Field(ge=1)
+
+
+class TechRequirementStatus(SQLModel):
+    """必要な技術Lvと、プレイヤーの現在の技術Lv."""
+
+    tech_id: str
+    tech_name: str
+    required_lv: int
+    current_lv: int
+
+
 class MasterBlueprintSettings(SQLModel):
     """機体・武器マスターの設計図設定（管理者用）."""
 
@@ -568,6 +584,10 @@ class MasterBlueprintSettings(SQLModel):
     )
     duplicate_credit_value: int = Field(
         ge=0, description="入手済みの設計図を再入手したときに付与するクレジット"
+    )
+    tech_requirements: list[TechRequirement] = Field(
+        default_factory=list,
+        description="購入に必要な技術Lv。標準配備品では判定しない",
     )
 
 
@@ -579,6 +599,9 @@ class MasterBlueprintSettingsInput(SQLModel):
 
     is_standard_issue: bool | None = None
     duplicate_credit_value: int | None = Field(default=None, ge=0)
+    tech_requirements: list[TechRequirement] | None = Field(
+        default=None, description="指定すると、必要な技術Lvをこの内容で置き換える"
+    )
 
 
 # --- Master Mobile Suit Admin Models ---
@@ -1082,26 +1105,39 @@ class LootKind(StrEnum):
     """戦利品の種別."""
 
     BLUEPRINT = "BLUEPRINT"
+    TECH_FRAGMENT = "TECH_FRAGMENT"
 
 
 class LootItem(SQLModel):
-    """バトルで得た戦利品."""
+    """バトルで得た戦利品.
+
+    設計図の項目は kind が BLUEPRINT のとき、技術断片の項目は TECH_FRAGMENT のときだけ入る。
+    技術断片の値は入手した時点のもので、閾値を後から変えても書き換えない。
+    """
 
     kind: str = Field(description="戦利品の種別 (LootKind)")
-    blueprint_id: str
-    target_type: str
-    target_id: str
-    is_new: bool = Field(description="未所持の設計図を入手したか")
+    blueprint_id: str | None = None
+    target_type: str | None = None
+    target_id: str | None = None
+    is_new: bool = Field(default=False, description="未所持の設計図を入手したか")
     credits_awarded: int = Field(
-        description="所持済みの設計図を換金したクレジット。未所持なら 0"
+        description="所持済みの設計図、または最大Lv後の技術断片を換金したクレジット"
+    )
+    tech_id: str | None = None
+    fragment_count: int | None = Field(default=None, description="入手後の累計断片数")
+    level: int | None = Field(default=None, description="入手後の技術Lv")
+    max_level: int | None = None
+    is_level_up: bool = Field(default=False, description="この断片で技術Lvが上がったか")
+    fragments_to_next_level: int | None = Field(
+        default=None, description="次のLvまでに必要な断片数。最大Lvなら null"
     )
 
 
 class LootItemDetail(LootItem):
-    """表示用に対象の名前を付けた戦利品."""
+    """表示用に名前を付けた戦利品."""
 
     target_name: str = Field(
-        description="機体・武器マスターの表示名。マスターが無ければ target_id"
+        description="機体・武器・技術マスターの表示名。マスターが無ければID"
     )
 
 
@@ -1764,6 +1800,153 @@ class BlueprintCollectionItem(SQLModel):
         default_factory=list,
         description="入手できる戦域。所持済み・標準配備・勢力外は空",
     )
+    tech_requirements: list[TechRequirementStatus] = Field(
+        default_factory=list,
+        description="購入に必要な技術Lvと現在Lv。標準配備品は空",
+    )
+
+
+# --- Technology Models ---
+
+
+def validate_level_thresholds(thresholds: list[int]) -> list[int]:
+    """技術Lvの閾値が1要素以上で、正の整数の狭義単調増加であることを検証する."""
+    if not thresholds:
+        raise ValueError("level_thresholds must have at least one element.")
+    if thresholds[0] < 1:
+        raise ValueError("level_thresholds must be positive.")
+    if any(a >= b for a, b in zip(thresholds, thresholds[1:], strict=False)):
+        raise ValueError("level_thresholds must be strictly increasing.")
+    return thresholds
+
+
+class MasterTechnology(SQLModel, table=True):
+    """技術マスター (DBテーブル).
+
+    プレイヤーの技術Lvの定義を持つ。
+    機体の beam_generator_lv（装備できるビーム武器のLv）とは別物。
+    """
+
+    __tablename__ = "master_technologies"
+
+    id: str = Field(primary_key=True, description="技術ID (例: beam_generator_tech)")
+    name: str = Field(description="表示名")
+    description: str = Field(default="", description="説明文")
+    level_thresholds: list[int] = Field(
+        sa_column=Column(JSON, nullable=False),
+        description="Lvごとに必要な累計断片数。要素数が最大Lvになる",
+    )
+    overflow_credit_value: int = Field(
+        default=0,
+        ge=0,
+        description="最大Lvに達した後に断片を入手したときに付与するクレジット",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
+
+
+class BlueprintTechRequirement(SQLModel, table=True):
+    """設計図の購入に必要な技術Lv (DBテーブル)."""
+
+    __tablename__ = "blueprint_tech_requirements"
+    __table_args__ = (
+        UniqueConstraint(
+            "blueprint_id", "tech_id", name="uq_blueprint_tech_requirement"
+        ),
+    )
+
+    id: int = Field(default=None, primary_key=True)
+    blueprint_id: str = Field(foreign_key="master_blueprints.id", index=True)
+    tech_id: str = Field(foreign_key="master_technologies.id", index=True)
+    required_lv: int = Field(ge=1)
+
+
+class PlayerTechnology(SQLModel, table=True):
+    """プレイヤーの技術断片の累計入手数 (DBテーブル).
+
+    技術Lvは保存しない。累計数と閾値から毎回計算する。
+    """
+
+    __tablename__ = "player_technologies"
+    __table_args__ = (
+        UniqueConstraint("user_id", "tech_id", name="uq_player_technology"),
+    )
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    user_id: str = Field(index=True, description="所有者 (Pilot.user_id)")
+    tech_id: str = Field(foreign_key="master_technologies.id", index=True)
+    fragment_count: int = Field(
+        default=0, ge=0, description="累計の断片入手数。最大Lv後の断片は加算しない"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
+
+
+class MasterTechnologyEntry(SQLModel):
+    """技術マスター（管理者用レスポンス）."""
+
+    id: str
+    name: str
+    description: str
+    level_thresholds: list[int]
+    overflow_credit_value: int
+
+
+class MasterTechnologyCreate(SQLModel):
+    """技術マスターの新規追加リクエスト."""
+
+    id: str
+    name: str = Field(min_length=1)
+    description: str = ""
+    level_thresholds: list[int]
+    overflow_credit_value: int = Field(default=0, ge=0)
+
+    @field_validator("level_thresholds")
+    @classmethod
+    def _check_thresholds(cls, v: list[int]) -> list[int]:
+        return validate_level_thresholds(v)
+
+
+class MasterTechnologyUpdate(SQLModel):
+    """技術マスターの更新リクエスト。未指定の項目は変更しない."""
+
+    name: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    level_thresholds: list[int] | None = None
+    overflow_credit_value: int | None = Field(default=None, ge=0)
+
+    @field_validator("level_thresholds")
+    @classmethod
+    def _check_thresholds(cls, v: list[int] | None) -> list[int] | None:
+        return None if v is None else validate_level_thresholds(v)
+
+
+class PlayerTechnologyProgress(SQLModel):
+    """プレイヤーの技術ごとの進捗."""
+
+    tech_id: str
+    name: str
+    description: str
+    level: int
+    max_level: int
+    fragment_count: int = Field(description="累計の断片入手数")
+    next_level_threshold: int | None = Field(
+        description="次のLvに必要な累計断片数。最大Lvなら null"
+    )
+    fragments_to_next_level: int | None = Field(
+        description="次のLvまでに必要な断片数。最大Lvなら null"
+    )
+    overflow_credit_value: int = Field(
+        description="最大Lv後に断片を入手したときに付与するクレジット"
+    )
+    obtainable_theaters: list[ObtainableTheater] = Field(
+        default_factory=list, description="技術断片を入手できる戦域"
+    )
 
 
 # --- Drop Table Models ---
@@ -1806,20 +1989,51 @@ class DropTable(SQLModel, table=True):
     )
 
 
+class DropRewardType(StrEnum):
+    """ドロップテーブルのエントリーで得られる報酬の種別."""
+
+    BLUEPRINT = "BLUEPRINT"
+    TECH_FRAGMENT = "TECH_FRAGMENT"
+
+
 class DropTableEntry(SQLModel, table=True):
-    """ドロップテーブルに含まれる設計図 (DBテーブル)."""
+    """ドロップテーブルに含まれる設計図・技術断片 (DBテーブル).
+
+    reward_type に対応する blueprint_id・tech_id の片方だけが入る。
+    """
 
     __tablename__ = "drop_table_entries"
     __table_args__ = (
         UniqueConstraint(
             "drop_table_id", "blueprint_id", name="uq_drop_table_entry_blueprint"
         ),
+        UniqueConstraint("drop_table_id", "tech_id", name="uq_drop_table_entry_tech"),
+        CheckConstraint(
+            "(reward_type = 'BLUEPRINT'"
+            " AND blueprint_id IS NOT NULL AND tech_id IS NULL)"
+            " OR (reward_type = 'TECH_FRAGMENT'"
+            " AND tech_id IS NOT NULL AND blueprint_id IS NULL)",
+            name="ck_drop_table_entry_reward",
+        ),
     )
 
     id: int = Field(default=None, primary_key=True)
     drop_table_id: int = Field(foreign_key="drop_tables.id", index=True)
-    blueprint_id: str = Field(
-        foreign_key="master_blueprints.id", index=True, description="設計図ID"
+    reward_type: str = Field(
+        default=DropRewardType.BLUEPRINT.value,
+        description="報酬の種別 (DropRewardType)",
+    )
+    blueprint_id: str | None = Field(
+        default=None,
+        foreign_key="master_blueprints.id",
+        index=True,
+        description="設計図ID",
+    )
+    tech_id: str | None = Field(
+        default=None,
+        foreign_key="master_technologies.id",
+        index=True,
+        description="技術ID",
     )
     weight: int = Field(default=1, ge=1, description="抽選の重み")
     requires_win: bool = Field(
@@ -1830,11 +2044,22 @@ class DropTableEntry(SQLModel, table=True):
 class DropTableEntryInput(SQLModel):
     """ドロップテーブルのエントリーの保存リクエスト（管理者用）."""
 
-    blueprint_id: str = Field(min_length=1)
+    reward_type: DropRewardType = DropRewardType.BLUEPRINT
+    blueprint_id: str | None = Field(default=None, min_length=1)
+    tech_id: str | None = Field(default=None, min_length=1)
     weight: int = Field(ge=1, description="抽選の重み")
     requires_win: bool = Field(
         default=False, description="true なら勝利時だけ抽選対象になる"
     )
+
+    @model_validator(mode="after")
+    def _check_reward_target(self) -> "DropTableEntryInput":
+        if self.reward_type == DropRewardType.BLUEPRINT:
+            if self.blueprint_id is None or self.tech_id is not None:
+                raise ValueError("BLUEPRINT entry requires blueprint_id only.")
+        elif self.tech_id is None or self.blueprint_id is not None:
+            raise ValueError("TECH_FRAGMENT entry requires tech_id only.")
+        return self
 
 
 class DropTableUpdate(SQLModel):
@@ -1862,9 +2087,26 @@ class BlueprintTargetSummary(SQLModel):
     is_standard_issue: bool
 
 
-class DropTableEntryDetail(BlueprintTargetSummary):
-    """ドロップテーブルのエントリー（管理者用）."""
+class DropTableEntryDetail(SQLModel):
+    """ドロップテーブルのエントリー（管理者用）.
 
+    設計図の項目は reward_type が BLUEPRINT のとき、tech_id は TECH_FRAGMENT のときだけ入る。
+    """
+
+    reward_type: str = Field(description="報酬の種別 (DropRewardType)")
+    blueprint_id: str | None = None
+    target_type: str | None = Field(
+        default=None, description="設計図の対象の種別 (BlueprintTargetType)"
+    )
+    target_id: str | None = None
+    tech_id: str | None = None
+    target_name: str = Field(
+        description="機体・武器・技術の表示名。マスターが無ければID"
+    )
+    faction: str = Field(default="", description="機体の勢力。それ以外は空文字")
+    is_standard_issue: bool = Field(
+        default=False, description="標準配備品の設計図か。技術断片は false"
+    )
     weight: int
     requires_win: bool
 

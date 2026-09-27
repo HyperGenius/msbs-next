@@ -17,8 +17,14 @@ from app.core.gamedata import (
     is_available_to_faction,
 )
 from app.db import get_session
-from app.models.models import BlueprintTargetType, MobileSuit, Pilot, Weapon
-from app.services.blueprint_service import BlueprintService
+from app.models.models import (
+    BlueprintTargetType,
+    MobileSuit,
+    Pilot,
+    TechRequirementStatus,
+    Weapon,
+)
+from app.services.blueprint_service import BlueprintService, purchase_denial_message
 from app.services.weapon_service import WeaponService
 
 router = APIRouter(prefix="/api/shop", tags=["shop"])
@@ -40,6 +46,7 @@ class ShopListingResponse(BaseModel):
     is_standard_issue: bool
     is_unlocked: bool
     unlock_hint: str | None
+    missing_tech_requirements: list[TechRequirementStatus]
 
 
 class PurchaseResponse(BaseModel):
@@ -62,6 +69,7 @@ class WeaponListingResponse(BaseModel):
     is_standard_issue: bool
     is_unlocked: bool
     unlock_hint: str | None
+    missing_tech_requirements: list[TechRequirementStatus]
 
 
 class WeaponPurchaseResponse(BaseModel):
@@ -130,6 +138,7 @@ async def get_shop_listings(
                 is_standard_issue=unlock_state.is_standard_issue,
                 is_unlocked=unlock_state.is_unlocked,
                 unlock_hint=unlock_state.unlock_hint,
+                missing_tech_requirements=list(unlock_state.missing_tech_requirements),
             )
         )
 
@@ -174,12 +183,13 @@ async def purchase_mobile_suit(
             detail=f"この機体はあなたの勢力（{pilot.faction}）では購入できません",
         )
 
-    # 4. 設計図チェック
-    if not BlueprintService.can_purchase(
+    # 4. 設計図・技術Lvチェック
+    unlock_state = BlueprintService.get_unlock_state(
         session, user_id, BlueprintTargetType.MOBILE_SUIT, item_id
-    ):
+    )
+    if not unlock_state.is_unlocked:
         raise HTTPException(
-            status_code=403, detail="この機体の設計図を所持していません"
+            status_code=403, detail=purchase_denial_message(unlock_state, "機体")
         )
 
     # 5. 所持金チェック
@@ -263,6 +273,7 @@ async def get_weapon_listings(
                 is_standard_issue=unlock_state.is_standard_issue,
                 is_unlocked=unlock_state.is_unlocked,
                 unlock_hint=unlock_state.unlock_hint,
+                missing_tech_requirements=list(unlock_state.missing_tech_requirements),
             )
         )
 

@@ -61,6 +61,7 @@ X-API-Key: <ADMIN_API_KEY>
 - `weapon_slot_count`: 1以上の整数。`specs.weapons` の件数が `weapon_slot_count` を超える場合は `422`（Issue #383）
 - `beam_generator_lv`: 0以上の整数。`specs.weapons` 内に `type == "BEAM"` かつ `required_beam_generator_lv` が `beam_generator_lv` を超える武器が含まれる場合は `422`（Issue #383）
 - `blueprint.duplicate_credit_value`: 0以上の整数。負の場合は `422`（Issue #554）
+- `blueprint.tech_requirements`: 購入に必要な技術Lvの一覧。存在しない技術・最大Lv超え・1未満・重複は `422`。指定するとその内容で置き換え、省略すると変更しない（Issue #569）
 - DELETE 時: 同名機体がプレイヤー所有の mobile_suits テーブルに存在する場合は `409`
 
 ### リクエスト例
@@ -118,7 +119,7 @@ Content-Type: application/json
 > (`""` / `""` / `1` / `0`) が使われる（Issue #383）。`flavor_text`（購入画面用フレーバーテキスト、
 > 1〜2行程度）は nullable。省略・`null` の場合、購入画面では非表示になる（Issue #483）。
 >
-> 設計図設定 `blueprint`（`{"is_standard_issue": bool, "duplicate_credit_value": int}`、各項目とも省略可）も指定できる。
+> 設計図設定 `blueprint`（`{"is_standard_issue": bool, "duplicate_credit_value": int, "tech_requirements": [{"tech_id": str, "required_lv": int}]}`、各項目とも省略可）も指定できる。
 > 省略した項目は初期値（標準配備・換金額は価格の20%）になる。GET・POST・PUT のレスポンスには常に `blueprint` が含まれる（Issue #554）。
 > 仕様は `blueprint-system.md` を参照。
 

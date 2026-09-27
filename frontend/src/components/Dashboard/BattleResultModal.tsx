@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { BattleRewards, LootItem, MobileSuit } from "@/types/battle";
 import MobileSuitRankBadges from "./MobileSuitRankBadges";
 import LootList from "@/components/loot/LootList";
+import { isHighlightedLoot } from "@/utils/technology";
 import { getWeaponPowerRank, getRankColor } from "@/utils/rankUtils";
 
 type WinLoss = "WIN" | "LOSE" | "DRAW";
@@ -168,7 +169,7 @@ export default function BattleResultModal({
 
   const theme = THEMES[winLoss];
   const isLevelUp = !!rewards && rewards.level_after > rewards.level_before;
-  const hasNewLoot = !!loot?.some((item) => item.is_new);
+  const hasNewLoot = !!loot?.some(isHighlightedLoot);
 
   useEffect(() => {
     if (!animate) return;

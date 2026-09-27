@@ -1,18 +1,44 @@
 import { Tactics, Weapon, WeaponSpec } from "./weapon";
 
+/** 設計図の購入に必要な技術Lv */
+export interface TechRequirement {
+    tech_id: string;
+    /** 1以上、技術の最大Lv以下 */
+    required_lv: number;
+}
+
 /** 機体・武器マスターの設計図設定 */
 export interface MasterBlueprintSettings {
     /** 標準配備品か。true なら設計図なしで購入できる */
     is_standard_issue: boolean;
     /** 入手済みの設計図を再入手したときに付与するクレジット (0以上) */
     duplicate_credit_value: number;
+    /** 購入に必要な技術Lv。標準配備品では判定しない */
+    tech_requirements: TechRequirement[];
 }
 
 /** 設計図設定の保存リクエスト。未指定（null・undefined）の項目は変更しない。新規作成時は初期値になる */
 export interface MasterBlueprintSettingsInput {
     is_standard_issue?: boolean | null;
     duplicate_credit_value?: number | null;
+    /** 指定すると、必要な技術Lvをこの内容で置き換える */
+    tech_requirements?: TechRequirement[] | null;
 }
+
+/** 技術マスター。プレイヤーの技術Lvの定義（機体の beam_generator_lv とは別物） */
+export interface MasterTechnology {
+    /** スネークケースのID (例: beam_generator_tech) */
+    id: string;
+    name: string;
+    description: string;
+    /** Lvごとに必要な累計断片数。要素数が最大Lv。正の整数の狭義単調増加 */
+    level_thresholds: number[];
+    /** 最大Lvに達した後に断片を入手したときに付与するクレジット */
+    overflow_credit_value: number;
+}
+
+/** 技術マスターの更新リクエスト。未指定の項目は変更しない */
+export type MasterTechnologyUpdate = Partial<Omit<MasterTechnology, "id">>;
 
 /** 管理者用マスター機体のスペック定義 */
 export interface MasterMobileSuitSpec {
@@ -329,8 +355,25 @@ export interface BlueprintTargetSummary {
     is_standard_issue: boolean;
 }
 
-/** ドロップテーブルのエントリー */
-export interface DropTableEntryDetail extends BlueprintTargetSummary {
+/** ドロップテーブルのエントリーで得られる報酬の種別 */
+export type DropRewardType = "BLUEPRINT" | "TECH_FRAGMENT";
+
+/**
+ * ドロップテーブルのエントリー。
+ * 設計図の項目は reward_type が BLUEPRINT のとき、tech_id は TECH_FRAGMENT のときだけ入る
+ */
+export interface DropTableEntryDetail {
+    reward_type: DropRewardType;
+    blueprint_id: string | null;
+    target_type: BlueprintTargetSummary["target_type"] | null;
+    target_id: string | null;
+    tech_id: string | null;
+    /** 機体・武器・技術の表示名 */
+    target_name: string;
+    /** 機体の勢力。それ以外は空文字 */
+    faction: string;
+    /** 標準配備品の設計図か。技術断片は false */
+    is_standard_issue: boolean;
     /** 抽選の重み (1以上の整数) */
     weight: number;
     /** true なら勝利時だけ抽選対象になる */
@@ -352,7 +395,9 @@ export interface DropTableDetail {
 }
 
 export interface DropTableEntryInput {
-    blueprint_id: string;
+    reward_type: DropRewardType;
+    blueprint_id?: string;
+    tech_id?: string;
     weight: number;
     requires_win: boolean;
 }

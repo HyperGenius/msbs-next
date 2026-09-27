@@ -5,7 +5,9 @@ import {
   dropTableFormSchema,
   effectiveDropRate,
   entryFromMobileSuit,
+  entryFromTechnology,
   entryFromWeapon,
+  entryKey,
   formatChance,
   isAvailableToFaction,
   toDropTableFormValues,
@@ -17,14 +19,18 @@ import {
   DropTableDetail,
   DropTableEntryDetail,
   MasterMobileSuit,
+  MasterTechnology,
   MasterWeapon,
+  TechRequirement,
 } from "@/types/admin";
 
 function entry(overrides: Partial<DropTableEntryDetail>): DropTableEntryDetail {
   return {
+    reward_type: "BLUEPRINT",
     blueprint_id: "mobile_suit:dom",
     target_type: "MOBILE_SUIT",
     target_id: "dom",
+    tech_id: null,
     target_name: "Dom",
     faction: "",
     is_standard_issue: false,
@@ -32,6 +38,18 @@ function entry(overrides: Partial<DropTableEntryDetail>): DropTableEntryDetail {
     requires_win: false,
     ...overrides,
   };
+}
+
+const PSYCOMMU: MasterTechnology = {
+  id: "psycommu_tech",
+  name: "サイコミュ技術",
+  description: "",
+  level_thresholds: [3, 8, 15],
+  overflow_credit_value: 500,
+};
+
+function techEntry(overrides: Partial<DropTableEntryDetail> = {}): DropTableEntryDetail {
+  return { ...entryFromTechnology(PSYCOMMU), ...overrides };
 }
 
 function summary(blueprintId: string, isStandardIssue = false): BlueprintTargetSummary {
@@ -145,6 +163,21 @@ describe("dropTableFormSchema", () => {
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toEqual(["entries", 1, "blueprint_id"]);
   });
+
+  it("技術断片のエントリーを受け入れ、同じ技術は2つ目をエラーにする", () => {
+    expect(
+      dropTableFormSchema.safeParse({ ...valid, entries: [entry({}), techEntry()] }).success
+    ).toBe(true);
+    const result = dropTableFormSchema.safeParse({ ...valid, entries: [techEntry(), techEntry()] });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["entries", 1, "tech_id"]);
+  });
+
+  it("種別に対応するIDが無いエントリーはエラー", () => {
+    const result = dropTableFormSchema.safeParse({ ...valid, entries: [techEntry({ tech_id: null })] });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0].path).toEqual(["entries", 0, "tech_id"]);
+  });
 });
 
 describe("toDropTableUpdate", () => {
@@ -154,14 +187,17 @@ describe("toDropTableUpdate", () => {
       name: "定期バトル",
       drop_rate: 0.3,
       win_rate_multiplier: 1.5,
-      entries: [entry({ weight: 2, requires_win: true })],
+      entries: [entry({ weight: 2, requires_win: true }), techEntry({ weight: 3 })],
       unobtainable_blueprints: [],
     };
     expect(toDropTableUpdate(toDropTableFormValues(detail))).toEqual({
       name: "定期バトル",
       drop_rate: 0.3,
       win_rate_multiplier: 1.5,
-      entries: [{ blueprint_id: "mobile_suit:dom", weight: 2, requires_win: true }],
+      entries: [
+        { reward_type: "BLUEPRINT", blueprint_id: "mobile_suit:dom", weight: 2, requires_win: true },
+        { reward_type: "TECH_FRAGMENT", tech_id: "psycommu_tech", weight: 3, requires_win: false },
+      ],
     });
   });
 });
@@ -178,12 +214,14 @@ describe("エントリーの追加", () => {
       name: "Gelgoog",
       name_ja: "ゲルググ",
       faction: "ZEON",
-      blueprint: { is_standard_issue: false, duplicate_credit_value: 0 },
+      blueprint: { is_standard_issue: false, duplicate_credit_value: 0, tech_requirements: [] as TechRequirement[] },
     } as MasterMobileSuit;
     expect(entryFromMobileSuit(ms)).toEqual({
+      reward_type: "BLUEPRINT",
       blueprint_id: "mobile_suit:gelgoog",
       target_type: "MOBILE_SUIT",
       target_id: "gelgoog",
+      tech_id: null,
       target_name: "ゲルググ",
       faction: "ZEON",
       is_standard_issue: false,
@@ -196,7 +234,7 @@ describe("エントリーの追加", () => {
     const weapon = {
       id: "beam_rifle",
       name: "Beam Rifle",
-      blueprint: { is_standard_issue: true, duplicate_credit_value: 0 },
+      blueprint: { is_standard_issue: true, duplicate_credit_value: 0, tech_requirements: [] as TechRequirement[] },
     } as MasterWeapon;
     expect(entryFromWeapon(weapon)).toMatchObject({
       blueprint_id: "weapon:beam_rifle",
@@ -204,6 +242,33 @@ describe("エントリーの追加", () => {
       faction: "",
       is_standard_issue: true,
     });
+  });
+});
+
+describe("技術断片のエントリー", () => {
+  it("技術マスターから、勢力なし・設計図の項目なしで作る", () => {
+    expect(entryFromTechnology(PSYCOMMU)).toEqual({
+      reward_type: "TECH_FRAGMENT",
+      blueprint_id: null,
+      target_type: null,
+      target_id: null,
+      tech_id: "psycommu_tech",
+      target_name: "サイコミュ技術",
+      faction: "",
+      is_standard_issue: false,
+      weight: 1,
+      requires_win: false,
+    });
+  });
+
+  it("設計図と技術でIDが同じでもキーが重ならない", () => {
+    expect(entryKey(entry({ blueprint_id: "x" }))).not.toBe(entryKey(techEntry({ tech_id: "x" })));
+  });
+
+  it("技術断片はどの勢力でも抽選対象になる", () => {
+    const settings = { drop_rate: 0.4, win_rate_multiplier: 1 };
+    const entries = [entry({ faction: "FEDERATION", weight: 1 }), techEntry({ weight: 1 })];
+    expect(dropChances(entries, settings, false, "ZEON")).toEqual([null, 0.4]);
   });
 });
 
@@ -216,6 +281,7 @@ describe("unobtainableBlueprints", () => {
     entries: [
       entry({ blueprint_id: "mobile_suit:gelgoog", is_standard_issue: false }),
       entry({ blueprint_id: "mobile_suit:dom", is_standard_issue: true }),
+      techEntry(),
     ],
     unobtainable_blueprints: [summary("weapon:beam_rifle"), summary("mobile_suit:gundam")],
   };

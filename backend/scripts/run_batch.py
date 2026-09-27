@@ -332,7 +332,9 @@ def _save_battle_results(
                     rng=drop_rng,
                 )
                 for item in loot:
-                    print(f"  戦利品 ({entry.user_id}): {item.blueprint_id}")
+                    print(
+                        f"  戦利品 ({entry.user_id}): {item.blueprint_id or item.tech_id}"
+                    )
             except Exception as e:
                 print(f"  警告: 戦利品の抽選エラー ({entry.user_id}): {e}")
                 traceback.print_exc()

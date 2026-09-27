@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SciFiPanel, SciFiHeading } from "@/components/ui";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
 import BlueprintBadge from "./BlueprintBadge";
+import UnlockRequirements from "./UnlockRequirements";
 import WeaponStatRadar from "./WeaponStatRadar";
 import { WeaponListing } from "@/types/battle";
 import { WEAPON_LABELS } from "@/utils/displayUtils";
@@ -110,11 +111,7 @@ export default function WeaponDetailPanel({
       <div className="mt-auto">
         {!listing.is_unlocked ? (
           <>
-            {listing.unlock_hint && (
-              <p className="text-xs text-[#00ff41]/60 text-center mb-2">
-                {listing.unlock_hint}
-              </p>
-            )}
+            <UnlockRequirements listing={listing} />
             <div className="w-full py-3 text-center text-sm font-mono bg-[#0a0a0a] border border-[#00ff41]/30 text-[#00ff41]/50">
               未解放 (LOCKED)
             </div>
@@ -122,7 +119,7 @@ export default function WeaponDetailPanel({
               href="/collection"
               className="block mt-2 text-center text-xs text-[#00f0ff]/80 hover:text-[#00f0ff] underline underline-offset-2"
             >
-              設計図図鑑で入手先を確認する
+              図鑑で入手先を確認する
             </Link>
           </>
         ) : (

@@ -331,6 +331,7 @@ def test_list_master_weapons_includes_blueprint(client_admin):
     assert entry["blueprint"] == {
         "is_standard_issue": True,
         "duplicate_credit_value": 120,
+        "tech_requirements": [],
     }
 
 
@@ -348,6 +349,7 @@ def test_list_master_weapons_without_blueprint_returns_default(client_admin, ses
     assert entry["blueprint"] == {
         "is_standard_issue": True,
         "duplicate_credit_value": 120,
+        "tech_requirements": [],
     }
 
 
@@ -365,6 +367,7 @@ def test_create_master_weapon_with_blueprint(client_admin, session):
     assert response.json()["blueprint"] == {
         "is_standard_issue": False,
         "duplicate_credit_value": 300,
+        "tech_requirements": [],
     }
     blueprint = session.get(MasterBlueprint, "weapon:test_beam_cannon")
     assert blueprint is not None
@@ -388,6 +391,7 @@ def test_update_master_weapon_blueprint(client_admin, session):
     assert response.json()["blueprint"] == {
         "is_standard_issue": False,
         "duplicate_credit_value": 50,
+        "tech_requirements": [],
     }
     session.expire_all()
     blueprint = session.get(MasterBlueprint, "weapon:test_beam_cannon")
@@ -451,6 +455,7 @@ def test_create_with_only_standard_issue_uses_default_credit_value(client_admin)
     assert response.json()["blueprint"] == {
         "is_standard_issue": False,
         "duplicate_credit_value": 120,
+        "tech_requirements": [],
     }
 
 
@@ -471,4 +476,5 @@ def test_update_only_standard_issue_keeps_duplicate_credit_value(client_admin):
     assert response.json()["blueprint"] == {
         "is_standard_issue": False,
         "duplicate_credit_value": 999,
+        "tech_requirements": [],
     }

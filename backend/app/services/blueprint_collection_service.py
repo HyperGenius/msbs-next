@@ -1,4 +1,6 @@
-"""設計図コレクション（図鑑）の一覧を組み立てるサービス."""
+"""設計図コレクション（図鑑）と技術Lvの一覧を組み立てるサービス."""
+
+from typing import Any
 
 from sqlalchemy import and_
 from sqlmodel import Session, col, select
@@ -12,12 +14,16 @@ from app.models.models import (
     DropTableEntry,
     MasterBlueprint,
     MasterMobileSuit,
+    MasterTechnology,
     MasterWeapon,
     ObtainableTheater,
     Pilot,
     PlayerBlueprint,
+    PlayerTechnologyProgress,
+    TechRequirementStatus,
 )
 from app.services.drop_service import DropScope
+from app.services.technology_service import TechnologyService
 
 # 戦域マスターが無い間は、定期バトルのテーブルが全戦域で共通になる。
 ALL_THEATERS_LABEL = "全戦域"
@@ -42,7 +48,7 @@ class BlueprintCollectionService:
         """プレイヤーの図鑑の一覧を、設計図ID順に返す.
 
         機体・武器マスターが無い設計図は含めない。
-        クエリは設計図の数によらず4回。
+        クエリは設計図の数によらず7回。
         """
         pilot_faction = (
             session.exec(select(Pilot.faction).where(Pilot.user_id == user_id)).first()
@@ -54,7 +60,12 @@ class BlueprintCollectionService:
                 select(PlayerBlueprint).where(PlayerBlueprint.user_id == user_id)
             ).all()
         }
-        theaters = BlueprintCollectionService._obtainable_theaters(session)
+        theaters = BlueprintCollectionService._obtainable_theaters(
+            session, col(DropTableEntry.blueprint_id)
+        )
+        requirements = TechnologyService.requirements_by_blueprint(session)
+        tech_names = TechnologyService.tech_names(session)
+        levels = TechnologyService.levels_by_tech(session, user_id)
 
         items: list[BlueprintCollectionItem] = []
         for blueprint, name, faction in BlueprintCollectionService._targets(session):
@@ -82,9 +93,54 @@ class BlueprintCollectionService:
                     obtainable_theaters=(
                         theaters.get(blueprint.id, []) if show_theaters else []
                     ),
+                    tech_requirements=[]
+                    if blueprint.is_standard_issue
+                    else [
+                        TechRequirementStatus(
+                            tech_id=r.tech_id,
+                            tech_name=tech_names.get(r.tech_id, r.tech_id),
+                            required_lv=r.required_lv,
+                            current_lv=levels.get(r.tech_id, 0),
+                        )
+                        for r in requirements.get(blueprint.id, [])
+                    ],
                 )
             )
         return items
+
+    @staticmethod
+    def get_technologies(
+        session: Session, user_id: str
+    ) -> list[PlayerTechnologyProgress]:
+        """プレイヤーの技術ごとの進捗と、断片の入手先を技術ID順に返す.
+
+        クエリは技術の数によらず3回。
+        """
+        counts = TechnologyService.fragment_counts(session, user_id)
+        theaters = BlueprintCollectionService._obtainable_theaters(
+            session, col(DropTableEntry.tech_id)
+        )
+        progresses: list[PlayerTechnologyProgress] = []
+        for tech in session.exec(
+            select(MasterTechnology).order_by(col(MasterTechnology.id))
+        ).all():
+            count = counts.get(tech.id, 0)
+            progress = TechnologyService.progress(tech.level_thresholds, count)
+            progresses.append(
+                PlayerTechnologyProgress(
+                    tech_id=tech.id,
+                    name=tech.name,
+                    description=tech.description,
+                    level=progress.level,
+                    max_level=progress.max_level,
+                    fragment_count=count,
+                    next_level_threshold=progress.next_level_threshold,
+                    fragments_to_next_level=progress.fragments_to_next_level,
+                    overflow_credit_value=tech.overflow_credit_value,
+                    obtainable_theaters=theaters.get(tech.id, []),
+                )
+            )
+        return progresses
 
     @staticmethod
     def _targets(session: Session) -> list[tuple[MasterBlueprint, str, str]]:
@@ -126,36 +182,39 @@ class BlueprintCollectionService:
 
     @staticmethod
     def _obtainable_theaters(
-        session: Session,
+        session: Session, reward_key: Any
     ) -> dict[str, list[ObtainableTheater]]:
-        """設計図IDごとに、入手できる戦域をテーブルID順に返す.
+        """報酬のIDごとに、入手できる戦域をテーブルID順に返す.
 
+        `reward_key` に DropTableEntry.blueprint_id を渡すと設計図IDごと、
+        tech_id を渡すと技術IDごとに集計する。
         同じ戦域に変換されるテーブルが複数あれば1件にまとめる。
         どれか1つでも敗北時にドロップするなら、勝利時のみとしない。
         """
         rows = session.exec(
             select(
-                DropTableEntry.blueprint_id,
+                reward_key,
                 DropTable.scope_type,
                 DropTable.scope_key,
                 DropTableEntry.requires_win,
             )
             .join(DropTable, col(DropTable.id) == col(DropTableEntry.drop_table_id))
+            .where(reward_key.is_not(None))
             .order_by(col(DropTable.id))
         ).all()
 
         requires_win_by_label: dict[str, dict[str, bool]] = {}
-        for blueprint_id, scope_type, scope_key, requires_win in rows:
+        for reward_id, scope_type, scope_key, requires_win in rows:
             label = theater_label_for(DropScope(DropScopeType(scope_type), scope_key))
             if label is None:
                 continue
-            by_label = requires_win_by_label.setdefault(blueprint_id, {})
+            by_label = requires_win_by_label.setdefault(reward_id, {})
             by_label[label] = by_label.get(label, True) and requires_win
 
         return {
-            blueprint_id: [
+            reward_id: [
                 ObtainableTheater(label=label, requires_win=requires_win)
                 for label, requires_win in by_label.items()
             ]
-            for blueprint_id, by_label in requires_win_by_label.items()
+            for reward_id, by_label in requires_win_by_label.items()
         }

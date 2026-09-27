@@ -1,7 +1,7 @@
 "use client";
 
 import { UseFormRegister } from "react-hook-form";
-import { DropTableFormValues, TARGET_TYPE_LABELS, formatChance } from "@/lib/dropTable";
+import { DropTableFormValues, entryRewardId, entryTypeLabel, formatChance } from "@/lib/dropTable";
 import { DropTableEntryDetail } from "@/types/admin";
 import { BlueprintBadge } from "@/components/admin/BlueprintSettingsFields";
 
@@ -35,18 +35,16 @@ export default function DropTableEntryRow({
       <td className={cellCls}>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] px-1 border border-[#00ff41]/30 text-[#00ff41]/70">
-            {TARGET_TYPE_LABELS[entry.target_type]}
+            {entryTypeLabel(entry)}
           </span>
           <span className="font-bold">{entry.target_name}</span>
-          <BlueprintBadge
-            blueprint={{ is_standard_issue: entry.is_standard_issue, duplicate_credit_value: 0 }}
-          />
+          {entry.reward_type === "BLUEPRINT" && <BlueprintBadge blueprint={entry} />}
         </div>
         <p className="text-[10px] text-[#00ff41]/40">
-          {entry.blueprint_id}
+          {entryRewardId(entry)}
           {entry.faction && ` / ${entry.faction}`}
         </p>
-        {entry.is_standard_issue && (
+        {entry.reward_type === "BLUEPRINT" && entry.is_standard_issue && (
           <p className="text-[10px] text-[#ffb000]">
             ⚠ 標準配備のため設計図なしで購入できる。ドロップしても換金されるだけになる
           </p>

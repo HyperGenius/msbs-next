@@ -21,6 +21,7 @@ const item = (overrides: Partial<BlueprintCollectionItem> = {}): BlueprintCollec
   source: null,
   is_available_to_faction: true,
   obtainable_theaters: [{ label: "全戦域", requires_win: false }],
+  tech_requirements: [],
   ...overrides,
 });
 

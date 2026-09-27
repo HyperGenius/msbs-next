@@ -11,6 +11,7 @@ from app.core.gamedata import is_available_to_faction
 from app.models.models import (
     BlueprintSource,
     BlueprintTargetType,
+    DropRewardType,
     DropScopeType,
     DropTable,
     DropTableEntry,
@@ -21,6 +22,7 @@ from app.models.models import (
     Pilot,
 )
 from app.services.blueprint_service import BlueprintService
+from app.services.technology_service import TechnologyService
 
 # 定期バトルにはミッションも戦闘環境も無いため、全ルームで1つのテーブルを共有する。
 BATCH_SCOPE_KEY = "default"
@@ -46,10 +48,12 @@ class DropScope:
 
 @dataclass(frozen=True)
 class _Candidate:
-    blueprint_id: str
-    target_type: str
-    target_id: str
+    reward_type: DropRewardType
     weight: int
+    blueprint_id: str | None = None
+    target_type: str | None = None
+    target_id: str | None = None
+    tech_id: str | None = None
 
 
 class DropService:
@@ -81,7 +85,7 @@ class DropService:
         battle_result_id: uuid.UUID,
         rng: random.Random,
     ) -> list[LootItem]:
-        """プレイヤー1人分の戦利品を抽選し、設計図を付与する.
+        """プレイヤー1人分の戦利品を抽選し、設計図か技術断片を付与する.
 
         ドロップは1回のバトルで最大1個。コミットは呼び出し側で行う。
 
@@ -112,6 +116,10 @@ class DropService:
             return []
 
         chosen = rng.choices(candidates, weights=[c.weight for c in candidates])[0]
+        if chosen.reward_type == DropRewardType.TECH_FRAGMENT:
+            return [DropService._grant_tech_fragment(session, user_id, chosen)]
+
+        assert chosen.blueprint_id is not None
         grant = BlueprintService.grant_blueprint(
             session,
             user_id,
@@ -131,12 +139,29 @@ class DropService:
         ]
 
     @staticmethod
+    def _grant_tech_fragment(
+        session: Session, user_id: str, chosen: _Candidate
+    ) -> LootItem:
+        assert chosen.tech_id is not None
+        grant = TechnologyService.grant_fragment(session, user_id, chosen.tech_id)
+        return LootItem(
+            kind=LootKind.TECH_FRAGMENT.value,
+            tech_id=grant.tech_id,
+            fragment_count=grant.fragment_count,
+            level=grant.progress.level,
+            max_level=grant.progress.max_level,
+            is_level_up=grant.is_level_up,
+            fragments_to_next_level=grant.progress.fragments_to_next_level,
+            credits_awarded=grant.credits_awarded,
+        )
+
+    @staticmethod
     def _candidates(
         session: Session, table: DropTable, pilot_faction: str, is_win: bool
     ) -> list[_Candidate]:
         statement = (
             select(DropTableEntry, MasterBlueprint, MasterMobileSuit.faction)
-            .join(
+            .outerjoin(
                 MasterBlueprint,
                 col(DropTableEntry.blueprint_id) == col(MasterBlueprint.id),
             )
@@ -150,18 +175,36 @@ class DropService:
             )
             .where(DropTableEntry.drop_table_id == table.id)
             # 抽選結果を乱数のシードだけで決めるため、候補の順序を固定する。
-            .order_by(col(DropTableEntry.blueprint_id))
+            # 同じ reward_type の中では、NULL でない方のIDだけで順序が決まる。
+            .order_by(
+                col(DropTableEntry.reward_type),
+                col(DropTableEntry.blueprint_id),
+                col(DropTableEntry.tech_id),
+            )
         )
         if not is_win:
             statement = statement.where(col(DropTableEntry.requires_win).is_(False))
 
-        return [
-            _Candidate(
-                blueprint_id=entry.blueprint_id,
-                target_type=blueprint.target_type,
-                target_id=blueprint.target_id,
-                weight=entry.weight,
-            )
-            for entry, blueprint, faction in session.exec(statement).all()
-            if is_available_to_faction(pilot_faction, faction or "")
-        ]
+        candidates: list[_Candidate] = []
+        for entry, blueprint, faction in session.exec(statement).all():
+            if entry.reward_type == DropRewardType.TECH_FRAGMENT:
+                candidates.append(
+                    _Candidate(
+                        reward_type=DropRewardType.TECH_FRAGMENT,
+                        weight=entry.weight,
+                        tech_id=entry.tech_id,
+                    )
+                )
+            elif blueprint is not None and is_available_to_faction(
+                pilot_faction, faction or ""
+            ):
+                candidates.append(
+                    _Candidate(
+                        reward_type=DropRewardType.BLUEPRINT,
+                        weight=entry.weight,
+                        blueprint_id=entry.blueprint_id,
+                        target_type=blueprint.target_type,
+                        target_id=blueprint.target_id,
+                    )
+                )
+        return candidates

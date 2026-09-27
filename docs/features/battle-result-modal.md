@@ -25,7 +25,7 @@ Issue #564（Epic #550 Sub-Issue 6）で、デザインの見直し、戦利品�
 | ヘッダー | `// BATTLE RESULT`、結果タイトル（MISSION COMPLETE / MISSION FAILED / DRAW）、勝利・敗北・引き分け |
 | 出撃機体 | 機体名、HP・装甲・機動性のランク、メイン・サブ武器の名前と威力ランク。スナップショットが無ければ出さない |
 | 獲得報酬 | 撃墜・EXP・CREDITS の3マス。レベルアップ時は「LEVEL UP Lv.X → Lv.Y」の行を追加する |
-| 戦利品 | `LootList`。空配列は「戦利品なし」、`null` は欄ごと出さない |
+| 戦利品 | `LootList`。空配列は「戦利品なし」、`null` は欄ごと出さない。設計図と技術断片（Issue #569）を同じ一覧に表示する |
 | フッター | 「リプレイを見る」（未読の定期バトルのみ）、CONTINUE |
 
 ### 配色・書体
@@ -50,10 +50,10 @@ Issue #564（Epic #550 Sub-Issue 6）で、デザインの見直し、戦利品�
 |---|---|
 | 0.3 秒 | カードを表示 |
 | 0.9 秒 | 獲得報酬を表示し、EXP・CREDITS を 1.5 秒でカウントアップ |
-| 2.4 秒 | 戦利品を表示。新規入手はシアンの光の走査と発光（`globals.css` の `loot-new-*`） |
-| 2.4 秒（新規入手ありは 3.4 秒） | レベルアップ時、LEVEL UP のオーバーレイを 2 秒表示して消す |
+| 2.4 秒 | 戦利品を表示。設計図の新規入手と技術Lvの上昇はシアンの光の走査と発光（`globals.css` の `loot-new-*`） |
+| 2.4 秒（入手演出ありは 3.4 秒） | レベルアップ時、LEVEL UP のオーバーレイを 2 秒表示して消す |
 
-* 新規入手とレベルアップの演出が重ならないよう、新規入手があるときはレベルアップを遅らせる
+* 入手演出とレベルアップの演出が重ならないよう、入手演出があるときはレベルアップを遅らせる。入手演出の有無は `isHighlightedLoot()`（`src/utils/technology.ts`）で判定する
 * レベルアップのパーティクルは配置を固定値にした。描画中に `Math.random()` を呼ぶと、再描画やストーリーごとに見た目が変わるため
 * `animate={false}` を渡すと、段階表示とカウントアップを省いて最終状態を表示する（ストーリーの比較用）
 * `prefers-reduced-motion` のときは、戦利品の入手演出を止める
@@ -83,9 +83,23 @@ Garage の機体一覧と同じランクを表示する。
 | 分類 | ストーリー |
 |---|---|
 | 勝敗 | `Win` / `Lose` / `Draw` |
-| 戦利品 | `LootNewBlueprint` / `LootConverted` / `LootEmpty` / `LootLegacyBattle` |
+| 戦利品 | `LootNewBlueprint` / `LootConverted` / `LootTechFragmentLevelUp` / `LootEmpty` / `LootLegacyBattle` |
 | レベルアップ | `LevelUp` / `LevelUpWithNewLoot` |
 | その他の状態 | `ZeroKills` / `NoSnapshot` / `NoRewards` / `LongNames` / `UnreadBattleWithReplay` |
 | 画面幅 | `MobileFull` / `MobileLose`（375px）、`DesktopFinalState`（1280px、演出なし） |
 
-戦利品1件の表示は `Loot/LootItemCard`（新規・換金・マスター削除済み・長い名前・一覧の状態・履歴のバッジ）で確認できる。
+戦利品1件の表示は `Loot/LootItemCard`（新規・換金・技術断片の通常の入手・Lvアップ・最大Lv到達・最大Lv後の換金・マスター削除済み・長い名前・一覧の状態・履歴のバッジ）で確認できる。
+
+## 技術断片の表示（Issue #569）
+
+`LootItemCard` は `kind` で設計図と技術断片を出し分ける。技術断片のアイコンは `IconCpu`（`TablerIcons.tsx`）。
+
+| 状態 | 配色 | 説明文（`techFragmentLootMessage()`） | 右端 |
+|---|---|---|---|
+| 通常の入手 | 緑 | 「累計 5 個・次のLvまであと 3 個」 | `+1` |
+| Lvアップ | シアン（入手演出あり） | 「Lv2 に上昇！ 累計 8 個」。最大Lvなら「Lv3（最大） に上昇！」 | `LV UP` |
+| 最大Lv後の換金 | アンバー | 「最大Lvのため +500 C に換金」 | `+500 C` |
+
+* 1行目に「技術断片」と「Lv2/3」、2行目に技術名を出す
+* 換金したクレジットは、設計図の換金と同じく獲得報酬のクレジットとは分けて表示する
+* バトル履歴のバッジ（`LootBadge`）は、設計図の新規入手 → `NEW`、技術Lvの上昇 → `LV UP`、換金 → 換金額の合計、Lvの上がらない技術断片だけ → `+断片` の優先順で1つ出す（`lootBadgeOf()`）

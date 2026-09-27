@@ -1,7 +1,7 @@
 """管理者専用 API ルーター.
 
-マスター機体データ・マスター武器データ・NPC(Pilot)データ・エースパイロットの
-CRUD エンドポイントと、ドロップテーブルの取得・保存エンドポイントを提供する。
+マスター機体データ・マスター武器データ・NPC(Pilot)データ・エースパイロット・
+技術マスターの CRUD エンドポイントと、ドロップテーブルの取得・保存エンドポイントを提供する。
 全エンドポイントは ADMIN_API_KEY ヘッダー (X-API-Key) による認証が必要。
 """
 
@@ -25,6 +25,9 @@ from app.models.models import (
     MasterMobileSuitEntry,
     MasterMobileSuitSpec,
     MasterMobileSuitUpdate,
+    MasterTechnologyCreate,
+    MasterTechnologyEntry,
+    MasterTechnologyUpdate,
     MasterWeaponCreate,
     MasterWeaponEntry,
     MasterWeaponSpec,
@@ -46,6 +49,7 @@ from app.services.drop_service import DropScope
 from app.services.drop_table_service import DropTableService
 from app.services.mobile_suit_service import MobileSuitService
 from app.services.pilot_service import PilotService
+from app.services.technology_service import TechnologyService
 from app.services.weapon_service import WeaponService
 
 router = APIRouter(
@@ -81,6 +85,12 @@ ace_pilot_router = APIRouter(
 drop_table_router = APIRouter(
     prefix="/api/admin/drop-tables",
     tags=["admin-drop-tables"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
+technology_router = APIRouter(
+    prefix="/api/admin/technologies",
+    tags=["admin-technologies"],
     dependencies=[Depends(verify_admin_api_key)],
 )
 
@@ -262,8 +272,16 @@ def update_master_weapon(
     data: MasterWeaponUpdate,
     session: Session = Depends(get_session),
 ) -> MasterWeaponEntry:
-    """既存マスター武器を更新する."""
-    result = WeaponService.update_master_weapon(session, weapon_id, data)
+    """既存マスター武器を更新する.
+
+    - 設計図の必要な技術Lvが不正な場合は 422 を返す
+    """
+    try:
+        result = WeaponService.update_master_weapon(session, weapon_id, data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
 
     if result is None:
         raise HTTPException(
@@ -602,7 +620,7 @@ def update_batch_drop_table(
     """定期バトルのドロップテーブルを保存する.
 
     - テーブルが無ければ作成する。エントリーは入力の内容で置き換える
-    - 重複した設計図・設計図マスターに無い設計図がある場合は 422 を返す
+    - 重複した設計図・技術や、マスターに無い設計図・技術がある場合は 422 を返す
     """
     try:
         return DropTableService.save(session, DropScope.batch(), data)
@@ -610,3 +628,88 @@ def update_batch_drop_table(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         ) from e
+
+
+# ===========================================================
+# 技術マスター CRUD エンドポイント
+# ===========================================================
+
+
+@technology_router.get("", response_model=list[MasterTechnologyEntry])
+def list_technologies(
+    session: Session = Depends(get_session),
+) -> list[MasterTechnologyEntry]:
+    """全技術マスターを技術ID順に返す."""
+    return [
+        TechnologyService.to_entry(tech)
+        for tech in TechnologyService.list_technologies(session)
+    ]
+
+
+@technology_router.post(
+    "", response_model=MasterTechnologyEntry, status_code=status.HTTP_201_CREATED
+)
+def create_technology(
+    data: MasterTechnologyCreate,
+    session: Session = Depends(get_session),
+) -> MasterTechnologyEntry:
+    """技術マスターを追加する.
+
+    - id はスネークケース英数字のみ許可（例: beam_generator_tech）
+    - level_thresholds は1要素以上で、正の整数の狭義単調増加
+    - id が重複している場合は 409 を返す
+    """
+    try:
+        tech = TechnologyService.create_technology(session, data)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+    return TechnologyService.to_entry(tech)
+
+
+@technology_router.put("/{tech_id}", response_model=MasterTechnologyEntry)
+def update_technology(
+    tech_id: str,
+    data: MasterTechnologyUpdate,
+    session: Session = Depends(get_session),
+) -> MasterTechnologyEntry:
+    """技術マスターを更新する.
+
+    - 最大Lvを、設計図に設定された必要Lvより下げる場合は 422 を返す
+    """
+    try:
+        tech = TechnologyService.update_technology(session, tech_id, data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+    if tech is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Technology '{tech_id}' not found.",
+        )
+    return TechnologyService.to_entry(tech)
+
+
+@technology_router.delete("/{tech_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_technology(
+    tech_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    """技術マスターを削除する.
+
+    - 設計図の購入条件・ドロップテーブルから参照されている場合は 409 を返す
+    - プレイヤーの累計断片数も削除する
+    """
+    try:
+        deleted = TechnologyService.delete_technology(session, tech_id)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Technology '{tech_id}' not found.",
+        )

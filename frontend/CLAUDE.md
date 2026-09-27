@@ -12,6 +12,7 @@ services/
 ├── auth.ts         ← 認証ユーティリティ（全サービスが import）
 ├── battle.ts       ← バトル結果の取得・既読マーク
 ├── blueprints.ts   ← 設計図コレクション（図鑑）
+├── technologies.ts ← 技術Lv・技術断片の進捗
 ├── entry.ts        ← バトルエントリー
 ├── friends.ts      ← フレンド申請・承認・拒否・解除
 ├── leaderboard.ts  ← リーダーボード・プレイヤー検索
@@ -50,7 +51,7 @@ types/
 ├── battle.ts       ← バレル（全型を re-export）後方互換のため維持
 ├── admin.ts        ← 管理者用型
 ├── battleCore.ts   ← バトルログ・バトル結果・BattleRoom・BattleEntry など
-├── blueprint.ts    ← 設計図コレクション（図鑑）
+├── blueprint.ts    ← 設計図コレクション（図鑑）・技術Lvの進捗
 ├── geometry.ts     ← Position 型など空間座標
 ├── leaderboard.ts  ← ランキング・EnrichedPlayerProfile
 ├── mobileSuit.ts   ← MobileSuit・戦術設定など
@@ -75,7 +76,7 @@ skill      → pilot
 shop       → weapon, mobileSuit
 leaderboard → mobileSuit
 social     → (なし)
-blueprint  → (なし)
+blueprint  → shop
 admin      → weapon
 ```
 
