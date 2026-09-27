@@ -7,7 +7,7 @@ Epic #550「戦利品ドロップと設計図システム」のデータ基盤�
 設計図を1度入手すれば、以降はクレジットで何度でも購入できる。
 設計図なしで購入できるアイテムは **標準配備品** とする。
 
-データ基盤とサービス層（Issue #551）、admin-tool での設計図設定の編集（Issue #554）、ショップの購入制限と「未解放」表示（Issue #556）、ドロップテーブルと抽選（Issue #560）、admin-tool でのドロップテーブル編集（Issue #562）、戦利品の表示（Issue #564）を実装済み。
+データ基盤とサービス層（Issue #551）、admin-tool での設計図設定の編集（Issue #554）、ショップの購入制限と「未解放」表示（Issue #556）、ドロップテーブルと抽選（Issue #560）、admin-tool でのドロップテーブル編集（Issue #562）、戦利品の表示（Issue #564）、設計図コレクション（図鑑）画面（Issue #566）を実装済み。
 標準配備を外したアイテムの設計図は、ドロップテーブルに入れるとバトルで入手できる。
 
 ---
@@ -360,9 +360,63 @@ admin-tool の `/drop-tables` で、定期バトルのテーブル（`BATCH` / `
 
 ---
 
+## 設計図コレクション（図鑑）（Issue #566）
+
+設計図の所持・未所持と、未所持の設計図を入手できる戦域を一覧で確認できる。
+画面の仕様は `blueprint-collection.md` を参照。
+
+### `GET /api/blueprints/collection`
+
+ログイン中プレイヤーの図鑑の一覧を、設計図ID順に返す（要認証）。`GET /api/blueprints/me` は変更していない。
+
+```json
+[
+  {
+    "blueprint_id": "mobile_suit:gelgoog",
+    "target_type": "MOBILE_SUIT",
+    "target_id": "gelgoog",
+    "target_name": "Gelgoog",
+    "faction": "ZEON",
+    "is_standard_issue": false,
+    "is_owned": false,
+    "acquired_at": null,
+    "source": null,
+    "is_available_to_faction": true,
+    "obtainable_theaters": [{ "label": "全戦域", "requires_win": true }]
+  }
+]
+```
+
+| 項目 | 内容 |
+|---|---|
+| `target_name` | 機体は `name_ja`、空なら `name`。武器は `name` |
+| `faction` | 機体の勢力。武器と共通機体は空文字 |
+| `is_owned` / `acquired_at` / `source` | 所持設計図（`player_blueprints`）の有無と、入手日時・入手経路。未所持なら `false` / `null` / `null` |
+| `is_available_to_faction` | パイロットの勢力で入手できるか。判定はショップ・抽選と同じ `is_available_to_faction()`。パイロットが無ければ `true` |
+| `obtainable_theaters` | 入手できる戦域（`label` / `requires_win`）。未所持・要設計図・勢力内の設計図だけに入れる。それ以外は空配列 |
+
+* 機体・武器マスターが無い設計図（データ不整合）は返さない
+* 実装は `BlueprintCollectionService.get_collection()`（`app/services/blueprint_collection_service.py`）。パイロット・所持設計図・ドロップテーブルとエントリー・設計図マスターと機体・武器マスターをそれぞれ1回のクエリで取得し、設計図の数によらずクエリは4回
+* ドロップ率は返さない
+
+### 適用範囲から戦域の表示への変換
+
+ドロップテーブルの適用範囲（`DropScope`）から図鑑の戦域名への変換は、`theater_label_for(scope)`（`blueprint_collection_service.py`）の1か所にまとめている。
+
+| 適用範囲 | 図鑑での表示 |
+|---|---|
+| 定期バトル（`BATCH` / `default`） | 「全戦域」（`ALL_THEATERS_LABEL`） |
+| ミッション（`MISSION`） | 表示しない（`None`）。ソロミッションを運用していないため |
+
+* ミッションのテーブルにしか入っていない設計図は、`obtainable_theaters` が空になる（画面では「現在は入手できません」）
+* 同じ戦域に変換されるテーブルが複数あれば1件にまとめる。どれか1つでも敗北時にドロップするなら `requires_win = false`
+* 戦域単位の適用範囲（Sub-Issue 10）を追加したときは、`theater_label_for()` に変換を足せば実際の戦域名で表示できる
+* ショップの `unlock_hint` は変更していない（ミッション名・「定期バトル」のまま）
+
+---
+
 ## 後続のSub-Issueで対応する事項
 
-* 設計図コレクション（図鑑）画面（Sub-Issue 7）
 * レア機体向けの技術断片・技術Lv（Sub-Issue 8）。設計図マスターに必要技術Lvのカラムを追加する想定
 * 戦域・環境単位のドロップテーブル（Sub-Issue 10）
 * 戦場（フィールド）ごとの標準配備設定。現状はアイテム単位の真偽値のみ

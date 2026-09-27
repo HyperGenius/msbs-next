@@ -13,6 +13,7 @@ const navLinks = [
   { href: "/team", label: "Team", variant: "accent" as const },
   { href: "/history", label: "History", variant: "secondary" as const },
   { href: "/shop", label: "Shop", variant: "accent" as const },
+  { href: "/collection", label: "Collection", variant: "secondary" as const },
   { href: "/garage", label: "Hangar", variant: "primary" as const },
 ];
 
