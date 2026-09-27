@@ -1190,6 +1190,15 @@ class BattleResult(SQLModel, table=True):
         sa_column=Column(JSON, nullable=True),
         description="フィールド範囲 [min, max] (m)。BattleViewerの背景グリッド整列用 (Issue #436)",
     )
+    theater_id: str | None = Field(
+        default=None,
+        foreign_key="master_theaters.id",
+        index=True,
+        description="戦域ID。定期バトル以外と戦域なしは null",
+    )
+    minovsky_density: float | None = Field(
+        default=None, description="戦闘時のミノフスキー濃度 (0〜1)"
+    )
     kills: int = Field(default=0, description="撃墜数")
     exp_gained: int = Field(default=0, description="獲得経験値")
     credits_gained: int = Field(default=0, description="獲得クレジット")
@@ -1275,6 +1284,131 @@ class BattleResultSummary(SQLModel):
     loot: list[LootItemDetail] | None = None
 
 
+# --- Theater Models ---
+
+
+class ObstacleDensity(StrEnum):
+    """障害物密度. 値は `OBSTACLE_GRID_PARAMS` のキーと `NONE` に一致させる."""
+
+    NONE = "NONE"
+    SPARSE = "SPARSE"
+    MEDIUM = "MEDIUM"
+    DENSE = "DENSE"
+
+
+class TerrainGrade(StrEnum):
+    """地形適正のランク."""
+
+    S = "S"
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
+
+
+class ViewerPreset(StrEnum):
+    """BattleViewer の描画プリセット."""
+
+    SPACE = "SPACE"
+    GROUND = "GROUND"
+    COLONY = "COLONY"
+    UNDERWATER = "UNDERWATER"
+    FOREST = "FOREST"
+
+
+class MasterEnvironment(SQLModel, table=True):
+    """環境タイプのマスター (DBテーブル).
+
+    id は機体の `terrain_adaptability` のキーと同じ文字列にする。
+    ソロミッションの `Mission.environment` もこの id で参照できる。
+    """
+
+    __tablename__ = "master_environments"
+    __table_args__ = (
+        CheckConstraint(
+            "sensor_range_multiplier > 0 AND sensor_range_multiplier <= 1",
+            name="ck_master_environment_sensor_range",
+        ),
+        CheckConstraint(
+            "ranged_accuracy_penalty >= 0 AND ranged_accuracy_penalty <= 1",
+            name="ck_master_environment_ranged_penalty",
+        ),
+        CheckConstraint(
+            "ranged_penalty_ref_distance > 0",
+            name="ck_master_environment_ranged_ref_distance",
+        ),
+    )
+
+    id: str = Field(primary_key=True, description="環境ID (例: SPACE, FOREST)")
+    name: str = Field(description="表示名")
+    description: str = Field(default="", description="説明文")
+    sensor_range_multiplier: float = Field(default=1.0, description="索敵範囲の倍率")
+    ranged_accuracy_penalty: float = Field(
+        default=0.0, description="射撃命中ペナルティの係数 α"
+    )
+    ranged_penalty_ref_distance: float = Field(
+        default=400.0, description="射撃命中ペナルティが最大になる距離 (m)"
+    )
+    default_obstacle_density: str = Field(
+        default=ObstacleDensity.MEDIUM, description="障害物密度の既定値"
+    )
+    default_terrain_grade: str = Field(
+        default=TerrainGrade.A,
+        description="機体に地形適正の設定が無いときのランク",
+    )
+    viewer_preset: str = Field(
+        default=ViewerPreset.SPACE, description="BattleViewer の描画プリセット"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
+
+
+class MasterTheater(SQLModel, table=True):
+    """戦域のマスター (DBテーブル).
+
+    有効な戦域を `(rotation_order, id)` の順に日替わりで巡回する。
+    """
+
+    __tablename__ = "master_theaters"
+    __table_args__ = (
+        CheckConstraint(
+            "base_minovsky >= 0 AND base_minovsky <= 1",
+            name="ck_master_theater_base_minovsky",
+        ),
+        CheckConstraint(
+            "minovsky_variance >= 0 AND minovsky_variance <= 0.5",
+            name="ck_master_theater_minovsky_variance",
+        ),
+    )
+
+    id: str = Field(primary_key=True, description="戦域ID (例: solomon)")
+    name: str = Field(description="表示名")
+    environment_id: str = Field(
+        foreign_key="master_environments.id", index=True, description="環境タイプID"
+    )
+    base_minovsky: float = Field(default=0.0, description="ミノフスキー濃度の基準値")
+    minovsky_variance: float = Field(
+        default=0.0, description="ミノフスキー濃度の揺らぎ幅"
+    )
+    obstacle_density: str | None = Field(
+        default=None, description="障害物密度。null なら環境タイプの既定値"
+    )
+    hint: str = Field(default="", description="予報に出す有利・不利のヒント")
+    description: str = Field(default="", description="フレーバーテキスト")
+    rotation_order: int = Field(default=0, description="ローテーション順 (昇順)")
+    is_active: bool = Field(default=True, description="ローテーションに含めるか")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="作成日時"
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="更新日時"
+    )
+
+
 class BattleRoom(SQLModel, table=True):
     """バトルルーム (定期更新バトルの開催回を管理)."""
 
@@ -1285,6 +1419,15 @@ class BattleRoom(SQLModel, table=True):
         default="OPEN", index=True, description="ステータス (OPEN/WAITING/COMPLETED)"
     )
     scheduled_at: datetime = Field(description="実行予定時刻")
+    theater_id: str | None = Field(
+        default=None,
+        foreign_key="master_theaters.id",
+        index=True,
+        description="戦域ID。null は戦域なし",
+    )
+    minovsky_density: float | None = Field(
+        default=None, description="ミノフスキー濃度 (0〜1)"
+    )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
     )

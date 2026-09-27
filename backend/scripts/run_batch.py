@@ -13,7 +13,6 @@ import random
 import sys
 import traceback
 import uuid
-from datetime import UTC, datetime, timedelta
 
 # パスを通す
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -36,6 +35,7 @@ from app.models.models import (
     Weapon,
 )
 from app.services.battle_digest_service import compute_battle_digest_fields
+from app.services.battle_room_service import BattleRoomService
 from app.services.drop_service import DropScope, DropService
 from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
@@ -487,33 +487,17 @@ def create_next_open_room(session: Session) -> None:
     print("次回バトル用ルーム作成フェーズを開始")
     print("=" * 60)
 
-    # 既存の OPEN ルームがあるか確認
-    statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
-    existing_room = session.exec(statement).first()
-
-    if existing_room:
+    room, created = BattleRoomService.get_or_create_open_room(session)
+    if not created:
         print("既存のOPENルームが存在します。スキップします。")
-        print(f"  ルームID: {existing_room.id}")
-        print(f"  予定時刻: {existing_room.scheduled_at}")
+        print(f"  ルームID: {room.id}")
+        print(f"  予定時刻: {room.scheduled_at}")
         return
 
-    # 次の21:00 JST (= 12:00 UTC) を予定時刻とする
-    now = datetime.now(UTC)
-    scheduled_time = now.replace(hour=12, minute=0, second=0, microsecond=0)
-    if now.hour >= 12:
-        scheduled_time += timedelta(days=1)
-
-    new_room = BattleRoom(
-        status="OPEN",
-        scheduled_at=scheduled_time,
-    )
-    session.add(new_room)
-    session.commit()
-    session.refresh(new_room)
-
     print("新しいOPENルームを作成しました")
-    print(f"  ルームID: {new_room.id}")
-    print(f"  予定時刻: {new_room.scheduled_at}")
+    print(f"  ルームID: {room.id}")
+    print(f"  予定時刻: {room.scheduled_at}")
+    print(f"  戦域: {room.theater_id} (ミノフスキー濃度: {room.minovsky_density})")
 
 
 def update_rankings(session: Session) -> None:

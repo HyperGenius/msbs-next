@@ -46,6 +46,7 @@ NEON_DATABASE_URL=<接続文字列> python scripts/run_batch.py
 
 フェーズ4: 次回バトル用ルーム作成
   └─ OPENルームが存在しない場合、次の21:00 JST (12:00 UTC) を予定時刻として新規作成
+     └─ 開催日の戦域とミノフスキー濃度を割り当てる（docs/features/theater-rotation.md）
 ```
 
 ### 主な関数
@@ -56,4 +57,4 @@ NEON_DATABASE_URL=<接続文字列> python scripts/run_batch.py
 | `run_simulation_phase()` | WAITINGルームの一覧を取得して各ルームを処理 |
 | `_process_room()` | 1ルームの戦闘シミュレーション・結果保存を実行 |
 | `update_rankings()` | `RankingService.calculate_ranking()` でランキングを更新 |
-| `create_next_open_room()` | 翌サイクル用のOPENルームを作成 |
+| `create_next_open_room()` | 翌サイクル用のOPENルームを作成（`BattleRoomService.get_or_create_open_room()` を呼び出し） |
