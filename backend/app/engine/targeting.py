@@ -11,8 +11,9 @@ from app.engine.combat import has_los
 from app.engine.constants import (
     DEFAULT_WEAPON_SWITCH_POLICY,
     DETECTION_FALLOFF_EXPONENT,
-    DETECTION_FALLOFF_EXPONENT_MINOVSKY,
-    SPECIAL_ENVIRONMENT_EFFECTS,
+    MINOVSKY_DENSE_LOG_THRESHOLD,
+    MINOVSKY_FALLOFF_EXPONENT_BONUS,
+    MINOVSKY_SENSOR_RANGE_REDUCTION,
     WEAPON_SWITCH_BALANCED_SCORE_MARGIN,
     WEAPON_SWITCH_LOCK_BASE_SEC,
     WEAPON_SWITCH_POLICY_AGGRESSIVE,
@@ -44,6 +45,7 @@ class TargetingMixin:
     _fuzzy_target_cache: dict[str, tuple[int, MobileSuit | None]]
     _weapon_score_cache: dict[str, dict[str, float]]
     unit_pilot_stats: dict[str, PilotStats]
+    minovsky_density: float
 
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見.
@@ -55,13 +57,7 @@ class TargetingMixin:
         """
         alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]
 
-        # ミノフスキー粒子効果: 索敵範囲を半減 + 距離減衰指数を強化
-        sensor_multiplier = 1.0
-        falloff_exponent = DETECTION_FALLOFF_EXPONENT
-        if "MINOVSKY" in self.special_effects:  # type: ignore[attr-defined]
-            minovsky = SPECIAL_ENVIRONMENT_EFFECTS["MINOVSKY"]
-            sensor_multiplier = minovsky["sensor_range_multiplier"]
-            falloff_exponent = DETECTION_FALLOFF_EXPONENT_MINOVSKY
+        sensor_multiplier, falloff_exponent = self._minovsky_detection_params()
 
         # グリッドのセルサイズは実際に索敵に使う最大有効範囲以上に設定する
         # （セル幅 >= 探索半径であれば、3x3x3近傍セルの走査だけで漏れなく候補を捕捉できる）
@@ -98,6 +94,18 @@ class TargetingMixin:
                 self._process_single_detection(
                     unit, target, pos_unit, effective_sensor_range, falloff_exponent
                 )
+
+    def _minovsky_detection_params(self) -> tuple[float, float]:
+        """ミノフスキー濃度 m から (索敵範囲の倍率, 距離減衰指数) を返す.
+
+        濃度 1.0 のとき、special_effects の MINOVSKY と同じ値になる。
+        """
+        m = self.minovsky_density
+        sensor_multiplier = 1.0 - MINOVSKY_SENSOR_RANGE_REDUCTION * m
+        falloff_exponent = (
+            DETECTION_FALLOFF_EXPONENT + MINOVSKY_FALLOFF_EXPONENT_BONUS * m
+        )
+        return sensor_multiplier, falloff_exponent
 
     def _process_single_detection(
         self,
@@ -154,7 +162,7 @@ class TargetingMixin:
         dist_label = self._get_distance_label(distance)  # type: ignore[attr-defined]
         actor_name = self._format_actor_name(unit)  # type: ignore[attr-defined]
         prob_pct = int(detect_prob * 100)
-        if "MINOVSKY" in self.special_effects:  # type: ignore[attr-defined]
+        if self.minovsky_density >= MINOVSKY_DENSE_LOG_THRESHOLD:
             detect_message = (
                 f"{actor_name}が濃密なミノフスキー粒子の中、"
                 f"{dist_label}に{target.name}の反応を捉えた！"

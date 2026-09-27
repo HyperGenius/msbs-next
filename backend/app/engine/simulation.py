@@ -98,6 +98,21 @@ def _personality_pilot_stats(personality: str | None) -> PilotStats:
     return table.get(personality, table[None])
 
 
+def _resolve_minovsky_density(
+    minovsky_density: float | None, special_effects: list[str]
+) -> float:
+    """シミュレーターで使うミノフスキー濃度を決める.
+
+    濃度が渡されない場合、ソロミッションの `special_effects: ["MINOVSKY"]` は
+    従来の挙動を保つため濃度 1.0 として扱う。
+    """
+    if minovsky_density is not None:
+        return max(0.0, min(1.0, float(minovsky_density)))
+    if "MINOVSKY" in special_effects:
+        return 1.0
+    return 0.0
+
+
 def _build_unit_pilot_stats(
     player: "MobileSuit",
     enemies: "list[MobileSuit]",
@@ -173,6 +188,7 @@ class BattleSimulator(
         enable_hot_reload: bool = False,
         obstacles: list[Obstacle] | None = None,
         battlefield: BattleField | None = None,
+        minovsky_density: float | None = None,
     ):
         """初期化.
 
@@ -193,6 +209,8 @@ class BattleSimulator(
             obstacles: フィールド上の障害物リスト (Phase A — LOS システム)
             battlefield: バトルフィールド定義 (Phase 6-3)。obstacle_density / spawn_zones を含む。
                 obstacles と同時に指定した場合は obstacles が優先される。
+            minovsky_density: ミノフスキー濃度 (0.0〜1.0。範囲外はクランプする)。
+                None の場合、special_effects に MINOVSKY があれば 1.0、なければ 0.0。
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -237,6 +255,9 @@ class BattleSimulator(
         self.player_skills = player_skills or {}
         self.environment = environment
         self.special_effects: list[str] = special_effects or []
+        self.minovsky_density: float = _resolve_minovsky_density(
+            minovsky_density, self.special_effects
+        )
         self.player_pilot_stats: PilotStats = player_pilot_stats or PilotStats()
         self.retreat_points: list[RetreatPoint] = retreat_points or []
 
