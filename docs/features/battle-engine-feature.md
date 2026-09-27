@@ -2247,3 +2247,215 @@ admin-tool で係数を調整できるようにするかは Epic #573 の検討�
 * 格闘武器の命中率が濃度の影響を受けない
 * 索敵ログの文言のしきい値
 * 攻撃ログの `minovsky_hit_multiplier` と、`strip_debug_fields()` での除去
+
+---
+
+## 30. 環境タイプの効果と地形適正
+
+Issue #576（Epic #573「戦域ローテーションと環境効果」の Sub-Issue 3）。
+
+### 30.1 概要
+
+環境タイプ（`MasterEnvironment`、[theater-rotation.md](theater-rotation.md)）の効果パラメータを戦闘に反映する。
+あわせて、地形適正を速度だけでなく命中・回避にも効かせ、機体マスターに地形適正を持たせる。
+狙いは「その環境の特化機 ＞ 汎用機 ＞ 環境に合わない特化機」という勝ち筋を作ること。
+
+### 30.2 `EnvironmentProfile`
+
+エンジンは DB を参照しない。呼び出し側が `MasterEnvironment` からプロファイルを作り、`BattleSimulator(..., environment_profile=...)` で渡す。
+
+定義は `backend/app/engine/environment.py`。
+
+| 項目 | 既定値 | 用途 |
+|---|---|---|
+| `environment_id` | — | 環境タイプID。指定すると `BattleSimulator.environment` をこの値にする |
+| `sensor_range_multiplier` | 1.0 | 索敵範囲の倍率 |
+| `ranged_accuracy_penalty` | 0.0 | 射撃の命中率ペナルティの係数 α |
+| `ranged_penalty_ref_distance` | 400.0 | ペナルティが最大になる距離 D (m) |
+| `default_obstacle_density` | `MEDIUM` | 戦域が障害物密度を指定しないときの密度 |
+| `default_terrain_grade` | `A` | 機体の `terrain_adaptability` にこの環境のキーが無いときのランク |
+
+`MasterEnvironment` からの変換は `TheaterService.environment_profile()` / `resolve_environment_profile()`（`backend/app/services/theater_service.py`）。
+定期バトルでプロファイルを渡すのは Sub-Issue 4。
+
+プロファイルを渡さない場合（ソロミッション、admin-tool のシミュレーション）は効果なしとして扱い、挙動は導入前と変わらない。
+地形適正の既定ランクは `A`（`DEFAULT_TERRAIN_GRADE`）。
+
+### 30.3 索敵範囲
+
+`TargetingMixin._detection_phase()` で、ミノフスキーの倍率（29.3節）に `sensor_range_multiplier` を掛け合わせる。
+
+$$d_{\text{eff}} = \text{sensor\_range} \times (1 - 0.5m) \times \text{sensor\_range\_multiplier}$$
+
+距離減衰指数 $k$ は環境タイプの影響を受けない。
+
+### 30.4 射撃の命中率
+
+`CombatMixin._get_environment_hit_multiplier()`（`backend/app/engine/combat.py`）で倍率を計算する。
+
+$$f_{\text{env}} = 1 - \alpha \cdot \min\left(1, \frac{d}{D}\right)$$
+
+* ミノフスキーの倍率と同じ位置（距離補正乗数の後、セクタ補正の前）で掛け合わせる
+* 格闘武器は対象外（常に 1.0）
+
+森林（α = 0.2、D = 400m）: 200m で ×0.9、400m 以上で ×0.8。
+
+### 30.5 障害物密度
+
+`BattleField.obstacle_density` を明示していない `BattleField` を渡したとき、`default_obstacle_density` を使う。
+「明示したか」は pydantic の `model_fields_set` で判定する（`_resolve_battlefield()`、`backend/app/engine/simulation.py`）。
+
+* 戦域が密度を指定したとき: `TheaterService.battlefield_for(theater)` が `BattleField(obstacle_density=...)` を返し、その値を使う
+* `battlefield` を渡さない場合: 従来どおり障害物を生成しない
+
+森林は障害物が `DENSE` のため、既存の LOS システムで遠距離の射線が切れやすい。
+
+### 30.6 地形適正
+
+ランクは `terrain_adaptability[environment]`。キーが無ければ `default_terrain_grade`（`MovementMixin._get_terrain_grade()`）。
+
+| ランク | 速度（`TERRAIN_ADAPTABILITY_MODIFIERS`） | 命中・回避（`TERRAIN_ADAPTABILITY_HIT_BONUS`） |
+|---|---|---|
+| S | ×1.2 | +1 |
+| A | ×1.0 | 0 |
+| B | ×0.8 | −0.5 |
+| C | ×0.6 | −1 |
+| D | ×0.4 | −1.5 |
+
+* 速度: `_get_terrain_modifier()` の係数を最大速度に掛ける（従来どおり）。キーが無いときの既定ランクだけを変えた
+* 命中・回避: `_calculate_hit_chance()` で `hit_chance += 攻撃側の値 − 防御側の値` を加算する。`accuracy_bonus` / `evasion_bonus` と同じく乗算補正の後に加算する
+
+Issue の初期案は 1 ランク 5 ポイント（S +5 〜 D −15）だったが、30.9節の結果から S +1 / B −0.5 / C −1 / D −1.5 に下げた。
+戦闘中の命中率は中央値 3.5% 程度と低い。5 ポイントの差を付けると不利な側の命中率が 0% に張り付き、S 対 A の同一機体戦で S が全勝したため。
+
+ソロミッションは所持機体の列（`SPACE`/`GROUND`/`COLONY` は全機 A）を使うため、速度・命中・回避は変わらない。
+定期バトルはエントリー時にマスターの地形適正をスナップショットに入れる（30.7節）。
+プロファイルを渡す前（Sub-Issue 4 より前）でも環境は `SPACE` なので、ゲルググ（S）・ドム・グフ（C）には宇宙の補正が掛かる。
+
+### 30.7 機体マスターの地形適正
+
+`MasterMobileSuitSpec.terrain_adaptability: dict[str, str]`（省略可、既定は空）。値は `S`〜`D` に限る（バリデーションあり）。
+`master_mobile_suits.specs` の JSON に入るため、マイグレーションは不要。
+
+地形適正は機体マスターを正とする。所持機体の `mobile_suits.terrain_adaptability` はショップ購入時に設定されず、全機デフォルトのため使わない。
+
+| 場所 | 処理 |
+|---|---|
+| エントリーのスナップショット（`POST /api/entries`、チームエントリー） | `MobileSuitService.build_entry_snapshot()` で、マスターの値で `terrain_adaptability` を上書きする |
+| ガレージ（`GET /api/mobile_suits` など） | 機体名で引いたマスターの値を返す |
+| ショップ（`GET /api/shop/listings`） | `specs.terrain_adaptability` を返す（無ければ空） |
+
+* マスターは `master_mobile_suit_id` で引き、無ければ機体名で引く。どちらでも引けない機体（スターター機など）は空の辞書になり、全環境で既定ランクになる
+* NPC（`MatchingService._create_npc_mobile_suit()`）はマスターを参照しないため、既定ランク（汎用機扱い）になる
+* admin-tool の機体マスター編集フォームは地形適正を送らない。更新 API は既存の specs とマージするため、保存しても消えない
+
+初期値（`backend/data/master/mobile_suits.json`。`GROUND`/`COLONY`/`UNDERWATER` は従来のデフォルト A/A/C）:
+
+| 機体 | 宇宙 | 森林 | 意図 |
+|---|---|---|---|
+| ザク II（`zaku_ii`） | A | A | 汎用 |
+| ジム（`gm`） | A | A | 汎用 |
+| ガンダム（`gundam`） | A | A | 汎用（高性能） |
+| ゲルググ（`gelgoog`） | S | B | 宇宙寄り |
+| ドム（`dom`） | C | B | 地上（ホバー）用 |
+| グフ（`gouf`） | C | S | 地上・格闘特化 |
+
+ザク II F型は `mobile_suits.json` に無い。本番DBにある場合は汎用（A/A）として扱う（キーが無ければ既定ランク A）。
+
+### 30.8 定数（`backend/app/engine/constants.py`）
+
+| 定数 | 値 | 用途 |
+|---|---|---|
+| `TERRAIN_ADAPTABILITY_HIT_BONUS` | S 1 / A 0 / B −0.5 / C −1 / D −1.5 | 地形適正による命中・回避の補正値 (%) |
+| `DEFAULT_TERRAIN_GRADE` | `A` | プロファイルが無いときの既定ランク |
+
+### 30.9 バランス確認
+
+`backend/scripts/simulation/terrain_balance_bench.py`（DB 不要。使い方は [balance-cli-tools.md](balance-cli-tools.md)）で 1対1 を繰り返した。
+
+* 最大 3000 ステップ（定期バトルと同じ）。決着しないときは残り HP の割合が高い方を勝ちとする。両者とも無傷（交戦なし）は引き分け
+* スポーン位置の偏りを消すため、試行ごとに PLAYER 側を入れ替える
+* 勝率は引き分けを除いた値。1 組 60 試行のため、±7 ポイント程度の誤差がある
+
+#### 補正値の決め方
+
+同一機体（ザク II）で地形適正ランクだけを変えた 1対1 の A 側勝率（`--rounds 60`）。
+
+| 補正値（S / B / C / D） | 森林 S 対 A | 森林 A 対 C | 宇宙 S 対 A | 宇宙 A 対 C |
+|---|---|---|---|---|
+| +5 / −5 / −10 / −15（初期案） | 100%（n=48） | — | — | — |
+| +1 / −1 / −2 / −3 | 75.7% | 79.5% | 55.4% | 94.9% |
+| +0.5 / −0.5 / −1 / −1.5 | 44.4% | 68.0% | 39.0% | 57.6% |
+| +1 / −0.5 / −1 / −1.5（採用） | 70.0% | 53.3% | 67.8% | 65.5% |
+
+* 初期案は不利な側の命中率が 0% に張り付き、有利な側が全勝した
+* 速度補正だけ（命中・回避の補正なし）では、宇宙 A 対 C の A の勝率は 38%。速い機体が有利にはならない
+* 1 ランク 0.5 ポイントでは、速度補正の不利を打ち消せず S が A に勝てない
+* 採用値は S の加点を 1 ポイントに保ち、A 未満の減点を半分にした。特化機 ＞ 汎用機 ＞ 不向きな機体 の順になり、不向きな機体も 2〜5 割勝てる
+
+#### 採用値での結果
+
+#### 同一機体のランク差（FOREST・ミノフスキー 0.6）
+
+| A | B | A 勝 | B 勝 | 引分 | A 勝率 |
+|---|---|---|---|---|---|
+| zaku_ii[S] | zaku_ii[A] | 35 | 15 | 10 | 70.0% |
+| zaku_ii[S] | zaku_ii[C] | 34 | 7 | 19 | 82.9% |
+| zaku_ii[A] | zaku_ii[C] | 24 | 21 | 15 | 53.3% |
+
+#### 特化機と汎用機（FOREST・ミノフスキー 0.6）
+
+| A | B | A 勝 | B 勝 | 引分 | A 勝率 |
+|---|---|---|---|---|---|
+| dom | zaku_ii | 18 | 23 | 19 | 43.9% |
+| dom | gm | 15 | 31 | 14 | 32.6% |
+| gouf | zaku_ii | 51 | 0 | 9 | 100.0% |
+| gouf | gm | 48 | 1 | 11 | 98.0% |
+| gelgoog | zaku_ii | 45 | 1 | 14 | 97.8% |
+| gelgoog | gm | 41 | 0 | 19 | 100.0% |
+
+#### 同一機体のランク差（SPACE・ミノフスキー 0.3）
+
+| A | B | A 勝 | B 勝 | 引分 | A 勝率 |
+|---|---|---|---|---|---|
+| zaku_ii[S] | zaku_ii[A] | 40 | 19 | 1 | 67.8% |
+| zaku_ii[S] | zaku_ii[C] | 48 | 10 | 2 | 82.8% |
+| zaku_ii[A] | zaku_ii[C] | 38 | 20 | 2 | 65.5% |
+
+#### 特化機と汎用機（SPACE・ミノフスキー 0.3）
+
+| A | B | A 勝 | B 勝 | 引分 | A 勝率 |
+|---|---|---|---|---|---|
+| dom | zaku_ii | 6 | 51 | 3 | 10.5% |
+| dom | gm | 3 | 56 | 1 | 5.1% |
+| gouf | zaku_ii | 55 | 0 | 5 | 100.0% |
+| gouf | gm | 58 | 0 | 2 | 100.0% |
+| gelgoog | zaku_ii | 59 | 0 | 1 | 100.0% |
+| gelgoog | gm | 59 | 0 | 1 | 100.0% |
+
+#### 考察
+
+* 同一機体では、森林・宇宙とも 特化機（S）＞ 汎用機（A）＞ 不向きな機体（C）の順になった
+* 機体マスターどうしでは、地形適正より基本性能の差が大きい。グフ・ゲルググは地形に関わらず汎用機にほぼ全勝し、ドムはほぼ全敗する
+* ドムの汎用機への勝率は、森林（B）で 33〜44%、宇宙（C）で 5〜11%。地形適正の差は勝率に出ている
+* 機体ごとの基本性能のバランス調整は本Issueの対象外（別Issueで扱う）
+* 引き分けの多くは交戦しないまま終わった戦闘。森林はミノフスキー 0.6 と索敵 ×0.8 で索敵範囲が約 0.56 倍になり、引き分けが増える
+
+### 30.10 テスト
+
+`backend/tests/unit/test_environment_profile.py`
+
+* プロファイルの倍率で索敵範囲が変わり、ミノフスキーの倍率と掛け合わさる
+* 射撃の命中率倍率（距離ごと・格闘武器は対象外・プロファイルなし）
+* 障害物密度の既定値（明示した密度が優先される）
+* 地形適正ランクごとの速度・命中・回避、既定ランクへのフォールバック
+* プロファイルなしの戦闘が、効果なしのプロファイルと同じ結果になる（回帰）
+
+`backend/tests/test_terrain_adaptability.py`
+
+* 機体マスターの地形適正（省略可・ランクの検証・シードデータ）
+* エントリーのスナップショットがマスターの値を使う（ID・機体名・マスターなし）
+* ショップ・ガレージの API が地形適正を返す
+* `MasterEnvironment` からのプロファイル作成、`battlefield_for()`
+
+`backend/tests/unit/test_admin_mobile_suits.py`: admin API で地形適正を登録でき、specs の部分更新で消えない

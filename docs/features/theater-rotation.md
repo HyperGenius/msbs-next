@@ -16,7 +16,7 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | Sub-Issue | 内容 |
 |---|---|
 | 2 | ミノフスキー濃度を連続値にし、索敵と射撃の命中率に反映する（Issue #575、実装済み。[battle-engine-feature.md 29章](battle-engine-feature.md#29-ミノフスキー濃度の連続値化)） |
-| 3 | 環境タイプの効果パラメータ（索敵・射撃ペナルティ）を戦闘に使う。`FOREST` の初期値を確定する |
+| 3 | 環境タイプの効果パラメータ（索敵・射撃ペナルティ）を戦闘に使う。`FOREST` の初期値を確定する（Issue #576、実装済み。[battle-engine-feature.md 30章](battle-engine-feature.md#30-環境タイプの効果と地形適正)） |
 | 4 | ルームの戦域・濃度を戦闘に適用し、`BattleResult` に記録する。森林を有効化し、濃度を実際の値にする |
 | 5 | 予報 API（`TheaterService.forecast()` を使う） |
 | 6 | admin-tool の戦域・環境タイプ編集画面 |
@@ -111,6 +111,9 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | `TheaterService.battle_date_of(scheduled_at)` | 開催予定時刻から開催日（JST）を返す |
 | `TheaterService.resolve_for_date(session, date)` | 開催日の `TheaterAssignment`（`theater_id`・`environment_id`・`minovsky_density`）を返す。将来ストーリーイベントで期間限定の戦域を固定する場合はここを差し替える |
 | `TheaterService.forecast(session, from_date, days)` | `from_date` から `days` 日分の `TheaterAssignment` を返す（Sub-Issue 5 の予報 API で使う） |
+| `TheaterService.resolve_environment_profile(session, environment_id)` | 環境タイプの `EnvironmentProfile` を返す（戦闘エンジンに渡す）。見つからなければ `None` |
+| `TheaterService.environment_profile(environment)` | `MasterEnvironment` から `EnvironmentProfile` を作る |
+| `TheaterService.battlefield_for(theater)` | 戦域の障害物密度を反映した `BattleField` を返す。戦域が密度を指定しなければ、エンジンが環境タイプの既定値を使う |
 
 ---
 
@@ -142,10 +145,14 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 
 ### 環境タイプ
 
-| id | name | 障害物密度の既定値 | 描画プリセット | 効果パラメータ |
-|---|---|---|---|---|
-| `SPACE` | 宇宙 | `MEDIUM` | `SPACE` | 既定値（効果なし） |
-| `FOREST` | 森林 | `DENSE` | `FOREST` | 既定値（効果なし）。Sub-Issue 3 で確定する |
+| id | name | 索敵範囲の倍率 | 射撃ペナルティ α | 基準距離 D | 障害物密度の既定値 | 地形適正の既定ランク | 描画プリセット |
+|---|---|---|---|---|---|---|---|
+| `SPACE` | 宇宙 | 1.0 | 0.0 | 400m | `SPARSE` | `A` | `SPACE` |
+| `FOREST` | 森林 | 0.8 | 0.2 | 400m | `DENSE` | `A` | `FOREST` |
+
+効果パラメータの使い方は [battle-engine-feature.md 30章](battle-engine-feature.md#30-環境タイプの効果と地形適正) を参照。
+Issue #576 で `SPACE` の障害物密度の既定値を `MEDIUM` から `SPARSE` に変えた。
+既存の本番DBのレコードは `seed_master_data.py --force` で更新する。
 
 ### 戦域
 

@@ -251,3 +251,35 @@ python scripts/verify/fetch_recent_battles.py --with-logs
 このディレクトリは `.gitignore` 対象のため、取得したバトルデータがリポジトリにコミットされることはありません。
 
 `NEON_DATABASE_URL`（共有のリモートDB）に接続する読み取り専用の参照ツールです。書き込みは行いません。
+
+---
+
+## 地形適正・環境効果のバランス確認（`terrain_balance_bench.py`）
+
+`backend/scripts/simulation/terrain_balance_bench.py` は、環境タイプの効果と地形適正の影響を 1対1 のモンテカルロで確認するスクリプトです（Issue #576）。
+DB を使わず、`backend/data/master/mobile_suits.json`・`environments.json` から戦闘を組み立てます。
+
+```bash
+cd backend
+# 1 組 100 試行（既定）。並列数は既定で CPU コア数
+python scripts/simulation/terrain_balance_bench.py
+
+# 試行回数・並列数・シードを指定する
+python scripts/simulation/terrain_balance_bench.py --rounds 60 --workers 8 --seed 576
+
+# 同一機体のランク差だけを見る
+python scripts/simulation/terrain_balance_bench.py --skip-masters
+```
+
+条件は「森林・ミノフスキー 0.6」と「宇宙・ミノフスキー 0.3」（スクリプト内の `_CONDITIONS`）。条件ごとに次の表を Markdown で出力します。
+
+| 表 | 内容 |
+|---|---|
+| 同一機体のランク差 | ザク II の性能で地形適正ランク（S / A / C）だけを変えて総当たり |
+| 特化機と汎用機 | 地形適正が A 以外の機体（ゲルググ・ドム・グフ）と汎用機（ザク II・ジム）の組 |
+
+* 最大ステップは定期バトルと同じ 3000。決着しないときは残り HP の割合が高い方を勝ちとします
+* 試行ごとに PLAYER 側を入れ替え、スポーン位置の偏りを消します
+* 1 戦に数秒かかります。`--rounds 60` で 30〜60 分程度です
+
+結果は [battle-engine-feature.md 30.9節](battle-engine-feature.md#309-バランス確認) に残しています。
