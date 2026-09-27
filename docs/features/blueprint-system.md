@@ -7,8 +7,9 @@ Epic #550「戦利品ドロップと設計図システム」のデータ基盤�
 設計図を1度入手すれば、以降はクレジットで何度でも購入できる。
 設計図なしで購入できるアイテムは **標準配備品** とする。
 
-データ基盤とサービス層（Issue #551）、admin-tool での設計図設定の編集（Issue #554）、ショップの購入制限と「未解放」表示（Issue #556）、ドロップテーブルと抽選（Issue #560）、admin-tool でのドロップテーブル編集（Issue #562）、戦利品の表示（Issue #564）、設計図コレクション（図鑑）画面（Issue #566）を実装済み。
+データ基盤とサービス層（Issue #551）、admin-tool での設計図設定の編集（Issue #554）、ショップの購入制限と「未解放」表示（Issue #556）、ドロップテーブルと抽選（Issue #560）、admin-tool でのドロップテーブル編集（Issue #562）、戦利品の表示（Issue #564）、設計図コレクション（図鑑）画面（Issue #566）、技術断片と技術Lv（Issue #569）を実装済み。
 標準配備を外したアイテムの設計図は、ドロップテーブルに入れるとバトルで入手できる。
+設計図に必要な技術Lvを設定すると、設計図と技術Lvがそろったときだけ購入できる（「技術断片と技術Lv（Issue #569）」）。
 
 ---
 
@@ -38,6 +39,7 @@ player_blueprints (所持設計図)
 * 設計図IDは `{target_type を小文字にした値}:{target_id}` で決まる（`BlueprintService.blueprint_id_for()`）。後続のドロップテーブルから人が読める形で参照できるようにするため
 * 入手経路と対象の種別は `BlueprintSource` / `BlueprintTargetType`（`app/models/models.py`）で定義する。DB上は文字列として保存する
 * ドロップテーブル（`drop_tables` / `drop_table_entries`）と `battle_results.loot` は「ドロップテーブルと抽選（Issue #560）」を参照
+* 技術マスター・必要な技術Lv・プレイヤーの累計断片数（`master_technologies` / `blueprint_tech_requirements` / `player_technologies`）は「技術断片と技術Lv（Issue #569）」を参照
 
 ---
 
@@ -52,7 +54,7 @@ player_blueprints (所持設計図)
 
 * 導入直後にショップの挙動を変えないため、**全件を標準配備で作成する**。運用者が admin-tool から標準配備を外していく
 * 換金額の初期値（価格の20%、`DUPLICATE_CREDIT_RATIO`）は暫定値。アイテムごとに admin-tool から調整する前提で、固定の計算式にはしない
-* 機体・武器マスターを削除すると、対応する設計図マスターと全プレイヤーの所持記録、その設計図を含むドロップテーブルのエントリーも削除する
+* 機体・武器マスターを削除すると、対応する設計図マスターと全プレイヤーの所持記録、その設計図を含むドロップテーブルのエントリー、必要な技術Lvの設定も削除する
 
 ---
 
@@ -128,6 +130,7 @@ player_blueprints (所持設計図)
 | 2 | パイロット | `404` |
 | 3 | 勢力（機体のみ） | `403`「この機体はあなたの勢力（…）では購入できません」 |
 | 4 | 設計図 | `403`「この機体の設計図を所持していません」／「この武器の設計図を所持していません」 |
+| 4 | 技術Lv（Issue #569） | `403`「技術Lvが足りません: サイコミュ技術 Lv2 が必要（現在 Lv1）」。設計図が無い場合は設計図のエラーを優先する |
 | 5 | 所持金 | `400` |
 
 * 機体は `purchase_mobile_suit()`（`app/routers/shop.py`）、武器は `WeaponService.purchase_weapon()` で判定する
@@ -141,7 +144,8 @@ player_blueprints (所持設計図)
 |---|---|
 | `is_standard_issue` | 標準配備品か。設計図マスターが無いアイテムは `true` |
 | `is_unlocked` | 購入できるか（標準配備品、または設計図を所持している） |
-| `unlock_hint` | 未解放のときに表示する入手方法のヒント。解放済みなら `null` |
+| `unlock_hint` | 設計図の入手方法のヒント。設計図を所持していれば `null` |
+| `missing_tech_requirements` | 足りない技術Lv（`tech_id` / `tech_name` / `required_lv` / `current_lv`）。標準配備品と、技術Lvが足りている商品は空配列（Issue #569） |
 
 * `GET /api/shop/weapons` はプレイヤーごとの解放状態を返すため、**認証必須** に変更した（未認証は `401`）
 * `unlock_hint` はサーバー側で組み立てる。Issue #556 時点では固定の文言だった。Issue #560 でドロップテーブルから組み立てるように変更した（「ドロップテーブルと抽選（Issue #560）」の「ショップの入手ヒント」）
@@ -168,7 +172,7 @@ player_blueprints (所持設計図)
 
 | API | `blueprint` |
 |---|---|
-| `GET /api/admin/mobile-suits`・`/api/admin/weapons` | 各アイテムの設定（`MasterBlueprintSettings`: `is_standard_issue` / `duplicate_credit_value`）。機体・武器マスターと設計図マスターを外部結合の1クエリで取得する |
+| `GET /api/admin/mobile-suits`・`/api/admin/weapons` | 各アイテムの設定（`MasterBlueprintSettings`: `is_standard_issue` / `duplicate_credit_value` / `tech_requirements`）。機体・武器マスターと設計図マスターを外部結合の1クエリ、必要な技術Lvを1クエリで取得する |
 | `POST`（新規作成） | 任意（`MasterBlueprintSettingsInput`）。省略した項目は初期値（標準配備・価格の20%） |
 | `PUT`（更新） | 任意（`MasterBlueprintSettingsInput`）。省略した項目は変更しない |
 
@@ -178,6 +182,7 @@ player_blueprints (所持設計図)
 * admin-tool の一覧に「設計図（標準配備／要設計図）」「換金額」列と、標準配備・要設計図の絞り込みを追加した
 * 編集フォームの「設計図」欄で標準配備フラグと換金額を編集する。換金額の空欄は、新規作成では初期値、編集では変更なしとして送る
 * Clone & Edit では、コピー元の設計図設定を引き継ぐ
+* 必要な技術Lv（`tech_requirements`）の編集は「技術断片と技術Lv（Issue #569）」の「admin-tool」を参照
 
 ---
 
@@ -199,13 +204,17 @@ drop_tables (ドロップテーブル)
 └── created_at / updated_at
    UNIQUE (scope_type, scope_key)
 
-drop_table_entries (テーブルに含まれる設計図)
+drop_table_entries (テーブルに含まれる設計図・技術断片)
 ├── id: int
 ├── drop_table_id: int           ← drop_tables.id (FK)
-├── blueprint_id: str            ← master_blueprints.id (FK)
+├── reward_type: str             ← BLUEPRINT / TECH_FRAGMENT (DropRewardType、Issue #569)
+├── blueprint_id: str|null       ← master_blueprints.id (FK)。BLUEPRINT のときだけ入る
+├── tech_id: str|null            ← master_technologies.id (FK)。TECH_FRAGMENT のときだけ入る
 ├── weight: int                  ← 抽選の重み (1以上)
 └── requires_win: bool           ← true なら勝利時だけ抽選対象
    UNIQUE (drop_table_id, blueprint_id)
+   UNIQUE (drop_table_id, tech_id)
+   CHECK (reward_type に対応する blueprint_id・tech_id の片方だけが入る)
 
 battle_results.loot: JSON|null   ← 戦利品の一覧 (LootItem)
 ```
@@ -259,7 +268,7 @@ battle_results.loot: JSON|null   ← 戦利品の一覧 (LootItem)
 ```
 
 * ドロップしなかった場合は空配列。導入前のバトル結果は `null`
-* `kind` は、技術断片（Sub-Issue 8）を同じ一覧に追加するための項目
+* `kind` は戦利品の種別。技術断片は `TECH_FRAGMENT`（「技術断片と技術Lv（Issue #569）」）
 * 換金したクレジットは `credits_gained`（バトル報酬）に含めず、`credits_awarded` に記録する
 * レスポンス: `POST /api/battle/simulate` の `rewards.loot`、`GET /api/battles`・`/api/battles/unread`・`/api/battles/{battle_id}` の `loot`（`BattleResultSummary`）。`rewards.total_credits` は換金後の所持クレジット
 * レスポンスの各項目には、表示用の `target_name` が付く（「戦利品の表示（Issue #564）」）
@@ -415,8 +424,151 @@ admin-tool の `/drop-tables` で、定期バトルのテーブル（`BATCH` / `
 
 ---
 
+## 技術断片と技術Lv（Issue #569）
+
+機体・武器に共通の **技術断片** をバトルでドロップさせ、集めた数でプレイヤーの **技術Lv** を上げる。
+レア機体・レア武器は「設計図 ＋ 必要な技術Lv」がそろったときに購入できる。
+技術はコードで固定せずマスターデータとして持ち、admin-tool から追加・編集する。
+
+> **注意: 機体の `beam_generator_lv` とは別物。**
+> `MasterMobileSuit.beam_generator_lv`・`WeaponSpecBase.required_beam_generator_lv` は、その機体が装備できるビーム武器のLv（装備制約）。
+> 本節の技術Lv（例: ビームジェネレータ技術 `beam_generator_tech`）はプレイヤーごとの値で、購入条件にだけ使う。
+> 名前が重ならないよう、技術IDは `*_tech` とする。
+
+### テーブル構成
+
+```
+master_technologies (技術マスター)
+├── id: str                      ← スネークケース (例: beam_generator_tech)
+├── name: str                    ← 表示名
+├── description: str
+├── level_thresholds: JSON       ← Lvごとに必要な累計断片数。要素数が最大Lv
+├── overflow_credit_value: int   ← 最大Lv後に断片を入手したときに付与するクレジット
+└── created_at / updated_at
+
+blueprint_tech_requirements (設計図の購入に必要な技術Lv)
+├── id: int
+├── blueprint_id: str            ← master_blueprints.id (FK)
+├── tech_id: str                 ← master_technologies.id (FK)
+└── required_lv: int             ← 1以上、技術の最大Lv以下
+   UNIQUE (blueprint_id, tech_id)
+
+player_technologies (プレイヤーの累計断片数)
+├── id: UUID
+├── user_id: str                 ← Pilot.user_id
+├── tech_id: str                 ← master_technologies.id (FK)
+├── fragment_count: int          ← 累計の断片入手数
+└── updated_at
+   UNIQUE (user_id, tech_id)
+```
+
+* `level_thresholds` は1要素以上で、正の整数の狭義単調増加（`validate_level_thresholds()`）。違反は admin API で `422`
+* 必要な技術Lvは **設計図マスターに紐づける**（機体マスターには持たせない）。機体・武器（将来は拡張パーツ）を同じ仕組みで扱うため。参照整合性のため JSON ではなく別テーブルにした
+* 技術Lvは DB に保存しない。累計数と閾値から毎回計算する（`TechnologyService.level_for()`）。閾値を引き上げると既存プレイヤーのLvが下がることがあるが、購入済みの機体・武器は残るため許容する
+* 導入時点では全プレイヤーの累計数を0とする（`player_technologies` は空）。既存の機体・武器には購入条件を設定しないため、導入直後に購入できなくなるアイテムは無い
+* マイグレーション `k5f6a7b8c9d0` はテーブル作成と `drop_table_entries` の変更のみ。既存のエントリーは `reward_type = BLUEPRINT` になる
+
+### 初期データ（`backend/data/master/technologies.json`）
+
+`scripts/seed/seed_master_data.py` で投入する（既存の技術はスキップ、`--force` で上書き）。
+
+| ID | 名前 | 閾値 | 最大Lv後の換金額 |
+|---|---|---|---|
+| `beam_generator_tech` | ビームジェネレータ技術 | `[3, 8, 15]`（Lv1 = 3個 / Lv2 = 8個 / Lv3 = 15個） | 500 C |
+| `psycommu_tech` | サイコミュ技術 | `[3, 8, 15]` | 500 C |
+
+* 換金額 500 C は勝利時の基本報酬と同じ額にした仮の値。閾値と合わせて admin-tool で調整する
+
+### 断片の付与（`TechnologyService.grant_fragment()`）
+
+* 1回のドロップで得る断片は1個。断片は消費せず、閾値に達すると自動でLvが上がる
+* 最大Lvに **達した後** の断片は累計数に加算せず、`overflow_credit_value` 分のクレジットをパイロットに加算する（設計図の重複時の換金と同じ扱い）。最大Lvに到達する断片そのものは累計数に加算する
+* 技術Lvは戦闘に影響しない。戦闘中の計算・装備時のチェックには使わない（判定は購入時のみ）
+
+### 購入の判定
+
+`BlueprintService.get_unlock_states()`（一覧）・`get_unlock_state()`・`can_purchase()`（1件）で判定する。
+
+| アイテム | 購入できる条件 |
+|---|---|
+| 標準配備品 | 常に購入できる（技術Lvも問わない） |
+| 標準配備でないもの | 設計図を所持していて、必要な技術Lvをすべて満たしている |
+| 設計図マスターが無いもの | 常に購入できる |
+
+* `UnlockState` に `needs_blueprint`（設計図の入手が必要か）と `missing_tech_requirements`（足りない技術Lv）を追加した。`unlock_hint` は設計図が必要なときだけ入る
+* `get_unlock_states()` のクエリはアイテム数によらず最大5回（標準配備・所持設計図・必要な技術Lv・プレイヤーの技術Lv・入手ヒント）。必要な技術Lvが1件も無ければ4回
+* 購入APIのエラー文言は `purchase_denial_message()`、足りない技術Lvの文言は `format_missing_tech()`（「サイコミュ技術 Lv2 が必要（現在 Lv1）」）。frontend の `formatMissingTech()` と同じ文言
+
+### ドロップ
+
+* 技術断片は **設計図と同じ抽選** の中でドロップする。1回のバトルでドロップするのは最大1個（設計図 **または** 技術断片）。`weight`・`requires_win` は設計図と同じく使える
+* 技術断片は勢力による絞り込みを受けない
+* 候補は `reward_type, blueprint_id, tech_id` の順に並べる。同じ `reward_type` の中は NULL でない方のIDだけで順序が決まるため、DB（SQLite / PostgreSQL）の NULL の並び順に依存せず、シードだけで抽選結果が決まる。設計図だけのテーブルでは従来と同じ順序になる
+* 設計図とは別枠で抽選する方式は採用していない。バランスに問題があれば別Issueで変更する
+
+### 戦利品（`LootItem`）
+
+```json
+{
+  "kind": "TECH_FRAGMENT",
+  "tech_id": "psycommu_tech",
+  "fragment_count": 8,
+  "level": 2,
+  "max_level": 3,
+  "is_level_up": true,
+  "fragments_to_next_level": 7,
+  "credits_awarded": 0,
+  "target_name": "サイコミュ技術"
+}
+```
+
+| 項目 | 内容 |
+|---|---|
+| `fragment_count` / `level` / `max_level` | 入手後の累計数・技術Lv・最大Lv。入手した時点の値で、閾値を後から変えても書き換えない |
+| `is_level_up` | この断片で技術Lvが上がったか |
+| `fragments_to_next_level` | 次のLvまでに必要な断片数。最大Lvなら `null` |
+| `credits_awarded` | 最大Lv後の断片を換金したクレジット |
+| `target_name` | 技術マスターの `name`。マスターが無ければ `tech_id`（`LootService` が引く） |
+
+* 設計図の項目（`blueprint_id` / `target_type` / `target_id`）は `null`、`is_new` は `false`
+* 導入前の設計図の戦利品（技術断片の項目を持たない JSON）もそのまま読める。`LootService.with_names()` のクエリは最大3回（機体・武器・技術マスター）
+
+### API
+
+| API | 内容 |
+|---|---|
+| `GET /api/technologies/me`（要認証） | 全技術の進捗を技術ID順に返す（`PlayerTechnologyProgress`: `level` / `max_level` / `fragment_count` / `next_level_threshold` / `fragments_to_next_level` / `overflow_credit_value` / `obtainable_theaters`）。未入手の技術は累計0・Lv0 |
+| `GET /api/blueprints/collection` | 各設計図に `tech_requirements`（`tech_id` / `tech_name` / `required_lv` / `current_lv`）を追加。標準配備品は空配列 |
+| `GET /api/shop/listings`・`/api/shop/weapons` | `missing_tech_requirements` を追加（「ショップ一覧 API」） |
+| `GET/POST /api/admin/technologies`、`PUT/DELETE /api/admin/technologies/{tech_id}` | 技術マスターの CRUD（`admin-technologies.md`） |
+| `POST/PUT /api/admin/mobile-suits`・`/api/admin/weapons` | `blueprint.tech_requirements` を受け付ける。指定すると置き換え、省略すると変更しない。存在しない技術・最大Lv超え・重複は `422` |
+| `PUT /api/admin/drop-tables/batch` | 技術断片のエントリー（`{"reward_type": "TECH_FRAGMENT", "tech_id": ...}`）を受け付ける（`admin-drop-tables.md`） |
+
+* `obtainable_theaters` は設計図と同じ変換（`theater_label_for()`）で組み立てる。`get_technologies()` は `blueprint_collection_service.py` に置いた。`TechnologyService` を抽選側（`drop_service.py`）からも使うため、`TechnologyService` は他のサービスに依存させていない
+
+### 画面
+
+| 画面 | 表示 |
+|---|---|
+| ショップの「未解放」表示 | 設計図の入手ヒントに加えて、足りない技術Lvを1行ずつ表示する（`UnlockRequirements`、`shop-ui-improvement.md`） |
+| バトル結果モーダル・バトル履歴 | 技術断片のカード（技術名・累計数・次のLvまでの残り・Lvアップ・最大Lv後の換金額）。Lvアップは設計図の新規入手と同じ入手演出（`battle-result-modal.md`） |
+| 図鑑（`/collection`） | 技術タブ（技術ごとのLv・累計数・次のLvまでの残り・入手先）と、所持済みの設計図に足りない技術Lv（`blueprint-collection.md`） |
+| admin-tool | 技術マスター画面（`/technologies`）、設計図設定の必要な技術Lv、ドロップテーブルの技術断片エントリー |
+
+### admin-tool
+
+* 技術マスター画面（`/technologies`）: `admin-technologies.md`
+* 機体・武器の編集フォームの「設計図」欄（`BlueprintSettingsFields`）に「必要な技術Lv」の行を追加した。技術は技術マスターから選び、Lvは1〜最大Lvから選ぶ。同じ技術は2行に置けない。保存するとフォームの内容で置き換える
+* ドロップテーブル（`/drop-tables`）に「技術断片を追加」を追加した（`admin-drop-tables.md`）
+
+### 本Issueの対象外
+
+* 技術Lvによる能力値の補正、装備時の技術Lvチェック、サイコミュ武器の搭載条件など戦闘中の挙動に関わる制約
+* 拡張パーツ（未実装）の購入条件への技術Lvの追加。拡張パーツを設計図マスターの対象に加えれば、同じ `blueprint_tech_requirements` で扱える
+
+---
+
 ## 後続のSub-Issueで対応する事項
 
-* レア機体向けの技術断片・技術Lv（Sub-Issue 8）。設計図マスターに必要技術Lvのカラムを追加する想定
 * 戦域・環境単位のドロップテーブル（Sub-Issue 10）
 * 戦場（フィールド）ごとの標準配備設定。現状はアイテム単位の真偽値のみ

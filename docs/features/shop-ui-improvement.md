@@ -498,7 +498,7 @@ API・判定ロジックの詳細は `blueprint-system.md` を参照。
 | 未解放 | `is_unlocked = false` | 「未解放」バッジ。カードを暗く表示（`opacity-50 grayscale`） | 「未解放」バッジ。購入ボタンの代わりに「未解放 (LOCKED)」を表示し、その上に `unlock_hint` を表示 |
 
 * 未解放のアイテムも、スペック・価格は従来どおり詳細パネルで見られる
-* 詳細パネルの「未解放 (LOCKED)」の下に、設計図図鑑（`/collection`）へのリンク「設計図図鑑で入手先を確認する」を置く（Issue #566。`blueprint-collection.md`）
+* 詳細パネルの「未解放 (LOCKED)」の下に、図鑑（`/collection`）へのリンク「図鑑で入手先を確認する」を置く（Issue #566。`blueprint-collection.md`）
 * 「購入可能のみ」の絞り込みは、所持金が足りていて、かつ解放済みのアイテムだけを表示する（`isPurchasable()`）。該当なしのときは「現在購入できるアイテムはありません」と表示する
 * 全アイテムが標準配備の状態では、表示・挙動は従来と変わらない
 
@@ -516,3 +516,17 @@ API・判定ロジックの詳細は `blueprint-system.md` を参照。
 | `frontend/src/app/shop/_components/MobileSuitCard.tsx`, `WeaponCard.tsx` | バッジと未解放時の表示 |
 | `frontend/src/app/shop/_components/MobileSuitDetailPanel.tsx`, `WeaponDetailPanel.tsx` | バッジ、未解放時の購入ボタン無効化と `unlock_hint` 表示 |
 | `frontend/src/app/shop/page.tsx` | 「購入可能のみ」の絞り込みに `is_unlocked` を追加 |
+
+---
+
+## 13. 未解放表示に足りない技術Lvを出す（Issue #569, 2026-09-27）
+
+Epic #550 の Sub-Issue 8（技術断片と技術Lv）。設計図に必要な技術Lvを設定したアイテムは、設計図と技術Lvがそろったときだけ購入できる。
+API・判定ロジックの詳細は `blueprint-system.md` の「技術断片と技術Lv（Issue #569）」を参照。
+
+* 詳細パネルの「未解放 (LOCKED)」の上に、足りない条件を1行ずつ表示する（`UnlockRequirements`、`src/app/shop/_components/UnlockRequirements.tsx`）
+  * 設計図が未所持: `unlock_hint`（入手ヒント）を緑で表示する
+  * 技術Lvが足りない: `missing_tech_requirements` を「サイコミュ技術 Lv2 が必要（現在 Lv1）」の形でアンバーで表示する（`formatMissingTech()`、`src/utils/technology.ts`）
+  * 両方足りなければ両方を表示する
+* 設計図を所持していても技術Lvが足りないアイテムは `is_unlocked = false` のため、バッジは「未解放」になる。「設計図所持」バッジは購入できるようになってから付く
+* 図鑑へのリンクの文言を「設計図図鑑で入手先を確認する」から「図鑑で入手先を確認する」に変更した。図鑑の技術タブで技術断片の入手先も確認できるため
