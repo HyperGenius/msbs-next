@@ -2,6 +2,7 @@
 "use client";
 
 import { BattleResult } from "@/types/battle";
+import LootBadge from "@/components/loot/LootBadge";
 
 /**
  * バトル履歴リストを表示するためのプロパティ
@@ -41,7 +42,9 @@ export default function BattleList({
   if (isError) {
     return (
       <div className="bg-red-900/30 border border-red-500 p-4 rounded">
-        <p className="text-red-400">Failed to load battle history. Check if backend is running.</p>
+        <p className="text-red-400">
+          Failed to load battle history. Check if backend is running.
+        </p>
       </div>
     );
   }
@@ -50,7 +53,9 @@ export default function BattleList({
     return (
       <div className="bg-gray-800 border border-gray-700 p-8 rounded text-center">
         <p className="text-xl text-gray-400">No battle records found.</p>
-        <p className="text-sm text-gray-500 mt-2">Complete some missions to see your history here.</p>
+        <p className="text-sm text-gray-500 mt-2">
+          Complete some missions to see your history here.
+        </p>
       </div>
     );
   }
@@ -87,18 +92,23 @@ export default function BattleList({
                     : "border-gray-700 hover:border-green-700"
                 }`}
               >
-                <div className="flex justify-between items-start">
-                  <span className="font-bold">{getMissionName(battle.mission_id, battle.created_at)}</span>
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-bold ${
-                      battle.win_loss === "WIN"
-                        ? "bg-green-900 text-green-300"
-                        : battle.win_loss === "LOSE"
-                        ? "bg-red-900 text-red-300"
-                        : "bg-yellow-900 text-yellow-300"
-                    }`}
-                  >
-                    {battle.win_loss}
+                <div className="flex justify-between items-start gap-2">
+                  <span className="font-bold">
+                    {getMissionName(battle.mission_id, battle.created_at)}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <LootBadge loot={battle.loot} />
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-bold ${
+                        battle.win_loss === "WIN"
+                          ? "bg-green-900 text-green-300"
+                          : battle.win_loss === "LOSE"
+                            ? "bg-red-900 text-red-300"
+                            : "bg-yellow-900 text-yellow-300"
+                      }`}
+                    >
+                      {battle.win_loss}
+                    </span>
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 mb-2">
@@ -110,7 +120,9 @@ export default function BattleList({
                       <p className="text-sm">
                         <span
                           className={`font-bold ${
-                            battle.player_survived ? "text-green-300" : "text-red-400"
+                            battle.player_survived
+                              ? "text-green-300"
+                              : "text-red-400"
                           }`}
                         >
                           {battle.player_survived ? "生還" : "撃墜"}
@@ -129,7 +141,9 @@ export default function BattleList({
                         ) : null}
                         <span className="text-gray-600 mx-1">/</span>
                         <span className="text-gray-500">搭乗MS</span>{" "}
-                        <span className="font-bold">{battle.pilot_ms_name}</span>
+                        <span className="font-bold">
+                          {battle.pilot_ms_name}
+                        </span>
                       </p>
                       <p className="text-sm mt-1">
                         <span className="text-gray-500">獲得Credits</span>{" "}
@@ -143,7 +157,9 @@ export default function BattleList({
                         </span>
                       </p>
                     </div>
-                    <p className="text-sm text-green-300 italic">「{battle.digest_text}」</p>
+                    <p className="text-sm text-green-300 italic">
+                      「{battle.digest_text}」
+                    </p>
                   </>
                 ) : null}
               </button>

@@ -1,5 +1,5 @@
 /* frontend/src/utils/rankUtils.ts */
-import { MobileSuit } from "@/types/battle";
+import { MobileSuit, Weapon } from "@/types/battle";
 import { STAT_CAPS } from "@/utils/statCaps";
 
 /**
@@ -133,13 +133,49 @@ const THRESHOLDS: Record<string, RankThreshold[]> = {
   ],
 };
 
-function lookupRank(statName: string, value: number): string {
-  const table = THRESHOLDS[statName];
+/**
+ * 機体の HP・装甲・機動性ランクの閾値.
+ * API が付与する hp_rank 等（Garage の表示）と同じ値にするため、
+ * backend/data/master/thresholds.json と同じ値を持つ。
+ * STAT_CAPS を基準にする THRESHOLDS（強化画面用）とは値が異なる。
+ */
+const MOBILE_SUIT_RANK_THRESHOLDS: Record<"hp" | "armor" | "mobility", RankThreshold[]> = {
+  hp: [
+    { rank: "S", min: 2000 },
+    { rank: "A", min: 1500 },
+    { rank: "B", min: 1000 },
+    { rank: "C", min: 700 },
+    { rank: "D", min: 400 },
+    { rank: "E", min: 0 },
+  ],
+  armor: [
+    { rank: "S", min: 100 },
+    { rank: "A", min: 80 },
+    { rank: "B", min: 60 },
+    { rank: "C", min: 40 },
+    { rank: "D", min: 20 },
+    { rank: "E", min: 0 },
+  ],
+  mobility: [
+    { rank: "S", min: 2.0 },
+    { rank: "A", min: 1.5 },
+    { rank: "B", min: 1.2 },
+    { rank: "C", min: 0.9 },
+    { rank: "D", min: 0.6 },
+    { rank: "E", min: 0.0 },
+  ],
+};
+
+function rankFromTable(table: RankThreshold[] | undefined, value: number): string {
   if (!table) return "C";
   for (const entry of table) {
     if (value >= entry.min) return entry.rank;
   }
   return "E";
+}
+
+function lookupRank(statName: string, value: number): string {
+  return rankFromTable(THRESHOLDS[statName], value);
 }
 
 /**
@@ -160,6 +196,36 @@ export function getRank(
   value: number
 ): string {
   return lookupRank(statName, value);
+}
+
+/** 機体の HP・装甲・機動性のランク */
+export interface MobileSuitRanks {
+  hp: string;
+  armor: string;
+  mobility: string;
+}
+
+/**
+ * 機体の HP・装甲・機動性のランクを返す.
+ * API のランクがあればそれを使い、無ければ値から算出する。
+ * バトル結果の ms_snapshot はランクを含まないため、算出側を使う。
+ */
+export function getMobileSuitRanks(
+  ms: Pick<MobileSuit, "max_hp" | "armor" | "mobility" | "hp_rank" | "armor_rank" | "mobility_rank">
+): MobileSuitRanks {
+  return {
+    hp: ms.hp_rank ?? rankFromTable(MOBILE_SUIT_RANK_THRESHOLDS.hp, ms.max_hp),
+    armor: ms.armor_rank ?? rankFromTable(MOBILE_SUIT_RANK_THRESHOLDS.armor, ms.armor),
+    mobility: ms.mobility_rank ?? rankFromTable(MOBILE_SUIT_RANK_THRESHOLDS.mobility, ms.mobility),
+  };
+}
+
+/**
+ * 武器の威力ランクを返す.
+ * API のランクがあればそれを使い、無ければ値から算出する。
+ */
+export function getWeaponPowerRank(weapon: Pick<Weapon, "power" | "power_rank">): string {
+  return weapon.power_rank ?? getWeaponRank("weapon_power", weapon.power);
 }
 
 /**
@@ -259,17 +325,15 @@ export function enrichMobileSuit(ms: MobileSuit): EnrichedMobileSuit {
     terrain[env] = getTerrainDisplayInfo(env, rank);
   }
 
-  const hpRank = ms.hp_rank ?? getRank("hp", ms.max_hp);
-  const armorRank = ms.armor_rank ?? getRank("armor", ms.armor);
-  const mobilityRank = ms.mobility_rank ?? getRank("mobility", ms.mobility);
+  const ranks = getMobileSuitRanks(ms);
 
   return {
     ...ms,
     display: {
       terrain,
-      hp:       { rank: hpRank,       colorClass: getRankColor(hpRank) },
-      armor:    { rank: armorRank,     colorClass: getRankColor(armorRank) },
-      mobility: { rank: mobilityRank,  colorClass: getRankColor(mobilityRank) },
+      hp:       { rank: ranks.hp,       colorClass: getRankColor(ranks.hp) },
+      armor:    { rank: ranks.armor,    colorClass: getRankColor(ranks.armor) },
+      mobility: { rank: ranks.mobility, colorClass: getRankColor(ranks.mobility) },
     },
   };
 }

@@ -7,7 +7,7 @@ Epic #550「戦利品ドロップと設計図システム」のデータ基盤�
 設計図を1度入手すれば、以降はクレジットで何度でも購入できる。
 設計図なしで購入できるアイテムは **標準配備品** とする。
 
-データ基盤とサービス層（Issue #551）、admin-tool での設計図設定の編集（Issue #554）、ショップの購入制限と「未解放」表示（Issue #556）、ドロップテーブルと抽選（Issue #560）、admin-tool でのドロップテーブル編集（Issue #562）を実装済み。
+データ基盤とサービス層（Issue #551）、admin-tool での設計図設定の編集（Issue #554）、ショップの購入制限と「未解放」表示（Issue #556）、ドロップテーブルと抽選（Issue #560）、admin-tool でのドロップテーブル編集（Issue #562）、戦利品の表示（Issue #564）を実装済み。
 標準配備を外したアイテムの設計図は、ドロップテーブルに入れるとバトルで入手できる。
 
 ---
@@ -262,7 +262,7 @@ battle_results.loot: JSON|null   ← 戦利品の一覧 (LootItem)
 * `kind` は、技術断片（Sub-Issue 8）を同じ一覧に追加するための項目
 * 換金したクレジットは `credits_gained`（バトル報酬）に含めず、`credits_awarded` に記録する
 * レスポンス: `POST /api/battle/simulate` の `rewards.loot`、`GET /api/battles`・`/api/battles/unread`・`/api/battles/{battle_id}` の `loot`（`BattleResultSummary`）。`rewards.total_credits` は換金後の所持クレジット
-* フロントエンドは型（`LootItem`、`src/types/battleCore.ts`）のみ追加した。表示は Sub-Issue 6
+* レスポンスの各項目には、表示用の `target_name` が付く（「戦利品の表示（Issue #564）」）
 
 ### ショップの入手ヒント
 
@@ -313,9 +313,55 @@ admin-tool の `/drop-tables` で、定期バトルのテーブル（`BATCH` / `
 
 ---
 
+## 戦利品の表示（Issue #564）
+
+バトル結果モーダルとバトル履歴で、入手した戦利品を表示する。
+
+### API: 対象の名前（`target_name`）
+
+レスポンスの戦利品（`LootItemDetail`）に、対象の表示名 `target_name` を追加した。
+
+```json
+{
+  "kind": "BLUEPRINT",
+  "blueprint_id": "mobile_suit:gelgoog",
+  "target_type": "MOBILE_SUIT",
+  "target_id": "gelgoog",
+  "target_name": "ゲルググ",
+  "is_new": true,
+  "credits_awarded": 0
+}
+```
+
+| 対象 | `target_name` |
+|---|---|
+| 機体 | 機体マスターの `name_ja`。空なら `name` |
+| 武器 | 武器マスターの `name` |
+| マスターが無い（削除済み） | `target_id` |
+
+* 名前は `battle_results.loot` に保存しない。レスポンスを組み立てるときに機体・武器マスターから引く（`LootService`、`app/services/loot_service.py`）。導入済みのバトル結果にも名前を付けるため
+* 対象: `POST /api/battle/simulate` の `rewards.loot`、`GET /api/battles`・`/api/battles/unread`・`/api/battles/{battle_id}` の `loot`
+* `LootService.summaries()` は、バトル件数によらず最大2回のクエリ（機体・武器マスター）で名前を取得する。戦利品が無ければクエリしない
+* `loot = null`（導入前のバトル）はそのまま `null` で返す
+
+### 画面
+
+| 画面 | 表示 |
+|---|---|
+| バトル結果モーダル（`BattleResultModal`） | 獲得報酬の下の「戦利品」欄。詳細は `battle-result-modal.md` |
+| バトル履歴の一覧（`BattleList`） | 戦利品のあったバトルにバッジ（`LootBadge`）。新規入手があれば `NEW`、換金のみなら換金額の合計 |
+| バトル詳細（`BattleSummaryPanel`） | 戦果サマリーの「戦利品」欄。表示内容はモーダルと同じ |
+
+* 1件の表示は共通コンポーネント `LootItemCard`（`src/components/loot/`）。一覧は `LootList`
+  * 新規入手（`is_new = true`）: シアンで強調し、`NEW` と「ショップで購入できるようになりました」を表示する
+  * 換金（`is_new = false`）: アンバーで「所持済みのため +N C に換金」を表示する
+* ドロップなし（空配列）は「戦利品なし」を控えめに表示する。導入前のバトル（`null`）は欄もバッジも出さない
+* 換金したクレジットは、獲得報酬のクレジット（`credits_gained`）と分けて表示する
+
+---
+
 ## 後続のSub-Issueで対応する事項
 
-* バトル結果モーダル・バトル履歴での戦利品表示（Sub-Issue 6）
 * 設計図コレクション（図鑑）画面（Sub-Issue 7）
 * レア機体向けの技術断片・技術Lv（Sub-Issue 8）。設計図マスターに必要技術Lvのカラムを追加する想定
 * 戦域・環境単位のドロップテーブル（Sub-Issue 10）

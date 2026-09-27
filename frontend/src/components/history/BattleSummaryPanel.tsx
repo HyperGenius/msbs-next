@@ -6,6 +6,7 @@ import { usePartHitSummary } from "@/hooks/usePartHitSummary";
 import { useWeaponAccuracySummary } from "@/hooks/useWeaponAccuracySummary";
 import { useDetectionSummary } from "@/hooks/useDetectionSummary";
 import PartHitSummaryTable from "./PartHitSummaryTable";
+import LootList from "@/components/loot/LootList";
 
 interface StatCardProps {
   label: string;
@@ -61,6 +62,13 @@ export default function BattleSummaryPanel({ battle, logs, playerId, enemies }: 
         />
         <StatCard label="索敵成功" value={String(detection.captured)} unit={`/ ${detection.total}機`} colorClass="text-cyan-400" />
       </div>
+
+      {battle.loot != null && (
+        <div className="mb-4">
+          <h4 className="text-xs font-semibold text-gray-400 mb-1">戦利品</h4>
+          <LootList loot={battle.loot} />
+        </div>
+      )}
 
       {weaponAccuracy.length > 0 && (
         <div className="mb-4">

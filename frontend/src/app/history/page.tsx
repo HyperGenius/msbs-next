@@ -7,6 +7,7 @@ import { useBattleHistory, useMissions } from "@/services/api";
 import { BattleResult } from "@/types/battle";
 import BattleList from "@/components/history/BattleList";
 import BattleDetailModal from "@/components/history/BattleDetailModal";
+import { getMissionName as getMissionNameOf } from "@/utils/missionName";
 
 export default function HistoryPage() {
   const { isLoaded } = useAuth();
@@ -26,23 +27,8 @@ export default function HistoryPage() {
     return () => clearTimeout(timer);
   }, [isLoaded]);
 
-  const getMissionName = (missionId: number | null, createdAt?: string): string => {
-    if (missionId && missions) {
-      const mission = missions.find((m) => m.id === missionId);
-      return mission?.name || `Mission ${missionId}`;
-    }
-    if (!missionId) {
-      if (createdAt) {
-        const d = new Date(createdAt);
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        return `${yyyy}${mm}${dd} デイリーバトルロイヤル`;
-      }
-      return "デイリーバトルロイヤル";
-    }
-    return "Unknown Mission";
-  };
+  const getMissionName = (missionId: number | null, createdAt?: string): string =>
+    getMissionNameOf(missions, missionId, createdAt);
 
   return (
     // Records一覧内だけをスクロール領域にするため、モバイル幅（main が h-[100dvh] で

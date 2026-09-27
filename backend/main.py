@@ -30,6 +30,7 @@ from app.models.models import (
     BattleResult,
     BattleResultSummary,
     LootItem,
+    LootItemDetail,
     Mission,
     MobileSuit,
     Vector3,
@@ -54,6 +55,7 @@ from app.services.battle_log_storage_service import (
     stream_battle_log_chunks,
 )
 from app.services.drop_service import DropScope, DropService
+from app.services.loot_service import LootService
 
 app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 
@@ -117,7 +119,7 @@ class BattleRewards(BaseModel):
     level_after: int
     total_exp: int
     total_credits: int
-    loot: list[LootItem] = []
+    loot: list[LootItemDetail] = []
 
 
 class BattleResponse(BaseModel):
@@ -380,7 +382,7 @@ async def simulate_battle(
             level_after=pilot.level,
             total_exp=pilot.exp,
             total_credits=pilot.credits,
-            loot=loot,
+            loot=LootService.with_names(session, [loot])[0] or [],
         )
 
     # 8. バトルログをDBに保存（battle_logsテーブル）
@@ -477,7 +479,7 @@ async def get_battle_history(
     session: Session = Depends(get_session),
     user_id: str | None = Depends(get_current_user_optional),
     limit: int = 50,
-) -> list[BattleResult]:
+) -> list[BattleResultSummary]:
     """バトル履歴を取得する（最新順、logsを除く軽量レスポンス）."""
     statement = (
         select(BattleResult).order_by(desc(BattleResult.created_at)).limit(limit)
@@ -488,14 +490,14 @@ async def get_battle_history(
         statement = statement.where(BattleResult.user_id == user_id)
 
     battles = session.exec(statement).all()
-    return list(battles)
+    return LootService.summaries(session, battles)
 
 
 @app.get("/api/battles/unread", response_model=list[BattleResultSummary])
 async def get_unread_battles(
     session: Session = Depends(get_session),
     user_id: str = Depends(get_current_user),
-) -> list[BattleResult]:
+) -> list[BattleResultSummary]:
     """ログインユーザーの未読バトル結果を取得する（最新順）."""
     statement = (
         select(BattleResult)
@@ -504,7 +506,7 @@ async def get_unread_battles(
         .order_by(desc(BattleResult.created_at))
     )
     battles = session.exec(statement).all()
-    return list(battles)
+    return LootService.summaries(session, battles)
 
 
 @app.post("/api/battles/{battle_id}/read")
@@ -537,7 +539,7 @@ async def mark_battle_as_read(
 async def get_battle_detail(
     battle_id: str,
     session: Session = Depends(get_session),
-) -> BattleResult:
+) -> BattleResultSummary:
     """特定のバトル結果の詳細を取得する."""
     try:
         battle_uuid = uuid.UUID(battle_id)
@@ -548,7 +550,7 @@ async def get_battle_detail(
     if not battle:
         raise HTTPException(status_code=404, detail="Battle not found")
 
-    return battle
+    return LootService.summaries(session, [battle])[0]
 
 
 async def _ndjson_lines(entries: list[dict]) -> AsyncIterator[bytes]:

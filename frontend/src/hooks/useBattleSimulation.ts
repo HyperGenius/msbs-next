@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BattleLog, BattleRewards, Mission, MobileSuit } from "@/types/battle";
+import { BattleLog, BattleRewards, LootItem, Mission, MobileSuit } from "@/types/battle";
 import { Obstacle } from "@/types/geometry";
 
 interface ModalResult {
@@ -10,6 +10,7 @@ interface ModalResult {
   rewards: BattleRewards | null;
   msSnapshot?: MobileSuit | null;
   kills?: number;
+  loot?: LootItem[] | null;
 }
 
 interface UseBattleSimulationOptions {
@@ -73,6 +74,7 @@ export function useBattleSimulation({
         rewards,
         msSnapshot: playerData,
         kills: rewards.kills,
+        loot: rewards.loot ?? null,
       });
       setShowResultModal(true);
     }

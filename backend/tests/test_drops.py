@@ -417,11 +417,15 @@ def test_simulate_records_loot(solo_client, session: Session) -> None:  # type: 
     assert response.status_code == 200
     loot = response.json()["rewards"]["loot"]
     assert [item["blueprint_id"] for item in loot] == [DOM]
+    assert loot[0]["target_name"] == "Dom"
 
     result = session.exec(
         select(BattleResult).where(BattleResult.user_id == USER_ID)
     ).one()
-    assert result.loot == loot
+    assert result.loot == [
+        {key: value for key, value in item.items() if key != "target_name"}
+        for item in loot
+    ]
     owned = session.exec(
         select(PlayerBlueprint).where(PlayerBlueprint.user_id == USER_ID)
     ).one()

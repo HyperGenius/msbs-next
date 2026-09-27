@@ -266,3 +266,30 @@ a:not(.no-min-size),
 ::-webkit-scrollbar-corner {
   background: var(--sf-deep-black);
 }
+/* 戦利品の新規入手演出（LootItemCard） */
+@keyframes loot-new-glow {
+  0%   { box-shadow: 0 0 0 rgba(0, 240, 255, 0); }
+  40%  { box-shadow: 0 0 18px rgba(0, 240, 255, 0.8); }
+  100% { box-shadow: 0 0 6px rgba(0, 240, 255, 0.35); }
+}
+
+@keyframes loot-new-sweep {
+  from { transform: translateX(0); }
+  to   { transform: translateX(450%); }
+}
+
+.loot-new-reveal {
+  animation: loot-new-glow 1.2s ease-out forwards;
+}
+
+.loot-new-sweep {
+  background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.35), transparent);
+  animation: loot-new-sweep 1s ease-out 0.1s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loot-new-reveal,
+  .loot-new-sweep {
+    animation: none;
+  }
+}

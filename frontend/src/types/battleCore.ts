@@ -65,6 +65,8 @@ export interface LootItem {
     is_new: boolean;
     /** 所持済みの設計図を換金したクレジット。バトル報酬の credits_gained には含まない */
     credits_awarded: number;
+    /** 機体・武器マスターの表示名。マスターが無ければ target_id */
+    target_name: string;
 }
 
 /** バトルで得た報酬（経験値・クレジット・レベル変化） */
