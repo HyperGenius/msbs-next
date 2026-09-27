@@ -622,3 +622,41 @@ def test_update_creates_missing_blueprint(client_admin, session):
     assert blueprint is not None
     assert blueprint.is_standard_issue is False
     assert blueprint.duplicate_credit_value == 70
+
+
+def test_create_and_update_keep_terrain_adaptability(client_admin):
+    """地形適正を登録でき、地形適正を含まない specs の更新では消えないこと."""
+    terrain = {"SPACE": "S", "FOREST": "B"}
+    payload = {
+        **SAMPLE_MS,
+        "specs": {**SAMPLE_MS["specs"], "terrain_adaptability": terrain},
+    }
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["specs"]["terrain_adaptability"] == terrain
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"specs": {**SAMPLE_MS["specs"], "max_hp": 900}},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    listed = client_admin.get("/api/admin/mobile-suits", headers=HEADERS).json()
+    test_gm = next(ms for ms in listed if ms["id"] == "test_gm")
+    assert test_gm["specs"]["max_hp"] == 900
+    assert test_gm["specs"]["terrain_adaptability"] == terrain
+
+
+def test_create_invalid_terrain_grade_returns_422(client_admin):
+    """地形適正に S/A/B/C/D 以外のランクを指定すると 422 が返ること."""
+    payload = {
+        **SAMPLE_MS,
+        "specs": {**SAMPLE_MS["specs"], "terrain_adaptability": {"FOREST": "X"}},
+    }
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY

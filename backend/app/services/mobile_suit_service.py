@@ -166,6 +166,40 @@ class MobileSuitService:
         return {r.name: r for r in records}
 
     @staticmethod
+    def resolve_master_terrain_adaptability(
+        session: Session, ms: MobileSuit
+    ) -> dict[str, str]:
+        """機体マスターの地形適正を返す.
+
+        所持機体の列はショップ購入時に設定されないため使わない。
+        マスターを引けない機体は空の辞書を返す（全環境で環境タイプの既定ランクになる）。
+        """
+        master = (
+            session.get(MasterMobileSuit, ms.master_mobile_suit_id)
+            if ms.master_mobile_suit_id
+            else None
+        )
+        if master is None:
+            master = MobileSuitService.get_master_mobile_suit_map(
+                session, [ms.name]
+            ).get(ms.name)
+        if master is None:
+            return {}
+        return dict(master.specs.get("terrain_adaptability") or {})
+
+    @staticmethod
+    def build_entry_snapshot(session: Session, ms: MobileSuit) -> dict:
+        """バトルエントリー用の機体スナップショットを作る.
+
+        地形適正は機体マスターの値で上書きする。
+        """
+        snapshot = ms.model_dump()
+        snapshot["terrain_adaptability"] = (
+            MobileSuitService.resolve_master_terrain_adaptability(session, ms)
+        )
+        return snapshot
+
+    @staticmethod
     def update_mobile_suit(
         session: Session, ms_id: str | uuid.UUID, update_data: MobileSuitUpdate
     ) -> MobileSuit | None:

@@ -57,6 +57,8 @@ export interface MasterMobileSuitSpec {
     weapons: Weapon[];
     /** 欠損部位（HEAD/TORSO/RIGHT_ARM/LEFT_ARM/RIGHT_LEG/LEFT_LEG） */
     missing_parts?: string[];
+    /** 環境タイプID → 地形適正ランク (S/A/B/C/D)。キーが無い環境は環境タイプの既定ランク */
+    terrain_adaptability?: Record<string, string>;
 }
 
 /** 管理者用マスター機体エントリー（ショップ・初期配備の元データ） */

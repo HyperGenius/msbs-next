@@ -12,6 +12,7 @@ from app.core.auth import get_current_user
 from app.db import get_session
 from app.models.models import BattleEntry, BattleRoom, MobileSuit
 from app.services.battle_room_service import BattleRoomService
+from app.services.mobile_suit_service import MobileSuitService
 from app.services.weapon_service import WeaponService
 
 router = APIRouter(prefix="/api/entries", tags=["entries"])
@@ -105,7 +106,9 @@ async def create_entry(
     if existing_entry:
         # 既にエントリー済みの場合は上書き
         existing_entry.mobile_suit_id = mobile_suit_uuid
-        existing_entry.mobile_suit_snapshot = mobile_suit.model_dump()
+        existing_entry.mobile_suit_snapshot = MobileSuitService.build_entry_snapshot(
+            session, mobile_suit
+        )
         session.add(existing_entry)
         session.commit()
         session.refresh(existing_entry)
@@ -123,7 +126,7 @@ async def create_entry(
 
     # 新規エントリーを作成
     # 機体データをスナップショットとして保存
-    snapshot = mobile_suit.model_dump()
+    snapshot = MobileSuitService.build_entry_snapshot(session, mobile_suit)
 
     new_entry = BattleEntry(
         user_id=user_id,

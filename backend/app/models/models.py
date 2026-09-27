@@ -481,6 +481,7 @@ class MobileSuitResponse(SQLModel):
         ms: "MobileSuit",
         weapon_slot_count: int | None = None,
         beam_generator_lv: int | None = None,
+        terrain_adaptability: dict[str, str] | None = None,
     ) -> "MobileSuitResponse":
         """MobileSuitインスタンスからMobileSuitResponseを生成する.
 
@@ -491,6 +492,8 @@ class MobileSuitResponse(SQLModel):
                 （解決順は resolve_weapon_slot_count() を参照）。
             beam_generator_lv: マスター機体から引いたビームジェネレータLv。
                 呼び出し側で解決できない場合は None を渡す（0 にフォールバックする）。
+            terrain_adaptability: マスター機体から引いた地形適正。
+                None の場合は所持機体の値を使う。
         """
         from app.core.rank_utils import get_rank
 
@@ -528,7 +531,11 @@ class MobileSuitResponse(SQLModel):
             evasion_bonus=ms.evasion_bonus,
             acceleration_bonus=ms.acceleration_bonus,
             turning_bonus=ms.turning_bonus,
-            terrain_adaptability=ms.terrain_adaptability,
+            terrain_adaptability=(
+                terrain_adaptability
+                if terrain_adaptability is not None
+                else ms.terrain_adaptability
+            ),
             max_en=ms.max_en,
             en_recovery=ms.en_recovery,
             max_propellant=ms.max_propellant,
@@ -627,6 +634,20 @@ class MasterMobileSuitSpec(SQLModel):
         default_factory=list,
         description="欠損部位のリスト (ALL_PART_NAMES のいずれか。例: 脚部のないMSは [RIGHT_LEG, LEFT_LEG])",
     )
+    terrain_adaptability: dict[str, str] = Field(
+        default_factory=dict,
+        description="環境タイプID → 地形適正ランク (S/A/B/C/D)。キーが無い環境は環境タイプの既定ランク",
+    )
+
+    @field_validator("terrain_adaptability")
+    @classmethod
+    def _validate_terrain_grades(cls, value: dict[str, str]) -> dict[str, str]:
+        invalid = {k: v for k, v in value.items() if v not in set(TerrainGrade)}
+        if invalid:
+            raise ValueError(
+                f"Invalid terrain grades: {invalid}. Must be one of S/A/B/C/D."
+            )
+        return value
 
 
 class MasterMobileSuitEntry(SQLModel):

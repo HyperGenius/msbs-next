@@ -20,6 +20,7 @@ from app.engine.constants import (
     WEAPON_SWITCH_POLICY_NEVER,
     WEAPON_SWITCH_POLICY_RACK_ONLY,
 )
+from app.engine.environment import EnvironmentProfile
 from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, Weapon
 
@@ -46,6 +47,7 @@ class TargetingMixin:
     _weapon_score_cache: dict[str, dict[str, float]]
     unit_pilot_stats: dict[str, PilotStats]
     minovsky_density: float
+    environment_profile: EnvironmentProfile | None
 
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見.
@@ -58,6 +60,8 @@ class TargetingMixin:
         alive_units = [u for u in self.units if u.current_hp > 0]  # type: ignore[attr-defined]
 
         sensor_multiplier, falloff_exponent = self._minovsky_detection_params()
+        if self.environment_profile is not None:
+            sensor_multiplier *= self.environment_profile.sensor_range_multiplier
 
         # グリッドのセルサイズは実際に索敵に使う最大有効範囲以上に設定する
         # （セル幅 >= 探索半径であれば、3x3x3近傍セルの走査だけで漏れなく候補を捕捉できる）

@@ -31,7 +31,14 @@
           "decay_rate": 0.08,
           "is_melee": false
         }
-      ]
+      ],
+      "terrain_adaptability": {
+        "SPACE": "A",
+        "GROUND": "A",
+        "COLONY": "A",
+        "UNDERWATER": "C",
+        "FOREST": "A"
+      }
     }
   },
   {
@@ -66,7 +73,14 @@
           "decay_rate": 0.09,
           "is_melee": false
         }
-      ]
+      ],
+      "terrain_adaptability": {
+        "SPACE": "A",
+        "GROUND": "A",
+        "COLONY": "A",
+        "UNDERWATER": "C",
+        "FOREST": "A"
+      }
     }
   },
   {
@@ -101,7 +115,14 @@
           "decay_rate": 0.1,
           "is_melee": false
         }
-      ]
+      ],
+      "terrain_adaptability": {
+        "SPACE": "C",
+        "GROUND": "A",
+        "COLONY": "A",
+        "UNDERWATER": "C",
+        "FOREST": "B"
+      }
     }
   },
   {
@@ -136,7 +157,14 @@
           "decay_rate": 0.12,
           "is_melee": true
         }
-      ]
+      ],
+      "terrain_adaptability": {
+        "SPACE": "C",
+        "GROUND": "A",
+        "COLONY": "A",
+        "UNDERWATER": "C",
+        "FOREST": "S"
+      }
     }
   },
   {
@@ -171,7 +199,14 @@
           "decay_rate": 0.05,
           "is_melee": false
         }
-      ]
+      ],
+      "terrain_adaptability": {
+        "SPACE": "A",
+        "GROUND": "A",
+        "COLONY": "A",
+        "UNDERWATER": "C",
+        "FOREST": "A"
+      }
     }
   },
   {
@@ -206,7 +241,14 @@
           "decay_rate": 0.06,
           "is_melee": false
         }
-      ]
+      ],
+      "terrain_adaptability": {
+        "SPACE": "S",
+        "GROUND": "A",
+        "COLONY": "A",
+        "UNDERWATER": "C",
+        "FOREST": "B"
+      }
     }
   }
 ]

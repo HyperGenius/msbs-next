@@ -13,6 +13,7 @@ from app.engine.combat import CombatMixin, has_los
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
     AREA_PER_UNIT,
+    DEFAULT_TERRAIN_GRADE,
     FUZZY_RULES_DIR,
     MAX_FIELD_SIZE,
     MIN_FIELD_SIZE,
@@ -36,6 +37,7 @@ from app.engine.constants import (
     STRATEGY_UPDATE_INTERVAL,
     VALID_STRATEGY_MODES,
 )
+from app.engine.environment import EnvironmentProfile
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.movement import MovementMixin
@@ -111,6 +113,25 @@ def _resolve_minovsky_density(
     if "MINOVSKY" in special_effects:
         return 1.0
     return 0.0
+
+
+def _resolve_battlefield(
+    battlefield: BattleField | None, environment_profile: EnvironmentProfile | None
+) -> BattleField:
+    """シミュレーターで使う BattleField を決める.
+
+    obstacle_density を明示していない BattleField には、環境タイプの既定値を使う。
+    """
+    if battlefield is None:
+        return BattleField()
+    if (
+        environment_profile is not None
+        and "obstacle_density" not in battlefield.model_fields_set
+    ):
+        return battlefield.model_copy(
+            update={"obstacle_density": environment_profile.default_obstacle_density}
+        )
+    return battlefield
 
 
 def _build_unit_pilot_stats(
@@ -189,6 +210,7 @@ class BattleSimulator(
         obstacles: list[Obstacle] | None = None,
         battlefield: BattleField | None = None,
         minovsky_density: float | None = None,
+        environment_profile: EnvironmentProfile | None = None,
     ):
         """初期化.
 
@@ -211,6 +233,8 @@ class BattleSimulator(
                 obstacles と同時に指定した場合は obstacles が優先される。
             minovsky_density: ミノフスキー濃度 (0.0〜1.0。範囲外はクランプする)。
                 None の場合、special_effects に MINOVSKY があれば 1.0、なければ 0.0。
+            environment_profile: 環境タイプの効果。指定すると environment より優先する。
+                None の場合は索敵・射撃の補正なし、地形適正の既定ランクは A とする。
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -253,7 +277,15 @@ class BattleSimulator(
         # （TargetingMixin._select_weapon_with_switch_policy 参照）。
         self._weapon_score_cache: dict[str, dict[str, float]] = {}
         self.player_skills = player_skills or {}
-        self.environment = environment
+        self.environment_profile: EnvironmentProfile | None = environment_profile
+        self.environment = (
+            environment_profile.environment_id if environment_profile else environment
+        )
+        self.default_terrain_grade: str = (
+            environment_profile.default_terrain_grade
+            if environment_profile
+            else DEFAULT_TERRAIN_GRADE
+        )
         self.special_effects: list[str] = special_effects or []
         self.minovsky_density: float = _resolve_minovsky_density(
             minovsky_density, self.special_effects
@@ -333,15 +365,15 @@ class BattleSimulator(
         # 明示的な obstacles 引数が渡された場合は後方互換性のためそれを優先する
         # battlefield が明示的に渡された場合のみ自動生成・適用する（後方互換性）
         self._battlefield_explicit: bool = battlefield is not None
-        if battlefield is None:
-            battlefield = BattleField()
-        self.battlefield: BattleField = battlefield
+        self.battlefield: BattleField = _resolve_battlefield(
+            battlefield, environment_profile
+        )
         if obstacles is not None:
             # 後方互換: obstacles 引数が明示的に渡された場合は battlefield を上書き
             self.battlefield = BattleField(
                 obstacles=obstacles,
-                spawn_zones=battlefield.spawn_zones,
-                obstacle_density=battlefield.obstacle_density,
+                spawn_zones=self.battlefield.spawn_zones,
+                obstacle_density=self.battlefield.obstacle_density,
             )
         self.obstacles: list[Obstacle] = self.battlefield.obstacles
 
