@@ -24,6 +24,7 @@ DEFAULT_TERRAIN_ADAPTABILITY = {
 
 # 特殊環境効果の定義
 SPECIAL_ENVIRONMENT_EFFECTS: dict[str, dict] = {
+    # 濃度 1.0 として扱う。エンジンは MINOVSKY_* 定数で濃度から補正を計算する。
     "MINOVSKY": {
         "description": "ミノフスキー粒子: 索敵範囲が半減する",
         "sensor_range_multiplier": 0.5,
@@ -311,7 +312,18 @@ RANGED_MID_ACCURACY_PENALTY: float = (
 
 # 確率的索敵定数 (Phase 6-4)
 DETECTION_FALLOFF_EXPONENT: float = 2.0  # 通常環境の距離減衰指数
-DETECTION_FALLOFF_EXPONENT_MINOVSKY: float = 3.0  # ミノフスキー粒子時の減衰指数
+DETECTION_FALLOFF_EXPONENT_MINOVSKY: float = 3.0  # ミノフスキー濃度 1.0 時の減衰指数
+
+# ミノフスキー濃度 m (0.0〜1.0) による補正係数。
+# 索敵範囲の倍率 = 1 − MINOVSKY_SENSOR_RANGE_REDUCTION·m
+MINOVSKY_SENSOR_RANGE_REDUCTION: float = 0.5
+# 索敵の距離減衰指数 k = DETECTION_FALLOFF_EXPONENT + MINOVSKY_FALLOFF_EXPONENT_BONUS·m
+MINOVSKY_FALLOFF_EXPONENT_BONUS: float = 1.0
+# 射撃の命中率倍率 = 1 − MINOVSKY_RANGED_ACCURACY_PENALTY·m·min(1, d / MINOVSKY_RANGED_PENALTY_REF_DISTANCE)
+MINOVSKY_RANGED_ACCURACY_PENALTY: float = 0.4
+MINOVSKY_RANGED_PENALTY_REF_DISTANCE: float = 600.0  # m
+# この濃度以上のとき、索敵ログを「濃密なミノフスキー粒子の中、」の文言にする
+MINOVSKY_DENSE_LOG_THRESHOLD: float = 0.5
 
 # 戦略遷移しきい値定数 (Phase 4-3) — ゲームバランス調整用
 # AGGRESSIVE → RETREAT (T01)

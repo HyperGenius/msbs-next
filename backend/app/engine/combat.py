@@ -32,6 +32,8 @@ from app.engine.constants import (
     MELEE_CLOSE_ACCURACY_BONUS,
     MELEE_MID_ACCURACY_BONUS,
     MELEE_RANGE,
+    MINOVSKY_RANGED_ACCURACY_PENALTY,
+    MINOVSKY_RANGED_PENALTY_REF_DISTANCE,
     PART_DIFFICULTY_DECAY_FLOOR,
     PART_DIFFICULTY_DECAY_RANGE,
     PART_HIT_DIFFICULTY,
@@ -305,6 +307,21 @@ class CombatMixin:
                 return RANGED_MID_ACCURACY_PENALTY  # 0.7
             return 1.0
 
+    def _get_minovsky_hit_multiplier(self, weapon: Weapon, distance: float) -> float:
+        """ミノフスキー濃度による射撃の命中率倍率を返す.
+
+        遠いほど倍率が下がり、MINOVSKY_RANGED_PENALTY_REF_DISTANCE 以上で一定になる。
+        格闘武器は影響を受けず 1.0 を返す。
+        """
+        is_melee_weapon = getattr(
+            weapon, "weapon_type", "RANGED"
+        ) == "MELEE" or getattr(weapon, "is_melee", False)
+        m = self.minovsky_density  # type: ignore[attr-defined]
+        if is_melee_weapon or m <= 0.0:
+            return 1.0
+        distance_ratio = min(1.0, distance / MINOVSKY_RANGED_PENALTY_REF_DISTANCE)
+        return 1.0 - MINOVSKY_RANGED_ACCURACY_PENALTY * m * distance_ratio
+
     def _check_attack_resources(
         self, weapon: Weapon, weapon_state: dict, resources: dict
     ) -> tuple[bool, str]:
@@ -349,6 +366,7 @@ class CombatMixin:
         """命中率を計算する.
 
         距離補正乗数を適用する（Phase C — 近接戦闘システム）。
+        射撃武器にはミノフスキー濃度による倍率も掛ける。
 
         Returns:
             tuple[float, float, str]: (命中率, 最適距離からの差, 攻撃セクタ)
@@ -396,6 +414,8 @@ class CombatMixin:
             weapon_type = "MELEE"
         accuracy_modifier = self._get_accuracy_modifier(distance, weapon_type)
         hit_chance = hit_chance * accuracy_modifier
+
+        hit_chance = hit_chance * self._get_minovsky_hit_multiplier(weapon, distance)
 
         # セクタ補正を適用 (Phase E-3)
         _target_resources = self.unit_resources[str(target.id)]  # type: ignore[attr-defined]
@@ -540,6 +560,12 @@ class CombatMixin:
         roll = random.uniform(0, 100)
         is_hit = roll <= hit_chance
 
+        # 敗因集計で使うため、ミノフスキーの補正が掛かった攻撃だけ倍率をログに残す。
+        minovsky_multiplier = self._get_minovsky_hit_multiplier(weapon, distance)
+        minovsky_hit_multiplier = (
+            round(minovsky_multiplier, 3) if minovsky_multiplier < 1.0 else None
+        )
+
         # スキル発動判定: スキルボーナスがあり、それが命中/回避の結果を変えた場合
         # hit_chance はクランプ済みのため、スキルなし命中率も [0, 100] にクランプして近似
         skill_activated = False
@@ -575,6 +601,7 @@ class CombatMixin:
                 attack_sector=attack_sector,
                 distance=distance,
                 en_details=en_details,
+                minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
         else:
             self._process_miss(
@@ -587,6 +614,7 @@ class CombatMixin:
                 is_bad_distance,
                 skill_activated,
                 en_details=en_details,
+                minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
 
     def _is_fire_arc_blocked(
@@ -689,10 +717,12 @@ class CombatMixin:
         attack_sector: str = "FRONT_SIDE",
         distance: float = 0.0,
         en_details: dict | None = None,
+        minovsky_hit_multiplier: float | None = None,
     ) -> None:
         """命中時の処理.
 
         `en_details` は ATTACK / MISS ログの `details` にそのまま載せる。
+        `minovsky_hit_multiplier` はデバッグ用フィールドとして ATTACK / MISS ログに載せる。
         """
         # 命中部位決定 (Issue #505 Phase 4): 命中判定とダメージ計算の間のフック
         hit_part = determine_hit_part(actor, target, weapon, attack_sector, distance)
@@ -743,6 +773,7 @@ class CombatMixin:
                     weapon_name=weapon.name if weapon else None,
                     weapon_id=weapon.id if weapon else None,
                     details=en_details,
+                    minovsky_hit_multiplier=minovsky_hit_multiplier,
                 )
             )
             return
@@ -826,6 +857,7 @@ class CombatMixin:
                     self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                 ),  # type: ignore[attr-defined]
                 details=en_details,
+                minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
         )
 
@@ -1085,10 +1117,12 @@ class CombatMixin:
         is_bad_distance: bool = False,
         skill_activated: bool = False,
         en_details: dict | None = None,
+        minovsky_hit_multiplier: float | None = None,
     ) -> None:
         """ミス時の処理.
 
         `en_details` は MISS ログの `details` にそのまま載せる。
+        `minovsky_hit_multiplier` はデバッグ用フィールドとして MISS ログに載せる。
         """
         # ミス時のセリフ生成
         miss_chatter = self._generate_chatter(actor, "miss")  # type: ignore[attr-defined]
@@ -1115,6 +1149,7 @@ class CombatMixin:
                 weapon_name=weapon.name if weapon else None,
                 weapon_id=weapon.id if weapon else None,
                 details=en_details,
+                minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
         )
 

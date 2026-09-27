@@ -47,7 +47,9 @@ def en_log_details(current_en: float) -> dict[str, int]:
 
 
 # バトルログ保存時に除去するデバッグ専用フィールドのセット
-_BATTLE_LOG_DEBUG_FIELDS: frozenset[str] = frozenset({"fuzzy_scores"})
+_BATTLE_LOG_DEBUG_FIELDS: frozenset[str] = frozenset(
+    {"fuzzy_scores", "minovsky_hit_multiplier"}
+)
 
 
 def strip_debug_fields(logs: list[BattleLog]) -> list[dict[str, Any]]:

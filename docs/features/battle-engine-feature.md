@@ -976,7 +976,7 @@ $$P(\text{detect}) = \max\!\left(0,\ 1 - \left(\frac{d}{d_{\text{eff}}}\right)^k
 |---|---|
 | $d$ | 索敵ユニットからターゲットまでの距離 (m) |
 | $d_{\text{eff}}$ | 有効索敵範囲（`sensor_range × sensor_multiplier`） |
-| $k$ | 距離減衰指数。`DETECTION_FALLOFF_EXPONENT`（通常）または `DETECTION_FALLOFF_EXPONENT_MINOVSKY`（ミノフスキー粒子時） |
+| $k$ | 距離減衰指数。ミノフスキー濃度 $m$ に応じて `2 + m`（[29章](#29-ミノフスキー濃度の連続値化)） |
 
 **`k = 2.0`（デフォルト）での挙動例（`sensor_range = 500m`）:**
 
@@ -1000,23 +1000,16 @@ $$P(\text{detect}) = \max\!\left(0,\ 1 - \left(\frac{d}{d_{\text{eff}}}\right)^k
 
 ### 15.4 ミノフスキー粒子時の強化
 
-ミノフスキー粒子時は索敵範囲の半減（`× 0.5`）に加え、距離減衰指数 $k$ を `DETECTION_FALLOFF_EXPONENT_MINOVSKY` に切り替えることで、近距離でも発見確率がさらに低下する。
-
-```python
-if "MINOVSKY" in self.special_effects:
-    effective_sensor_range = sensor_range * 0.5  # MINOVSKY_SENSOR_RANGE_MULTIPLIER
-    falloff_exponent = DETECTION_FALLOFF_EXPONENT_MINOVSKY  # 3.0
-else:
-    effective_sensor_range = sensor_range
-    falloff_exponent = DETECTION_FALLOFF_EXPONENT  # 2.0
-```
+ミノフスキー粒子は索敵範囲を狭め、距離減衰指数 $k$ を大きくする。そのため近距離でも発見確率が下がる。
+当初は「あり/なし」の2値だったが、Issue #575 で濃度（0.0〜1.0）の連続値に変わった。計算式は [29章](#29-ミノフスキー濃度の連続値化) を参照。
+濃度 1.0（`special_effects: ["MINOVSKY"]`）のとき、索敵範囲 ×0.5・$k = 3.0$ になる。
 
 ### 15.5 新定数 (`constants.py`)
 
 ```python
 # 確率的索敵定数 (Phase 6-4)
 DETECTION_FALLOFF_EXPONENT: float = 2.0       # 通常環境の距離減衰指数
-DETECTION_FALLOFF_EXPONENT_MINOVSKY: float = 3.0  # ミノフスキー粒子時の減衰指数
+DETECTION_FALLOFF_EXPONENT_MINOVSKY: float = 3.0  # ミノフスキー濃度 1.0 時の減衰指数
 ```
 
 ### 15.6 発見ログの変更
@@ -1027,7 +1020,7 @@ DETECTION_FALLOFF_EXPONENT_MINOVSKY: float = 3.0  # ミノフスキー粒子時�
 # 通常環境
 "{actor_name}が{dist_label}に{target.name}を発見！（索敵確率 56%）"
 
-# ミノフスキー粒子時
+# ミノフスキー濃度が MINOVSKY_DENSE_LOG_THRESHOLD（0.5）以上のとき
 "{actor_name}が濃密なミノフスキー粒子の中、{dist_label}に{target.name}の反応を捉えた！（索敵確率 21%）"
 ```
 
@@ -2164,3 +2157,93 @@ Issue #385（20章）でモンテカルロ的アサーションを複数回試�
   CI の安定性を確保した。
 - 同様の flaky なモンテカルロ的アサーションに遭遇した場合の判断基準を `backend/CLAUDE.md`
   の「テスト規約」に追記した。
+
+---
+
+## 29. ミノフスキー濃度の連続値化
+
+Issue #575（Epic #573「戦域ローテーションと環境効果」の Sub-Issue 2）。
+
+### 29.1 概要
+
+ミノフスキー粒子を「あり/なし」から、0.0〜1.0 の連続値（濃度 $m$）に変えた。
+濃度は索敵と射撃の命中率に影響する。高濃度では近接が有利になり、低濃度では遠距離が有利になる。
+
+### 29.2 濃度の決め方
+
+`BattleSimulator(..., minovsky_density: float | None = None)` で渡す。`self.minovsky_density` は次の順で決まる。
+
+1. 引数で渡された場合はその値（[0, 1] にクランプ）
+2. 渡されず、`special_effects` に `"MINOVSKY"` がある場合は 1.0（ソロミッションの従来の挙動）
+3. どちらでもない場合は 0.0
+
+濃度 0.0 のとき、索敵・命中率は導入前と完全に同じ結果になる。
+定期バトルのルームの濃度をシミュレーターへ渡すのは Sub-Issue 4（[theater-rotation.md](theater-rotation.md)）。
+
+### 29.3 索敵への影響
+
+`TargetingMixin._minovsky_detection_params()`（`backend/app/engine/targeting.py`）で計算する。
+
+$$d_{\text{eff}} = \text{sensor\_range} \times (1 - 0.5m), \qquad k = 2 + m$$
+
+| m | 索敵範囲 | 指数 k |
+|---|---|---|
+| 0.0 | ×1.00 | 2.0 |
+| 0.3 | ×0.85 | 2.3 |
+| 0.6 | ×0.70 | 2.6 |
+| 1.0 | ×0.50 | 3.0 |
+
+発見確率は従来どおり $P = \max(0, 1 - (d / d_{\text{eff}})^k)$（15.2節）。
+
+### 29.4 射撃の命中率への影響
+
+`CombatMixin._get_minovsky_hit_multiplier()`（`backend/app/engine/combat.py`）で倍率を計算する。
+
+$$f = 1 - 0.4 \cdot m \cdot \min\left(1, \frac{d}{600\text{m}}\right)$$
+
+* $d$ はターゲットまでの距離
+* 対象は射撃武器（`weapon_type` が `MELEE` でなく、`is_melee` が false）。格闘武器は常に 1.0
+* `_calculate_hit_chance()` で、距離補正乗数（`_get_accuracy_modifier()`）の後、セクタ補正の前に掛ける
+
+| m | 150m | 300m | 600m以上 |
+|---|---|---|---|
+| 0.0 | ×1.00 | ×1.00 | ×1.00 |
+| 0.3 | ×0.97 | ×0.94 | ×0.88 |
+| 0.6 | ×0.94 | ×0.88 | ×0.76 |
+| 1.0 | ×0.90 | ×0.80 | ×0.60 |
+
+ファジィ推論の武器選択・ターゲット選択は命中率を入力に使わないため、影響を受けない。
+管理画面の攻撃シミュレーション（`combat_preview.py`）は環境効果を対象外としているため、濃度を反映しない。
+
+### 29.5 定数（`backend/app/engine/constants.py`）
+
+| 定数 | 値 | 用途 |
+|---|---|---|
+| `MINOVSKY_SENSOR_RANGE_REDUCTION` | 0.5 | 索敵範囲の倍率 `1 − 係数·m` |
+| `MINOVSKY_FALLOFF_EXPONENT_BONUS` | 1.0 | 減衰指数 `DETECTION_FALLOFF_EXPONENT + 係数·m` |
+| `MINOVSKY_RANGED_ACCURACY_PENALTY` | 0.4 | 射撃の命中率倍率の係数 |
+| `MINOVSKY_RANGED_PENALTY_REF_DISTANCE` | 600.0 | 射撃ペナルティが最大になる距離 (m) |
+| `MINOVSKY_DENSE_LOG_THRESHOLD` | 0.5 | 索敵ログを「濃密なミノフスキー粒子の中、」にする濃度 |
+
+`SPECIAL_ENVIRONMENT_EFFECTS["MINOVSKY"]` と `DETECTION_FALLOFF_EXPONENT_MINOVSKY` は濃度 1.0 のときの値として残している。
+admin-tool で係数を調整できるようにするかは Epic #573 の検討事項（未確定）。
+
+### 29.6 ログ
+
+* 索敵ログ: 濃度が `MINOVSKY_DENSE_LOG_THRESHOLD` 以上のとき「濃密なミノフスキー粒子の中、」の文言にする（15.6節）
+* 攻撃ログ: 射撃の `ATTACK` / `MISS` ログに、デバッグ用フィールド `minovsky_hit_multiplier`（命中率の倍率、小数第3位に丸め）を載せる
+  * 倍率が 1.0 未満のときだけ値を入れる。それ以外は `null`
+  * Sub-Issue 9 の敗因集計で使う
+  * DB 保存時は `strip_debug_fields()`（`backend/app/engine/battle_utils.py`）で除去する
+* バトルログの表示（フロントエンド）は変えていない
+
+### 29.7 テスト
+
+`backend/tests/unit/test_minovsky_density.py`
+
+* 濃度の決め方（引数・`special_effects`・クランプ）
+* 濃度 0.0 / `["MINOVSKY"]` で索敵パラメータが導入前と一致する（回帰）
+* 濃度ごとの索敵範囲・減衰指数・射撃の命中率倍率（上の表）
+* 格闘武器の命中率が濃度の影響を受けない
+* 索敵ログの文言のしきい値
+* 攻撃ログの `minovsky_hit_multiplier` と、`strip_debug_fields()` での除去

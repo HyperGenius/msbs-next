@@ -1019,6 +1019,9 @@ class BattleLog(SQLModel):
     skill_activated: bool | None = None  # スキルが命中/回避の判定を変えた場合True
     velocity_snapshot: Vector3 | None = None  # 行動時点の速度ベクトル
     fuzzy_scores: dict | None = None  # ファジィ推論の中間スコア（デバッグ用）
+    minovsky_hit_multiplier: float | None = (
+        None  # ミノフスキー濃度による命中率の倍率（デバッグ用）
+    )
     strategy_mode: str | None = None  # 行動決定時の戦略モード
     team_id: str | None = None  # チームレベルイベント用チームID (Phase 4-2)
     details: dict | None = None  # 追加詳細情報（STRATEGY_CHANGED 等）(Phase 4-2)
