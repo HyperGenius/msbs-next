@@ -24,7 +24,8 @@ from app.models.models import (
     WeaponCustomStats,
     resolve_weapon_slot_count,
 )
-from app.services.blueprint_service import BlueprintService
+from app.services.blueprint_service import BlueprintService, purchase_denial_message
+from app.services.technology_service import TechnologyService
 
 
 def _master_weapon_to_dict(
@@ -146,11 +147,13 @@ class WeaponService:
                 status_code=404, detail="パイロット情報が見つかりません"
             )
 
-        if not BlueprintService.can_purchase(
+        unlock_state = BlueprintService.get_unlock_state(
             session, user_id, BlueprintTargetType.WEAPON, weapon_id
-        ):
+        )
+        if not unlock_state.is_unlocked:
             raise HTTPException(
-                status_code=403, detail="この武器の設計図を所持していません"
+                status_code=403,
+                detail=purchase_denial_message(unlock_state, "武器"),
             )
 
         if pilot.credits < listing["price"]:
@@ -473,9 +476,15 @@ class WeaponService:
                 ),
             )
         ).all()
+        requirements = TechnologyService.requirements_by_blueprint(session)
         return [
             _master_weapon_to_dict(
-                record, BlueprintService.settings_of(blueprint, record.price)
+                record,
+                BlueprintService.settings_of(
+                    blueprint,
+                    record.price,
+                    requirements.get(blueprint.id) if blueprint else None,
+                ),
             )
             for record, blueprint in rows
         ]
@@ -529,7 +538,7 @@ class WeaponService:
         gd._cache_expires_at = None
 
         return _master_weapon_to_dict(
-            record, BlueprintService.settings_of(blueprint, record.price)
+            record, BlueprintService.saved_settings(session, blueprint, record.price)
         )
 
     @staticmethod
@@ -577,7 +586,7 @@ class WeaponService:
         gd._cache_expires_at = None
 
         return _master_weapon_to_dict(
-            record, BlueprintService.settings_of(blueprint, record.price)
+            record, BlueprintService.saved_settings(session, blueprint, record.price)
         )
 
     @staticmethod

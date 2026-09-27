@@ -284,18 +284,21 @@ def test_get_unlock_states(session: Session, pilot: Pilot) -> None:
     )
 
     assert states["zaku_ii"] == UnlockState(
-        is_standard_issue=True, is_unlocked=True, unlock_hint=None
+        is_standard_issue=True, is_unlocked=True, needs_blueprint=False
     )
     assert states["gundam"] == UnlockState(
-        is_standard_issue=False, is_unlocked=True, unlock_hint=None
+        is_standard_issue=False, is_unlocked=True, needs_blueprint=False
     )
     assert states["gelgoog"] == UnlockState(
-        is_standard_issue=False, is_unlocked=False, unlock_hint=UNAVAILABLE_UNLOCK_HINT
+        is_standard_issue=False,
+        is_unlocked=False,
+        needs_blueprint=True,
+        unlock_hint=UNAVAILABLE_UNLOCK_HINT,
     )
     # 他のプレイヤーの設計図では解放されない。
     assert states["dom"].is_unlocked is False
     assert states["no_such_ms"] == UnlockState(
-        is_standard_issue=True, is_unlocked=True, unlock_hint=None
+        is_standard_issue=True, is_unlocked=True, needs_blueprint=False
     )
 
 
@@ -328,7 +331,7 @@ def test_get_unlock_states_ignores_other_target_type(
 def test_get_unlock_states_query_count_is_constant(
     session: Session, pilot: Pilot
 ) -> None:
-    """解放状態の取得が商品数によらず3回のクエリで済むこと."""
+    """必要な技術Lvが無ければ、解放状態の取得が商品数によらず4回のクエリで済むこと."""
     target_ids = [m.id for m in session.exec(select(MasterMobileSuit)).all()]
     for target_id in target_ids:
         _make_restricted(session, f"mobile_suit:{target_id}")
@@ -338,4 +341,4 @@ def test_get_unlock_states_query_count_is_constant(
         )
 
     assert len(target_ids) > 3
-    assert len(statements) == 3
+    assert len(statements) == 4

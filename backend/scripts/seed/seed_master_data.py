@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """マスターデータシードスクリプト.
 
-mobile_suits.json / weapons.json / ace_pilots.json から master_mobile_suits /
-master_weapons / ace_pilots テーブルへデータを投入する。べき等に実行可能（ON CONFLICT DO NOTHING）。
+mobile_suits.json / weapons.json / ace_pilots.json / technologies.json から
+master_mobile_suits / master_weapons / ace_pilots / master_technologies テーブルへ
+データを投入する。べき等に実行可能（ON CONFLICT DO NOTHING）。
 新規に投入した機体・武器には、標準配備の設計図マスターも作成する。
 
 Usage:
@@ -72,6 +73,42 @@ def _seed_ace_pilots(session: Session, data_dir: Path, force: bool) -> tuple[int
             session.add(existing)
         else:
             session.add(AcePilot(**item))
+            inserted += 1
+    return inserted, skipped
+
+
+def _seed_technologies(
+    session: Session, data_dir: Path, force: bool
+) -> tuple[int, int]:
+    """technologies.json から master_technologies テーブルへデータを投入する.
+
+    Returns:
+        tuple[int, int]: (挿入件数, スキップ件数)
+    """
+    from app.models.models import MasterTechnology, validate_level_thresholds
+
+    tech_json_path = data_dir / "technologies.json"
+    if not tech_json_path.exists():
+        print(f"[WARNING] {tech_json_path} が見つかりません。スキップします。")
+        return 0, 0
+
+    inserted = 0
+    skipped = 0
+    for item in json.loads(tech_json_path.read_text(encoding="utf-8")):
+        validate_level_thresholds(item["level_thresholds"])
+        existing = session.get(MasterTechnology, item["id"])
+
+        if existing is not None and not force:
+            skipped += 1
+            continue
+
+        if existing is not None:
+            for key, value in item.items():
+                setattr(existing, key, value)
+            existing.updated_at = datetime.now(UTC)
+            session.add(existing)
+        else:
+            session.add(MasterTechnology(**item))
             inserted += 1
     return inserted, skipped
 
@@ -184,6 +221,7 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
                     inserted_w += 1
 
         inserted_ace, skipped_ace = _seed_ace_pilots(session, data_dir, force)
+        inserted_tech, skipped_tech = _seed_technologies(session, data_dir, force)
 
         session.commit()
 
@@ -194,13 +232,18 @@ def seed_master_data(force: bool = False) -> dict[str, int]:
         "weapons_skipped": skipped_w,
         "ace_pilots_inserted": inserted_ace,
         "ace_pilots_skipped": skipped_ace,
+        "technologies_inserted": inserted_tech,
+        "technologies_skipped": skipped_tech,
     }
 
 
 def main() -> None:
     """コマンドラインエントリーポイント."""
     parser = argparse.ArgumentParser(
-        description="マスターデータ (mobile_suits / weapons / ace_pilots) を DB へシードする"
+        description=(
+            "マスターデータ (mobile_suits / weapons / ace_pilots / technologies) を"
+            " DB へシードする"
+        )
     )
     parser.add_argument(
         "--force",
@@ -217,6 +260,8 @@ def main() -> None:
     print(f"[INFO] weapons: {w_in} 件挿入, {w_sk} 件スキップ")
     ace_in, ace_sk = result["ace_pilots_inserted"], result["ace_pilots_skipped"]
     print(f"[INFO] ace_pilots: {ace_in} 件挿入, {ace_sk} 件スキップ")
+    tech_in, tech_sk = result["technologies_inserted"], result["technologies_skipped"]
+    print(f"[INFO] technologies: {tech_in} 件挿入, {tech_sk} 件スキップ")
     print("[INFO] シード完了")
 
 

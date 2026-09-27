@@ -225,7 +225,7 @@ def test_collection_without_pilot_treats_all_factions_available(
 
 
 def test_collection_query_count_is_constant(session: Session, pilot: Pilot) -> None:
-    """取得が設計図・エントリー・所持設計図の数によらず4回のクエリで済むこと."""
+    """取得が設計図・エントリー・所持設計図の数によらず7回のクエリで済むこと."""
     blueprint_ids = list(session.exec(select(MasterBlueprint.id)).all())
     _make_restricted(session, *blueprint_ids)
     _make_table(session, DropScope.batch(), [(bid, False) for bid in blueprint_ids])
@@ -240,7 +240,7 @@ def test_collection_query_count_is_constant(session: Session, pilot: Pilot) -> N
         items = BlueprintCollectionService.get_collection(session, USER_ID)
 
     assert len(items) == len(blueprint_ids) > 3
-    assert len(statements) == 4
+    assert len(statements) == 7
 
 
 def test_get_collection_api(client: TestClient, session: Session, pilot: Pilot) -> None:
@@ -268,6 +268,7 @@ def test_get_collection_api(client: TestClient, session: Session, pilot: Pilot) 
         "source": None,
         "is_available_to_faction": True,
         "obtainable_theaters": [{"label": ALL_THEATERS_LABEL, "requires_win": True}],
+        "tech_requirements": [],
     }
 
 

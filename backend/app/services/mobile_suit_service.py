@@ -28,6 +28,7 @@ from app.models.models import (
     resolve_weapon_slot_count,
 )
 from app.services.blueprint_service import BlueprintService
+from app.services.technology_service import TechnologyService
 from app.services.weapon_service import validate_aim_distribution
 
 # 機体マスターの specs から MobileSuit へそのままコピーする項目（weapons は別途変換する）。
@@ -305,9 +306,15 @@ class MobileSuitService:
                 ),
             )
         ).all()
+        requirements = TechnologyService.requirements_by_blueprint(session)
         return [
             _master_mobile_suit_to_dict(
-                record, BlueprintService.settings_of(blueprint, record.price)
+                record,
+                BlueprintService.settings_of(
+                    blueprint,
+                    record.price,
+                    requirements.get(blueprint.id) if blueprint else None,
+                ),
             )
             for record, blueprint in rows
         ]
@@ -382,7 +389,7 @@ class MobileSuitService:
         gd._cache_expires_at = None
 
         return _master_mobile_suit_to_dict(
-            record, BlueprintService.settings_of(blueprint, record.price)
+            record, BlueprintService.saved_settings(session, blueprint, record.price)
         )
 
     @staticmethod
@@ -493,7 +500,7 @@ class MobileSuitService:
         gd._cache_expires_at = None
 
         return _master_mobile_suit_to_dict(
-            record, BlueprintService.settings_of(blueprint, record.price)
+            record, BlueprintService.saved_settings(session, blueprint, record.price)
         )
 
     @staticmethod

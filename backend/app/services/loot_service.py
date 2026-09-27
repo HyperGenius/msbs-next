@@ -1,4 +1,4 @@
-"""戦利品に表示用の対象の名前を付けるサービス."""
+"""戦利品に表示用の名前を付けるサービス."""
 
 from collections.abc import Iterable, Sequence
 
@@ -10,9 +10,11 @@ from app.models.models import (
     BlueprintTargetType,
     LootItem,
     LootItemDetail,
+    LootKind,
     MasterMobileSuit,
     MasterWeapon,
 )
+from app.services.technology_service import TechnologyService
 
 TargetKey = tuple[str, str]
 
@@ -25,11 +27,11 @@ class LootService:
         session: Session,
         loots: Sequence[Sequence[LootItem | dict] | None],
     ) -> list[list[LootItemDetail] | None]:
-        """戦利品の一覧ごとに、対象の名前を付けて返す.
+        """戦利品の一覧ごとに、表示名を付けて返す.
 
-        名前は保存済みの loot に書き込まず、機体・武器マスターから引く。
+        名前は保存済みの loot に書き込まず、機体・武器・技術マスターから引く。
         導入済みのバトル結果にも名前を付けるため。
-        クエリは一覧の数によらず最大2回。
+        クエリは一覧の数によらず最大3回。
 
         Returns:
             `loots` と同じ順序の一覧。`None`（導入前のバトル）は `None` のまま返す。
@@ -38,19 +40,31 @@ class LootService:
             None if loot is None else [LootItem.model_validate(item) for item in loot]
             for loot in loots
         ]
-        names = LootService._target_names(
-            session, (item for loot in parsed if loot for item in loot)
+        items = [item for loot in parsed if loot for item in loot]
+        names = LootService._target_names(session, items)
+        tech_names = TechnologyService.tech_names(
+            session,
+            sorted(
+                {
+                    item.tech_id
+                    for item in items
+                    if item.kind == LootKind.TECH_FRAGMENT and item.tech_id
+                }
+            ),
         )
+
+        def name_of(item: LootItem) -> str:
+            if item.kind == LootKind.TECH_FRAGMENT:
+                return tech_names.get(item.tech_id or "", item.tech_id or "")
+            return names.get(
+                (item.target_type or "", item.target_id or ""), item.target_id or ""
+            )
+
         return [
             None
             if loot is None
             else [
-                LootItemDetail(
-                    **item.model_dump(),
-                    target_name=names.get(
-                        (item.target_type, item.target_id), item.target_id
-                    ),
-                )
+                LootItemDetail(**item.model_dump(), target_name=name_of(item))
                 for item in loot
             ]
             for loot in parsed
@@ -74,6 +88,8 @@ class LootService:
         mobile_suit_ids: set[str] = set()
         weapon_ids: set[str] = set()
         for item in items:
+            if item.target_id is None:
+                continue
             if item.target_type == BlueprintTargetType.MOBILE_SUIT:
                 mobile_suit_ids.add(item.target_id)
             elif item.target_type == BlueprintTargetType.WEAPON:

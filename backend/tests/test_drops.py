@@ -182,6 +182,12 @@ def test_roll_grants_blueprint_as_drop(session: Session, pilot: Pilot) -> None:
         "target_id": "dom",
         "is_new": True,
         "credits_awarded": 0,
+        "tech_id": None,
+        "fragment_count": None,
+        "level": None,
+        "max_level": None,
+        "is_level_up": False,
+        "fragments_to_next_level": None,
     }
     owned = session.exec(
         select(PlayerBlueprint).where(PlayerBlueprint.user_id == USER_ID)

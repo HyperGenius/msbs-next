@@ -2,6 +2,7 @@
 
 from collections import Counter
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import and_
 from sqlmodel import Session, col, delete, select
@@ -9,6 +10,7 @@ from sqlmodel import Session, col, delete, select
 from app.models.models import (
     BlueprintTargetSummary,
     BlueprintTargetType,
+    DropRewardType,
     DropTable,
     DropTableDetail,
     DropTableEntry,
@@ -16,9 +18,11 @@ from app.models.models import (
     DropTableUpdate,
     MasterBlueprint,
     MasterMobileSuit,
+    MasterTechnology,
     MasterWeapon,
 )
 from app.services.drop_service import DropScope, DropService
+from app.services.technology_service import TechnologyService
 
 # テーブルが未作成のときに返す設定。drop_rate が0なのでドロップは起きない。
 DEFAULT_TABLE_NAMES = {DropScope.batch(): "定期バトル"}
@@ -34,7 +38,7 @@ class DropTableService:
         """適用範囲のテーブルを、エントリーの表示情報付きで返す.
 
         テーブルが無ければ、エントリー無しの既定値を返す。
-        クエリはエントリー数によらず最大3回。
+        クエリはエントリー数によらず最大4回。
         """
         table = DropService.find_table(session, scope)
         entries: list[DropTableEntry] = []
@@ -47,17 +51,34 @@ class DropTableService:
                 ).all()
             )
         summaries = DropTableService._blueprint_summaries(session)
+        tech_names = TechnologyService.tech_names(
+            session, [entry.tech_id for entry in entries if entry.tech_id]
+        )
 
-        entry_details = [
-            DropTableEntryDetail(
-                **summaries[entry.blueprint_id].model_dump(),
-                weight=entry.weight,
-                requires_win=entry.requires_win,
-            )
-            for entry in entries
-            if entry.blueprint_id in summaries
-        ]
-        in_table = {entry.blueprint_id for entry in entries}
+        entry_details: list[DropTableEntryDetail] = []
+        for entry in entries:
+            if entry.reward_type == DropRewardType.TECH_FRAGMENT:
+                if entry.tech_id not in tech_names:
+                    continue
+                entry_details.append(
+                    DropTableEntryDetail(
+                        reward_type=entry.reward_type,
+                        tech_id=entry.tech_id,
+                        target_name=tech_names[entry.tech_id],
+                        weight=entry.weight,
+                        requires_win=entry.requires_win,
+                    )
+                )
+            elif entry.blueprint_id in summaries:
+                entry_details.append(
+                    DropTableEntryDetail(
+                        reward_type=entry.reward_type,
+                        **summaries[entry.blueprint_id].model_dump(),
+                        weight=entry.weight,
+                        requires_win=entry.requires_win,
+                    )
+                )
+        in_table = {entry.blueprint_id for entry in entries if entry.blueprint_id}
         unobtainable = [
             summary
             for blueprint_id, summary in summaries.items()
@@ -91,29 +112,17 @@ class DropTableService:
         テーブルが無ければ作成する。エントリーは `data.entries` で置き換える。
 
         Raises:
-            ValueError: 同じ設計図が2つ以上のエントリーにある場合。
-                または設計図マスターに無い設計図がある場合。
+            ValueError: 同じ設計図・技術が2つ以上のエントリーにある場合。
+                または設計図マスター・技術マスターに無いIDがある場合。
         """
-        blueprint_ids = [entry.blueprint_id for entry in data.entries]
-        duplicated = sorted(
-            blueprint_id
-            for blueprint_id, count in Counter(blueprint_ids).items()
-            if count > 1
+        blueprint_ids = [e.blueprint_id for e in data.entries if e.blueprint_id]
+        tech_ids = [e.tech_id for e in data.entries if e.tech_id]
+        DropTableService._check_references(
+            session, "blueprints", blueprint_ids, col(MasterBlueprint.id)
         )
-        if duplicated:
-            raise ValueError(f"Duplicate blueprints: {', '.join(duplicated)}")
-
-        if blueprint_ids:
-            existing = set(
-                session.exec(
-                    select(MasterBlueprint.id).where(
-                        col(MasterBlueprint.id).in_(blueprint_ids)
-                    )
-                ).all()
-            )
-            missing = sorted(set(blueprint_ids) - existing)
-            if missing:
-                raise ValueError(f"Blueprints not found: {', '.join(missing)}")
+        DropTableService._check_references(
+            session, "technologies", tech_ids, col(MasterTechnology.id)
+        )
 
         table = DropService.find_table(session, scope)
         if table is None:
@@ -139,13 +148,34 @@ class DropTableService:
             session.add(
                 DropTableEntry(
                     drop_table_id=table.id,
+                    reward_type=entry.reward_type.value,
                     blueprint_id=entry.blueprint_id,
+                    tech_id=entry.tech_id,
                     weight=entry.weight,
                     requires_win=entry.requires_win,
                 )
             )
         session.commit()
         return DropTableService.get_detail(session, scope)
+
+    @staticmethod
+    def _check_references(
+        session: Session, label: str, ids: list[str], id_column: Any
+    ) -> None:
+        """エントリーのIDに重複が無く、すべてマスターにあることを検証する.
+
+        Raises:
+            ValueError: 重複したIDか、マスターに無いIDがある場合。
+        """
+        duplicated = sorted(i for i, count in Counter(ids).items() if count > 1)
+        if duplicated:
+            raise ValueError(f"Duplicate {label}: {', '.join(duplicated)}")
+        if not ids:
+            return
+        existing = set(session.exec(select(id_column).where(id_column.in_(ids))).all())
+        missing = sorted(set(ids) - existing)
+        if missing:
+            raise ValueError(f"{label.capitalize()} not found: {', '.join(missing)}")
 
     @staticmethod
     def _blueprint_summaries(session: Session) -> dict[str, BlueprintTargetSummary]:

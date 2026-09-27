@@ -48,6 +48,7 @@ from app.routers import (
     rankings,
     shop,
     teams,
+    technologies,
 )
 from app.services.battle_digest_service import compute_battle_digest_fields
 from app.services.battle_log_storage_service import (
@@ -101,8 +102,10 @@ app.include_router(admin.simulation_router)
 app.include_router(admin.npc_router)
 app.include_router(admin.ace_pilot_router)
 app.include_router(admin.drop_table_router)
+app.include_router(admin.technology_router)
 app.include_router(player_weapons.router)
 app.include_router(blueprints.router)
+app.include_router(technologies.router)
 
 # --- Response Schemas ---
 # models.py にあるクラスを使用する形でも良いですが、

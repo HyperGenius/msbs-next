@@ -1,0 +1,16 @@
+[
+  {
+    "id": "beam_generator_tech",
+    "name": "ビームジェネレータ技術",
+    "description": "高出力ビーム武器の開発に必要な技術",
+    "level_thresholds": [3, 8, 15],
+    "overflow_credit_value": 500
+  },
+  {
+    "id": "psycommu_tech",
+    "name": "サイコミュ技術",
+    "description": "サイコミュ武器、サイコミュ搭載機体の開発に必要な技術",
+    "level_thresholds": [3, 8, 15],
+    "overflow_credit_value": 500
+  }
+]
