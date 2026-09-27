@@ -317,8 +317,8 @@ class TechnologyService:
     ) -> MasterTechnology | None:
         """技術マスターを更新する.
 
-        閾値を減らして最大Lvが下がっても、それを超える必要Lvの設定は残す。
-        その設計図は購入できなくなるため、ValueError にする。
+        最大Lvを、設計図に設定された必要Lvより下げる変更は拒否する。
+        その設計図が誰にも購入できなくなるため。
 
         Returns:
             更新後の技術マスター。見つからなければ None。
