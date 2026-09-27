@@ -35,6 +35,11 @@ export default function HomePage() {
               ドロップテーブル管理
             </SciFiButton>
           </Link>
+          <Link href="/technologies">
+            <SciFiButton className="w-full" variant="secondary">
+              技術マスタ管理
+            </SciFiButton>
+          </Link>
         </div>
       </SciFiPanel>
     </main>

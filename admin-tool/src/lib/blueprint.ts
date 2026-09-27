@@ -17,6 +17,7 @@ export function defaultBlueprintSettings(price: number): MasterBlueprintSettings
   return {
     is_standard_issue: true,
     duplicate_credit_value: Math.floor(price * DUPLICATE_CREDIT_RATIO),
+    tech_requirements: [],
   };
 }
 
@@ -28,11 +29,12 @@ export function applyBlueprintInput(
   return {
     is_standard_issue: input?.is_standard_issue ?? current.is_standard_issue,
     duplicate_credit_value: input?.duplicate_credit_value ?? current.duplicate_credit_value,
+    tech_requirements: input?.tech_requirements ?? current.tech_requirements,
   };
 }
 
 export function matchesBlueprintFilter(
-  blueprint: MasterBlueprintSettings,
+  blueprint: Pick<MasterBlueprintSettings, "is_standard_issue">,
   filter: BlueprintFilter
 ): boolean {
   if (filter === "standard") return blueprint.is_standard_issue;

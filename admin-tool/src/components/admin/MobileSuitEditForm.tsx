@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { MasterMobileSuit } from "@/types/admin";
 import { defaultBlueprintSettings } from "@/lib/blueprint";
+import { firstErrorMessage } from "@/lib/technology";
 import BlueprintSettingsFields, {
   blueprintFormSchema,
   nullableNumberOptions,
@@ -514,13 +515,22 @@ export default function MobileSuitEditForm({
       {/* 設計図 */}
       <div>
         <p className={sectionTitle}>設計図</p>
-        <BlueprintSettingsFields
-          standardIssueField={register("blueprint.is_standard_issue")}
-          creditValueField={register("blueprint.duplicate_credit_value", nullableNumberOptions)}
-          creditValueError={errors.blueprint?.duplicate_credit_value?.message}
-          defaultCreditValue={
-            initialData ? null : defaultBlueprintSettings(Number.isFinite(price) ? price : 0).duplicate_credit_value
-          }
+        <Controller
+          control={control}
+          name="blueprint.tech_requirements"
+          render={({ field }) => (
+            <BlueprintSettingsFields
+              standardIssueField={register("blueprint.is_standard_issue")}
+              creditValueField={register("blueprint.duplicate_credit_value", nullableNumberOptions)}
+              creditValueError={errors.blueprint?.duplicate_credit_value?.message}
+              defaultCreditValue={
+                initialData ? null : defaultBlueprintSettings(Number.isFinite(price) ? price : 0).duplicate_credit_value
+              }
+              techRequirements={field.value}
+              onTechRequirementsChange={field.onChange}
+              techRequirementsError={firstErrorMessage(errors.blueprint?.tech_requirements)}
+            />
+          )}
         />
       </div>
 

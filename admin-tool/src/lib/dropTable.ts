@@ -3,8 +3,10 @@ import {
   BlueprintTargetSummary,
   DropTableDetail,
   DropTableEntryDetail,
+  DropTableEntryInput,
   DropTableUpdate,
   MasterMobileSuit,
+  MasterTechnology,
   MasterWeapon,
 } from "@/types/admin";
 
@@ -21,14 +23,36 @@ export const TARGET_TYPE_LABELS: Record<BlueprintTargetSummary["target_type"], s
   WEAPON: "武器",
 };
 
+export const TECH_FRAGMENT_LABEL = "技術断片";
+
+/** エントリーの種別の表示名。設計図は対象の種別で分ける */
+export function entryTypeLabel(entry: DropTableEntryDetail): string {
+  if (entry.reward_type === "TECH_FRAGMENT" || entry.target_type === null) {
+    return TECH_FRAGMENT_LABEL;
+  }
+  return TARGET_TYPE_LABELS[entry.target_type];
+}
+
+/** 同じ報酬のエントリーを見分けるキー。設計図と技術でIDが重なっても区別する */
+export function entryKey(entry: Pick<DropTableEntryDetail, "reward_type" | "blueprint_id" | "tech_id">): string {
+  return entry.reward_type === "BLUEPRINT" ? `blueprint:${entry.blueprint_id}` : `tech:${entry.tech_id}`;
+}
+
+/** エントリーのID（設計図IDまたは技術ID） */
+export function entryRewardId(entry: DropTableEntryDetail): string {
+  return (entry.reward_type === "BLUEPRINT" ? entry.blueprint_id : entry.tech_id) ?? "";
+}
+
 // ============================================================
 // フォーム
 // ============================================================
 
 const entrySchema = z.object({
-  blueprint_id: z.string().min(1),
-  target_type: z.enum(["MOBILE_SUIT", "WEAPON"]),
-  target_id: z.string(),
+  reward_type: z.enum(["BLUEPRINT", "TECH_FRAGMENT"]),
+  blueprint_id: z.string().min(1).nullable(),
+  target_type: z.enum(["MOBILE_SUIT", "WEAPON"]).nullable(),
+  target_id: z.string().nullable(),
+  tech_id: z.string().min(1).nullable(),
   target_name: z.string(),
   faction: z.string(),
   is_standard_issue: z.boolean(),
@@ -46,14 +70,21 @@ export const dropTableFormSchema = z
   .superRefine((values, ctx) => {
     const seen = new Set<string>();
     values.entries.forEach((entry, index) => {
-      if (seen.has(entry.blueprint_id)) {
+      const isBlueprint = entry.reward_type === "BLUEPRINT";
+      const idField = isBlueprint ? "blueprint_id" : "tech_id";
+      if (entry[idField] === null) {
+        ctx.addIssue({ code: "custom", path: ["entries", index, idField], message: "IDが無い" });
+        return;
+      }
+      const key = entryKey(entry);
+      if (seen.has(key)) {
         ctx.addIssue({
           code: "custom",
-          path: ["entries", index, "blueprint_id"],
-          message: "同じ設計図がすでにテーブルにある",
+          path: ["entries", index, idField],
+          message: isBlueprint ? "同じ設計図がすでにテーブルにある" : "同じ技術がすでにテーブルにある",
         });
       }
-      seen.add(entry.blueprint_id);
+      seen.add(key);
     });
   });
 
@@ -73,12 +104,16 @@ export function toDropTableUpdate(values: DropTableFormValues): DropTableUpdate 
     name: values.name,
     drop_rate: values.drop_rate,
     win_rate_multiplier: values.win_rate_multiplier,
-    entries: values.entries.map(({ blueprint_id, weight, requires_win }) => ({
-      blueprint_id,
-      weight,
-      requires_win,
-    })),
+    entries: values.entries.map(toEntryInput),
   };
+}
+
+function toEntryInput(entry: DropTableFormValues["entries"][number]): DropTableEntryInput {
+  const { reward_type, weight, requires_win } = entry;
+  if (reward_type === "BLUEPRINT") {
+    return { reward_type, blueprint_id: entry.blueprint_id ?? "", weight, requires_win };
+  }
+  return { reward_type, tech_id: entry.tech_id ?? "", weight, requires_win };
 }
 
 // ============================================================
@@ -94,7 +129,23 @@ export function blueprintIdFor(
 }
 
 export function entryFromSummary(summary: BlueprintTargetSummary): DropTableEntryDetail {
-  return { ...summary, weight: 1, requires_win: false };
+  return { ...summary, reward_type: "BLUEPRINT", tech_id: null, weight: 1, requires_win: false };
+}
+
+/** 技術マスターから技術断片のエントリーを作る。技術断片は勢力で絞り込まない */
+export function entryFromTechnology(tech: MasterTechnology): DropTableEntryDetail {
+  return {
+    reward_type: "TECH_FRAGMENT",
+    blueprint_id: null,
+    target_type: null,
+    target_id: null,
+    tech_id: tech.id,
+    target_name: tech.name,
+    faction: "",
+    is_standard_issue: false,
+    weight: 1,
+    requires_win: false,
+  };
 }
 
 export function entryFromMobileSuit(ms: MasterMobileSuit): DropTableEntryDetail {
@@ -151,7 +202,7 @@ function isCandidate(entry: RateEntry, faction: DropFaction, isWin: boolean): bo
 }
 
 /**
- * 1回のバトルで各エントリーの設計図が出る確率を、エントリーと同じ順で返す。
+ * 1回のバトルで各エントリーの報酬が出る確率を、エントリーと同じ順で返す。
  * 抽選対象外のエントリーは null。入力途中の不正な重みは 0 として扱う。
  */
 export function dropChances(
@@ -194,16 +245,23 @@ export function unobtainableBlueprints(
   currentBlueprintIds: string[]
 ): BlueprintTargetSummary[] {
   const current = new Set(currentBlueprintIds);
-  const removedEntries: BlueprintTargetSummary[] = saved.entries
-    .filter((entry) => !entry.is_standard_issue)
-    .map((entry) => ({
-      blueprint_id: entry.blueprint_id,
-      target_type: entry.target_type,
-      target_id: entry.target_id,
-      target_name: entry.target_name,
-      faction: entry.faction,
-      is_standard_issue: entry.is_standard_issue,
-    }));
+  const removedEntries: BlueprintTargetSummary[] = saved.entries.flatMap((entry) =>
+    entry.reward_type === "BLUEPRINT" &&
+    !entry.is_standard_issue &&
+    entry.blueprint_id !== null &&
+    entry.target_type !== null
+      ? [
+          {
+            blueprint_id: entry.blueprint_id,
+            target_type: entry.target_type,
+            target_id: entry.target_id ?? "",
+            target_name: entry.target_name,
+            faction: entry.faction,
+            is_standard_issue: entry.is_standard_issue,
+          },
+        ]
+      : []
+  );
   return [...saved.unobtainable_blueprints, ...removedEntries]
     .filter((summary) => !current.has(summary.blueprint_id))
     // backend と同じく設計図IDのコードポイント順に並べる。
