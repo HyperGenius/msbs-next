@@ -11,10 +11,7 @@ export default function CountdownTimer({ targetTime }: CountdownTimerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    if (!targetTime) {
-      setTimeLeft("--:--:--");
-      return;
-    }
+    if (!targetTime) return;
 
     const updateCountdown = () => {
       const now = new Date();
@@ -81,7 +78,7 @@ export default function CountdownTimer({ targetTime }: CountdownTimerProps) {
         NEXT BATTLE IN
       </div>
       <div className="text-4xl sm:text-5xl md:text-6xl font-bold text-[#00ff41] font-mono tracking-wider">
-        {timeLeft}
+        {targetTime ? timeLeft : "--:--:--"}
       </div>
       {formattedStartTime && (
         <div className="text-xs text-[#00ff41]/50 mt-2 font-mono">

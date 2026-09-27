@@ -68,12 +68,18 @@ export default function OnboardingOverlay({
   const [currentStep, setCurrentStep] = useState(startStep);
   const [isVisible, setIsVisible] = useState(false);
 
-  useEffect(() => {
+  // show が true になったとき（表示中に startStep が変わったときも）に開き直す。
+  // prevShow の初期値を false にして、show=true でマウントしたときも開く。
+  const [prevShow, setPrevShow] = useState(false);
+  const [prevStartStep, setPrevStartStep] = useState(startStep);
+  if (show !== prevShow || startStep !== prevStartStep) {
+    setPrevShow(show);
+    setPrevStartStep(startStep);
     if (show) {
       setIsVisible(true);
-      setCurrentStep(startStep); // Reset to the specified start step when showing
+      setCurrentStep(startStep);
     }
-  }, [show, startStep]);
+  }
 
   // Highlight target element based on current step
   useEffect(() => {

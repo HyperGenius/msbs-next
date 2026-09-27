@@ -24,7 +24,6 @@ function getGaugeColor(remaining: number, total: number): string {
  */
 export default function StatusPointGauge({ total, remaining }: StatusPointGaugeProps) {
   const gaugeColor = getGaugeColor(remaining, total);
-  const gaugePct = total > 0 ? Math.max(0, Math.min((remaining / total) * 100, 100)) : 0;
   const isEmpty = remaining <= 0;
 
   return (

@@ -358,6 +358,7 @@ luk: number;
 | 状況 | 対処 |
 |---|---|
 | `npx tsc` が失敗する | `cd frontend && ./node_modules/.bin/tsc --noEmit` を使う |
+| `npm run lint` で `react-hooks/set-state-in-effect` が出る | `useEffect` の本体で同期的に `setState` しない。props から決まる値は描画中に計算する（例: `CountdownTimer.tsx`）。props の変化で state を戻すときは、前回値を state に持って描画中に比較する（例: `HoldSciFiButton.tsx`・`OnboardingOverlay.tsx`）。`localStorage` は `useSyncExternalStore` で読む（例: `useOnboarding.ts`）。lint は CI（`frontend-ci.yaml`）と pre-commit で警告も失敗にしている（`--max-warnings=0`。Issue #568, #571） |
 | Vitest で `vi is not defined` | `import { vi } from "vitest"` を明示的に書く（globals 無効） |
 | `vi.mock` が hoisting されない | `vi.mock(...)` はファイル先頭の `import` より前に動作する（Vitest が自動 hoist） |
 | SSR で `getAuthToken` が null を返す | 正常動作。`window.Clerk` はクライアントサイドのみ存在する |

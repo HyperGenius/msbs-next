@@ -23,3 +23,20 @@ repos:
           - dotenv
           - fastapi
           - sqlmodel
+
+  # --- ESLint (frontend / admin-tool) ---
+  # 各ディレクトリの eslint.config.mjs とプラグインを使うため、インストール済みの eslint を呼ぶ。
+  # --no-warn-ignored は、ignore 対象のファイルで出る警告を --max-warnings で失敗にしないため。
+  - repo: local
+    hooks:
+      - id: eslint-frontend
+        name: eslint (frontend)
+        language: system
+        files: ^frontend/.*\.(js|jsx|mjs|cjs|ts|tsx)$
+        entry: bash -c 'cd frontend && ./node_modules/.bin/eslint --no-warn-ignored --max-warnings=0 "${@#frontend/}"' --
+      # react-hooks/incompatible-library の警告が残るため、警告では失敗にしない
+      - id: eslint-admin-tool
+        name: eslint (admin-tool)
+        language: system
+        files: ^admin-tool/.*\.(js|jsx|mjs|cjs|ts|tsx)$
+        entry: bash -c 'cd admin-tool && ./node_modules/.bin/eslint --no-warn-ignored "${@#admin-tool/}"' --

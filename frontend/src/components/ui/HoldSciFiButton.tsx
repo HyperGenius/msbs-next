@@ -79,11 +79,16 @@ export default function HoldSciFiButton({
     }
   }, []);
 
-  // loading が終わったらゲージをリセット
+  // loading が終わったらゲージをリセットする。
+  // state は描画中に戻す。ref は描画中に書けないため effect で戻す。
+  const [prevLoading, setPrevLoading] = useState(loading);
+  if (loading !== prevLoading) {
+    setPrevLoading(loading);
+    if (!loading) setProgress(0);
+  }
   useEffect(() => {
     if (!loading) {
       progressRef.current = 0;
-      setProgress(0);
       firedRef.current = false;
     }
   }, [loading]);
@@ -95,7 +100,6 @@ export default function HoldSciFiButton({
     };
   }, []);
 
-  const isActive = !disabled && !loading;
   const isFull = progress >= 100;
 
   // ゲージの色
