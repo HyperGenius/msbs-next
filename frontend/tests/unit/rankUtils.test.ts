@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import {
   enrichMobileSuit,
@@ -13,7 +14,10 @@ type Threshold = { rank: string; min: number };
 /** バックエンドの閾値（API の hp_rank 等の算出元） */
 const backendThresholds: Record<string, Threshold[]> = JSON.parse(
   readFileSync(
-    path.join(__dirname, "../../../backend/data/master/thresholds.json"),
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../../backend/data/master/thresholds.json",
+    ),
     "utf-8",
   ),
 );
