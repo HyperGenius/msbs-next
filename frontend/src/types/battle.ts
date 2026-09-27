@@ -11,3 +11,4 @@ export * from "./skill";
 export * from "./shop";
 export * from "./leaderboard";
 export * from "./social";
+export * from "./blueprint";

@@ -12,6 +12,7 @@ import {
   IconUsers,
   IconUser,
   IconMenu2,
+  IconFileCertificate,
 } from "@/components/icons/TablerIcons";
 
 const mainNavItems = [
@@ -24,6 +25,7 @@ const mainNavItems = [
 const menuItems = [
   { href: "/team", label: "Team", Icon: IconUsers },
   { href: "/pilot", label: "Pilot", Icon: IconUser },
+  { href: "/collection", label: "Collection", Icon: IconFileCertificate },
 ];
 
 /*

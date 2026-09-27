@@ -1,6 +1,7 @@
 /** MS 詳細表示パネル: モバイルではモーダル、PC ではインラインパネルとして機能する */
 "use client";
 
+import Link from "next/link";
 import { SciFiPanel, SciFiHeading } from "@/components/ui";
 import HoldSciFiButton from "@/components/ui/HoldSciFiButton";
 import BlueprintBadge from "./BlueprintBadge";
@@ -107,6 +108,12 @@ export default function MobileSuitDetailPanel({
             <div className="w-full py-3 text-center text-sm font-mono bg-[#0a0a0a] border border-[#00ff41]/30 text-[#00ff41]/50">
               未解放 (LOCKED)
             </div>
+            <Link
+              href="/collection"
+              className="block mt-2 text-center text-xs text-[#00f0ff]/80 hover:text-[#00f0ff] underline underline-offset-2"
+            >
+              設計図図鑑で入手先を確認する
+            </Link>
           </>
         ) : (
           <>

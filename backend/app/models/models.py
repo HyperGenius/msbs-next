@@ -1734,6 +1734,38 @@ class PlayerBlueprintResponse(SQLModel):
     acquired_at: datetime
 
 
+class ObtainableTheater(SQLModel):
+    """設計図を入手できる戦域（図鑑用）."""
+
+    label: str = Field(description="戦域の表示名")
+    requires_win: bool = Field(description="true なら勝利時だけドロップする")
+
+
+class BlueprintCollectionItem(SQLModel):
+    """設計図コレクション（図鑑）の1件."""
+
+    blueprint_id: str
+    target_type: str = Field(description="対象の種別 (BlueprintTargetType)")
+    target_id: str
+    target_name: str = Field(description="対象の表示名")
+    faction: str = Field(default="", description="機体の勢力。武器と共通機体は空文字")
+    is_standard_issue: bool
+    is_owned: bool
+    acquired_at: datetime | None = Field(
+        default=None, description="入手日時。未所持なら null"
+    )
+    source: str | None = Field(
+        default=None, description="入手経路 (BlueprintSource)。未所持なら null"
+    )
+    is_available_to_faction: bool = Field(
+        description="パイロットの勢力で入手できるか。false ならドロップしない"
+    )
+    obtainable_theaters: list[ObtainableTheater] = Field(
+        default_factory=list,
+        description="入手できる戦域。所持済み・標準配備・勢力外は空",
+    )
+
+
 # --- Drop Table Models ---
 
 
