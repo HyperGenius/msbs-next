@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       frontend: ${{ steps.filter.outputs.frontend }}
-      admin-tool: ${{ steps.filter.outputs.admin-tool }}
+      admin_tool: ${{ steps.filter.outputs.admin_tool }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
             frontend:
               - 'frontend/**'
               - '.github/workflows/frontend-ci.yaml'
-            admin-tool:
+            admin_tool:
               - 'admin-tool/**'
               - '.github/workflows/frontend-ci.yaml'
 
@@ -75,7 +75,7 @@ jobs:
 
   admin-tool:
     needs: changes
-    if: needs.changes.outputs.admin-tool == 'true'
+    if: needs.changes.outputs.admin_tool == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
