@@ -7,7 +7,8 @@ from datetime import UTC, date, datetime, timedelta, timezone
 
 from sqlmodel import Session, col, select
 
-from app.models.models import MasterTheater
+from app.engine.environment import EnvironmentProfile
+from app.models.models import BattleField, MasterEnvironment, MasterTheater
 
 JST = timezone(timedelta(hours=9), "JST")
 
@@ -101,3 +102,38 @@ class TheaterService:
             TheaterService.assign(theaters, from_date + timedelta(days=offset))
             for offset in range(days)
         ]
+
+    @staticmethod
+    def environment_profile(environment: MasterEnvironment) -> EnvironmentProfile:
+        """環境タイプのマスターから、戦闘エンジンに渡すプロファイルを作る."""
+        return EnvironmentProfile(
+            environment_id=environment.id,
+            sensor_range_multiplier=environment.sensor_range_multiplier,
+            ranged_accuracy_penalty=environment.ranged_accuracy_penalty,
+            ranged_penalty_ref_distance=environment.ranged_penalty_ref_distance,
+            default_obstacle_density=environment.default_obstacle_density,
+            default_terrain_grade=environment.default_terrain_grade,
+        )
+
+    @staticmethod
+    def resolve_environment_profile(
+        session: Session, environment_id: str | None
+    ) -> EnvironmentProfile | None:
+        """環境タイプIDからプロファイルを作る。見つからなければ None を返す."""
+        if environment_id is None:
+            return None
+        environment = session.get(MasterEnvironment, environment_id)
+        if environment is None:
+            return None
+        return TheaterService.environment_profile(environment)
+
+    @staticmethod
+    def battlefield_for(theater: MasterTheater | None) -> BattleField:
+        """戦域の障害物密度を反映した BattleField を返す.
+
+        戦域が密度を指定しないときは obstacle_density を渡さない。
+        エンジンが環境タイプの既定値を使う。
+        """
+        if theater is None or theater.obstacle_density is None:
+            return BattleField()
+        return BattleField(obstacle_density=theater.obstacle_density)

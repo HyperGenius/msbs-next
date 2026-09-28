@@ -46,6 +46,7 @@ from app.engine.constants import (
     SECTOR_FRONT_SIDE_DEG,
     SECTOR_REAR_SIDE_DEG,
     SPECIAL_ENVIRONMENT_EFFECTS,
+    TERRAIN_ADAPTABILITY_HIT_BONUS,
     get_weapon_slot_role_for_weapon,
 )
 from app.models.models import (
@@ -322,6 +323,26 @@ class CombatMixin:
         distance_ratio = min(1.0, distance / MINOVSKY_RANGED_PENALTY_REF_DISTANCE)
         return 1.0 - MINOVSKY_RANGED_ACCURACY_PENALTY * m * distance_ratio
 
+    def _get_environment_hit_multiplier(self, weapon: Weapon, distance: float) -> float:
+        """環境タイプによる射撃の命中率倍率を返す.
+
+        遠いほど倍率が下がり、プロファイルの基準距離以上で一定になる。
+        格闘武器とプロファイルが無い場合は 1.0 を返す。
+        """
+        profile = self.environment_profile  # type: ignore[attr-defined]
+        is_melee_weapon = getattr(
+            weapon, "weapon_type", "RANGED"
+        ) == "MELEE" or getattr(weapon, "is_melee", False)
+        if is_melee_weapon or profile is None or profile.ranged_accuracy_penalty <= 0:
+            return 1.0
+        distance_ratio = min(1.0, distance / profile.ranged_penalty_ref_distance)
+        return 1.0 - profile.ranged_accuracy_penalty * distance_ratio
+
+    def _get_terrain_hit_bonus(self, unit: MobileSuit) -> float:
+        """地形適正による命中・回避の補正値 (%) を返す."""
+        grade = self._get_terrain_grade(unit)  # type: ignore[attr-defined]
+        return TERRAIN_ADAPTABILITY_HIT_BONUS.get(grade, 0.0)
+
     def _check_attack_resources(
         self, weapon: Weapon, weapon_state: dict, resources: dict
     ) -> tuple[bool, str]:
@@ -366,7 +387,8 @@ class CombatMixin:
         """命中率を計算する.
 
         距離補正乗数を適用する（Phase C — 近接戦闘システム）。
-        射撃武器にはミノフスキー濃度による倍率も掛ける。
+        射撃武器にはミノフスキー濃度と環境タイプによる倍率も掛ける。
+        地形適正の補正は機体パラメータ補正と同じく乗算補正の後に加算する。
 
         Returns:
             tuple[float, float, str]: (命中率, 最適距離からの差, 攻撃セクタ)
@@ -416,6 +438,7 @@ class CombatMixin:
         hit_chance = hit_chance * accuracy_modifier
 
         hit_chance = hit_chance * self._get_minovsky_hit_multiplier(weapon, distance)
+        hit_chance = hit_chance * self._get_environment_hit_multiplier(weapon, distance)
 
         # セクタ補正を適用 (Phase E-3)
         _target_resources = self.unit_resources[str(target.id)]  # type: ignore[attr-defined]
@@ -428,6 +451,9 @@ class CombatMixin:
         # 機体パラメータ補正: 乗算補正後にフラット加算（accuracy_bonus=+N は最終命中率を常に+N%変化させる）
         hit_chance += getattr(actor, "accuracy_bonus", 0.0)
         hit_chance -= getattr(target, "evasion_bonus", 0.0)
+        hit_chance += self._get_terrain_hit_bonus(actor) - self._get_terrain_hit_bonus(
+            target
+        )
 
         # 命中率を [0.0, 100.0] にクランプ
         hit_chance = max(0.0, min(100.0, hit_chance))

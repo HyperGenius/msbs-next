@@ -16,6 +16,7 @@ from app.models.models import (
     Team,
     TeamMember,
 )
+from app.services.mobile_suit_service import MobileSuitService
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
 
@@ -345,7 +346,7 @@ async def team_entry(
             user_id=member.user_id,
             room_id=room.id,
             mobile_suit_id=ms.id,
-            mobile_suit_snapshot=ms.model_dump(),
+            mobile_suit_snapshot=MobileSuitService.build_entry_snapshot(session, ms),
         )
         session.add(entry)
         session.flush()

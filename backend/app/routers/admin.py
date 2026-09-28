@@ -116,6 +116,7 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
         turning_bonus=specs_raw.get("turning_bonus", 1.0),
         weapons=weapons,
         missing_parts=specs_raw.get("missing_parts", []),
+        terrain_adaptability=specs_raw.get("terrain_adaptability", {}),
     )
     return MasterMobileSuitEntry(
         id=raw["id"],

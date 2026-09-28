@@ -44,6 +44,8 @@ class MovementMixin:
     units: list[MobileSuit]
     _movement_grid: UnitSpatialGrid | None
     _threat_repulsion_grid: UnitSpatialGrid | None
+    environment: str
+    default_terrain_grade: str
 
     def _get_movement_grid(self) -> UnitSpatialGrid:
         """ポテンシャルフィールド計算用のグリッドを取得する（1ステップに1回だけ構築. Issue #450）.
@@ -559,14 +561,21 @@ class MovementMixin:
         # 位置を更新
         actor.position = Vector3.from_numpy(new_pos)
 
-    def _get_terrain_modifier(self, unit: MobileSuit) -> float:
-        """地形適正による補正係数を取得."""
-        # 地形適正を取得
-        terrain_adaptability = getattr(unit, "terrain_adaptability", {})
-        adaptability_grade = terrain_adaptability.get(self.environment, "A")  # type: ignore[attr-defined]
+    def _get_terrain_grade(self, unit: MobileSuit) -> str:
+        """現在の環境での地形適正ランクを返す.
 
-        # 補正係数を返す
-        modifier = TERRAIN_ADAPTABILITY_MODIFIERS.get(adaptability_grade, 1.0)
+        機体にこの環境のキーが無ければ、環境タイプの既定ランクを使う。
+        """
+        terrain_adaptability: dict[str, str] = (
+            getattr(unit, "terrain_adaptability", None) or {}
+        )
+        return terrain_adaptability.get(self.environment, self.default_terrain_grade)
+
+    def _get_terrain_modifier(self, unit: MobileSuit) -> float:
+        """地形適正による速度の補正係数を取得."""
+        modifier = TERRAIN_ADAPTABILITY_MODIFIERS.get(
+            self._get_terrain_grade(unit), 1.0
+        )
 
         # 重力井戸効果: 機動性をさらに低下
         if "GRAVITY_WELL" in self.special_effects:  # type: ignore[attr-defined]

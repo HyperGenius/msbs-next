@@ -14,6 +14,21 @@ TERRAIN_ADAPTABILITY_MODIFIERS = {
     "D": 0.4,
 }
 
+# 地形適正による命中・回避の補正値 (%)。
+# hit_chance += 攻撃側の値 − 防御側の値 として、乗算補正の後に加算する。
+# 戦闘中の命中率は中央値 3.5% 程度と低い。1 ランク 5% にすると不利な側の命中率が 0 に張り付く。
+# 不向きな機体でも勝てるよう、A 未満の減点は S の加点より小さくする。
+TERRAIN_ADAPTABILITY_HIT_BONUS: dict[str, float] = {
+    "S": 1.0,
+    "A": 0.0,
+    "B": -0.5,
+    "C": -1.0,
+    "D": -1.5,
+}
+
+# 環境プロファイルが無いときの地形適正ランク。
+DEFAULT_TERRAIN_GRADE: str = "A"
+
 # デフォルトの地形適正（標準的な機体）
 DEFAULT_TERRAIN_ADAPTABILITY = {
     "SPACE": "A",

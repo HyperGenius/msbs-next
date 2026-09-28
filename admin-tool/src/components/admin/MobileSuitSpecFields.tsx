@@ -343,7 +343,7 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
 
 /** 機体マスターにも同じ項目があるもの。EN・戦術は機体マスターに無いため含めない */
 export type MasterMobileSuitKey =
-  | Exclude<keyof MasterMobileSuit["specs"], "weapons" | "missing_parts">
+  | Exclude<keyof MasterMobileSuit["specs"], "weapons" | "missing_parts" | "terrain_adaptability">
   | "weapon_slot_count";
 
 /** 武器マスターにも同じ項目があり、フォームで編集できるもの */

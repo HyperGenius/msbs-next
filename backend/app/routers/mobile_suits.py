@@ -29,12 +29,15 @@ class EquipWeaponRequest(BaseModel):
 def _to_response(
     ms: MobileSuit, master_map: dict[str, MasterMobileSuit]
 ) -> MobileSuitResponse:
-    """マスター機体マップから weapon_slot_count / beam_generator_lv を解決してレスポンスに変換する."""
+    """マスター機体マップから weapon_slot_count / beam_generator_lv / 地形適正を解決してレスポンスに変換する."""
     master = master_map.get(ms.name)
     return MobileSuitResponse.from_mobile_suit(
         ms,
         weapon_slot_count=master.weapon_slot_count if master else None,
         beam_generator_lv=master.beam_generator_lv if master else None,
+        terrain_adaptability=(
+            dict(master.specs.get("terrain_adaptability") or {}) if master else None
+        ),
     )
 
 

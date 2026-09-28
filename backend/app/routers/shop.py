@@ -122,6 +122,7 @@ async def get_shop_listings(
         # Weaponオブジェクトをdictに変換
         specs = cast(dict[str, Any], item["specs"]).copy()
         specs["weapons"] = [w.model_dump() for w in specs["weapons"]]
+        specs.setdefault("terrain_adaptability", {})
 
         listings.append(
             ShopListingResponse(
