@@ -94,7 +94,7 @@ class TheaterForecastService:
                         environment.name if environment else theater.environment_id
                     ),
                     default_terrain_grade=(
-                        environment.default_terrain_grade
+                        TerrainGrade(environment.default_terrain_grade)
                         if environment
                         else TerrainGrade.A
                     ),

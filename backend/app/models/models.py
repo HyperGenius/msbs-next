@@ -1458,11 +1458,11 @@ class TheaterForecast(SQLModel):
     environment_name: str = Field(
         description="環境タイプ名。マスターに無ければ環境タイプID"
     )
-    default_terrain_grade: str = Field(
+    default_terrain_grade: TerrainGrade = Field(
         description="機体に地形適正の設定が無いときのランク"
     )
     minovsky_density: float
-    minovsky_level: str = Field(description="濃度の段階 (MinovskyLevel)")
+    minovsky_level: MinovskyLevel = Field(description="濃度の段階")
     hint: str
     description: str
 
