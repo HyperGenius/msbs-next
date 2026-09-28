@@ -259,11 +259,17 @@ def test_battle_endpoints_include_theater_names(
 
 
 def test_labels_for_battles_without_master(session: Session) -> None:
-    """戦域の無いバトルやマスターに無い環境タイプは、名前を None にする."""
+    """戦域の無いバトルやマスターに無い環境タイプは、名前を None にする.
+
+    マスターに無い戦域は、戦域IDを名前にする。
+    """
     solo = BattleResult(win_loss="WIN", environment="GROUND")
     legacy = BattleResult(win_loss="WIN")
+    deleted_theater = BattleResult(
+        win_loss="WIN", environment="SPACE", theater_id="a_baoa_qu"
+    )
 
-    labels = TheaterService.labels_for(session, [solo, legacy])
+    labels = TheaterService.labels_for(session, [solo, legacy, deleted_theater])
 
     assert labels[0].theater_name is None
     assert labels[0].environment_name is None
@@ -271,3 +277,4 @@ def test_labels_for_battles_without_master(session: Session) -> None:
     assert labels[1].theater_name is None
     assert labels[1].environment_name == "宇宙"
     assert labels[1].viewer_preset == "SPACE"
+    assert labels[2].theater_name == "a_baoa_qu"

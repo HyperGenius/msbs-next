@@ -40,6 +40,16 @@ export default function HomePage() {
               技術マスタ管理
             </SciFiButton>
           </Link>
+          <Link href="/theaters">
+            <SciFiButton className="w-full" variant="secondary">
+              戦域管理
+            </SciFiButton>
+          </Link>
+          <Link href="/environments">
+            <SciFiButton className="w-full" variant="secondary">
+              環境タイプ管理
+            </SciFiButton>
+          </Link>
         </div>
       </SciFiPanel>
     </main>

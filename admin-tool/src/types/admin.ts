@@ -411,3 +411,73 @@ export interface DropTableUpdate {
     win_rate_multiplier: number;
     entries: DropTableEntryInput[];
 }
+
+/** 障害物密度 */
+export type ObstacleDensity = "NONE" | "SPARSE" | "MEDIUM" | "DENSE";
+
+/** 地形適正のランク */
+export type TerrainGrade = "S" | "A" | "B" | "C" | "D";
+
+/** BattleViewer の描画プリセット */
+export type ViewerPreset = "SPACE" | "GROUND" | "COLONY" | "UNDERWATER" | "FOREST";
+
+/** 環境タイプ。id は機体の terrain_adaptability のキーになる */
+export interface MasterEnvironment {
+    /** 大文字スネークケースのID (例: FOREST)。作成後は変更できない */
+    id: string;
+    name: string;
+    description: string;
+    /** 索敵範囲の倍率。0 より大きく 1 以下 */
+    sensor_range_multiplier: number;
+    /** 射撃命中ペナルティの係数 α (0〜1) */
+    ranged_accuracy_penalty: number;
+    /** 射撃命中ペナルティが最大になる距離 (m)。0 より大きい */
+    ranged_penalty_ref_distance: number;
+    default_obstacle_density: ObstacleDensity;
+    /** 機体に地形適正の設定が無いときのランク */
+    default_terrain_grade: TerrainGrade;
+    viewer_preset: ViewerPreset;
+}
+
+/** 環境タイプの更新リクエスト。未指定の項目は変更しない */
+export type MasterEnvironmentUpdate = Partial<Omit<MasterEnvironment, "id">>;
+
+/** 戦域 */
+export interface MasterTheater {
+    /** スネークケースのID (例: solomon)。作成後は変更できない */
+    id: string;
+    name: string;
+    environment_id: string;
+    /** ミノフスキー濃度の基準値 (0〜1) */
+    base_minovsky: number;
+    /** ミノフスキー濃度の揺らぎ幅 (0〜0.5) */
+    minovsky_variance: number;
+    /** null なら環境タイプの既定値 */
+    obstacle_density: ObstacleDensity | null;
+    hint: string;
+    description: string;
+    /** ローテーション順 (昇順) */
+    rotation_order: number;
+    /** ローテーションに含めるか */
+    is_active: boolean;
+}
+
+/** 戦域の更新リクエスト。未指定の項目は変更しない。obstacle_density は null で環境タイプの既定値に戻す */
+export type MasterTheaterUpdate = Partial<Omit<MasterTheater, "id">>;
+
+/** ローテーションの1回分の開催（公開の予報 API と同じ形） */
+export interface TheaterRotationSlot {
+    /** 開催予定時刻 (UTC) */
+    scheduled_at: string;
+    /** 作成済みの OPEN ルームの開催なら true。保存済みの値なので、戦域を変更しても変わらない */
+    is_current: boolean;
+    theater_id: string;
+    theater_name: string;
+    environment_id: string;
+    environment_name: string;
+    default_terrain_grade: TerrainGrade;
+    minovsky_density: number;
+    minovsky_level: "LOW" | "MEDIUM" | "HIGH";
+    hint: string;
+    description: string;
+}

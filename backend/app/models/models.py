@@ -1216,9 +1216,11 @@ class BattleResult(SQLModel, table=True):
     )
     theater_id: str | None = Field(
         default=None,
-        foreign_key="master_theaters.id",
         index=True,
-        description="戦域ID。定期バトル以外と戦域なしは null",
+        description=(
+            "戦域ID。定期バトル以外と戦域なしは null。"
+            "戦域マスターを削除しても結果を残すため FK は張らない"
+        ),
     )
     minovsky_density: float | None = Field(
         default=None, description="戦闘時のミノフスキー濃度 (0〜1)"
@@ -1467,6 +1469,89 @@ class TheaterForecast(SQLModel):
     description: str
 
 
+class MasterEnvironmentFields(SQLModel):
+    """環境タイプの編集できる項目（管理者用）."""
+
+    name: str = Field(min_length=1)
+    description: str = ""
+    sensor_range_multiplier: float = Field(default=1.0, gt=0, le=1)
+    ranged_accuracy_penalty: float = Field(default=0.0, ge=0, le=1)
+    ranged_penalty_ref_distance: float = Field(default=400.0, gt=0)
+    default_obstacle_density: ObstacleDensity = ObstacleDensity.MEDIUM
+    default_terrain_grade: TerrainGrade = TerrainGrade.A
+    viewer_preset: ViewerPreset = ViewerPreset.SPACE
+
+
+class MasterEnvironmentEntry(MasterEnvironmentFields):
+    """環境タイプ（管理者用レスポンス）."""
+
+    id: str
+
+
+class MasterEnvironmentCreate(MasterEnvironmentFields):
+    """環境タイプの新規追加リクエスト."""
+
+    id: str
+
+
+class MasterEnvironmentUpdate(SQLModel):
+    """環境タイプの更新リクエスト。未指定の項目は変更しない."""
+
+    name: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    sensor_range_multiplier: float | None = Field(default=None, gt=0, le=1)
+    ranged_accuracy_penalty: float | None = Field(default=None, ge=0, le=1)
+    ranged_penalty_ref_distance: float | None = Field(default=None, gt=0)
+    default_obstacle_density: ObstacleDensity | None = None
+    default_terrain_grade: TerrainGrade | None = None
+    viewer_preset: ViewerPreset | None = None
+
+
+class MasterTheaterFields(SQLModel):
+    """戦域の編集できる項目（管理者用）."""
+
+    name: str = Field(min_length=1)
+    environment_id: str = Field(min_length=1)
+    base_minovsky: float = Field(default=0.0, ge=0, le=1)
+    minovsky_variance: float = Field(default=0.0, ge=0, le=0.5)
+    obstacle_density: ObstacleDensity | None = Field(
+        default=None, description="null なら環境タイプの既定値"
+    )
+    hint: str = ""
+    description: str = ""
+    rotation_order: int = 0
+    is_active: bool = True
+
+
+class MasterTheaterEntry(MasterTheaterFields):
+    """戦域（管理者用レスポンス）."""
+
+    id: str
+
+
+class MasterTheaterCreate(MasterTheaterFields):
+    """戦域の新規追加リクエスト."""
+
+    id: str
+
+
+class MasterTheaterUpdate(SQLModel):
+    """戦域の更新リクエスト.
+
+    未指定の項目は変更しない。`obstacle_density` は null を送ると環境タイプの既定値に戻す。
+    """
+
+    name: str | None = Field(default=None, min_length=1)
+    environment_id: str | None = Field(default=None, min_length=1)
+    base_minovsky: float | None = Field(default=None, ge=0, le=1)
+    minovsky_variance: float | None = Field(default=None, ge=0, le=0.5)
+    obstacle_density: ObstacleDensity | None = None
+    hint: str | None = None
+    description: str | None = None
+    rotation_order: int | None = None
+    is_active: bool | None = None
+
+
 class BattleRoom(SQLModel, table=True):
     """バトルルーム (定期更新バトルの開催回を管理)."""
 
@@ -1479,9 +1564,11 @@ class BattleRoom(SQLModel, table=True):
     scheduled_at: datetime = Field(description="実行予定時刻")
     theater_id: str | None = Field(
         default=None,
-        foreign_key="master_theaters.id",
         index=True,
-        description="戦域ID。null は戦域なし",
+        description=(
+            "戦域ID。null は戦域なし。"
+            "戦域マスターを削除しても終了したルームを残すため FK は張らない"
+        ),
     )
     minovsky_density: float | None = Field(
         default=None, description="ミノフスキー濃度 (0〜1)"

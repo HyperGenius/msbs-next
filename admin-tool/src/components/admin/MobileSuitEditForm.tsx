@@ -8,6 +8,8 @@ import { z } from "zod";
 import { MasterMobileSuit } from "@/types/admin";
 import { defaultBlueprintSettings } from "@/lib/blueprint";
 import { firstErrorMessage } from "@/lib/technology";
+import { terrainAdaptabilitySchema } from "@/lib/theater";
+import TerrainAdaptabilityFields from "./TerrainAdaptabilityFields";
 import BlueprintSettingsFields, {
   blueprintFormSchema,
   nullableNumberOptions,
@@ -63,6 +65,7 @@ export const masterMobileSuitSchema = z
       acceleration_bonus: z.number({ message: "Must be a number" }).positive(),
       turning_bonus: z.number({ message: "Must be a number" }).positive(),
       weapons: z.array(weaponSchema).min(1, "At least one weapon is required"),
+      terrain_adaptability: terrainAdaptabilitySchema,
     }),
     blueprint: blueprintFormSchema,
   })
@@ -142,6 +145,7 @@ const defaultValues: MobileSuitFormValues = {
     acceleration_bonus: 1.0,
     turning_bonus: 1.0,
     weapons: [{ ...defaultWeapon }],
+    terrain_adaptability: {},
   },
   blueprint: toBlueprintFormValues(null),
 };
@@ -186,6 +190,7 @@ function toFormValues(ms: MasterMobileSuit): MobileSuitFormValues {
         cool_down_turn: w.cool_down_turn ?? 0,
         required_beam_generator_lv: w.required_beam_generator_lv ?? 0,
       })),
+      terrain_adaptability: { ...(ms.specs.terrain_adaptability ?? {}) },
     },
     blueprint: toBlueprintFormValues(ms.blueprint),
   };
@@ -510,6 +515,22 @@ export default function MobileSuitEditForm({
             </div>
           ))}
         </div>
+      </div>
+
+      {/* 地形適正 */}
+      <div>
+        <p className={sectionTitle}>地形適正</p>
+        <Controller
+          control={control}
+          name="specs.terrain_adaptability"
+          render={({ field }) => (
+            <TerrainAdaptabilityFields
+              value={field.value}
+              onChange={field.onChange}
+              error={firstErrorMessage(errors.specs?.terrain_adaptability)}
+            />
+          )}
+        />
       </div>
 
       {/* 設計図 */}
