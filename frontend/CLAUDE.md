@@ -21,6 +21,7 @@ services/
 ├── shop.ts         ← ショップ商品一覧・購入
 ├── skills.ts       ← スキル習得・レベルアップ
 ├── teams.ts        ← チーム作成・招待・Ready・離脱・エントリー
+├── theaters.ts     ← 戦域予報
 └── upgrades.ts     ← 機体強化プレビュー・実行
 ```
 
@@ -59,6 +60,7 @@ types/
 ├── shop.ts         ← ショップ商品・強化プレビュー・武器管理
 ├── skill.ts        ← スキル定義・SkillId
 ├── social.ts       ← Friend・Team・チームメンバー
+├── theater.ts      ← 戦域予報
 └── weapon.ts       ← Weapon・WeaponType
 ```
 
@@ -78,6 +80,7 @@ leaderboard → mobileSuit
 social     → (なし)
 blueprint  → shop
 admin      → weapon
+theater    → (なし)
 ```
 
 ---

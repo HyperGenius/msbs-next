@@ -15,3 +15,4 @@ export * from "./friends";
 export * from "./teams";
 export * from "./blueprints";
 export * from "./technologies";
+export * from "./theaters";
