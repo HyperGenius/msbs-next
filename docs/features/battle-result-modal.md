@@ -23,6 +23,7 @@ Issue #564（Epic #550 Sub-Issue 6）で、デザインの見直し、戦利品�
 | 領域 | 内容 |
 |---|---|
 | ヘッダー | `// BATTLE RESULT`、結果タイトル（MISSION COMPLETE / MISSION FAILED / DRAW）、勝利・敗北・引き分け |
+| 戦域 | 「ソロモン宙域（宇宙）／ミノフスキー濃度 42%」の形式（`formatTheaterLabel()`）。定期バトルで戦域のあるときだけ出す（Issue #577。詳細は [theater-rotation.md](theater-rotation.md#バトル結果の表示)） |
 | 出撃機体 | 機体名、HP・装甲・機動性のランク、メイン・サブ武器の名前と威力ランク。スナップショットが無ければ出さない |
 | 獲得報酬 | 撃墜・EXP・CREDITS の3マス。レベルアップ時は「LEVEL UP Lv.X → Lv.Y」の行を追加する |
 | 戦利品 | `LootList`。空配列は「戦利品なし」、`null` は欄ごと出さない。設計図と技術断片（Issue #569）を同じ一覧に表示する |
@@ -85,7 +86,7 @@ Garage の機体一覧と同じランクを表示する。
 | 勝敗 | `Win` / `Lose` / `Draw` |
 | 戦利品 | `LootNewBlueprint` / `LootConverted` / `LootTechFragmentLevelUp` / `LootEmpty` / `LootLegacyBattle` |
 | レベルアップ | `LevelUp` / `LevelUpWithNewLoot` |
-| その他の状態 | `ZeroKills` / `NoSnapshot` / `NoRewards` / `LongNames` / `UnreadBattleWithReplay` |
+| その他の状態 | `ZeroKills` / `NoSnapshot` / `NoRewards` / `LongNames` / `UnreadBattleWithReplay`（戦域の表示あり） |
 | 画面幅 | `MobileFull` / `MobileLose`（375px）、`DesktopFinalState`（1280px、演出なし） |
 
 戦利品1件の表示は `Loot/LootItemCard`（新規・換金・技術断片の通常の入手・Lvアップ・最大Lv到達・最大Lv後の換金・マスター削除済み・長い名前・一覧の状態・履歴のバッジ）で確認できる。

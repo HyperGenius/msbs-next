@@ -40,6 +40,7 @@ type ModalResult = {
   msSnapshot?: MobileSuit | null;
   kills?: number;
   loot?: LootItem[] | null;
+  theaterLabel?: string | null;
 };
 
 export default function Home() {
@@ -249,6 +250,7 @@ export default function Home() {
             msSnapshot={modalResult.msSnapshot}
             kills={modalResult.kills}
             loot={modalResult.loot}
+            theaterLabel={modalResult.theaterLabel}
             onClose={handleResultClose}
             // ソロミッションはホーム画面に BattleViewer を表示しているため、リプレイ導線は出さない
             onOpenReplay={currentUnreadBattle ? handleOpenReplay : undefined}

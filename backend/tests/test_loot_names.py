@@ -110,7 +110,10 @@ def test_with_names_keeps_none_and_empty(session: Session) -> None:
 
 
 def test_summaries_query_count_does_not_depend_on_battles(session: Session) -> None:
-    """バトル履歴の名前の取得が、バトル件数によらず2回のクエリで済むこと."""
+    """バトル履歴の名前の取得が、バトル件数によらず3回のクエリで済むこと.
+
+    戦利品の対象で2回、環境タイプで1回。戦域の無いバトルは戦域を引かない。
+    """
     _make_battle(session, [_loot("MOBILE_SUIT", "dom")], minutes_ago=1)
     _make_battle(session, [_loot("WEAPON", "beam_rifle")], minutes_ago=2)
     _make_battle(session, [_loot("MOBILE_SUIT", "gundam")], minutes_ago=3)
@@ -123,7 +126,7 @@ def test_summaries_query_count_does_not_depend_on_battles(session: Session) -> N
     with _recorded_queries(session) as statements:
         summaries = LootService.summaries(session, battles)
 
-    assert len(statements) == 2
+    assert len(statements) == 3
     assert [
         None if s.loot is None else [item.target_name for item in s.loot]
         for s in summaries

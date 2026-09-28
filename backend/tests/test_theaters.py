@@ -108,15 +108,18 @@ def test_resolve_for_date_is_deterministic(session: Session) -> None:
     assert first == second
 
 
-def test_only_solomon_is_active_by_default(session: Session) -> None:
-    """初期データではソロモン宙域・濃度 0 だけになる."""
-    for offset in range(3):
-        assignment = TheaterService.resolve_for_date(
-            session, date(2026, 10, 1) + timedelta(days=offset)
-        )
-        assert assignment.theater_id == "solomon"
-        assert assignment.environment_id == "SPACE"
-        assert assignment.minovsky_density == 0.0
+def test_initial_data_alternates_space_and_forest(session: Session) -> None:
+    """初期データではソロモン宙域と東南アジア密林が日替わりで交互になる."""
+    assignments = TheaterService.forecast(session, THEATER_ROTATION_EPOCH, 30)
+    for offset, assignment in enumerate(assignments):
+        if offset % 2 == 0:
+            assert assignment.theater_id == "solomon"
+            assert assignment.environment_id == "SPACE"
+            assert 0.2 <= assignment.minovsky_density <= 0.5
+        else:
+            assert assignment.theater_id == "southeast_asia_jungle"
+            assert assignment.environment_id == "FOREST"
+            assert 0.45 <= assignment.minovsky_density <= 0.75
 
 
 def test_active_theaters_alternate_by_date(session: Session) -> None:
@@ -147,10 +150,9 @@ def test_rotation_follows_rotation_order(session: Session) -> None:
 
 def test_no_active_theater_returns_empty_assignment(session: Session) -> None:
     """有効な戦域が無ければ戦域なし・濃度 0 になる."""
-    solomon = session.get(MasterTheater, "solomon")
-    assert solomon is not None
-    solomon.is_active = False
-    session.add(solomon)
+    for theater in session.exec(select(MasterTheater)).all():
+        theater.is_active = False
+        session.add(theater)
     session.commit()
 
     assignment = TheaterService.resolve_for_date(session, date(2026, 10, 1))
@@ -210,18 +212,19 @@ def test_existing_open_room_keeps_its_theater(session: Session) -> None:
     _clear_rooms(session)
     now = datetime(2026, 10, 1, 3, 0, tzinfo=UTC)
     room, _ = BattleRoomService.get_or_create_open_room(session, now=now)
-    assert room.theater_id == "solomon"
+    original_theater_id = room.theater_id
+    assert original_theater_id is not None
 
-    solomon = session.get(MasterTheater, "solomon")
-    assert solomon is not None
-    solomon.is_active = False
-    session.add(solomon)
+    theater = session.get(MasterTheater, original_theater_id)
+    assert theater is not None
+    theater.is_active = False
+    session.add(theater)
     session.commit()
 
     same_room, created = BattleRoomService.get_or_create_open_room(session, now=now)
     assert not created
     assert same_room.id == room.id
-    assert same_room.theater_id == "solomon"
+    assert same_room.theater_id == original_theater_id
 
 
 def test_postponed_room_is_reassigned(session: Session) -> None:

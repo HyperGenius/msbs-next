@@ -10,6 +10,7 @@ import ModalHeader from "./ModalHeader";
 import TurnController from "./TurnController";
 import BattleSummaryPanel from "./BattleSummaryPanel";
 import { useBattleLogs } from "@/services/api";
+import { getViewerEnvironment } from "@/utils/theater";
 
 interface BattleDetailModalProps {
   battle: BattleResult;
@@ -92,7 +93,7 @@ export default function BattleDetailModal({
                     obstacles={battle.obstacles_info}
                     mapBounds={battle.map_bounds}
                     currentTimestamp={currentTimestamp}
-                    environment={battle.environment || "SPACE"}
+                    environment={getViewerEnvironment(battle)}
                     recenterToken={recenterToken}
                   />
                   {/* ログを裏で読み込み中でも再生をブロックしない。読み込み継続中であることだけ

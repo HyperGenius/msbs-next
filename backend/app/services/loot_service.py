@@ -1,6 +1,7 @@
 """戦利品に表示用の名前を付けるサービス."""
 
 from collections.abc import Iterable, Sequence
+from dataclasses import asdict
 
 from sqlmodel import Session, col, select
 
@@ -15,6 +16,7 @@ from app.models.models import (
     MasterWeapon,
 )
 from app.services.technology_service import TechnologyService
+from app.services.theater_service import TheaterService
 
 TargetKey = tuple[str, str]
 
@@ -74,11 +76,14 @@ class LootService:
     def summaries(
         session: Session, battles: Sequence[BattleResult]
     ) -> list[BattleResultSummary]:
-        """バトル結果を、戦利品の名前付きのサマリーにして返す."""
+        """バトル結果を、戦利品と戦域の名前付きのサマリーにして返す."""
         loots = LootService.with_names(session, [battle.loot for battle in battles])
+        labels = TheaterService.labels_for(session, battles)
         return [
-            BattleResultSummary.model_validate(battle, update={"loot": loot})
-            for battle, loot in zip(battles, loots, strict=True)
+            BattleResultSummary.model_validate(
+                battle, update={"loot": loot, **asdict(label)}
+            )
+            for battle, loot, label in zip(battles, loots, labels, strict=True)
         ]
 
     @staticmethod

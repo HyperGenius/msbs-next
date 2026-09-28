@@ -2,6 +2,7 @@
 "use client";
 
 import { BattleResult } from "@/types/battle";
+import { formatTheaterLabel } from "@/utils/theater";
 
 interface ModalHeaderProps {
   battle: BattleResult;
@@ -10,6 +11,7 @@ interface ModalHeaderProps {
 }
 
 export default function ModalHeader({ battle, missionName, onClose }: ModalHeaderProps) {
+  const theaterLabel = formatTheaterLabel(battle);
   return (
     <div className="flex items-start justify-between p-4 border-b border-gray-700">
       <div>
@@ -30,6 +32,9 @@ export default function ModalHeader({ battle, missionName, onClose }: ModalHeade
             {battle.win_loss}
           </span>
         </div>
+        {theaterLabel && (
+          <p className="text-gray-400 text-xs mt-1">{theaterLabel}</p>
+        )}
       </div>
       <button
         onClick={onClose}

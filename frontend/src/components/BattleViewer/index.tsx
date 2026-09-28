@@ -8,7 +8,7 @@ import { getBattleSnapshot, getDetectedUnits, SnapshotCache } from "./hooks/useB
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
-import { getEnvironmentColor, SIMULATION_STEP_S } from "./utils";
+import { getEnvironmentColor, SIMULATION_STEP_S, toSupportedEnvironment } from "./utils";
 import { hasLos } from "./utils/losUtils";
 
 interface BattleViewerProps {
@@ -114,13 +114,15 @@ export default function BattleViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showLos, currentTimestamp, obstacles]);
 
+    const sceneEnvironment = toSupportedEnvironment(environment);
+
     return (
         <div 
             className="w-full h-[300px] sm:h-[400px] md:h-[500px] rounded border border-green-800 mb-4 overflow-hidden relative touch-none" 
-            style={{ backgroundColor: getEnvironmentColor(environment) }}
+            style={{ backgroundColor: getEnvironmentColor(sceneEnvironment) }}
         >
             <BattleScene
-                environment={environment}
+                environment={sceneEnvironment}
                 player={player}
                 playerState={playerState}
                 enemyStates={visibleEnemyStates}

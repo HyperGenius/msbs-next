@@ -25,7 +25,6 @@ from app.engine.battle_utils import serialize_obstacles, strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleEntry,
-    BattleField,
     BattleLogRecord,
     BattleResult,
     BattleRoom,
@@ -40,6 +39,7 @@ from app.services.drop_service import DropScope, DropService
 from app.services.matching_service import MatchingService
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
+from app.services.theater_service import BattleConditions, TheaterService
 
 # Cloud Run Jobs 並列実行対応スタブ（将来の並列化に備えた環境変数読み取り）
 _CLOUD_RUN_TASK_INDEX = int(os.environ.get("CLOUD_RUN_TASK_INDEX", 0))
@@ -192,18 +192,24 @@ def _prepare_battle_units(
 
 
 def _run_simulation(
-    player_unit: MobileSuit, enemy_units: list[MobileSuit]
+    player_unit: MobileSuit,
+    enemy_units: list[MobileSuit],
+    conditions: BattleConditions | None = None,
 ) -> tuple[BattleSimulator, bool, int, int]:
     """戦闘シミュレーションを実行.
 
     Args:
         player_unit: プレイヤーユニット
         enemy_units: 敵ユニットリスト
+        conditions: ルームの戦域の条件。省略時は既定の条件（宇宙・濃度0）
 
     Returns:
         (シミュレーター, 勝利フラグ, プレイヤー自身の撃墜数, 消費ステップ数)
     """
-    simulator = BattleSimulator(player_unit, enemy_units, battlefield=BattleField())
+    conditions = conditions or BattleConditions()
+    simulator = BattleSimulator(
+        player_unit, enemy_units, **conditions.simulator_kwargs()
+    )
 
     steps_used = 0
     for _step_count in range(_MAX_SIMULATION_STEPS):
@@ -233,6 +239,7 @@ def _save_battle_results(
     enemy_units: list[MobileSuit],
     steps_used: int = 0,
     rng: random.Random | None = None,
+    conditions: BattleConditions | None = None,
 ) -> None:
     """戦闘結果を保存し報酬を付与.
 
@@ -249,7 +256,9 @@ def _save_battle_results(
         steps_used: シミュレーションが消費したステップ数（ダイジェストの
             長期戦判定に使用。テスト等でシミュレーションを行わない場合は0のままでよい）
         rng: 戦利品の抽選に使う乱数生成器。省略時はシードなしで生成する
+        conditions: 戦闘に適用した戦域の条件。省略時は既定の条件（宇宙・濃度0）
     """
+    conditions = conditions or BattleConditions()
     pilot_service = PilotService(session)
     drop_rng = rng or random.Random()
     # entry.mobile_suit_snapshot はエントリー時点（バトル前）のHPしか持たないため、
@@ -374,6 +383,9 @@ def _save_battle_results(
             room_id=room.id,
             battle_log_id=battle_log_record.id,
             win_loss=individual_win_loss,
+            environment=conditions.environment,
+            theater_id=conditions.theater_id,
+            minovsky_density=conditions.minovsky_density,
             player_info=entry_unit_for_info.model_dump(),
             enemies_info=enemies_info_for_entry,
             obstacles_info=obstacles_data,
@@ -451,9 +463,17 @@ def _process_room(session: Session, room: BattleRoom) -> None:
     print(f"  プレイヤー: {player_unit.name}")
     print(f"  敵機: {len(enemy_units)} 機")
 
+    conditions = TheaterService.battle_conditions(
+        session, room.theater_id, room.minovsky_density
+    )
+    print(
+        f"  戦域: {conditions.theater_id or 'なし'} / 環境: {conditions.environment}"
+        f" / ミノフスキー濃度: {conditions.minovsky_density}"
+    )
+
     # シミュレーション実行
     simulator, primary_player_win, kills, steps_used = _run_simulation(
-        player_unit, enemy_units
+        player_unit, enemy_units, conditions
     )
 
     if primary_player_win:
@@ -472,6 +492,7 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         player_unit,
         enemy_units,
         steps_used,
+        conditions=conditions,
     )
 
     print("  結果を保存しました")
