@@ -3,7 +3,7 @@
 ## 概要
 
 定期バトル（デイリーバトルロイヤル）のルームに、開催日ごとの「戦域」と「ミノフスキー濃度」を割り当てる仕組み。
-Epic #573「戦域ローテーションと環境効果」の土台で、本ドキュメントは Sub-Issue 1（Issue #574）と Sub-Issue 4（Issue #577）の範囲を記述する。
+Epic #573「戦域ローテーションと環境効果」の土台で、本ドキュメントは Sub-Issue 1（Issue #574）、Sub-Issue 4（Issue #577）、Sub-Issue 5（Issue #578）の範囲を記述する。
 
 * 戦域は一年戦争の地名・作戦名（例: ソロモン宙域、東南アジア密林）。環境タイプ（宇宙・森林など）を1つ持つ
 * 戦域・環境タイプはコードに書かず、マスターデータ（DB）として持つ
@@ -19,7 +19,7 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | 2 | ミノフスキー濃度を連続値にし、索敵と射撃の命中率に反映する（Issue #575、実装済み。[battle-engine-feature.md 29章](battle-engine-feature.md#29-ミノフスキー濃度の連続値化)） |
 | 3 | 環境タイプの効果パラメータ（索敵・射撃ペナルティ）を戦闘に使う。`FOREST` の初期値を確定する（Issue #576、実装済み。[battle-engine-feature.md 30章](battle-engine-feature.md#30-環境タイプの効果と地形適正)） |
 | 4 | ルームの戦域・濃度を戦闘に適用し、`BattleResult` に記録する。森林を有効化し、濃度を実際の値にする（Issue #577、実装済み。本ドキュメントの「[定期バトルへの適用](#定期バトルへの適用)」） |
-| 5 | 予報 API（`TheaterService.forecast()` を使う） |
+| 5 | 予報 API とダッシュボードの予報カード（Issue #578、実装済み。本ドキュメントの「[戦域予報](#戦域予報)」） |
 | 6 | admin-tool の戦域・環境タイプ編集画面 |
 | 7 | ドロップテーブルの適用範囲に `THEATER` を追加する |
 
@@ -200,6 +200,67 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 
 ---
 
+## 戦域予報
+
+エントリー前に、今回と次回以降の戦域・環境・ミノフスキー濃度を知らせる。
+予報は確定値で、実際の戦闘は予報どおりになる（戦域の設定を変えない限り）。
+
+### API: `GET /api/theaters/forecast?days=3`
+
+ログイン不要。`backend/app/routers/theaters.py`、処理は `backend/app/services/theater_forecast_service.py` の `TheaterForecastService.forecast()`。
+
+* `days` は 1〜7（既定 3）。範囲外は 422
+* 今回（OPEN ルームの開催）と、その後 `days − 1` 回分の開催を、開催予定時刻の昇順で返す
+* 今回はルームに保存した `theater_id`・`minovsky_density` を返す。次回以降は `TheaterService.forecast()` で開催日から計算する
+* OPEN ルームが無いときは、ルーム作成時と同じ計算（`next_scheduled_at()` と `resolve_for_date()`）で今回の値を返す。GET ではルームを作らない
+* 戦域の無い開催（有効な戦域が無い、戦域のマスターが無い）は含めない。有効な戦域が無ければ空の配列になる
+  * 作成済みの OPEN ルームに戦域があれば、その後すべての戦域を無効にしても今回の分は返す（そのルームは保存した戦域で戦うため）
+
+レスポンス（`TheaterForecast`、`backend/app/models/models.py`）:
+
+```json
+[
+  {
+    "scheduled_at": "2026-10-01T12:00:00Z",
+    "is_current": true,
+    "theater_id": "southeast_asia_jungle",
+    "theater_name": "東南アジア密林",
+    "environment_id": "FOREST",
+    "environment_name": "森林",
+    "default_terrain_grade": "A",
+    "minovsky_density": 0.62,
+    "minovsky_level": "MEDIUM",
+    "hint": "格闘・索敵に強い機体が有利。長距離射撃は不利",
+    "description": "..."
+  }
+]
+```
+
+| 項目 | 説明 |
+|---|---|
+| `is_current` | OPEN ルームの開催なら true |
+| `environment_name` | 環境タイプ名。マスターに無ければ環境タイプID |
+| `default_terrain_grade` | 環境タイプの地形適正の既定ランク。フロントエンドが機体に設定の無い環境のランクを出すのに使う |
+| `minovsky_level` | `LOW`（0.33 未満）、`MEDIUM`（0.66 未満）、`HIGH`（それ以上）。しきい値は `MINOVSKY_LEVEL_LOW_MAX`・`MINOVSKY_LEVEL_MEDIUM_MAX` |
+
+管理者が戦域の有効化や順番を変えると、次回以降の予報も変わる。今回の分はルームに保存した値なので変わらない。
+
+### ダッシュボードの予報カード
+
+`frontend/src/components/Dashboard/TheaterForecastCard.tsx`。`EntryDashboard` の先頭に表示する（エントリー前・エントリー後の両方）。
+予報は `useTheaterForecast()`（`frontend/src/services/theaters.ts`）で取得し、ホーム画面（`app/page.tsx`）から渡す。
+
+* 今回の戦域: 戦域名、環境、ミノフスキー濃度（％と低・中・高）、ヒント
+* エントリー中の機体の、その環境の地形適正（例: 「あなたの機体: 森林適正 B」）。C 以下は「この戦域には不向き」と注意を出す
+  * 機体の `terrain_adaptability` にその環境が無ければ `default_terrain_grade` を使う（戦闘時と同じ）
+* カードの下に次回以降を「次回 10/2(金) 🌌 ソロモン宙域（宇宙・ミノフスキー 低）」の形で並べる。日付は JST
+* 環境ごとのアイコンと色（`getEnvironmentVisual()`、`frontend/src/utils/theater.ts`）: 宇宙は 🌌 とシアン、森林は 🌲 と緑。未知の環境タイプは 🛰️ と既定の色
+* 予報が空なら「現在、戦域の予報はありません」を出す
+
+Storybook: `Dashboard/TheaterForecastCard`（宇宙・森林・不向きな機体・予報なし・未知の環境タイプ）
+
+---
+
 ## 初期データ
 
 `backend/data/master/environments.json`・`backend/data/master/theaters.json` を
@@ -252,4 +313,13 @@ Issue #576 で `SPACE` の障害物密度の既定値を `MEDIUM` から `SPARSE
 * 定期バトルのシミュレーターに条件を渡し、`BattleResult` に環境タイプ・戦域・濃度を記録する
 * バトル結果の一覧・未読・詳細の API に戦域名・環境タイプ名・描画プリセットを含める
 
-`frontend/tests/unit/theater.test.ts`: 戦域の表示名と BattleViewer に渡す環境
+`backend/tests/test_theater_forecast.py`
+
+* 濃度の段階のしきい値
+* 今回はルームに保存した値、次回以降は開催日から計算した値を返す。`days` の既定値と範囲
+* OPEN ルームが無ければ計算した値を返し、ルームを作らない
+* 有効な戦域が無ければ空の配列
+* 戦域の設定を変えると次回以降の予報だけが変わる
+* 今回と次回の予報の戦域・濃度が、実際に開催した定期バトルの `BattleResult` の値と一致する
+
+`frontend/tests/unit/theater.test.ts`: 戦域の表示名、BattleViewer に渡す環境、予報カードの表示（環境のアイコン、濃度の段階、地形適正、開催日）

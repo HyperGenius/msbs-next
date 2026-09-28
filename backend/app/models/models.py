@@ -1439,6 +1439,34 @@ class MasterTheater(SQLModel, table=True):
     )
 
 
+class MinovskyLevel(StrEnum):
+    """予報に出すミノフスキー濃度の段階."""
+
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+
+
+class TheaterForecast(SQLModel):
+    """1回分の開催の戦域予報 (APIレスポンス用)."""
+
+    scheduled_at: datetime = Field(description="開催予定時刻 (UTC)")
+    is_current: bool = Field(description="募集中のルームの開催か")
+    theater_id: str
+    theater_name: str
+    environment_id: str
+    environment_name: str = Field(
+        description="環境タイプ名。マスターに無ければ環境タイプID"
+    )
+    default_terrain_grade: str = Field(
+        description="機体に地形適正の設定が無いときのランク"
+    )
+    minovsky_density: float
+    minovsky_level: str = Field(description="濃度の段階 (MinovskyLevel)")
+    hint: str
+    description: str
+
+
 class BattleRoom(SQLModel, table=True):
     """バトルルーム (定期更新バトルの開催回を管理)."""
 
