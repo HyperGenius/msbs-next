@@ -1,14 +1,23 @@
-"""開催日ごとの戦域とミノフスキー濃度を決めるサービス."""
+"""開催日ごとの戦域と濃度を決め、戦闘と結果表示に使う戦域の情報を返すサービス."""
 
+import logging
 import random
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta, timezone
+from typing import Any
 
 from sqlmodel import Session, col, select
 
 from app.engine.environment import EnvironmentProfile
-from app.models.models import BattleField, MasterEnvironment, MasterTheater
+from app.models.models import (
+    BattleField,
+    BattleResult,
+    MasterEnvironment,
+    MasterTheater,
+)
+
+logger = logging.getLogger(__name__)
 
 JST = timezone(timedelta(hours=9), "JST")
 
@@ -25,6 +34,38 @@ class TheaterAssignment:
     theater_id: str | None
     environment_id: str | None
     minovsky_density: float
+
+
+@dataclass(frozen=True)
+class BattleConditions:
+    """戦闘に適用する戦域の条件.
+
+    既定値は戦域を導入する前の条件（宇宙・濃度0・障害物 MEDIUM）。
+    """
+
+    theater_id: str | None = None
+    environment: str = "SPACE"
+    environment_profile: EnvironmentProfile | None = None
+    minovsky_density: float = 0.0
+    battlefield: BattleField = field(default_factory=BattleField)
+
+    def simulator_kwargs(self) -> dict[str, Any]:
+        """`BattleSimulator` に渡すキーワード引数を返す."""
+        return {
+            "environment": self.environment,
+            "environment_profile": self.environment_profile,
+            "minovsky_density": self.minovsky_density,
+            "battlefield": self.battlefield,
+        }
+
+
+@dataclass(frozen=True)
+class TheaterLabel:
+    """バトル結果に表示する戦域と環境タイプの名前."""
+
+    theater_name: str | None = None
+    environment_name: str | None = None
+    viewer_preset: str | None = None
 
 
 class TheaterService:
@@ -137,3 +178,79 @@ class TheaterService:
         if theater is None or theater.obstacle_density is None:
             return BattleField()
         return BattleField(obstacle_density=theater.obstacle_density)
+
+    @staticmethod
+    def battle_conditions(
+        session: Session, theater_id: str | None, minovsky_density: float | None
+    ) -> BattleConditions:
+        """戦域と濃度から、戦闘に適用する条件を組み立てる.
+
+        戦域なし、または戦域・環境タイプのマスターが無いときは、既定の条件を返す。
+        """
+        if theater_id is None:
+            return BattleConditions()
+        theater = session.get(MasterTheater, theater_id)
+        if theater is None:
+            logger.warning(
+                "戦域 %s が見つかりません。既定の条件で戦闘します。", theater_id
+            )
+            return BattleConditions()
+        profile = TheaterService.resolve_environment_profile(
+            session, theater.environment_id
+        )
+        if profile is None:
+            logger.warning(
+                "環境タイプ %s が見つかりません。既定の条件で戦闘します。",
+                theater.environment_id,
+            )
+            return BattleConditions()
+        return BattleConditions(
+            theater_id=theater.id,
+            environment=profile.environment_id,
+            environment_profile=profile,
+            minovsky_density=minovsky_density or 0.0,
+            battlefield=TheaterService.battlefield_for(theater),
+        )
+
+    @staticmethod
+    def labels_for(
+        session: Session, battles: Sequence[BattleResult]
+    ) -> list[TheaterLabel]:
+        """バトル結果ごとに、戦域と環境タイプの名前を返す.
+
+        マスターに無い戦域・環境タイプの名前は None にする。
+        クエリは一覧の数によらず最大2回。
+        """
+        theater_ids = {b.theater_id for b in battles if b.theater_id is not None}
+        environment_ids = {b.environment for b in battles}
+        theater_names: dict[str, str] = {}
+        if theater_ids:
+            theater_names = dict(
+                session.exec(
+                    select(MasterTheater.id, MasterTheater.name).where(
+                        col(MasterTheater.id).in_(theater_ids)
+                    )
+                ).all()
+            )
+        environments: dict[str, tuple[str, str]] = {}
+        if environment_ids:
+            for env_id, name, preset in session.exec(
+                select(
+                    MasterEnvironment.id,
+                    MasterEnvironment.name,
+                    MasterEnvironment.viewer_preset,
+                ).where(col(MasterEnvironment.id).in_(environment_ids))
+            ).all():
+                environments[env_id] = (name, preset)
+
+        labels: list[TheaterLabel] = []
+        for battle in battles:
+            environment = environments.get(battle.environment)
+            labels.append(
+                TheaterLabel(
+                    theater_name=theater_names.get(battle.theater_id or ""),
+                    environment_name=environment[0] if environment else None,
+                    viewer_preset=environment[1] if environment else None,
+                )
+            )
+        return labels

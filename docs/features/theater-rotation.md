@@ -3,13 +3,14 @@
 ## 概要
 
 定期バトル（デイリーバトルロイヤル）のルームに、開催日ごとの「戦域」と「ミノフスキー濃度」を割り当てる仕組み。
-Epic #573「戦域ローテーションと環境効果」の土台で、本ドキュメントは Sub-Issue 1（Issue #574）の範囲を記述する。
+Epic #573「戦域ローテーションと環境効果」の土台で、本ドキュメントは Sub-Issue 1（Issue #574）と Sub-Issue 4（Issue #577）の範囲を記述する。
 
 * 戦域は一年戦争の地名・作戦名（例: ソロモン宙域、東南アジア密林）。環境タイプ（宇宙・森林など）を1つ持つ
 * 戦域・環境タイプはコードに書かず、マスターデータ（DB）として持つ
 * 開催日から戦域と濃度を決定的に計算する。スケジュール表は持たない
 
-> 現時点では戦闘の挙動は変わらない。初期データで有効な戦域は「ソロモン宙域（宇宙・濃度0）」だけで、シミュレーターにはまだ渡していない。
+> 定期バトルは、ルームに割り当てた戦域の環境タイプ・ミノフスキー濃度・障害物密度で戦う（Issue #577）。
+> 初期データでは「ソロモン宙域（宇宙）」と「東南アジア密林（森林）」を日替わりで交互に開催する。
 
 ### 今後の予定（Epic #573）
 
@@ -17,7 +18,7 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 |---|---|
 | 2 | ミノフスキー濃度を連続値にし、索敵と射撃の命中率に反映する（Issue #575、実装済み。[battle-engine-feature.md 29章](battle-engine-feature.md#29-ミノフスキー濃度の連続値化)） |
 | 3 | 環境タイプの効果パラメータ（索敵・射撃ペナルティ）を戦闘に使う。`FOREST` の初期値を確定する（Issue #576、実装済み。[battle-engine-feature.md 30章](battle-engine-feature.md#30-環境タイプの効果と地形適正)） |
-| 4 | ルームの戦域・濃度を戦闘に適用し、`BattleResult` に記録する。森林を有効化し、濃度を実際の値にする |
+| 4 | ルームの戦域・濃度を戦闘に適用し、`BattleResult` に記録する。森林を有効化し、濃度を実際の値にする（Issue #577、実装済み。本ドキュメントの「[定期バトルへの適用](#定期バトルへの適用)」） |
 | 5 | 予報 API（`TheaterService.forecast()` を使う） |
 | 6 | admin-tool の戦域・環境タイプ編集画面 |
 | 7 | ドロップテーブルの適用範囲に `THEATER` を追加する |
@@ -68,9 +69,9 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | テーブル | 追加カラム | 説明 |
 |---|---|---|
 | `battle_rooms` | `theater_id`（FK、nullable）、`minovsky_density`（float、nullable） | ルーム作成時に保存する |
-| `battle_results` | `theater_id`（FK、nullable）、`minovsky_density`（float、nullable） | 値を入れるのは Sub-Issue 4。現時点では常に null |
+| `battle_results` | `theater_id`（FK、nullable）、`minovsky_density`（float、nullable） | 定期バトルで戦闘に適用した値を入れる。ソロミッションは null |
 
-* 導入前に作成されたルーム・結果は null のまま（バックフィルしない）。Sub-Issue 4 では宇宙・濃度0として扱う
+* 導入前に作成されたルーム・結果は null のまま（バックフィルしない）。`theater_id` が null のルームは宇宙・濃度0で戦う
 * 有効な戦域が無いときに作成したルームは `theater_id = null`、`minovsky_density = 0.0`
 
 マイグレーション: `backend/alembic/versions/l6f7a8b9c0d1_add_theaters.py`
@@ -114,6 +115,8 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | `TheaterService.resolve_environment_profile(session, environment_id)` | 環境タイプの `EnvironmentProfile` を返す（戦闘エンジンに渡す）。見つからなければ `None` |
 | `TheaterService.environment_profile(environment)` | `MasterEnvironment` から `EnvironmentProfile` を作る |
 | `TheaterService.battlefield_for(theater)` | 戦域の障害物密度を反映した `BattleField` を返す。戦域が密度を指定しなければ、エンジンが環境タイプの既定値を使う |
+| `TheaterService.battle_conditions(session, theater_id, minovsky_density)` | 戦闘に適用する条件（`BattleConditions`）を返す。次章を参照 |
+| `TheaterService.labels_for(session, battles)` | バトル結果ごとに戦域名・環境タイプ名・描画プリセット（`TheaterLabel`）を返す |
 
 ---
 
@@ -137,6 +140,66 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 
 ---
 
+## 定期バトルへの適用
+
+### 戦闘の条件
+
+`scripts/run_batch.py` の `_process_room()` が、ルームの `theater_id`・`minovsky_density` から
+`TheaterService.battle_conditions()` で `BattleConditions` を作り、`_run_simulation()` と `_save_battle_results()` に渡す。
+
+| 項目 | `BattleSimulator` の引数 | 値 |
+|---|---|---|
+| `environment` | `environment` | 環境タイプID |
+| `environment_profile` | `environment_profile` | 環境タイプの効果（`TheaterService.environment_profile()`） |
+| `minovsky_density` | `minovsky_density` | `BattleRoom.minovsky_density` |
+| `battlefield` | `battlefield` | `TheaterService.battlefield_for(theater)`。戦域が密度を指定しなければ環境タイプの既定値 |
+
+`BattleConditions.simulator_kwargs()` が上の4つを返す。
+ソロミッションなど他の経路でも、戦域IDと濃度があれば同じ関数で条件を作れる（ソロミッションへの適用は未対応）。
+
+### 既定の条件（戦域を導入する前と同じ）
+
+次のときは `BattleConditions()`（宇宙・効果なし・濃度0・障害物 `MEDIUM`）で戦う。
+
+| ケース | 警告 |
+|---|---|
+| ルームの `theater_id` が null（導入前のルーム、有効な戦域が無いときに作ったルーム） | 出さない |
+| 戦域のマスターが無い | 出す（`logging` の WARNING） |
+| 戦域の環境タイプのマスターが無い | 出す |
+
+マスターが無いときは `theater_id` も null として記録する（実際に戦った条件と記録を一致させるため）。
+
+### バトル結果への記録
+
+`_save_battle_results()` が `BattleResult` に次を保存する。
+
+| カラム | 値 |
+|---|---|
+| `environment` | 環境タイプID（既定の条件では `SPACE`） |
+| `theater_id` | 戦域ID（既定の条件では null） |
+| `minovsky_density` | 戦闘時の濃度（既定の条件では 0.0） |
+
+### バトル結果の表示
+
+バトル結果・履歴の API（`GET /api/battles`・`/api/battles/unread`・`/api/battles/{id}`）の `BattleResultSummary` に次を含める。
+名前は保存せず、`LootService.summaries()` が `TheaterService.labels_for()` でマスターから引く（クエリは件数によらず最大2回）。
+
+| 項目 | 説明 |
+|---|---|
+| `theater_id` / `minovsky_density` | `BattleResult` の値 |
+| `theater_name` | 戦域名。戦域が無い、またはマスターに無ければ null |
+| `environment_name` | 環境タイプ名。マスターに無い環境（ソロミッションの `GROUND` など）は null |
+| `viewer_preset` | 環境タイプの描画プリセット。マスターに無い環境は null |
+
+フロントエンド:
+
+* `formatTheaterLabel()`（`frontend/src/utils/theater.ts`）で「ソロモン宙域（宇宙）／ミノフスキー濃度 42%」の形式にする。戦域が無ければ null で、表示しない
+* 表示する場所: バトル結果モーダル（`BattleResultModal` の「戦域」欄）、バトル履歴の一覧（`BattleList`）、リプレイのヘッダー（`ModalHeader`）
+* リプレイの BattleViewer には `getViewerEnvironment()` で `viewer_preset`（無ければ `environment`）を渡す
+* BattleViewer は描画を用意していない環境（現時点では `FOREST`）を `SPACE` として描画する（`toSupportedEnvironment()`）。森林の描画は Sub-Issue 8 で追加する
+
+---
+
 ## 初期データ
 
 `backend/data/master/environments.json`・`backend/data/master/theaters.json` を
@@ -156,12 +219,14 @@ Issue #576 で `SPACE` の障害物密度の既定値を `MEDIUM` から `SPARSE
 
 ### 戦域
 
-| id | name | 環境 | 基準濃度 | 揺らぎ | 順番 | 有効 |
-|---|---|---|---|---|---|---|
-| `solomon` | ソロモン宙域 | SPACE | 0.0 | 0.0 | 10 | ✅ |
-| `southeast_asia_jungle` | 東南アジア密林 | FOREST | 0.0 | 0.0 | 20 | ❌ |
+| id | name | 環境 | 基準濃度 | 揺らぎ | 障害物 | 順番 | 有効 | ヒント |
+|---|---|---|---|---|---|---|---|---|
+| `solomon` | ソロモン宙域 | SPACE | 0.35 | 0.15 | 環境の既定値 | 10 | ✅ | ビーム・高機動・長距離に強い機体が有利 |
+| `southeast_asia_jungle` | 東南アジア密林 | FOREST | 0.6 | 0.15 | 環境の既定値 | 20 | ✅ | 格闘・索敵に強い機体が有利。長距離射撃は不利 |
 
 `rotation_order` は間に戦域を追加できるように10刻みにしている。
+値は運用しながら調整する（Issue #577 で初期値を設定し、森林を有効にした）。
+作成済みの OPEN ルームの戦域は変わらず、次に作るルームから切り替わる。
 
 > 本番DB（Neon）への投入・マイグレーションは書き込みになるため、実行前に確認を取る。
 
@@ -178,3 +243,13 @@ Issue #576 で `SPACE` の障害物密度の既定値を `MEDIUM` から `SPARSE
 * 有効な戦域が無ければ戦域なし・濃度 0
 * ルーム作成時に戦域と濃度が保存され、作成済みの OPEN ルームは設定を変えても変わらない
 * 延期したルームは延期後の日付で戦域を決め直す
+
+`backend/tests/test_theater_battle.py`
+
+* 戦域なしのルームは宇宙・濃度0・障害物 `MEDIUM` で戦う
+* 森林の戦域は環境タイプの効果・濃度・障害物密度の既定値（`DENSE`）で戦う。戦域が密度を指定すればそちらを使う
+* 戦域・環境タイプのマスターが無ければ既定の条件で戦い、警告を出す
+* 定期バトルのシミュレーターに条件を渡し、`BattleResult` に環境タイプ・戦域・濃度を記録する
+* バトル結果の一覧・未読・詳細の API に戦域名・環境タイプ名・描画プリセットを含める
+
+`frontend/tests/unit/theater.test.ts`: 戦域の表示名と BattleViewer に渡す環境

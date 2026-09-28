@@ -3,10 +3,10 @@
     "id": "solomon",
     "name": "ソロモン宙域",
     "environment_id": "SPACE",
-    "base_minovsky": 0.0,
-    "minovsky_variance": 0.0,
+    "base_minovsky": 0.35,
+    "minovsky_variance": 0.15,
     "obstacle_density": null,
-    "hint": "地形の影響が無く、どの機体も実力を出しやすい",
+    "hint": "ビーム・高機動・長距離に強い機体が有利",
     "description": "ジオン公国軍の宇宙要塞ソロモン周辺の宙域。",
     "rotation_order": 10,
     "is_active": true
@@ -15,12 +15,12 @@
     "id": "southeast_asia_jungle",
     "name": "東南アジア密林",
     "environment_id": "FOREST",
-    "base_minovsky": 0.0,
-    "minovsky_variance": 0.0,
+    "base_minovsky": 0.6,
+    "minovsky_variance": 0.15,
     "obstacle_density": null,
-    "hint": "格闘・索敵に強い機体が有利",
+    "hint": "格闘・索敵に強い機体が有利。長距離射撃は不利",
     "description": "連邦軍とジオン軍がゲリラ戦を繰り広げた東南アジアの密林地帯。",
     "rotation_order": 20,
-    "is_active": false
+    "is_active": true
   }
 ]

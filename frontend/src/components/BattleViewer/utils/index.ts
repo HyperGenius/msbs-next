@@ -35,6 +35,13 @@ export function getEnemyHpBarColor(ratio: number): string {
     return '#dc2626'; // 濃い赤
 }
 
+/** BattleViewer が描画を用意している環境。これ以外は SPACE として描画する。 */
+const SUPPORTED_ENVIRONMENTS: ReadonlySet<string> = new Set(["SPACE", "GROUND", "COLONY", "UNDERWATER"]);
+
+export function toSupportedEnvironment(environment: string): string {
+    return SUPPORTED_ENVIRONMENTS.has(environment) ? environment : "SPACE";
+}
+
 // 環境に応じた背景色を決定
 export function getEnvironmentColor(environment: string) {
     switch (environment) {

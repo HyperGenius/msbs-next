@@ -3,6 +3,7 @@
 
 import { BattleResult } from "@/types/battle";
 import LootBadge from "@/components/loot/LootBadge";
+import { formatTheaterLabel } from "@/utils/theater";
 
 /**
  * バトル履歴リストを表示するためのプロパティ
@@ -81,6 +82,7 @@ export default function BattleList({
             const hasDigest = battle.digest_text != null;
             // 辛勝タグは「土壇場で耐えた」ドラマを強調するため、枠と背景を警告色にする
             const isCritical = battle.digest_tag === "辛勝";
+            const theaterLabel = formatTheaterLabel(battle);
 
             return (
               <button
@@ -113,6 +115,9 @@ export default function BattleList({
                 </div>
                 <p className="text-xs text-gray-500 mb-2">
                   {new Date(battle.created_at).toLocaleString("ja-JP")}
+                  {theaterLabel && (
+                    <span className="block text-gray-400">{theaterLabel}</span>
+                  )}
                 </p>
                 {hasDigest ? (
                   <>

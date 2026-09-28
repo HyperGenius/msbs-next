@@ -1284,6 +1284,12 @@ class BattleResultSummary(SQLModel):
     obstacles_info: list[dict] | None = None
     ms_snapshot: dict | None = None
     map_bounds: list[float] | None = None
+    theater_id: str | None = None
+    minovsky_density: float | None = None
+    # 以下3つはマスターから引く表示用の値。マスターに無ければ null。
+    theater_name: str | None = None
+    environment_name: str | None = None
+    viewer_preset: str | None = None
     kills: int = 0
     exp_gained: int = 0
     credits_gained: int = 0

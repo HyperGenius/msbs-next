@@ -356,7 +356,7 @@ export const LongNames: Story = {
 
 // ── リプレイ導線 ────────────────────────────────────────────
 
-/** 未読の定期バトル（リプレイを見るボタンあり） */
+/** 未読の定期バトル（戦域の表示・リプレイを見るボタンあり） */
 export const UnreadBattleWithReplay: Story = {
   args: {
     winLoss: "WIN",
@@ -364,6 +364,7 @@ export const UnreadBattleWithReplay: Story = {
     msSnapshot: sampleMs,
     kills: 2,
     loot: [lootNew],
+    theaterLabel: "東南アジア密林（森林）／ミノフスキー濃度 58%",
     onOpenReplay: () => {},
   },
 };
