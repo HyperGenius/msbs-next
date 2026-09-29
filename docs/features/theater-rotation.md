@@ -20,7 +20,7 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | 3 | 環境タイプの効果パラメータ（索敵・射撃ペナルティ）を戦闘に使う。`FOREST` の初期値を確定する（Issue #576、実装済み。[battle-engine-feature.md 30章](battle-engine-feature.md#30-環境タイプの効果と地形適正)） |
 | 4 | ルームの戦域・濃度を戦闘に適用し、`BattleResult` に記録する。森林を有効化し、濃度を実際の値にする（Issue #577、実装済み。本ドキュメントの「[定期バトルへの適用](#定期バトルへの適用)」） |
 | 5 | 予報 API とダッシュボードの予報カード（Issue #578、実装済み。本ドキュメントの「[戦域予報](#戦域予報)」） |
-| 6 | admin-tool の戦域・環境タイプ編集画面 |
+| 6 | admin-tool の戦域・環境タイプ編集画面（Issue #579、実装済み。[admin-theaters.md](admin-theaters.md)） |
 | 7 | ドロップテーブルの適用範囲に `THEATER` を追加する |
 
 ---
@@ -68,13 +68,15 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 
 | テーブル | 追加カラム | 説明 |
 |---|---|---|
-| `battle_rooms` | `theater_id`（FK、nullable）、`minovsky_density`（float、nullable） | ルーム作成時に保存する |
-| `battle_results` | `theater_id`（FK、nullable）、`minovsky_density`（float、nullable） | 定期バトルで戦闘に適用した値を入れる。ソロミッションは null |
+| `battle_rooms` | `theater_id`（nullable）、`minovsky_density`（float、nullable） | ルーム作成時に保存する |
+| `battle_results` | `theater_id`（nullable）、`minovsky_density`（float、nullable） | 定期バトルで戦闘に適用した値を入れる。ソロミッションは null |
 
 * 導入前に作成されたルーム・結果は null のまま（バックフィルしない）。`theater_id` が null のルームは宇宙・濃度0で戦う
 * 有効な戦域が無いときに作成したルームは `theater_id = null`、`minovsky_density = 0.0`
 
-マイグレーション: `backend/alembic/versions/l6f7a8b9c0d1_add_theaters.py`
+* `theater_id` には外部キーを張らない。戦域マスターを削除しても、過去のルームと結果の戦域IDを残すため（Issue #579）
+
+マイグレーション: `backend/alembic/versions/l6f7a8b9c0d1_add_theaters.py`、`m7a8b9c0d1e2_drop_theater_foreign_keys.py`（外部キーを外す）
 
 ---
 
@@ -187,7 +189,7 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | 項目 | 説明 |
 |---|---|
 | `theater_id` / `minovsky_density` | `BattleResult` の値 |
-| `theater_name` | 戦域名。戦域が無い、またはマスターに無ければ null |
+| `theater_name` | 戦域名。戦域が無ければ null。マスターに無い（削除した）戦域は戦域ID |
 | `environment_name` | 環境タイプ名。マスターに無い環境（ソロミッションの `GROUND` など）は null |
 | `viewer_preset` | 環境タイプの描画プリセット。マスターに無い環境は null |
 
@@ -290,6 +292,8 @@ Issue #576 で `SPACE` の障害物密度の既定値を `MEDIUM` から `SPARSE
 作成済みの OPEN ルームの戦域は変わらず、次に作るルームから切り替わる。
 
 > 本番DB（Neon）への投入・マイグレーションは書き込みになるため、実行前に確認を取る。
+>
+> 運用中の追加・調整は admin-tool の戦域・環境タイプの画面で行う（[admin-theaters.md](admin-theaters.md)）。
 
 ---
 

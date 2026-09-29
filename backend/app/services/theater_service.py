@@ -2,6 +2,7 @@
 
 import logging
 import random
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -13,8 +14,15 @@ from app.engine.environment import EnvironmentProfile
 from app.models.models import (
     BattleField,
     BattleResult,
+    BattleRoom,
     MasterEnvironment,
+    MasterEnvironmentCreate,
+    MasterEnvironmentEntry,
+    MasterEnvironmentUpdate,
     MasterTheater,
+    MasterTheaterCreate,
+    MasterTheaterEntry,
+    MasterTheaterUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,6 +32,17 @@ JST = timezone(timedelta(hours=9), "JST")
 # 開催日と基準日の差でローテーション位置を決める。
 # 変えると全開催日の戦域がずれる。
 THEATER_ROTATION_EPOCH = date(2026, 1, 1)
+
+# 環境タイプIDは機体の terrain_adaptability のキーになるため、既存キーと同じ大文字にする。
+ENVIRONMENT_ID_PATTERN = re.compile(r"[A-Z0-9_]+")
+THEATER_ID_PATTERN = re.compile(r"[a-z0-9_]+")
+
+# 戦域の更新で null を送ると「既定値に戻す」意味になる項目。
+_NULLABLE_THEATER_FIELDS = {"obstacle_density"}
+
+
+class TheaterConflictError(Exception):
+    """今の状態では戦域・環境タイプを変更できないことを表す."""
 
 
 @dataclass(frozen=True)
@@ -218,7 +237,8 @@ class TheaterService:
     ) -> list[TheaterLabel]:
         """バトル結果ごとに、戦域と環境タイプの名前を返す.
 
-        マスターに無い戦域・環境タイプの名前は None にする。
+        マスターに無い戦域の名前は戦域IDにする（削除した戦域の結果も表示するため）。
+        マスターに無い環境タイプの名前は None にする。
         クエリは一覧の数によらず最大2回。
         """
         theater_ids = {b.theater_id for b in battles if b.theater_id is not None}
@@ -248,9 +268,244 @@ class TheaterService:
             environment = environments.get(battle.environment)
             labels.append(
                 TheaterLabel(
-                    theater_name=theater_names.get(battle.theater_id or ""),
+                    theater_name=(
+                        theater_names.get(battle.theater_id, battle.theater_id)
+                        if battle.theater_id is not None
+                        else None
+                    ),
                     environment_name=environment[0] if environment else None,
                     viewer_preset=environment[1] if environment else None,
                 )
             )
         return labels
+
+    # --- 環境タイプの管理 ---
+
+    @staticmethod
+    def list_environments(session: Session) -> list[MasterEnvironment]:
+        """環境タイプを環境ID順に返す."""
+        return list(
+            session.exec(
+                select(MasterEnvironment).order_by(col(MasterEnvironment.id))
+            ).all()
+        )
+
+    @staticmethod
+    def to_environment_entry(environment: MasterEnvironment) -> MasterEnvironmentEntry:
+        """環境タイプを管理者用レスポンスにする."""
+        return MasterEnvironmentEntry.model_validate(
+            environment.model_dump(exclude={"created_at", "updated_at"})
+        )
+
+    @staticmethod
+    def create_environment(
+        session: Session, data: MasterEnvironmentCreate
+    ) -> MasterEnvironment:
+        """環境タイプを追加する.
+
+        Raises:
+            ValueError: IDの形式が不正な場合。
+            LookupError: IDが重複している場合。
+        """
+        if not ENVIRONMENT_ID_PATTERN.fullmatch(data.id):
+            raise ValueError(
+                f"Invalid id format: '{data.id}'. "
+                "Only uppercase alphanumeric and underscore are allowed."
+            )
+        if session.get(MasterEnvironment, data.id) is not None:
+            raise LookupError(f"Environment id '{data.id}' already exists.")
+
+        environment = MasterEnvironment(**data.model_dump(mode="json"))
+        session.add(environment)
+        session.commit()
+        session.refresh(environment)
+        return environment
+
+    @staticmethod
+    def update_environment(
+        session: Session, environment_id: str, data: MasterEnvironmentUpdate
+    ) -> MasterEnvironment | None:
+        """環境タイプを更新する.
+
+        Returns:
+            更新後の環境タイプ。見つからなければ None。
+        """
+        environment = session.get(MasterEnvironment, environment_id)
+        if environment is None:
+            return None
+
+        updates = data.model_dump(mode="json", exclude_unset=True, exclude_none=True)
+        for key, value in updates.items():
+            setattr(environment, key, value)
+        environment.updated_at = datetime.now(UTC)
+        session.add(environment)
+        session.commit()
+        session.refresh(environment)
+        return environment
+
+    @staticmethod
+    def delete_environment(session: Session, environment_id: str) -> bool:
+        """環境タイプを削除する.
+
+        機体の terrain_adaptability に残ったキーは消さない。同じIDで作り直すと再び使われる。
+
+        Returns:
+            削除したら True。見つからなければ False。
+
+        Raises:
+            TheaterConflictError: 戦域から参照されている場合。
+        """
+        environment = session.get(MasterEnvironment, environment_id)
+        if environment is None:
+            return False
+
+        theater_ids = session.exec(
+            select(MasterTheater.id).where(
+                MasterTheater.environment_id == environment_id
+            )
+        ).all()
+        if theater_ids:
+            raise TheaterConflictError(
+                f"Environment '{environment_id}' is used by theaters: "
+                f"{', '.join(sorted(theater_ids))}"
+            )
+
+        session.delete(environment)
+        session.commit()
+        return True
+
+    # --- 戦域の管理 ---
+
+    @staticmethod
+    def list_theaters(session: Session) -> list[MasterTheater]:
+        """全戦域を巡回順に返す。無効な戦域も含める."""
+        return list(
+            session.exec(
+                select(MasterTheater).order_by(
+                    col(MasterTheater.rotation_order), col(MasterTheater.id)
+                )
+            ).all()
+        )
+
+    @staticmethod
+    def to_theater_entry(theater: MasterTheater) -> MasterTheaterEntry:
+        """戦域を管理者用レスポンスにする."""
+        return MasterTheaterEntry.model_validate(
+            theater.model_dump(exclude={"created_at", "updated_at"})
+        )
+
+    @staticmethod
+    def _require_environment(session: Session, environment_id: str) -> None:
+        if session.get(MasterEnvironment, environment_id) is None:
+            raise ValueError(f"Environment '{environment_id}' not found.")
+
+    @staticmethod
+    def _is_last_active(session: Session, theater: MasterTheater) -> bool:
+        if not theater.is_active:
+            return False
+        active_ids = session.exec(
+            select(MasterTheater.id).where(col(MasterTheater.is_active).is_(True))
+        ).all()
+        return list(active_ids) == [theater.id]
+
+    @staticmethod
+    def create_theater(session: Session, data: MasterTheaterCreate) -> MasterTheater:
+        """戦域を追加する.
+
+        Raises:
+            ValueError: IDの形式が不正な場合。環境タイプが無い場合。
+            LookupError: IDが重複している場合。
+        """
+        if not THEATER_ID_PATTERN.fullmatch(data.id):
+            raise ValueError(
+                f"Invalid id format: '{data.id}'. "
+                "Only lowercase alphanumeric and underscore are allowed."
+            )
+        if session.get(MasterTheater, data.id) is not None:
+            raise LookupError(f"Theater id '{data.id}' already exists.")
+        TheaterService._require_environment(session, data.environment_id)
+
+        theater = MasterTheater(**data.model_dump(mode="json"))
+        session.add(theater)
+        session.commit()
+        session.refresh(theater)
+        return theater
+
+    @staticmethod
+    def update_theater(
+        session: Session, theater_id: str, data: MasterTheaterUpdate
+    ) -> MasterTheater | None:
+        """戦域を更新する.
+
+        作成済みのルームに保存した戦域と濃度は変えない。
+        ローテーションの変更は、次に作成するルームから反映する。
+
+        Returns:
+            更新後の戦域。見つからなければ None。
+
+        Raises:
+            ValueError: 環境タイプが無い場合。
+            TheaterConflictError: 最後の有効な戦域を無効にする場合。
+        """
+        theater = session.get(MasterTheater, theater_id)
+        if theater is None:
+            return None
+
+        updates = {
+            key: value
+            for key, value in data.model_dump(mode="json", exclude_unset=True).items()
+            if value is not None or key in _NULLABLE_THEATER_FIELDS
+        }
+        if "environment_id" in updates:
+            TheaterService._require_environment(session, updates["environment_id"])
+        if updates.get("is_active") is False and TheaterService._is_last_active(
+            session, theater
+        ):
+            raise TheaterConflictError(
+                f"Theater '{theater_id}' is the last active theater."
+            )
+
+        for key, value in updates.items():
+            setattr(theater, key, value)
+        theater.updated_at = datetime.now(UTC)
+        session.add(theater)
+        session.commit()
+        session.refresh(theater)
+        return theater
+
+    @staticmethod
+    def delete_theater(session: Session, theater_id: str) -> bool:
+        """戦域を削除する.
+
+        終了したルームとバトル結果の theater_id は残す。
+
+        Returns:
+            削除したら True。見つからなければ False。
+
+        Raises:
+            TheaterConflictError: 最後の有効な戦域の場合。
+                または終了していないルームに割り当てられている場合。
+        """
+        theater = session.get(MasterTheater, theater_id)
+        if theater is None:
+            return False
+
+        if TheaterService._is_last_active(session, theater):
+            raise TheaterConflictError(
+                f"Theater '{theater_id}' is the last active theater."
+            )
+        # 削除するとルームは既定の条件で戦うことになり、予報と食い違う。
+        pending_room = session.exec(
+            select(BattleRoom.id).where(
+                BattleRoom.theater_id == theater_id,
+                BattleRoom.status != "COMPLETED",
+            )
+        ).first()
+        if pending_room is not None:
+            raise TheaterConflictError(
+                f"Theater '{theater_id}' is assigned to a room that has not finished."
+            )
+
+        session.delete(theater)
+        session.commit()
+        return True

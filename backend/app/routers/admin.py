@@ -1,13 +1,14 @@
 """管理者専用 API ルーター.
 
 マスター機体データ・マスター武器データ・NPC(Pilot)データ・エースパイロット・
-技術マスターの CRUD エンドポイントと、ドロップテーブルの取得・保存エンドポイントを提供する。
+技術マスター・環境タイプ・戦域の CRUD エンドポイントと、
+ドロップテーブルの取得・保存エンドポイントを提供する。
 全エンドポイントは ADMIN_API_KEY ヘッダー (X-API-Key) による認証が必要。
 """
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.core.auth import verify_admin_api_key
@@ -21,6 +22,9 @@ from app.models.models import (
     DropTableDetail,
     DropTableUpdate,
     MasterBlueprintSettings,
+    MasterEnvironmentCreate,
+    MasterEnvironmentEntry,
+    MasterEnvironmentUpdate,
     MasterMobileSuitCreate,
     MasterMobileSuitEntry,
     MasterMobileSuitSpec,
@@ -28,6 +32,9 @@ from app.models.models import (
     MasterTechnologyCreate,
     MasterTechnologyEntry,
     MasterTechnologyUpdate,
+    MasterTheaterCreate,
+    MasterTheaterEntry,
+    MasterTheaterUpdate,
     MasterWeaponCreate,
     MasterWeaponEntry,
     MasterWeaponSpec,
@@ -40,6 +47,7 @@ from app.models.models import (
     NpcPilotEntry,
     NpcPilotUpdate,
     Pilot,
+    TheaterForecast,
     Weapon,
     resolve_weapon_slot_count,
 )
@@ -50,6 +58,8 @@ from app.services.drop_table_service import DropTableService
 from app.services.mobile_suit_service import MobileSuitService
 from app.services.pilot_service import PilotService
 from app.services.technology_service import TechnologyService
+from app.services.theater_forecast_service import TheaterForecastService
+from app.services.theater_service import TheaterConflictError, TheaterService
 from app.services.weapon_service import WeaponService
 
 router = APIRouter(
@@ -93,6 +103,21 @@ technology_router = APIRouter(
     tags=["admin-technologies"],
     dependencies=[Depends(verify_admin_api_key)],
 )
+
+environment_router = APIRouter(
+    prefix="/api/admin/environments",
+    tags=["admin-environments"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
+theater_router = APIRouter(
+    prefix="/api/admin/theaters",
+    tags=["admin-theaters"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
+ROTATION_DEFAULT_DAYS = 14
+ROTATION_MAX_DAYS = 28
 
 
 def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
@@ -713,4 +738,178 @@ def delete_technology(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Technology '{tech_id}' not found.",
+        )
+
+
+# ===========================================================
+# 環境タイプ CRUD エンドポイント
+# ===========================================================
+
+
+@environment_router.get("", response_model=list[MasterEnvironmentEntry])
+def list_environments(
+    session: Session = Depends(get_session),
+) -> list[MasterEnvironmentEntry]:
+    """全環境タイプを環境ID順に返す."""
+    return [
+        TheaterService.to_environment_entry(environment)
+        for environment in TheaterService.list_environments(session)
+    ]
+
+
+@environment_router.post(
+    "", response_model=MasterEnvironmentEntry, status_code=status.HTTP_201_CREATED
+)
+def create_environment(
+    data: MasterEnvironmentCreate,
+    session: Session = Depends(get_session),
+) -> MasterEnvironmentEntry:
+    """環境タイプを追加する.
+
+    - id は大文字スネークケース英数字のみ許可（例: FOREST）
+    - id が重複している場合は 409 を返す
+    """
+    try:
+        environment = TheaterService.create_environment(session, data)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+    return TheaterService.to_environment_entry(environment)
+
+
+@environment_router.put("/{environment_id}", response_model=MasterEnvironmentEntry)
+def update_environment(
+    environment_id: str,
+    data: MasterEnvironmentUpdate,
+    session: Session = Depends(get_session),
+) -> MasterEnvironmentEntry:
+    """環境タイプを更新する。id は変更できない."""
+    environment = TheaterService.update_environment(session, environment_id, data)
+    if environment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Environment '{environment_id}' not found.",
+        )
+    return TheaterService.to_environment_entry(environment)
+
+
+@environment_router.delete("/{environment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_environment(
+    environment_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    """環境タイプを削除する.
+
+    - 戦域から参照されている場合は 409 を返す
+    """
+    try:
+        deleted = TheaterService.delete_environment(session, environment_id)
+    except TheaterConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Environment '{environment_id}' not found.",
+        )
+
+
+# ===========================================================
+# 戦域 CRUD エンドポイント
+# ===========================================================
+
+
+@theater_router.get("", response_model=list[MasterTheaterEntry])
+def list_theaters(
+    session: Session = Depends(get_session),
+) -> list[MasterTheaterEntry]:
+    """全戦域を巡回順に返す。無効な戦域も含める."""
+    return [
+        TheaterService.to_theater_entry(theater)
+        for theater in TheaterService.list_theaters(session)
+    ]
+
+
+@theater_router.get("/rotation", response_model=list[TheaterForecast])
+def get_theater_rotation(
+    days: int = Query(default=ROTATION_DEFAULT_DAYS, ge=1, le=ROTATION_MAX_DAYS),
+    session: Session = Depends(get_session),
+) -> list[TheaterForecast]:
+    """今回と、その後 days − 1 回分の開催の戦域・濃度を返す.
+
+    計算は公開の予報 API と同じ。今回は OPEN ルームに保存した値を返す。
+    """
+    return TheaterForecastService.forecast(session, days)
+
+
+@theater_router.post(
+    "", response_model=MasterTheaterEntry, status_code=status.HTTP_201_CREATED
+)
+def create_theater(
+    data: MasterTheaterCreate,
+    session: Session = Depends(get_session),
+) -> MasterTheaterEntry:
+    """戦域を追加する.
+
+    - id はスネークケース英数字のみ許可（例: solomon）
+    - 環境タイプが無い場合は 422、id が重複している場合は 409 を返す
+    """
+    try:
+        theater = TheaterService.create_theater(session, data)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+    return TheaterService.to_theater_entry(theater)
+
+
+@theater_router.put("/{theater_id}", response_model=MasterTheaterEntry)
+def update_theater(
+    theater_id: str,
+    data: MasterTheaterUpdate,
+    session: Session = Depends(get_session),
+) -> MasterTheaterEntry:
+    """戦域を更新する.
+
+    - 環境タイプが無い場合は 422 を返す
+    - 最後の有効な戦域を無効にする場合は 409 を返す
+    """
+    try:
+        theater = TheaterService.update_theater(session, theater_id, data)
+    except TheaterConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+    if theater is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Theater '{theater_id}' not found.",
+        )
+    return TheaterService.to_theater_entry(theater)
+
+
+@theater_router.delete("/{theater_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_theater(
+    theater_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    """戦域を削除する.
+
+    - 最後の有効な戦域、終了していないルームの戦域は 409 を返す
+    - 終了したルームとバトル結果の theater_id は残す
+    """
+    try:
+        deleted = TheaterService.delete_theater(session, theater_id)
+    except TheaterConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Theater '{theater_id}' not found.",
         )
