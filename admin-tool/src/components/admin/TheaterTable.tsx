@@ -17,7 +17,10 @@ interface TheaterTableProps {
 const thClass = "px-2 py-1 text-left text-[#ffb000]/80 font-normal";
 const tdClass = "px-2 py-1.5";
 
-/** 順番の入力欄。確定（フォーカスを外す・Enter）したときだけ保存する */
+/**
+ * 順番の入力欄。確定（フォーカスを外す・Enter）したときだけ保存する。
+ * 保存済みの値が変わったら、呼び出し側が key を変えて作り直す。
+ */
 function RotationOrderInput({
   theater,
   onChange,
@@ -26,12 +29,6 @@ function RotationOrderInput({
   onChange: (theater: MasterTheater, rotationOrder: number) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(String(theater.rotation_order));
-  const [savedOrder, setSavedOrder] = useState(theater.rotation_order);
-  // 保存や再取得で元の値が変わったら、入力中の値を合わせる。
-  if (savedOrder !== theater.rotation_order) {
-    setSavedOrder(theater.rotation_order);
-    setDraft(String(theater.rotation_order));
-  }
 
   function commit() {
     const value = Number(draft);
@@ -102,7 +99,11 @@ export default function TheaterTable({
                 } ${theater.is_active ? "" : "opacity-50"}`}
               >
                 <td className={tdClass}>
-                  <RotationOrderInput theater={theater} onChange={onChangeOrder} />
+                  <RotationOrderInput
+                    key={`${theater.id}:${theater.rotation_order}`}
+                    theater={theater}
+                    onChange={onChangeOrder}
+                  />
                 </td>
                 <td className={tdClass}>
                   <input

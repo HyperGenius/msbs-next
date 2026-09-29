@@ -120,7 +120,8 @@ export default function AdminTheatersPage() {
           <div className="p-6">
             <p className="text-[#ffb000] font-bold text-xl mb-2">ERROR: データ取得失敗</p>
             <p className="text-sm">
-              ADMIN_API_KEY が正しく設定されているか、バックエンドが起動しているか確認してください。
+              admin-tool の NEXT_PUBLIC_ADMIN_API_KEY・NEXT_PUBLIC_API_URL が正しく設定されているか、
+              バックエンドが起動しているか確認してください。
             </p>
           </div>
         </SciFiPanel>
