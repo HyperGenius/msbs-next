@@ -283,3 +283,72 @@ python scripts/simulation/terrain_balance_bench.py --skip-masters
 * 1 戦に数秒かかります。`--rounds 60` で 30〜60 分程度です
 
 結果は [battle-engine-feature.md 30.9節](battle-engine-feature.md#309-バランス確認) に残しています。
+
+---
+
+## 交戦距離・膠着の計測（`engagement_bench.py`）
+
+`backend/scripts/simulation/engagement_bench.py` は、1対1 の戦闘で「どの距離で戦っているか」「格闘の空振りが続いていないか」を数値で確認するスクリプトです（Issue #595、Epic #594）。
+DB を使わず、`backend/data/master/mobile_suits.json`・`weapons.json` から機体と武器を組み立てます。バトルエンジンの挙動は変えません。
+
+```bash
+cd backend
+# 全シナリオ × 戦略 4 種 × tactics.range の組を各 10 試行（既定）。8 コアで約 2 分
+python scripts/simulation/engagement_bench.py run --output results/engagement_before.json
+
+# シナリオ・戦略・試行回数を絞る
+python scripts/simulation/engagement_bench.py run \
+  --scenarios melee_duel --strategies AGGRESSIVE,ASSAULT --rounds 20
+
+# 両機の tactics.range を指定する（既定はシナリオごとの組）
+python scripts/simulation/engagement_bench.py run --ranges BALANCED,RANGED
+
+# 2 つの結果 JSON を比べる（変更前 → 変更後）
+python scripts/simulation/engagement_bench.py diff \
+  results/engagement_before.json results/engagement_after.json
+```
+
+### `run` のオプション
+
+| オプション | デフォルト | 説明 |
+|---|---|---|
+| `--rounds` | `10` | 1 条件あたりの試行回数 |
+| `--seed` | `595` | 1 試行目のシード。i 試行目は `seed + i` |
+| `--workers` | CPU コア数 | 並列プロセス数。結果は並列数によらず同じ |
+| `--max-steps` | `5000` | 最大ステップ数（0.1 秒刻み。5000 で 500 秒） |
+| `--scenarios` | 全シナリオ | カンマ区切りのシナリオキー |
+| `--strategies` | `AGGRESSIVE,DEFENSIVE,SNIPER,ASSAULT` | 両機に設定する戦略モード |
+| `--ranges` | シナリオごとの組 | 両機に同じ `tactics.range` を設定する |
+| `--output` | なし | 結果 JSON の保存先 |
+
+### シナリオ
+
+| キー | 内容 | 開始距離 | 既定の `tactics.range`（A×B） |
+|---|---|---|---|
+| `melee_duel` | ガンダム［ビームサーベル＋ビームライフル］ vs グフ［ヒートロッド＋ザクマシンガン］ | 300m | BALANCED×BALANCED、MELEE×MELEE |
+| `ranged_gundam_zaku` | ガンダム［ビームライフル］ vs ザクII［ザクマシンガン］ | 1000m | BALANCED×BALANCED、RANGED×RANGED |
+| `ranged_gelgoog_gundam` | ゲルググ［ビームライフル］ vs ガンダム［ビームライフル］ | 1000m | BALANCED×BALANCED、RANGED×RANGED |
+| `melee_vs_ranged` | グフ［ヒートロッド＋ザクマシンガン］ vs ガンダム［ビームライフル］ | 1000m | BALANCED×BALANCED、MELEE×RANGED |
+
+シナリオはスクリプト内の `SCENARIOS` で定義しています。両機のパイロットステータスは全項目 1 にそろえます。
+
+### 指標
+
+| 列 | 内容 |
+|---|---|
+| 攻撃数 | 命中判定を行った攻撃（ATTACK / MISS）の合計 |
+| 距離 p10/p50/p90 | 交戦中（最初の攻撃以降、両機の生存中）の毎ステップの両機間距離。全試行の標本をまとめて集計する |
+| <50m / <150m | 交戦中に `MELEE_RANGE`（50m）未満・150m 未満にいた割合 |
+| 最適比 格闘/射撃 p50 | 攻撃時の距離 ÷ 使用武器の `optimal_range` の中央値。格闘武器は `weapon_type == "MELEE"` または `is_melee` |
+| 格闘ミス最長 | 同じユニットの格闘 MISS が、そのユニットの命中を挟まずに続いた最長の時間と回数（射撃の MISS では途切れない） |
+| 持ち替え/分 | `WEAPON_SWITCH_START` の 1 機・1 分あたりの回数 |
+| セクタ F/FS/RS/R % | 攻撃セクタ FRONT / FRONT_SIDE / REAR_SIDE / REAR の割合 |
+| 戦闘時間 p50 / 時間切れ / 勝率 | 戦闘時間の中央値、最大ステップまで両機が生存した割合、A・B の勝率（時間切れは引き分け） |
+
+* 攻撃時の距離とセクタは、`BattleSimulator._calculate_hit_chance()` をインスタンス単位で包んで記録します。MISS ログにはセクタが載らず、移動後の位置からは攻撃時の距離を復元できないためです。包む処理は乱数を消費しないため、戦闘結果は変わりません（`tests/unit/test_engagement_bench.py` で確認）
+* 再現性のため `random`・`numpy.random`・部位選択用の RNG（`combat._part_hit_rng`）をすべて試行ごとに固定します。ユニット ID も固定値にします
+* 行動順の偏りを消すため、奇数シードの試行では B を PLAYER 側にします
+* 結果 JSON には `meta`（作成日時・git リビジョン・シード等）と、シナリオ・条件ごとの集計値（`results.<シナリオ>.<戦略>/<rangeA>x<rangeB>`）、試行ごとの戦闘時間・勝者・格闘ミス最長が入ります
+* `diff` はシードまたは試行回数が異なると警告を出します
+
+本 Epic 着手前の計測結果は Issue #595 のコメントに残しています。
