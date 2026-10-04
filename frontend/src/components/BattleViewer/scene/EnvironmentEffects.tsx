@@ -4,13 +4,24 @@
 
 import * as THREE from "three";
 import { UnderwaterParticles } from "./UnderwaterParticles";
+import { FOREST_FLOOR_Y, getEnvironmentColor } from "../utils";
+
+interface EnvironmentEffectsProps {
+    environment: string;
+    /** フィールド中心のシーン座標。FOREST の林床をフィールドに合わせて敷くために使う。 */
+    fieldCenter?: number;
+    /** フィールドの一辺の長さ（シーン単位）。 */
+    fieldSpan?: number;
+}
 
 // 環境エフェクトコンポーネント
-export function EnvironmentEffects({ environment }: { environment: string }) {
+export function EnvironmentEffects({ environment, fieldCenter = 0, fieldSpan = 200 }: EnvironmentEffectsProps) {
     const getFogColor = () => {
         switch (environment) {
             case "GROUND":
                 return "#2a5a2a"; // 緑系の霧
+            case "FOREST":
+                return getEnvironmentColor("FOREST"); // 背景と同色にして地平線を馴染ませる
             case "COLONY":
                 return "#4a4a6a"; // 紫系の霧
             case "UNDERWATER":
@@ -40,6 +51,20 @@ export function EnvironmentEffects({ environment }: { environment: string }) {
                     <mesh position={[0, 50, 0]} rotation={[-Math.PI / 2, 0, 0]}>
                         <planeGeometry args={[200, 200]} />
                         <meshBasicMaterial color="#87CEEB" side={THREE.BackSide} />
+                    </mesh>
+                </>
+            );
+        case "FOREST":
+            return (
+                <>
+                    {/* 樹冠越しの柔らかい光 */}
+                    <directionalLight position={[15, 25, 5]} intensity={0.9} color="#e8f0d0" />
+                    <hemisphereLight args={['#b8d8a8', '#1a2a1a', 0.5]} />
+                    <fog attach="fog" args={[fogColor, 35, 140]} />
+                    {/* 林床 */}
+                    <mesh position={[fieldCenter, FOREST_FLOOR_Y, fieldCenter]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <planeGeometry args={[fieldSpan * 2, fieldSpan * 2]} />
+                        <meshStandardMaterial color="#2b3f24" roughness={1} />
                     </mesh>
                 </>
             );

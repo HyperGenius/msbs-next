@@ -1,6 +1,6 @@
 /* frontend/src/components/BattleViewer/__stories__/battleScenarioFixtures.ts */
 
-import { BattleLog, MobileSuit, Vector3 } from "@/types/battle";
+import { BattleLog, MobileSuit, Obstacle, Vector3 } from "@/types/battle";
 import {
     attackHitLog,
     boostEndLog,
@@ -196,4 +196,25 @@ export function buildEnShortageScenario(): BattleScenario {
     ].sort((a, b) => a.timestamp - b.timestamp);
 
     return { logs, player, enemies: [zaku] };
+}
+
+/** 障害物を 1 つ作る。高さはバックエンドの自動生成と同じく半径の 1.5 倍にする。 */
+function obstacle(id: string, x: number, z: number, radius: number): Obstacle {
+    return { obstacle_id: id, position: { x, y: 0, z }, radius, height: radius * 1.5 };
+}
+
+/**
+ * buildSkirmishScenario の戦場に置く障害物。
+ * story-grove-los は 2 秒時点の自機とリック・ドムの間にあり、LOS を ON にすると遮断表示になる。
+ */
+export function buildSkirmishObstacles(): Obstacle[] {
+    return [
+        obstacle("story-grove-los", 2420, 2760, 110),
+        obstacle("story-grove-1", 2000, 2300, 150),
+        obstacle("story-grove-2", 2650, 2250, 90),
+        obstacle("story-grove-3", 2900, 2800, 100),
+        obstacle("story-grove-4", 2450, 3050, 80),
+        obstacle("story-grove-5", 2100, 2800, 120),
+        obstacle("story-grove-6", 2950, 2350, 140),
+    ];
 }

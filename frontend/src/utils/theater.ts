@@ -11,6 +11,11 @@ type TheaterFields = Pick<
   "theater_name" | "environment_name" | "minovsky_density"
 >;
 
+/** ミノフスキー濃度（0〜1）を「42%」の形式にする。 */
+export function formatMinovskyDensity(density: number): string {
+  return `${Math.round(density * 100)}%`;
+}
+
 /**
  * 戦域の表示名を返す（例: 「ソロモン宙域（宇宙）／ミノフスキー濃度 42%」）。
  * 戦域の無いバトルは null を返す。
@@ -22,7 +27,7 @@ export function formatTheaterLabel(battle: TheaterFields): string | null {
     : "";
   const minovsky =
     battle.minovsky_density != null
-      ? `／ミノフスキー濃度 ${Math.round(battle.minovsky_density * 100)}%`
+      ? `／ミノフスキー濃度 ${formatMinovskyDensity(battle.minovsky_density)}`
       : "";
   return `${battle.theater_name}${environment}${minovsky}`;
 }

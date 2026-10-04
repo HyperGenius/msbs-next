@@ -22,6 +22,7 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | 5 | 予報 API とダッシュボードの予報カード（Issue #578、実装済み。本ドキュメントの「[戦域予報](#戦域予報)」） |
 | 6 | admin-tool の戦域・環境タイプ編集画面（Issue #579、実装済み。[admin-theaters.md](admin-theaters.md)） |
 | 7 | ドロップテーブルの適用範囲に `THEATER` を追加する |
+| 8 | BattleViewer: 森林の描画とミノフスキー濃度の演出（Issue #581、実装済み。[battle-viewer-feature.md](battle-viewer-feature.md#森林の描画とミノフスキー濃度の演出issue-581)） |
 
 ---
 
@@ -198,7 +199,8 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 * `formatTheaterLabel()`（`frontend/src/utils/theater.ts`）で「ソロモン宙域（宇宙）／ミノフスキー濃度 42%」の形式にする。戦域が無ければ null で、表示しない
 * 表示する場所: バトル結果モーダル（`BattleResultModal` の「戦域」欄）、バトル履歴の一覧（`BattleList`）、リプレイのヘッダー（`ModalHeader`）
 * リプレイの BattleViewer には `getViewerEnvironment()` で `viewer_preset`（無ければ `environment`）を渡す
-* BattleViewer は描画を用意していない環境（現時点では `FOREST`）を `SPACE` として描画する（`toSupportedEnvironment()`）。森林の描画は Sub-Issue 8 で追加する
+* BattleViewer は描画を用意していない環境を `SPACE` として描画する（`toSupportedEnvironment()`）
+* `FOREST` は森林として描画し、障害物を木立として描く。BattleViewer には戦域名とミノフスキー濃度も渡し、右上のラベルと画面全体のもやで示す（Issue #581、[battle-viewer-feature.md](battle-viewer-feature.md#森林の描画とミノフスキー濃度の演出issue-581)）
 
 ---
 

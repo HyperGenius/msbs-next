@@ -318,6 +318,7 @@ luk: number;
 | `#ff9800`/`#2196f3` | 警告アイコン（弾切れ/クールダウン）。EN不足アイコン（`#ffeb3b`）は Issue #534 で廃止し、`BattleOverlay` のENゲージで示す | `MobileSuitMesh.tsx` |
 | `#5a4a3a`/`#4a5a4a`（塗り）、`#b89b78`/`#8fb88f`（輪郭線） | 障害物本体（SPACE/GROUND）。輪郭線は塗りと同じ色相を明るくしたトーン | `ObstacleMesh.tsx` |
 | `#8a3a3a`（塗り）＋既存の `#ff4444`（輪郭線） | LOS遮断中の障害物（`isBlocking`） | `ObstacleMesh.tsx` |
+| `#4a3626`（幹）、`#2f5a2c`/`#3d6b34`/`#284d2a`（樹冠） | 森林（FOREST）の障害物＝木立。LOS遮断中は `ObstacleMesh` と同じ `#8a3a3a`（塗り）＋`#ff4444`（木立の半径のリング）（Issue #581） | `ForestGroves.tsx` |
 | `#ffd84a`/`#ff5a4e`/`#9aa0a6` | ダメージ数字（与ダメージ/被ダメージ/MISS）。`#ffd84a` は着弾フラッシュのリングにも使う（Issue #531） | `utils/index.ts` の `HIT_EFFECT_COLORS` |
 | `#6fe6ff`/`#ffb36b` | 射線と武器名ラベルの帯（ビーム/実弾）（Issue #531） | `utils/index.ts` の `HIT_EFFECT_COLORS` |
 

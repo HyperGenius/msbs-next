@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   formatForecastDate,
+  formatMinovskyDensity,
   formatTheaterLabel,
   getEnvironmentVisual,
   getMinovskyLevelLabel,
@@ -49,6 +50,14 @@ describe("formatTheaterLabel", () => {
       }),
     ).toBeNull();
     expect(formatTheaterLabel({})).toBeNull();
+  });
+});
+
+describe("formatMinovskyDensity", () => {
+  it("濃度を百分率に丸める", () => {
+    expect(formatMinovskyDensity(0.42)).toBe("42%");
+    expect(formatMinovskyDensity(0.625)).toBe("63%");
+    expect(formatMinovskyDensity(0)).toBe("0%");
   });
 });
 

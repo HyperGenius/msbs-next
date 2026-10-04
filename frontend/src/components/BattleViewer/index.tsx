@@ -8,6 +8,7 @@ import { getBattleSnapshot, getDetectedUnits, SnapshotCache } from "./hooks/useB
 import { useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
+import { MinovskyHaze } from "./ui/MinovskyHaze";
 import { getEnvironmentColor, SIMULATION_STEP_S, toSupportedEnvironment } from "./utils";
 import { hasLos } from "./utils/losUtils";
 
@@ -20,6 +21,10 @@ interface BattleViewerProps {
     mapBounds?: [number, number] | null;
     currentTimestamp: number;
     environment?: string;
+    /** 戦域名。オーバーレイに表示する。 */
+    theaterName?: string | null;
+    /** ミノフスキー濃度 (0〜1)。もやの濃さとオーバーレイの表示に使う。 */
+    minovskyDensity?: number | null;
     /** チャプタージャンプ時のみ増分されるトークン。カメラターゲットの再センタリングをトリガーする（Issue #524） */
     recenterToken?: number;
 }
@@ -32,6 +37,8 @@ export default function BattleViewer({
     mapBounds,
     currentTimestamp,
     environment = "SPACE",
+    theaterName,
+    minovskyDensity,
     recenterToken,
 }: BattleViewerProps) {
     // LOS 表示のトグルステート（デフォルト: OFF）
@@ -135,12 +142,16 @@ export default function BattleViewer({
                 currentTimestamp={currentTimestamp}
                 recenterToken={recenterToken}
             />
-            
+
+            <MinovskyHaze density={minovskyDensity} />
+
             <BattleOverlay
                 player={player}
                 playerState={playerState}
                 enemyStates={visibleEnemyStates}
                 environment={environment}
+                theaterName={theaterName}
+                minovskyDensity={minovskyDensity}
                 currentTimestamp={currentTimestamp}
                 logs={logs}
                 showLos={showLos}
