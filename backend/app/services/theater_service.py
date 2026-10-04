@@ -24,6 +24,7 @@ from app.models.models import (
     MasterTheaterEntry,
     MasterTheaterUpdate,
 )
+from app.services.drop_table_service import DropTableService
 
 logger = logging.getLogger(__name__)
 
@@ -477,6 +478,7 @@ class TheaterService:
     def delete_theater(session: Session, theater_id: str) -> bool:
         """戦域を削除する.
 
+        戦域のドロップテーブルも削除する。
         終了したルームとバトル結果の theater_id は残す。
 
         Returns:
@@ -506,6 +508,7 @@ class TheaterService:
                 f"Theater '{theater_id}' is assigned to a room that has not finished."
             )
 
+        DropTableService.remove_theater_table(session, theater_id)
         session.delete(theater)
         session.commit()
         return True

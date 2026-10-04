@@ -9,7 +9,6 @@ from app.core.gamedata import is_available_to_faction
 from app.models.models import (
     BlueprintCollectionItem,
     BlueprintTargetType,
-    DropScopeType,
     DropTable,
     DropTableEntry,
     MasterBlueprint,
@@ -22,22 +21,8 @@ from app.models.models import (
     PlayerTechnologyProgress,
     TechRequirementStatus,
 )
-from app.services.drop_service import DropScope
+from app.services.drop_source_service import TheaterDropSources
 from app.services.technology_service import TechnologyService
-
-# 戦域マスターが無い間は、定期バトルのテーブルが全戦域で共通になる。
-ALL_THEATERS_LABEL = "全戦域"
-
-
-def theater_label_for(scope: DropScope) -> str | None:
-    """ドロップテーブルの適用範囲を、図鑑に表示する戦域名に変換する.
-
-    Returns:
-        戦域の表示名。図鑑に出さない適用範囲（ミッション）なら None。
-    """
-    if scope == DropScope.batch():
-        return ALL_THEATERS_LABEL
-    return None
 
 
 class BlueprintCollectionService:
@@ -48,7 +33,7 @@ class BlueprintCollectionService:
         """プレイヤーの図鑑の一覧を、設計図ID順に返す.
 
         機体・武器マスターが無い設計図は含めない。
-        クエリは設計図の数によらず7回。
+        クエリは設計図の数によらず8回。
         """
         pilot_faction = (
             session.exec(select(Pilot.faction).where(Pilot.user_id == user_id)).first()
@@ -114,7 +99,7 @@ class BlueprintCollectionService:
     ) -> list[PlayerTechnologyProgress]:
         """プレイヤーの技術ごとの進捗と、断片の入手先を技術ID順に返す.
 
-        クエリは技術の数によらず3回。
+        クエリは技術の数によらず4回。
         """
         counts = TechnologyService.fragment_counts(session, user_id)
         theaters = BlueprintCollectionService._obtainable_theaters(
@@ -184,13 +169,14 @@ class BlueprintCollectionService:
     def _obtainable_theaters(
         session: Session, reward_key: Any
     ) -> dict[str, list[ObtainableTheater]]:
-        """報酬のIDごとに、入手できる戦域をテーブルID順に返す.
+        """報酬のIDごとに、入手できる有効な戦域を巡回順に返す.
 
         `reward_key` に DropTableEntry.blueprint_id を渡すと設計図IDごと、
         tech_id を渡すと技術IDごとに集計する。
-        同じ戦域に変換されるテーブルが複数あれば1件にまとめる。
+        同じ戦域が複数のテーブルにあれば1件にまとめる。
         どれか1つでも敗北時にドロップするなら、勝利時のみとしない。
         """
+        sources = TheaterDropSources.load(session)
         rows = session.exec(
             select(
                 reward_key,
@@ -203,18 +189,20 @@ class BlueprintCollectionService:
             .order_by(col(DropTable.id))
         ).all()
 
-        requires_win_by_label: dict[str, dict[str, bool]] = {}
+        # 報酬ID → 戦域名 → (表示順, 勝利時のみか)
+        by_reward: dict[str, dict[str, tuple[int, bool]]] = {}
         for reward_id, scope_type, scope_key, requires_win in rows:
-            label = theater_label_for(DropScope(DropScopeType(scope_type), scope_key))
-            if label is None:
-                continue
-            by_label = requires_win_by_label.setdefault(reward_id, {})
-            by_label[label] = by_label.get(label, True) and requires_win
+            for source in sources.sources_for(scope_type, scope_key):
+                by_label = by_reward.setdefault(reward_id, {})
+                _, win_only = by_label.get(source.label, (source.order, True))
+                by_label[source.label] = (source.order, win_only and requires_win)
 
         return {
             reward_id: [
                 ObtainableTheater(label=label, requires_win=requires_win)
-                for label, requires_win in by_label.items()
+                for label, (_, requires_win) in sorted(
+                    by_label.items(), key=lambda item: item[1][0]
+                )
             ]
-            for reward_id, by_label in requires_win_by_label.items()
+            for reward_id, by_label in by_reward.items()
         }

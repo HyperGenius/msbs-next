@@ -335,7 +335,7 @@ def _save_battle_results(
                 loot = DropService.roll(
                     session,
                     entry.user_id,
-                    DropScope.batch(),
+                    DropScope.for_battle(conditions.theater_id),
                     is_win=individual_win_loss == "WIN",
                     battle_result_id=battle_result_id,
                     rng=drop_rng,

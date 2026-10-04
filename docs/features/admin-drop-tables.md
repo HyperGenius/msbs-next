@@ -5,8 +5,9 @@
 定期バトル（バトルロイヤル）のドロップテーブルを、admin-tool から確認・編集する画面（Issue #562、Epic #550 Sub-Issue 5）。
 シードスクリプトを本番DBで直接実行せずに、ドロップ率とエントリーを調整できるようにする。
 
-* 編集対象は定期バトルのテーブル1つ（`scope_type = BATCH`、`scope_key = default`）
-* ソロミッション単位・戦域単位のテーブル、複数テーブルの一覧・作成・削除、変更履歴は対象外
+* 編集対象は定期バトルの共通テーブル（`scope_type = BATCH`、`scope_key = default`）と、戦域のテーブル（`scope_type = THEATER`、`scope_key` は戦域ID。Issue #580）
+* 定期バトルは、ルームの戦域のテーブルで抽選する。戦域のテーブルが無ければ共通テーブルで抽選する（`blueprint-system.md` の「戦域別ドロップテーブル（Issue #580）」）
+* ソロミッション単位のテーブル、変更履歴は対象外
 * ドロップテーブルと抽選の仕様は `blueprint-system.md` の「ドロップテーブルと抽選（Issue #560）」を参照
 * 技術断片のエントリー（Issue #569）も同じ画面で追加できる。技術断片の仕様は `blueprint-system.md` の「技術断片と技術Lv（Issue #569）」を参照
 
@@ -17,9 +18,27 @@
 全エンドポイントは `X-API-Key` ヘッダー（環境変数 `ADMIN_API_KEY`）による認証が必要（`verify_admin_api_key`）。
 ルーターは `backend/app/routers/admin.py` の `drop_table_router`、処理は `backend/app/services/drop_table_service.py` の `DropTableService`。
 
+### GET /api/admin/drop-tables
+
+共通テーブルと全戦域について、テーブルの有無を返す。共通テーブルを先頭に置き、戦域は巡回順に並べる。無効な戦域も含める。
+
+```json
+[
+  { "scope_type": "BATCH", "scope_key": "default", "label": "共通テーブル", "is_active": true, "has_table": true },
+  { "scope_type": "THEATER", "scope_key": "solomon", "label": "ソロモン宙域", "is_active": true, "has_table": true },
+  { "scope_type": "THEATER", "scope_key": "southeast_asia_jungle", "label": "東南アジア密林", "is_active": true, "has_table": false }
+]
+```
+
+| 項目 | 内容 |
+|---|---|
+| `label` | 共通テーブルは「共通テーブル」、戦域は戦域名 |
+| `is_active` | 戦域が有効か。共通テーブルは常に `true` |
+| `has_table` | テーブルを作成済みか。戦域で `false` なら、その戦域は共通テーブルで抽選する |
+
 ### GET /api/admin/drop-tables/batch
 
-定期バトルのテーブルを返す。テーブルが無ければ（シード未実行）、`id = null`・`drop_rate = 0`・`win_rate_multiplier = 1`・エントリー無しの既定値を返す。
+定期バトルの共通テーブルを返す。テーブルが無ければ（シード未実行）、`id = null`・`drop_rate = 0`・`win_rate_multiplier = 1`・エントリー無しの既定値を返す。
 
 ```json
 {
@@ -73,12 +92,13 @@
 | `target_name` | 機体は `name_ja`（空なら `name`）、武器は `name`、技術断片は技術マスターの `name`。対象のマスターが無いエントリーは返さない |
 | `faction` | 機体マスターの勢力。武器と共通機体は空文字 |
 | `unobtainable_blueprints` | 要設計図（`is_standard_issue = false`）なのに、このテーブルに入っていない設計図。設計図ID順 |
+| `uses_common_table` | 戦域のテーブルが無く、共通テーブルで抽選しているか。共通テーブル自身では常に `false` |
 
 * テーブル・エントリー・全設計図（機体・武器マスターを外部結合）・技術名をそれぞれ1回のクエリで取得する。エントリー数によらずクエリは最大4回（技術断片のエントリーが無ければ3回）
 
 ### PUT /api/admin/drop-tables/batch
 
-定期バトルのテーブルを保存し、保存後の内容を GET と同じ形で返す。
+定期バトルの共通テーブルを保存し、保存後の内容を GET と同じ形で返す。
 
 ```json
 {
@@ -113,6 +133,28 @@
 
 DB でも、`reward_type` に対応するIDだけが入ることをチェック制約（`ck_drop_table_entry_reward`）で保証する。
 
+### GET /api/admin/drop-tables/theaters/{theater_id}
+
+戦域のテーブルを、共通テーブルの GET と同じ形で返す。
+
+* テーブルが無ければ、共通テーブルの設定とエントリーを `id = null`・`name` = 戦域名・`uses_common_table = true` で返す。このまま保存すると、共通テーブルと同じ内容で戦域のテーブルを作成できる
+* 共通テーブルも無ければ、共通テーブルの既定値（ドロップ率0・エントリー無し）を同じく返す
+* 戦域マスターに無い戦域は `404`
+
+### PUT /api/admin/drop-tables/theaters/{theater_id}
+
+戦域のテーブルを保存する。リクエスト・レスポンス・バリデーションは共通テーブルの PUT と同じ。
+
+* テーブルが無ければ作成する。以降、その戦域は共通テーブルを使わない
+* エントリーが0件のテーブルも保存できる。その戦域ではドロップしなくなる（共通テーブルは使わない）
+* 戦域マスターに無い戦域は `404`。テーブルを作成しない
+
+### DELETE /api/admin/drop-tables/theaters/{theater_id}
+
+戦域のテーブルとエントリーを削除する。以降、その戦域は共通テーブルで抽選する。成功すると `204`、テーブルが無ければ `404`。
+
+* 戦域を削除すると（`DELETE /api/admin/theaters/{theater_id}`）、その戦域のテーブルも削除する（`admin-theaters.md`）
+
 ---
 
 ## フロントエンド（`admin-tool/`）
@@ -125,12 +167,15 @@ DB でも、`reward_type` に対応するIDだけが入ることをチェック�
 
 | セクション | 内容 |
 |---|---|
+| テーブルの選択 | 共通テーブルと各戦域の一覧（`GET /api/admin/drop-tables`）。戦域には「戦域のテーブル」「共通テーブルを使用中」「無効」を表示する。選ぶと右側に編集フォームを出す |
+| 戦域の状態 | 戦域のテーブルが無ければ「共通テーブルを使用中」と、保存で作成されることを表示する。テーブルがあれば「共通テーブルに戻す」ボタン（確認ダイアログの後に DELETE） |
 | テーブルの設定 | `name`・`drop_rate`（0〜1）・`win_rate_multiplier`（1以上）。入力値から、1回のバトルで何かがドロップする確率を勝利時・敗北時で表示する |
 | エントリー | 報酬（種別・名前・設計図なら標準配備か要設計図か）、重み、勝利時のみ、勝敗別・勢力別の出現率、削除ボタン。機体・武器・技術マスターのプルダウンから追加する |
 | 入手手段の無い要設計図 | 要設計図なのにテーブルに入っていない機体・武器の一覧。「テーブルに追加」でエントリーに加えられる |
 
 * テーブルの設定とエントリーは「保存」でまとめて1回で送る。「変更を破棄」で保存済みの内容に戻す
 * 未保存の変更があれば「未保存の変更がある」、テーブルが未作成なら「保存すると作成される」と表示する
+* テーブルを切り替えると、フォームを選んだテーブルの内容で作り直す（`key` に選択中のテーブルを渡す）。保存・削除の後は一覧を取り直す
 * 標準配備の設計図のエントリーには「標準配備のため設計図なしで購入できる。ドロップしても換金されるだけになる」と注意を表示する
 * すでにテーブルにある設計図・技術を追加しようとすると、追加せずにメッセージを表示する。設計図と技術は `entryKey()` で区別する
 
@@ -151,12 +196,12 @@ DB でも、`reward_type` に対応するIDだけが入ることをチェック�
 
 | ファイル | 役割 |
 |---|---|
-| `src/app/drop-tables/page.tsx` | 画面。保存結果をトーストで表示する |
+| `src/app/drop-tables/page.tsx` | 画面。テーブルの選択、戦域のテーブルの削除。保存・削除の結果をトーストで表示する |
 | `src/components/admin/DropTableForm.tsx` | テーブルの設定・エントリー・入手手段の無い要設計図の編集。`react-hook-form` + `zod`（`"use no memo"` 付き） |
 | `src/components/admin/DropTableEntryRow.tsx` | エントリー1行。重み・勝利時のみの入力と、勝敗別・勢力別の出現率 |
-| `src/hooks/useAdminDropTable.ts` | `GET` / `PUT /api/admin/drop-tables/batch`。保存後は SWR のキャッシュをレスポンスで置き換える |
+| `src/hooks/useAdminDropTable.ts` | `useAdminDropTableScopes()`: テーブルの一覧。`useAdminDropTable(scope)`: 共通テーブルか戦域のテーブルの `GET` / `PUT`、戦域のテーブルの `DELETE`。保存後は SWR のキャッシュをレスポンスで置き換える。削除後は取り直す |
 | `src/lib/dropTable.ts` | フォームのスキーマ（`dropTableFormSchema`）、出現率の計算、設計図IDの組み立て（`blueprintIdFor()`、backend の `BlueprintService.blueprint_id_for()` と同じ規則） |
-| `src/types/admin.ts` | `DropTableDetail` / `DropTableEntryDetail` / `BlueprintTargetSummary` / `DropTableUpdate` / `DropTableEntryInput` |
+| `src/types/admin.ts` | `DropTableDetail` / `DropTableEntryDetail` / `BlueprintTargetSummary` / `DropTableUpdate` / `DropTableEntryInput` / `DropTableScopeSummary` |
 
 * 機体・武器の追加には、既存の `MasterMobileSuitSelect` / `MasterWeaponSelect` を使う。技術断片は `MasterTechnologySelect`（`useAdminTechnologies`）から追加する（`entryFromTechnology()`）
 * フォームのスキーマでも範囲・重複を検証する。backend の 422 は保存前に防げるが、backend 側の検証が正とする
@@ -173,6 +218,7 @@ DB でも、`reward_type` に対応するIDだけが入ることをチェック�
 * 取得: テーブルが無いときの既定値、エントリーの表示情報、入手手段の無い要設計図、ミッションのテーブルを返さないこと、クエリ回数が3回で一定
 * 保存: テーブルの作成、既存エントリーの置き換え、0件での保存、ミッションのテーブルを変更しないこと、ショップの入手ヒントと抽選への反映
 * バリデーション: 重複・存在しない設計図・範囲外の値が 422 になり、保存されないこと
+* 戦域のテーブル: 一覧、テーブルが無いときに共通テーブルの内容を返すこと、作成、削除、存在しない戦域の 404、戦域の削除でテーブルも削除されること
 * 技術断片のエントリーの保存・取得・バリデーションは `backend/tests/test_technologies.py`
 
 ```bash

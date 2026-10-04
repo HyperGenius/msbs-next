@@ -120,7 +120,7 @@
 * 削除しても、終了したルーム（`battle_rooms`）とバトル結果（`battle_results`）の `theater_id` は残す。
   そのため両テーブルの `theater_id` には外部キーを張っていない（マイグレーション `m7a8b9c0d1e2_drop_theater_foreign_keys.py`）
 * マスターに無い戦域のバトル結果は、戦域名の代わりに戦域IDを表示する（`TheaterService.labels_for()`）
-* 戦域別ドロップテーブル（Sub-Issue 7、Issue #580）を追加するときは、戦域の削除でそのドロップテーブルも削除する
+* 戦域を削除すると、その戦域のドロップテーブルとエントリーも同じトランザクションで削除する（Issue #580、`admin-drop-tables.md`）
 * ローテーション API は公開の予報 API（`GET /api/theaters/forecast`）と同じ `TheaterForecastService.forecast()` を使う。今回（`is_current`）は OPEN ルームに保存した値を返す
 
 ---

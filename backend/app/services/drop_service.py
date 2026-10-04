@@ -24,7 +24,7 @@ from app.models.models import (
 from app.services.blueprint_service import BlueprintService
 from app.services.technology_service import TechnologyService
 
-# 定期バトルにはミッションも戦闘環境も無いため、全ルームで1つのテーブルを共有する。
+# 定期バトルの共通テーブルのキー。自分のテーブルが無い戦域と、戦域なしのルームが使う。
 BATCH_SCOPE_KEY = "default"
 
 
@@ -42,8 +42,18 @@ class DropScope:
 
     @classmethod
     def batch(cls) -> "DropScope":
-        """定期バトルの適用範囲を返す."""
+        """定期バトルの共通テーブルの適用範囲を返す."""
         return cls(DropScopeType.BATCH, BATCH_SCOPE_KEY)
+
+    @classmethod
+    def theater(cls, theater_id: str) -> "DropScope":
+        """戦域のテーブルの適用範囲を返す."""
+        return cls(DropScopeType.THEATER, theater_id)
+
+    @classmethod
+    def for_battle(cls, theater_id: str | None) -> "DropScope":
+        """定期バトルの適用範囲を返す。戦域なしなら共通テーブルにする."""
+        return cls.batch() if theater_id is None else cls.theater(theater_id)
 
 
 @dataclass(frozen=True)
@@ -77,6 +87,17 @@ class DropService:
         ).first()
 
     @staticmethod
+    def resolve_table(session: Session, scope: DropScope) -> DropTable | None:
+        """抽選に使うテーブルを返す.
+
+        戦域のテーブルが無ければ、共通テーブルを返す。
+        """
+        table = DropService.find_table(session, scope)
+        if table is None and scope.scope_type == DropScopeType.THEATER:
+            return DropService.find_table(session, DropScope.batch())
+        return table
+
+    @staticmethod
     def roll(
         session: Session,
         user_id: str,
@@ -92,7 +113,7 @@ class DropService:
         Args:
             session: DBセッション
             user_id: 抽選するプレイヤー。NPC なら抽選しない
-            scope: 戦闘の適用範囲。対応するテーブルが無ければドロップしない
+            scope: 戦闘の適用範囲。抽選に使うテーブルが無ければドロップしない
             is_win: 勝利したか。DRAW は敗北として渡す
             battle_result_id: 所持設計図の `source_battle_id` に記録するバトル結果ID
             rng: 抽選に使う乱数生成器
@@ -104,7 +125,7 @@ class DropService:
         if pilot is None or pilot.is_npc:
             return []
 
-        table = DropService.find_table(session, scope)
+        table = DropService.resolve_table(session, scope)
         if table is None:
             return []
 

@@ -394,6 +394,24 @@ export interface DropTableDetail {
     entries: DropTableEntryDetail[];
     /** 要設計図なのに、このテーブルに入っていない設計図 */
     unobtainable_blueprints: BlueprintTargetSummary[];
+    /** 戦域のテーブルが無く、共通テーブルで抽選しているか。true なら設定とエントリーは共通テーブルの内容 */
+    uses_common_table: boolean;
+}
+
+/** ドロップテーブルの適用範囲の種別。admin-tool で編集するのは共通テーブル（BATCH）と戦域（THEATER） */
+export type DropScopeType = "BATCH" | "THEATER";
+
+/** 編集できるドロップテーブルの一覧の1件 */
+export interface DropTableScopeSummary {
+    scope_type: DropScopeType;
+    /** 適用範囲のキー。戦域なら戦域ID */
+    scope_key: string;
+    /** 表示名。共通テーブルか戦域名 */
+    label: string;
+    /** 戦域が有効か。共通テーブルは true */
+    is_active: boolean;
+    /** テーブルを作成済みか。戦域で false なら共通テーブルで抽選する */
+    has_table: boolean;
 }
 
 export interface DropTableEntryInput {
