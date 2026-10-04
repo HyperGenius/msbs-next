@@ -1,59 +1,46 @@
 "use client";
 
 import useSWR from "swr";
-import { DropTableDetail, DropTableUpdate } from "@/types/admin";
+import { DropTableDetail, DropTableScopeSummary, DropTableUpdate } from "@/types/admin";
+import { adminFetcher, adminRequest, adminUrl } from "@/lib/adminApi";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-const ADMIN_API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY || "";
+type DropTableScope = Pick<DropTableScopeSummary, "scope_type" | "scope_key">;
 
-const ENDPOINT = `${API_BASE_URL}/api/admin/drop-tables/batch`;
+const LIST_ENDPOINT = adminUrl("/drop-tables");
 
-function adminFetcher(url: string) {
-  return fetch(url, {
-    headers: { "X-API-Key": ADMIN_API_KEY },
-  }).then(async (res) => {
-    if (!res.ok) {
-      const err = new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`) as Error & { status: number };
-      err.status = res.status;
-      throw err;
-    }
-    return res.json();
-  });
-}
-
-/** FastAPI の 422 は detail が文字列（サービスの検証）か、項目ごとのエラーの配列（スキーマの検証）になる。 */
-function errorMessage(detail: unknown, fallback: string): string {
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    return detail
-      .map((d: { loc?: unknown[]; msg?: string }) => `${(d.loc ?? []).join(".")}: ${d.msg ?? ""}`)
-      .join(" / ");
-  }
-  return fallback;
+function endpointFor(scope: DropTableScope): string {
+  if (scope.scope_type === "BATCH") return adminUrl("/drop-tables/batch");
+  return adminUrl(`/drop-tables/theaters/${encodeURIComponent(scope.scope_key)}`);
 }
 
 /**
- * 定期バトルのドロップテーブルを取得・保存する SWR フック
+ * 共通テーブルと全戦域について、テーブルの有無を取得する SWR フック
  */
-export function useAdminDropTable() {
-  const { data, error, isLoading, mutate } = useSWR<DropTableDetail>(ENDPOINT, adminFetcher);
+export function useAdminDropTableScopes() {
+  const { data, error, isLoading, mutate } = useSWR<DropTableScopeSummary[]>(LIST_ENDPOINT, adminFetcher);
+  return { scopes: data, isLoading, isError: error, reloadScopes: mutate };
+}
+
+/**
+ * 共通テーブルか戦域のドロップテーブルを取得・保存・削除する SWR フック。
+ * 戦域のテーブルを削除すると、その戦域は共通テーブルで抽選する。
+ */
+export function useAdminDropTable(scope: DropTableScope | null) {
+  const endpoint = scope ? endpointFor(scope) : null;
+  const { data, error, isLoading, mutate } = useSWR<DropTableDetail>(endpoint, adminFetcher);
 
   async function saveDropTable(payload: DropTableUpdate): Promise<DropTableDetail> {
-    const res = await fetch(ENDPOINT, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": ADMIN_API_KEY,
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(errorMessage(body.detail, `Save failed: ${res.status}`));
-    }
-    const saved: DropTableDetail = await res.json();
+    if (!endpoint) throw new Error("No drop table is selected");
+    const saved = await adminRequest<DropTableDetail>(endpoint, "PUT", payload);
     await mutate(saved, { revalidate: false });
     return saved;
+  }
+
+  /** 戦域のテーブルを削除し、共通テーブルの内容を取り直す */
+  async function deleteDropTable(): Promise<void> {
+    if (!endpoint) throw new Error("No drop table is selected");
+    await adminRequest<void>(endpoint, "DELETE");
+    await mutate();
   }
 
   return {
@@ -61,5 +48,6 @@ export function useAdminDropTable() {
     isLoading,
     isError: error,
     saveDropTable,
+    deleteDropTable,
   };
 }

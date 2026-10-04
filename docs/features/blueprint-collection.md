@@ -61,7 +61,9 @@ API・戦域の表示の変換は `blueprint-system.md` の「設計図コレク
 |---|---|
 | パイロットの勢力では購入できない機体（`is_available_to_faction = false`） | 「あなたの勢力では入手できません」（赤） |
 | 入手できる戦域が無い（`obtainable_theaters` が空） | 「現在は入手できません」 |
-| 入手できる戦域がある | 「入手先」の後に戦域をチップで並べる。勝利時のみなら「全戦域（勝利時のみ）」 |
+| 入手できる戦域がある | 「入手先」の後に戦域をチップで並べる（例: 「ソロモン宙域（勝利時のみ）」「東南アジア密林」）。すべての有効な戦域が共通テーブルを使うなら「全戦域」 |
+
+* 戦域名は API の `label` をそのまま表示する。戦域の並び（巡回順）と、共通テーブル・無効な戦域の扱いは API で決める（`blueprint-system.md` の「適用範囲から戦域の表示への変換」、Issue #580）
 
 * 標準配備品は、所持記録があっても「標準配備」として表示する
 * 勢力の表示: `FEDERATION` は「地球連邦軍」（シアン）、`ZEON` は「ジオン公国軍」（アンバー）
@@ -104,7 +106,8 @@ API・戦域の表示の変換は `blueprint-system.md` の「設計図コレク
 | ファイル | 変更内容 |
 |---|---|
 | `backend/app/models/models.py` | `BlueprintCollectionItem`・`ObtainableTheater` を追加 |
-| `backend/app/services/blueprint_collection_service.py`（新規） | `BlueprintCollectionService.get_collection()`・`theater_label_for()` |
+| `backend/app/services/blueprint_collection_service.py`（新規） | `BlueprintCollectionService.get_collection()` |
+| `backend/app/services/drop_source_service.py`（Issue #580 で新規） | `TheaterDropSources`: ドロップテーブルから戦域名への変換。ショップの `unlock_hint` と共用 |
 | `backend/app/routers/blueprints.py` | `GET /api/blueprints/collection` を追加 |
 | `frontend/src/types/blueprint.ts`（新規） | 図鑑の型。`types/battle.ts` のバレルに追加 |
 | `frontend/src/services/blueprints.ts`（新規） | `useBlueprintCollection()`。`services/api.ts` のバレルに追加 |
@@ -118,5 +121,5 @@ API・戦域の表示の変換は `blueprint-system.md` の「設計図コレク
 
 ## 後続の対応
 
-* 戦域ローテーション（Sub-Issue 10）で、`theater_label_for()` を実際の戦域名に対応させる
+* 戦域名の表示は Issue #580（戦域別ドロップテーブル）で対応した。フロントエンドの変更は無い
 * 技術断片・技術Lv（Sub-Issue 8）の表示は Issue #569 で追加した（技術タブ・所持済み設計図の足りない技術Lv）

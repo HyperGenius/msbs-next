@@ -20,6 +20,7 @@ from app.models.models import (
     CombatSimulationRequest,
     CombatSimulationResponse,
     DropTableDetail,
+    DropTableScopeSummary,
     DropTableUpdate,
     MasterBlueprintSettings,
     MasterEnvironmentCreate,
@@ -627,11 +628,22 @@ def delete_ace_pilot(
 # ===========================================================
 
 
+@drop_table_router.get("", response_model=list[DropTableScopeSummary])
+def list_drop_tables(
+    session: Session = Depends(get_session),
+) -> list[DropTableScopeSummary]:
+    """共通テーブルと全戦域について、テーブルの有無を返す.
+
+    - 戦域は巡回順に並べる。無効な戦域も含める
+    """
+    return DropTableService.list_scopes(session)
+
+
 @drop_table_router.get("/batch", response_model=DropTableDetail)
 def get_batch_drop_table(
     session: Session = Depends(get_session),
 ) -> DropTableDetail:
-    """定期バトルのドロップテーブルを返す.
+    """定期バトルの共通テーブルを返す.
 
     - テーブルが無ければ、ドロップ率0・エントリー無しの既定値を返す
     """
@@ -643,7 +655,7 @@ def update_batch_drop_table(
     data: DropTableUpdate,
     session: Session = Depends(get_session),
 ) -> DropTableDetail:
-    """定期バトルのドロップテーブルを保存する.
+    """定期バトルの共通テーブルを保存する.
 
     - テーブルが無ければ作成する。エントリーは入力の内容で置き換える
     - 重複した設計図・技術や、マスターに無い設計図・技術がある場合は 422 を返す
@@ -654,6 +666,62 @@ def update_batch_drop_table(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         ) from e
+
+
+@drop_table_router.get("/theaters/{theater_id}", response_model=DropTableDetail)
+def get_theater_drop_table(
+    theater_id: str,
+    session: Session = Depends(get_session),
+) -> DropTableDetail:
+    """戦域のドロップテーブルを返す.
+
+    - テーブルが無ければ、共通テーブルの内容を uses_common_table=true で返す
+    - 戦域が無い場合は 404 を返す
+    """
+    try:
+        return DropTableService.get_detail(session, DropScope.theater(theater_id))
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+
+@drop_table_router.put("/theaters/{theater_id}", response_model=DropTableDetail)
+def update_theater_drop_table(
+    theater_id: str,
+    data: DropTableUpdate,
+    session: Session = Depends(get_session),
+) -> DropTableDetail:
+    """戦域のドロップテーブルを保存する.
+
+    - テーブルが無ければ作成する。以降、その戦域は共通テーブルを使わない
+    - 戦域が無い場合は 404 を返す
+    - 重複した設計図・技術や、マスターに無い設計図・技術がある場合は 422 を返す
+    """
+    try:
+        return DropTableService.save(session, DropScope.theater(theater_id), data)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
+        ) from e
+
+
+@drop_table_router.delete(
+    "/theaters/{theater_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_theater_drop_table(
+    theater_id: str,
+    session: Session = Depends(get_session),
+) -> None:
+    """戦域のドロップテーブルを削除する。以降、その戦域は共通テーブルを使う.
+
+    - テーブルが無い場合は 404 を返す
+    """
+    if not DropTableService.delete_theater_table(session, theater_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Drop table for theater '{theater_id}' not found.",
+        )
 
 
 # ===========================================================

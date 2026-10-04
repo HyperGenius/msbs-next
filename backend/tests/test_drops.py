@@ -20,6 +20,7 @@ from app.models.models import (
     DropTable,
     DropTableEntry,
     MasterBlueprint,
+    MasterTheater,
     Mission,
     MobileSuit,
     Pilot,
@@ -29,6 +30,7 @@ from app.models.models import (
 )
 from app.services.blueprint_service import UNAVAILABLE_UNLOCK_HINT, BlueprintService
 from app.services.drop_service import DropScope, DropService
+from app.services.theater_service import BattleConditions
 from main import app
 
 USER_ID = "test_drop_user"
@@ -37,6 +39,8 @@ GELGOOG = "mobile_suit:gelgoog"
 GUNDAM = "mobile_suit:gundam"
 MISSION_ID = 9002
 MISSION_NAME = "Mission 02: 防衛線突破"
+SOLOMON = "solomon"
+JUNGLE = "southeast_asia_jungle"
 
 
 class FixedRandom(random.Random):
@@ -297,6 +301,42 @@ def test_roll_without_table(session: Session, pilot: Pilot) -> None:
     assert _roll(session, FixedRandom(0.0), scope=DropScope.batch()) == []
 
 
+def test_roll_uses_theater_table(session: Session, pilot: Pilot) -> None:
+    """戦域のテーブルがあれば、共通テーブルを使わずに抽選すること."""
+    _make_table(session, [(DOM, 1, False)])
+    _make_table(session, [(GELGOOG, 1, False)], DropScope.theater(SOLOMON))
+
+    loot = _roll(session, FixedRandom(0.0), scope=DropScope.theater(SOLOMON))
+
+    assert [item.blueprint_id for item in loot] == [GELGOOG]
+
+
+def test_roll_falls_back_to_common_table(session: Session, pilot: Pilot) -> None:
+    """戦域のテーブルが無ければ、共通テーブルで抽選すること."""
+    _make_table(session, [(DOM, 1, False)])
+    _make_table(session, [(GELGOOG, 1, False)], DropScope.theater(SOLOMON))
+
+    loot = _roll(session, FixedRandom(0.0), scope=DropScope.theater(JUNGLE))
+
+    assert [item.blueprint_id for item in loot] == [DOM]
+
+
+def test_roll_empty_theater_table_does_not_fall_back(
+    session: Session, pilot: Pilot
+) -> None:
+    """戦域のテーブルにエントリーが無ければ、共通テーブルがあってもドロップしないこと."""
+    _make_table(session, [(DOM, 1, False)])
+    _make_table(session, [], DropScope.theater(SOLOMON))
+
+    assert _roll(session, FixedRandom(0.0), scope=DropScope.theater(SOLOMON)) == []
+
+
+def test_scope_for_battle() -> None:
+    """戦域なしのルームは共通テーブル、それ以外は戦域のテーブルになること."""
+    assert DropScope.for_battle(None) == DropScope.batch()
+    assert DropScope.for_battle(SOLOMON) == DropScope(DropScopeType.THEATER, SOLOMON)
+
+
 def test_roll_skips_npc_and_unknown_user(session: Session) -> None:
     """NPC パイロットと、パイロットのいないユーザーは抽選しないこと."""
     session.add(Pilot(user_id="npc_user", name="NPC", is_npc=True))
@@ -323,8 +363,8 @@ def test_unlock_hint_lists_missions_and_batch(
         session, USER_ID, BlueprintTargetType.MOBILE_SUIT, ["dom", "gelgoog", "gundam"]
     )
 
-    assert states["dom"].unlock_hint == f"『{MISSION_NAME}』・定期バトルでドロップ"
-    assert states["gelgoog"].unlock_hint == "定期バトルでドロップ（勝利時のみ）"
+    assert states["dom"].unlock_hint == f"『{MISSION_NAME}』・全戦域でドロップ"
+    assert states["gelgoog"].unlock_hint == "全戦域でドロップ（勝利時のみ）"
     assert states["gundam"].unlock_hint == UNAVAILABLE_UNLOCK_HINT
 
 
@@ -342,8 +382,45 @@ def test_unlock_hint_marks_win_only_source(
 
     assert (
         states["dom"].unlock_hint
-        == f"『{MISSION_NAME}』・定期バトル（勝利時のみ）でドロップ"
+        == f"『{MISSION_NAME}』・全戦域（勝利時のみ）でドロップ"
     )
+
+
+def test_unlock_hint_lists_theaters(
+    session: Session, pilot: Pilot, mission: Mission
+) -> None:
+    """戦域のテーブルは戦域名で並び、共通テーブルはそれを使う戦域名になること."""
+    _make_restricted(session, DOM, GELGOOG)
+    _make_table(session, [(GELGOOG, 1, False)], DropScope.mission(MISSION_ID))
+    _make_table(session, [(DOM, 1, False), (GELGOOG, 1, True)])
+    _make_table(session, [(GELGOOG, 1, True)], DropScope.theater(SOLOMON))
+
+    states = BlueprintService.get_unlock_states(
+        session, USER_ID, BlueprintTargetType.MOBILE_SUIT, ["dom", "gelgoog"]
+    )
+
+    assert states["dom"].unlock_hint == "東南アジア密林でドロップ"
+    assert (
+        states["gelgoog"].unlock_hint
+        == f"『{MISSION_NAME}』・ソロモン宙域（勝利時のみ）・東南アジア密林（勝利時のみ）でドロップ"
+    )
+
+
+def test_unlock_hint_skips_inactive_theater(session: Session, pilot: Pilot) -> None:
+    """無効な戦域のテーブルにしか無い設計図は、入手できないと表示すること."""
+    _make_restricted(session, GELGOOG)
+    _make_table(session, [(GELGOOG, 1, False)], DropScope.theater(JUNGLE))
+    jungle = session.get(MasterTheater, JUNGLE)
+    assert jungle is not None
+    jungle.is_active = False
+    session.add(jungle)
+    session.commit()
+
+    states = BlueprintService.get_unlock_states(
+        session, USER_ID, BlueprintTargetType.MOBILE_SUIT, ["gelgoog"]
+    )
+
+    assert states["gelgoog"].unlock_hint == UNAVAILABLE_UNLOCK_HINT
 
 
 def test_unlock_hint_falls_back_to_table_name(session: Session, pilot: Pilot) -> None:
@@ -370,7 +447,7 @@ def test_shop_listing_shows_drop_hint(client, session: Session, pilot: Pilot) ->
 
     assert response.status_code == 200
     listings = {item["id"]: item for item in response.json()}
-    assert listings["dom"]["unlock_hint"] == "定期バトルでドロップ"
+    assert listings["dom"]["unlock_hint"] == "全戦域でドロップ"
 
 
 # --- 機体・武器マスターの削除 ---
@@ -491,6 +568,7 @@ def _save_batch(
     entries: list[BattleEntry],
     room: BattleRoom,
     rng: random.Random | None = None,
+    conditions: BattleConditions | None = None,
 ) -> None:
     from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
 
@@ -514,6 +592,7 @@ def _save_batch(
         player_unit=units[0],
         enemy_units=units[1:],
         rng=rng or FixedRandom(0.0),
+        conditions=conditions,
     )
 
 
@@ -552,6 +631,22 @@ def test_batch_records_loot_per_player(
         assert result.loot is not None
         assert [item["blueprint_id"] for item in result.loot] == [DOM]
         assert owned_by_user[result.user_id].source_battle_id == result.id  # type: ignore[index]
+
+
+def test_batch_uses_room_theater_table(
+    session: Session, pilot: Pilot, room: BattleRoom
+) -> None:
+    """定期バトルでは、ルームの戦域のテーブルで抽選すること."""
+    _make_table(session, [(DOM, 1, False)])
+    _make_table(session, [(GELGOOG, 1, False)], DropScope.theater(SOLOMON))
+    entries = [_make_batch_entry(session, room, USER_ID)]
+
+    _save_batch(session, entries, room, conditions=BattleConditions(theater_id=SOLOMON))
+
+    result = session.exec(
+        select(BattleResult).where(BattleResult.room_id == room.id)
+    ).one()
+    assert [item["blueprint_id"] for item in result.loot or []] == [GELGOOG]
 
 
 def test_batch_drop_error_does_not_stop_others(
@@ -626,7 +721,7 @@ def test_batch_loot_does_not_depend_on_entry_order(
 
 
 def test_seed_drop_tables_is_idempotent(session: Session) -> None:
-    """シードが定期バトルのテーブルを作り、再実行しても重複しないこと."""
+    """シードが共通テーブルと戦域のテーブルを作り、再実行しても重複しないこと."""
     from scripts.seed.seed_drop_tables import seed_drop_tables
 
     first = seed_drop_tables(session)
@@ -634,18 +729,59 @@ def test_seed_drop_tables_is_idempotent(session: Session) -> None:
     second = seed_drop_tables(session)
     session.commit()
 
-    table = session.exec(
-        select(DropTable).where(DropTable.scope_type == DropScopeType.BATCH.value)
-    ).one()
-    assert table.drop_rate == 0.3
-    assert table.win_rate_multiplier == 1.5
-    entries = {
-        e.blueprint_id: (e.weight, e.requires_win)
-        for e in session.exec(select(DropTableEntry)).all()
+    tables = {
+        (table.scope_type, table.scope_key): table
+        for table in session.exec(select(DropTable)).all()
     }
+    assert set(tables) == {
+        (DropScopeType.BATCH.value, "default"),
+        (DropScopeType.THEATER.value, SOLOMON),
+        (DropScopeType.THEATER.value, JUNGLE),
+    }
+    batch = tables[(DropScopeType.BATCH.value, "default")]
+    assert batch.drop_rate == 0.3
+    assert batch.win_rate_multiplier == 1.5
+
+    def _entries(table: DropTable) -> dict[str, tuple[int, bool]]:
+        return {
+            (e.blueprint_id or e.tech_id or ""): (e.weight, e.requires_win)
+            for e in session.exec(
+                select(DropTableEntry).where(DropTableEntry.drop_table_id == table.id)
+            ).all()
+        }
+
     # テスト用のマスターデータには zaku_ii_f が無いため投入されない。
-    assert entries == {DOM: (3, False), GELGOOG: (1, True), GUNDAM: (1, True)}
-    assert first["inserted"] == 3
-    assert first["missing_blueprint"] == 1
+    assert _entries(batch) == {
+        DOM: (3, False),
+        GELGOOG: (1, True),
+        GUNDAM: (1, True),
+    }
+    tech_fragments = {"beam_generator_tech": (2, False), "psycommu_tech": (1, False)}
+    assert _entries(tables[(DropScopeType.THEATER.value, SOLOMON)]) == {
+        GELGOOG: (1, True),
+        **tech_fragments,
+    }
+    assert _entries(tables[(DropScopeType.THEATER.value, JUNGLE)]) == {
+        DOM: (3, False),
+        "mobile_suit:gouf": (3, False),
+        **tech_fragments,
+    }
+    assert first["inserted"] == 10
+    assert first["missing_blueprint"] == 2
     assert second["inserted"] == 0
-    assert second["skipped"] == 3
+    assert second["skipped"] == 10
+
+
+def test_seed_drop_tables_skips_missing_theater(session: Session) -> None:
+    """戦域マスターが無い戦域のテーブルは投入しないこと."""
+    from scripts.seed.seed_drop_tables import seed_drop_tables
+
+    session.exec(delete(MasterTheater).where(col(MasterTheater.id) == SOLOMON))  # type: ignore[call-overload]
+    session.commit()
+
+    counts = seed_drop_tables(session)
+    session.commit()
+
+    assert counts["missing_theater"] == 1
+    assert DropService.find_table(session, DropScope.theater(SOLOMON)) is None
+    assert DropService.find_table(session, DropScope.theater(JUNGLE)) is not None

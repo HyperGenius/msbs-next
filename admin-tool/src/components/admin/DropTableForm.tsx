@@ -208,7 +208,7 @@ export default function DropTableForm({ initialData, onSubmit, isSubmitting = fa
           入手手段の無い要設計図（{unobtainable.length}件）
         </SciFiHeading>
         <p className="text-xs text-[#00ff41]/50">
-          標準配備ではないのに、このテーブルに入っていない機体・武器。プレイヤーは購入できない。
+          標準配備ではないのに、このテーブルに入っていない機体・武器。他のテーブルにも無ければ、プレイヤーは購入できない。
         </p>
         {unobtainable.length === 0 ? (
           <p className="text-xs text-[#00ff41]/40">なし</p>
@@ -251,7 +251,11 @@ export default function DropTableForm({ initialData, onSubmit, isSubmitting = fa
         </SciFiButton>
         {isDirty && <span className="text-xs text-[#ffb000]">未保存の変更がある</span>}
         {initialData.id === null && (
-          <span className="text-xs text-[#ffb000]/70">テーブルは未作成。保存すると作成される</span>
+          <span className="text-xs text-[#ffb000]/70">
+            {initialData.uses_common_table
+              ? "共通テーブルを使用中。保存すると戦域のテーブルが作成される"
+              : "テーブルは未作成。保存すると作成される"}
+          </span>
         )}
       </div>
     </form>

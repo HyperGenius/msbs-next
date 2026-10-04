@@ -2245,6 +2245,7 @@ class DropScopeType(StrEnum):
 
     MISSION = "MISSION"
     BATCH = "BATCH"
+    THEATER = "THEATER"
 
 
 class DropTable(SQLModel, table=True):
@@ -2258,7 +2259,10 @@ class DropTable(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     scope_type: str = Field(description="適用範囲の種別 (DropScopeType)")
     scope_key: str = Field(
-        description="適用範囲のキー。MISSION は missions.id の文字列、BATCH は default"
+        description=(
+            "適用範囲のキー。MISSION は missions.id の文字列、BATCH は default、"
+            "THEATER は master_theaters.id"
+        )
     )
     name: str = Field(description="管理用の名前")
     drop_rate: float = Field(
@@ -2409,4 +2413,23 @@ class DropTableDetail(SQLModel):
     entries: list[DropTableEntryDetail]
     unobtainable_blueprints: list[BlueprintTargetSummary] = Field(
         description="要設計図なのに、このテーブルに入っていない設計図"
+    )
+    uses_common_table: bool = Field(
+        default=False,
+        description=(
+            "戦域のテーブルが無く、共通テーブルで抽選しているか。"
+            "true なら設定とエントリーは共通テーブルの内容"
+        ),
+    )
+
+
+class DropTableScopeSummary(SQLModel):
+    """編集できるドロップテーブルの一覧の1件（管理者用）."""
+
+    scope_type: str = Field(description="適用範囲の種別 (DropScopeType)")
+    scope_key: str = Field(description="適用範囲のキー。戦域なら戦域ID")
+    label: str = Field(description="表示名。共通テーブルか戦域名")
+    is_active: bool = Field(description="戦域が有効か。共通テーブルは true")
+    has_table: bool = Field(
+        description="テーブルを作成済みか。戦域で false なら共通テーブルで抽選する"
     )

@@ -28,12 +28,10 @@ from app.models.models import (
     PlayerTechnology,
     TechRequirement,
 )
-from app.services.blueprint_collection_service import (
-    ALL_THEATERS_LABEL,
-    BlueprintCollectionService,
-)
+from app.services.blueprint_collection_service import BlueprintCollectionService
 from app.services.blueprint_service import BlueprintService, format_missing_tech
 from app.services.drop_service import DropScope, DropService
+from app.services.drop_source_service import ALL_THEATERS_LABEL
 from app.services.loot_service import LootService
 from app.services.technology_service import TechnologyService
 from main import app
@@ -352,7 +350,7 @@ def test_standard_issue_ignores_tech_requirements(
 def test_unlock_states_query_count_with_requirements(
     session: Session, pilot: Pilot
 ) -> None:
-    """必要な技術Lvがあっても、解放状態の取得が商品数によらず5回のクエリで済むこと."""
+    """必要な技術Lvがあっても、解放状態の取得が商品数によらず6回のクエリで済むこと."""
     target_ids = [m.id for m in session.exec(select(MasterMobileSuit)).all()]
     for target_id in target_ids:
         _require(session, f"mobile_suit:{target_id}", [(BEAM, 1), (PSYCOMMU, 2)])
@@ -364,7 +362,7 @@ def test_unlock_states_query_count_with_requirements(
         )
 
     assert len(target_ids) > 3
-    assert len(statements) == 5
+    assert len(statements) == 6
 
 
 def test_format_missing_tech() -> None:

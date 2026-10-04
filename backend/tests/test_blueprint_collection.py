@@ -16,16 +16,14 @@ from app.models.models import (
     DropTable,
     DropTableEntry,
     MasterBlueprint,
+    MasterTheater,
     ObtainableTheater,
     Pilot,
 )
-from app.services.blueprint_collection_service import (
-    ALL_THEATERS_LABEL,
-    BlueprintCollectionService,
-    theater_label_for,
-)
+from app.services.blueprint_collection_service import BlueprintCollectionService
 from app.services.blueprint_service import BlueprintService
 from app.services.drop_service import DropScope
+from app.services.drop_source_service import ALL_THEATERS_LABEL
 from main import app
 
 USER_ID = "test_collection_user"
@@ -34,6 +32,8 @@ DOM = "mobile_suit:dom"
 GELGOOG = "mobile_suit:gelgoog"
 GUNDAM = "mobile_suit:gundam"
 BEAM_RIFLE = "weapon:beam_rifle"
+SOLOMON = "solomon"
+JUNGLE = "southeast_asia_jungle"
 
 
 @pytest.fixture(name="pilot")
@@ -93,12 +93,6 @@ def _recorded_queries(session: Session) -> Iterator[list[str]]:
         yield statements
     finally:
         event.remove(engine, "before_cursor_execute", _record)
-
-
-def test_theater_label_for() -> None:
-    """定期バトルは固定ラベル、ミッションは対象外になること."""
-    assert theater_label_for(DropScope.batch()) == ALL_THEATERS_LABEL
-    assert theater_label_for(DropScope.mission(1)) is None
 
 
 def test_collection_lists_all_blueprints_with_names(
@@ -224,8 +218,60 @@ def test_collection_without_pilot_treats_all_factions_available(
     ]
 
 
+def test_collection_lists_theater_names(session: Session, pilot: Pilot) -> None:
+    """戦域のテーブルは戦域名になり、共通テーブルはそれを使う戦域名になること."""
+    _make_restricted(session, DOM, GELGOOG)
+    _make_table(session, DropScope.batch(), [(DOM, False), (GELGOOG, False)])
+    _make_table(session, DropScope.theater(SOLOMON), [(GELGOOG, True)])
+
+    by_id = _by_id(BlueprintCollectionService.get_collection(session, USER_ID))
+
+    assert by_id[DOM].obtainable_theaters == [
+        ObtainableTheater(label="東南アジア密林", requires_win=False)
+    ]
+    # 巡回順（ソロモン宙域 → 東南アジア密林）に並ぶ。
+    assert by_id[GELGOOG].obtainable_theaters == [
+        ObtainableTheater(label="ソロモン宙域", requires_win=True),
+        ObtainableTheater(label="東南アジア密林", requires_win=False),
+    ]
+
+
+def test_collection_hides_unused_common_table(session: Session, pilot: Pilot) -> None:
+    """全戦域が自分のテーブルを持つなら、共通テーブルを入手先に出さないこと."""
+    _make_restricted(session, DOM, GELGOOG)
+    _make_table(session, DropScope.batch(), [(DOM, False)])
+    _make_table(session, DropScope.theater(SOLOMON), [(GELGOOG, False)])
+    _make_table(session, DropScope.theater(JUNGLE), [])
+
+    by_id = _by_id(BlueprintCollectionService.get_collection(session, USER_ID))
+
+    assert by_id[DOM].obtainable_theaters == []
+    assert by_id[GELGOOG].obtainable_theaters == [
+        ObtainableTheater(label="ソロモン宙域", requires_win=False)
+    ]
+
+
+def test_collection_hides_inactive_theater(session: Session, pilot: Pilot) -> None:
+    """無効な戦域のテーブルを入手先に出さず、共通テーブルは有効な戦域だけで判定すること."""
+    _make_restricted(session, DOM, GELGOOG)
+    _make_table(session, DropScope.batch(), [(DOM, False)])
+    _make_table(session, DropScope.theater(JUNGLE), [(GELGOOG, False)])
+    jungle = session.get(MasterTheater, JUNGLE)
+    assert jungle is not None
+    jungle.is_active = False
+    session.add(jungle)
+    session.commit()
+
+    by_id = _by_id(BlueprintCollectionService.get_collection(session, USER_ID))
+
+    assert by_id[DOM].obtainable_theaters == [
+        ObtainableTheater(label=ALL_THEATERS_LABEL, requires_win=False)
+    ]
+    assert by_id[GELGOOG].obtainable_theaters == []
+
+
 def test_collection_query_count_is_constant(session: Session, pilot: Pilot) -> None:
-    """取得が設計図・エントリー・所持設計図の数によらず7回のクエリで済むこと."""
+    """取得が設計図・エントリー・所持設計図の数によらず8回のクエリで済むこと."""
     blueprint_ids = list(session.exec(select(MasterBlueprint.id)).all())
     _make_restricted(session, *blueprint_ids)
     _make_table(session, DropScope.batch(), [(bid, False) for bid in blueprint_ids])
@@ -240,7 +286,7 @@ def test_collection_query_count_is_constant(session: Session, pilot: Pilot) -> N
         items = BlueprintCollectionService.get_collection(session, USER_ID)
 
     assert len(items) == len(blueprint_ids) > 3
-    assert len(statements) == 7
+    assert len(statements) == 8
 
 
 def test_get_collection_api(client: TestClient, session: Session, pilot: Pilot) -> None:

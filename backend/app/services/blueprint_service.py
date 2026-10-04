@@ -25,13 +25,13 @@ from app.models.models import (
     TechRequirement,
     TechRequirementStatus,
 )
+from app.services.drop_source_service import TheaterDropSources
 from app.services.technology_service import TechnologyService
 
 # 換金額はアイテムごとに admin-tool で調整する前提の暫定値。
 DUPLICATE_CREDIT_RATIO = 0.2
 
 UNAVAILABLE_UNLOCK_HINT = "現在は入手できません"
-BATCH_DROP_SOURCE_LABEL = "定期バトル"
 WIN_ONLY_SUFFIX = "（勝利時のみ）"
 
 
@@ -375,10 +375,14 @@ class BlueprintService:
     def _unlock_hints(
         session: Session, target_type: BlueprintTargetType, target_ids: list[str]
     ) -> dict[str, str]:
-        """対象アイテムごとに、設計図を入手できる戦闘を示すヒントを返す."""
+        """対象アイテムごとに、設計図を入手できる戦闘を示すヒントを返す.
+
+        ミッションをミッションID順に並べ、その後に有効な戦域を巡回順に並べる。
+        """
         if not target_ids:
             return {}
 
+        theater_sources = TheaterDropSources.load(session)
         rows = session.exec(
             select(
                 MasterBlueprint.target_id,
@@ -400,21 +404,35 @@ class BlueprintService:
             )
             .where(MasterBlueprint.target_type == target_type.value)
             .where(col(MasterBlueprint.target_id).in_(target_ids))
-            # ミッションを定期バトルより先に、ミッションID順に並べる。
-            .order_by(col(DropTable.scope_type).desc(), col(Mission.id))
+            .order_by(col(Mission.id))
         ).all()
 
-        sources_by_target: dict[str, list[tuple[str, bool]]] = {}
+        # 対象ID → 表示名 → (表示順, 勝利時のみか)。ミッションの表示順は取得順で決める。
+        sources_by_target: dict[str, dict[str, tuple[tuple[int, int], bool]]] = {}
         for target_id, table, mission_name, requires_win in rows:
-            if table.scope_type == DropScopeType.BATCH.value:
-                label = BATCH_DROP_SOURCE_LABEL
+            if table.scope_type == DropScopeType.MISSION.value:
+                labels = [(f"『{mission_name or table.name}』", (0, 0))]
             else:
-                label = f"『{mission_name or table.name}』"
-            sources_by_target.setdefault(target_id, []).append((label, requires_win))
+                labels = [
+                    (source.label, (1, source.order))
+                    for source in theater_sources.sources_for(
+                        table.scope_type, table.scope_key
+                    )
+                ]
+            by_label = sources_by_target.setdefault(target_id, {})
+            for label, order in labels:
+                _, win_only = by_label.get(label, (order, True))
+                by_label[label] = (order, win_only and requires_win)
 
         return {
             target_id: BlueprintService._format_unlock_hint(
-                sources_by_target.get(target_id, [])
+                [
+                    (label, requires_win)
+                    for label, (_, requires_win) in sorted(
+                        sources_by_target.get(target_id, {}).items(),
+                        key=lambda item: item[1][0],
+                    )
+                ]
             )
             for target_id in target_ids
         }
