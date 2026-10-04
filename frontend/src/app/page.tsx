@@ -13,6 +13,7 @@ import {
   usePilot,
   useBattleHistory,
   useUnreadBattleResults,
+  useTheaterForecast,
   markBattleAsRead,
 } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
@@ -40,6 +41,7 @@ type ModalResult = {
   msSnapshot?: MobileSuit | null;
   kills?: number;
   loot?: LootItem[] | null;
+  theaterLabel?: string | null;
 };
 
 export default function Home() {
@@ -52,6 +54,7 @@ export default function Home() {
   const { pilot, isLoading: pilotLoading, isNotFound: pilotNotFound, mutate: mutatePilot } = usePilot();
   const { battles, isLoading: battlesLoading } = useBattleHistory(1);
   const { unreadBattles, mutate: mutateUnreadBattles } = useUnreadBattleResults();
+  const { forecasts } = useTheaterForecast();
 
   // バトル結果モーダルの状態（シミュレーション・未読キュー共通）
   const [showResultModal, setShowResultModal] = useState(false);
@@ -233,6 +236,7 @@ export default function Home() {
                   ? mobileSuits.find((ms) => ms.id === entryStatus.entry?.mobile_suit_id)
                   : undefined
               }
+              forecasts={forecasts}
               onEntry={handleEntry}
               onCancel={handleCancelEntry}
               isLoading={entryLoading}
@@ -249,6 +253,7 @@ export default function Home() {
             msSnapshot={modalResult.msSnapshot}
             kills={modalResult.kills}
             loot={modalResult.loot}
+            theaterLabel={modalResult.theaterLabel}
             onClose={handleResultClose}
             // ソロミッションはホーム画面に BattleViewer を表示しているため、リプレイ導線は出さない
             onOpenReplay={currentUnreadBattle ? handleOpenReplay : undefined}

@@ -331,7 +331,7 @@ def test_get_unlock_states_ignores_other_target_type(
 def test_get_unlock_states_query_count_is_constant(
     session: Session, pilot: Pilot
 ) -> None:
-    """必要な技術Lvが無ければ、解放状態の取得が商品数によらず4回のクエリで済むこと."""
+    """必要な技術Lvが無ければ、解放状態の取得が商品数によらず5回のクエリで済むこと."""
     target_ids = [m.id for m in session.exec(select(MasterMobileSuit)).all()]
     for target_id in target_ids:
         _make_restricted(session, f"mobile_suit:{target_id}")
@@ -341,4 +341,4 @@ def test_get_unlock_states_query_count_is_constant(
         )
 
     assert len(target_ids) > 3
-    assert len(statements) == 4
+    assert len(statements) == 5

@@ -129,6 +129,15 @@ export interface BattleResult {
     ms_snapshot?: MobileSuit;
     /** フィールド範囲 [min, max] (m)。マイグレーション前の既存レコードは null (Issue #436) */
     map_bounds?: [number, number] | null;
+    /** 定期バトルの戦域。ソロミッションと戦域導入前のバトルは null */
+    theater_id?: string | null;
+    /** 戦闘時のミノフスキー濃度 (0〜1) */
+    minovsky_density?: number | null;
+    /** 戦域・環境タイプの表示名。マスターに無ければ null */
+    theater_name?: string | null;
+    environment_name?: string | null;
+    /** BattleViewer の描画プリセット。マスターに無ければ null */
+    viewer_preset?: string | null;
     kills?: number;
     exp_gained?: number;
     credits_gained?: number;

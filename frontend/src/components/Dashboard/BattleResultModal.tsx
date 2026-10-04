@@ -16,6 +16,8 @@ interface BattleResultModalProps {
   kills?: number;
   /** 戦利品。空配列はドロップなし、null・未指定は導入前のバトルで、欄を出さない */
   loot?: LootItem[] | null;
+  /** 戦域の表示名。戦域の無いバトルは null・未指定で、欄を出さない */
+  theaterLabel?: string | null;
   onClose: () => void;
   /** 指定したときだけ「リプレイを見る」ボタンを表示する */
   onOpenReplay?: () => void;
@@ -158,6 +160,7 @@ export default function BattleResultModal({
   msSnapshot,
   kills,
   loot,
+  theaterLabel,
   onClose,
   onOpenReplay,
   animate = true,
@@ -270,6 +273,13 @@ export default function BattleResultModal({
 
         {/* 本文（ここだけスクロールする） */}
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
+          {theaterLabel && (
+            <section>
+              <SectionLabel>戦域</SectionLabel>
+              <p className="text-sm text-gray-300">{theaterLabel}</p>
+            </section>
+          )}
+
           {msSnapshot && (
             <section>
               <SectionLabel>出撃機体</SectionLabel>

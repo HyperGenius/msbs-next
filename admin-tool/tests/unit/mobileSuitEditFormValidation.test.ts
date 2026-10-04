@@ -44,6 +44,7 @@ const validMobileSuit = {
     acceleration_bonus: 1.0,
     turning_bonus: 1.0,
     weapons: [validWeapon],
+    terrain_adaptability: { SPACE: "A", FOREST: "B" },
   },
   blueprint: { is_standard_issue: true, duplicate_credit_value: 100, tech_requirements: [] },
 };

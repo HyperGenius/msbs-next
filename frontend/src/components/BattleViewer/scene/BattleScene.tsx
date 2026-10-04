@@ -10,6 +10,7 @@ import { MobileSuit } from "@/types/battle";
 import { EnvironmentEffects } from "./EnvironmentEffects";
 import { MobileSuitMesh } from "./MobileSuitMesh";
 import { ObstacleMesh } from "./ObstacleMesh";
+import { ForestGroves } from "./ForestGroves";
 import { TracerMesh } from "./TracerMesh";
 import { WeaponLabel } from "./WeaponLabel";
 import { ImpactMarker } from "./ImpactMarker";
@@ -20,6 +21,13 @@ import { getEnvironmentColor } from "../utils";
 
 // MobileSuitMesh と同じスケール定数（座標変換の一貫性）
 const POSITION_SCALE = 0.05;
+
+const DEFAULT_GRID_COLORS = { section: "#00ff00", cell: "#003300" };
+// FOREST は木立が見えるよう、グリッドの明るさを落とす
+const GRID_COLORS: Record<string, { section: string; cell: string }> = {
+    COLONY: { section: "#8a8aaa", cell: "#4a4a6a" },
+    FOREST: { section: "#3f7a45", cell: "#1c3322" },
+};
 
 // map_bounds が未取得（旧バトル履歴等）の場合のフォールバック値。
 // backend/app/engine/constants.py の MAP_BOUNDS デフォルトと合わせる
@@ -319,8 +327,8 @@ export function BattleScene({
                 sectionSize={10}
                 cellSize={1}
                 fadeDistance={gridFadeDistance}
-                sectionColor={environment === "COLONY" ? "#8a8aaa" : "#00ff00"}
-                cellColor={environment === "COLONY" ? "#4a4a6a" : "#003300"}
+                sectionColor={GRID_COLORS[environment]?.section ?? DEFAULT_GRID_COLORS.section}
+                cellColor={GRID_COLORS[environment]?.cell ?? DEFAULT_GRID_COLORS.cell}
             />
             <OrbitControls
                 ref={controlsRef}
@@ -341,7 +349,7 @@ export function BattleScene({
             />
 
             {/* Environment Effects */}
-            <EnvironmentEffects environment={environment} />
+            <EnvironmentEffects environment={environment} fieldCenter={fieldCenter} fieldSpan={fieldSpan} />
 
             {/* Player */}
             <MobileSuitMesh
@@ -416,7 +424,10 @@ export function BattleScene({
             ))}
 
             {/* Obstacles */}
-            {obstacles && obstacles.map((obs) => (
+            {environment === "FOREST" && obstacles && (
+                <ForestGroves obstacles={obstacles} blockingObstacleIds={blockingObstacleIds} />
+            )}
+            {environment !== "FOREST" && obstacles && obstacles.map((obs) => (
                 <ObstacleMesh
                     key={obs.obstacle_id}
                     obstacle={obs}

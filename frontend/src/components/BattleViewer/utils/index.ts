@@ -35,11 +35,26 @@ export function getEnemyHpBarColor(ratio: number): string {
     return '#dc2626'; // 濃い赤
 }
 
+/** BattleViewer が描画を用意している環境。これ以外は SPACE として描画する。 */
+const SUPPORTED_ENVIRONMENTS: ReadonlySet<string> = new Set(["SPACE", "GROUND", "COLONY", "UNDERWATER", "FOREST"]);
+
+export function toSupportedEnvironment(environment: string): string {
+    return SUPPORTED_ENVIRONMENTS.has(environment) ? environment : "SPACE";
+}
+
+/**
+ * FOREST の林床の高さ（シーン座標）。
+ * センサー範囲リングは機体の少し下に描くため、それより下に敷く。
+ */
+export const FOREST_FLOOR_Y = -2;
+
 // 環境に応じた背景色を決定
 export function getEnvironmentColor(environment: string) {
     switch (environment) {
         case "GROUND":
             return "#1a3a1a"; // 濃い緑
+        case "FOREST":
+            return "#1f3626"; // 深緑（EnvironmentEffects の霧と同じ色）
         case "COLONY":
             return "#2a2a3a"; // 濃い紫
         case "UNDERWATER":
@@ -48,6 +63,18 @@ export function getEnvironmentColor(environment: string) {
         default:
             return "#000000"; // 黒
     }
+}
+
+/** ミノフスキー粒子のもやの不透明度。濃度 1 で最も濃くなる。 */
+const MINOVSKY_HAZE_MAX_OPACITY = 0.55;
+
+/**
+ * ミノフスキー濃度（0〜1）からもやの不透明度を返す。
+ * 濃度が 0 以下・未設定のときは 0 を返し、もやを出さない。
+ */
+export function getMinovskyHazeOpacity(density: number | null | undefined): number {
+    if (density == null || !Number.isFinite(density) || density <= 0) return 0;
+    return Math.min(1, density) * MINOVSKY_HAZE_MAX_OPACITY;
 }
 
 /** ビーム武器かどうかを weapon_name の文字列で判定する（武器 ID から型を引けない場合のフォールバック）。 */

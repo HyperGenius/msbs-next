@@ -365,7 +365,7 @@ def test_saved_table_is_used_by_shop_and_drop(
     states = BlueprintService.get_unlock_states(
         session, "drop_admin_user", BlueprintTargetType.MOBILE_SUIT, ["gelgoog"]
     )
-    assert states["gelgoog"].unlock_hint == "定期バトルでドロップ"
+    assert states["gelgoog"].unlock_hint == "全戦域でドロップ"
 
     loot = DropService.roll(
         session,
@@ -431,3 +431,138 @@ def test_put_rejects_out_of_range_values(
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     assert DropService.find_table(session, DropScope.batch()) is None
+
+
+# ===================== 戦域のテーブル =====================
+
+LIST_ENDPOINT = "/api/admin/drop-tables"
+SOLOMON = "solomon"
+JUNGLE = "southeast_asia_jungle"
+
+
+def _theater_endpoint(theater_id: str) -> str:
+    return f"/api/admin/drop-tables/theaters/{theater_id}"
+
+
+def test_list_scopes(client: TestClient, session: Session) -> None:
+    """共通テーブルと全戦域が、テーブルの有無付きで巡回順に並ぶこと."""
+    _make_batch_table(session, [])
+    client.put(_theater_endpoint(JUNGLE), json=_payload(), headers=HEADERS)
+
+    response = client.get(LIST_ENDPOINT, headers=HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == [
+        {
+            "scope_type": "BATCH",
+            "scope_key": "default",
+            "label": "共通テーブル",
+            "is_active": True,
+            "has_table": True,
+        },
+        {
+            "scope_type": "THEATER",
+            "scope_key": SOLOMON,
+            "label": "ソロモン宙域",
+            "is_active": True,
+            "has_table": False,
+        },
+        {
+            "scope_type": "THEATER",
+            "scope_key": JUNGLE,
+            "label": "東南アジア密林",
+            "is_active": True,
+            "has_table": True,
+        },
+    ]
+
+
+def test_get_theater_without_table_returns_common_table(
+    client: TestClient, session: Session
+) -> None:
+    """戦域のテーブルが無ければ、共通テーブルの内容を戦域名で返すこと."""
+    _make_restricted(session, GELGOOG)
+    _make_batch_table(session, [(GELGOOG, 2, True)])
+
+    response = client.get(_theater_endpoint(SOLOMON), headers=HEADERS)
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["id"] is None
+    assert data["name"] == "ソロモン宙域"
+    assert data["uses_common_table"] is True
+    assert data["drop_rate"] == 0.3
+    assert data["win_rate_multiplier"] == 1.5
+    assert [(e["blueprint_id"], e["weight"]) for e in data["entries"]] == [(GELGOOG, 2)]
+
+
+def test_put_theater_creates_table(client: TestClient, session: Session) -> None:
+    """戦域のテーブルを保存すると作成され、共通テーブルは変わらないこと."""
+    _make_batch_table(session, [(DOM, 1, False)])
+
+    response = client.put(
+        _theater_endpoint(SOLOMON),
+        json=_payload(
+            [{"blueprint_id": GELGOOG, "weight": 1, "requires_win": True}],
+            name="ソロモン宙域",
+        ),
+        headers=HEADERS,
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["id"] is not None
+    assert data["uses_common_table"] is False
+    assert [e["blueprint_id"] for e in data["entries"]] == [GELGOOG]
+    assert [e.blueprint_id for e in _batch_entries(session)] == [DOM]
+    table = DropService.find_table(session, DropScope.theater(SOLOMON))
+    assert table is not None
+    assert table.scope_type == DropScopeType.THEATER.value
+
+
+def test_delete_theater_table(client: TestClient, session: Session) -> None:
+    """戦域のテーブルを削除すると、共通テーブルを使う状態に戻ること."""
+    client.put(
+        _theater_endpoint(SOLOMON),
+        json=_payload([{"blueprint_id": GELGOOG, "weight": 1}]),
+        headers=HEADERS,
+    )
+
+    response = client.delete(_theater_endpoint(SOLOMON), headers=HEADERS)
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert DropService.find_table(session, DropScope.theater(SOLOMON)) is None
+    assert session.exec(select(DropTableEntry)).all() == []
+    second = client.delete(_theater_endpoint(SOLOMON), headers=HEADERS)
+    assert second.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.parametrize("method", ["get", "put"])
+def test_unknown_theater_returns_404(
+    client: TestClient, session: Session, method: str
+) -> None:
+    """戦域マスターに無い戦域は 404 になり、テーブルを作成しないこと."""
+    kwargs = {"json": _payload()} if method == "put" else {}
+    response = getattr(client, method)(
+        _theater_endpoint("unknown"), headers=HEADERS, **kwargs
+    )
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert DropService.find_table(session, DropScope.theater("unknown")) is None
+
+
+def test_deleting_theater_removes_its_table(
+    client: TestClient, session: Session
+) -> None:
+    """戦域を削除すると、その戦域のテーブルも削除されること."""
+    client.put(
+        _theater_endpoint(SOLOMON),
+        json=_payload([{"blueprint_id": GELGOOG, "weight": 1}]),
+        headers=HEADERS,
+    )
+
+    response = client.delete(f"/api/admin/theaters/{SOLOMON}", headers=HEADERS)
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert DropService.find_table(session, DropScope.theater(SOLOMON)) is None
+    assert session.exec(select(DropTableEntry)).all() == []

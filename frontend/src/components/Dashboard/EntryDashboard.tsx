@@ -2,15 +2,18 @@
 "use client";
 
 import { useState } from "react";
-import { MobileSuit } from "@/types/battle";
+import { MobileSuit, TheaterForecast } from "@/types/battle";
 import { getRankColor } from "@/utils/rankUtils";
 import { STATUS_LABELS } from "@/utils/displayUtils";
 import MobileSuitRankBadges from "./MobileSuitRankBadges";
+import TheaterForecastCard from "./TheaterForecastCard";
 
 interface EntryDashboardProps {
   isEntered: boolean;
   entryCount: number;
   mobileSuit?: MobileSuit;
+  /** 戦域予報。取得前は undefined */
+  forecasts?: TheaterForecast[];
   onEntry: () => void;
   onCancel: () => void;
   isLoading: boolean;
@@ -19,6 +22,7 @@ interface EntryDashboardProps {
 
 /*
  * エントリー状況を表示するダッシュボードコンポーネント
+  * - 先頭に今回と次回以降の戦域予報を表示
   * - エントリー済みの場合は機体情報と参加者数、キャンセルボタンを表示
   * - 未エントリーの場合はエントリーボタンと参加者数を表示
 */
@@ -26,6 +30,7 @@ export default function EntryDashboard({
   isEntered,
   entryCount,
   mobileSuit,
+  forecasts,
   onEntry,
   onCancel,
   isLoading,
@@ -36,6 +41,8 @@ export default function EntryDashboard({
   if (isEntered && mobileSuit) {
     return (
       <div className="space-y-3">
+        <TheaterForecastCard forecasts={forecasts} mobileSuit={mobileSuit} />
+
         {/* エントリー確認ステータス */}
         <div className="bg-[#0a0a0a] border-2 border-[#00ff41]/50 p-4">
           <div className="flex items-center justify-between mb-3">
@@ -147,6 +154,8 @@ export default function EntryDashboard({
   // 未エントリー時
   return (
     <div className="space-y-3">
+      <TheaterForecastCard forecasts={forecasts} />
+
       {/* エントリーボタン */}
       <div className="bg-[#0a0a0a] border-2 border-[#00ff41]/20 p-6 text-center">
         <div className="mb-5">

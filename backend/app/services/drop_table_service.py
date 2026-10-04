@@ -11,36 +11,92 @@ from app.models.models import (
     BlueprintTargetSummary,
     BlueprintTargetType,
     DropRewardType,
+    DropScopeType,
     DropTable,
     DropTableDetail,
     DropTableEntry,
     DropTableEntryDetail,
+    DropTableScopeSummary,
     DropTableUpdate,
     MasterBlueprint,
     MasterMobileSuit,
     MasterTechnology,
+    MasterTheater,
     MasterWeapon,
 )
 from app.services.drop_service import DropScope, DropService
 from app.services.technology_service import TechnologyService
 
-# テーブルが未作成のときに返す設定。drop_rate が0なのでドロップは起きない。
+# 共通テーブルが未作成のときに返す設定。drop_rate が0なのでドロップは起きない。
 DEFAULT_TABLE_NAMES = {DropScope.batch(): "定期バトル"}
 DEFAULT_DROP_RATE = 0.0
 DEFAULT_WIN_RATE_MULTIPLIER = 1.0
+
+COMMON_TABLE_LABEL = "共通テーブル"
 
 
 class DropTableService:
     """ドロップテーブル管理サービス."""
 
     @staticmethod
+    def list_scopes(session: Session) -> list[DropTableScopeSummary]:
+        """共通テーブルと全戦域のテーブルの有無を返す.
+
+        戦域は巡回順に並べる。無効な戦域も含める。
+        """
+        batch_scope = DropScope.batch()
+        theater_table_keys = set(
+            session.exec(
+                select(DropTable.scope_key).where(
+                    DropTable.scope_type == DropScopeType.THEATER.value
+                )
+            ).all()
+        )
+        summaries = [
+            DropTableScopeSummary(
+                scope_type=batch_scope.scope_type.value,
+                scope_key=batch_scope.scope_key,
+                label=COMMON_TABLE_LABEL,
+                is_active=True,
+                has_table=DropService.find_table(session, batch_scope) is not None,
+            )
+        ]
+        for theater in session.exec(
+            select(MasterTheater).order_by(
+                col(MasterTheater.rotation_order), col(MasterTheater.id)
+            )
+        ).all():
+            summaries.append(
+                DropTableScopeSummary(
+                    scope_type=DropScopeType.THEATER.value,
+                    scope_key=theater.id,
+                    label=theater.name,
+                    is_active=theater.is_active,
+                    has_table=theater.id in theater_table_keys,
+                )
+            )
+        return summaries
+
+    @staticmethod
     def get_detail(session: Session, scope: DropScope) -> DropTableDetail:
         """適用範囲のテーブルを、エントリーの表示情報付きで返す.
 
-        テーブルが無ければ、エントリー無しの既定値を返す。
-        クエリはエントリー数によらず最大4回。
+        共通テーブルが無ければ、エントリー無しの既定値を返す。
+        戦域のテーブルが無ければ、共通テーブルの内容を戦域名で返す。
+        保存すると、その内容で戦域のテーブルを作成できる。
+        クエリはエントリー数によらず最大6回。
+
+        Raises:
+            LookupError: 戦域がマスターに無い場合。
         """
+        theater_name = DropTableService._theater_name(session, scope)
         table = DropService.find_table(session, scope)
+        if table is None and theater_name is not None:
+            common = DropTableService.get_detail(session, DropScope.batch())
+            return common.model_copy(
+                update={"id": None, "name": theater_name, "uses_common_table": True}
+            )
+
         entries: list[DropTableEntry] = []
         if table is not None:
             entries = list(
@@ -112,9 +168,11 @@ class DropTableService:
         テーブルが無ければ作成する。エントリーは `data.entries` で置き換える。
 
         Raises:
+            LookupError: 戦域がマスターに無い場合。
             ValueError: 同じ設計図・技術が2つ以上のエントリーにある場合。
                 または設計図マスター・技術マスターに無いIDがある場合。
         """
+        DropTableService._theater_name(session, scope)
         blueprint_ids = [e.blueprint_id for e in data.entries if e.blueprint_id]
         tech_ids = [e.tech_id for e in data.entries if e.tech_id]
         DropTableService._check_references(
@@ -157,6 +215,48 @@ class DropTableService:
             )
         session.commit()
         return DropTableService.get_detail(session, scope)
+
+    @staticmethod
+    def delete_theater_table(session: Session, theater_id: str) -> bool:
+        """戦域のテーブルを削除する。以降、その戦域は共通テーブルで抽選する.
+
+        Returns:
+            削除したら True。テーブルが無ければ False。
+        """
+        if not DropTableService.remove_theater_table(session, theater_id):
+            return False
+        session.commit()
+        return True
+
+    @staticmethod
+    def remove_theater_table(session: Session, theater_id: str) -> bool:
+        """戦域のテーブルとエントリーを削除する。コミットは呼び出し側で行う.
+
+        Returns:
+            削除したら True。テーブルが無ければ False。
+        """
+        table = DropService.find_table(session, DropScope.theater(theater_id))
+        if table is None:
+            return False
+        session.exec(  # type: ignore[call-overload]
+            delete(DropTableEntry).where(col(DropTableEntry.drop_table_id) == table.id)
+        )
+        session.delete(table)
+        return True
+
+    @staticmethod
+    def _theater_name(session: Session, scope: DropScope) -> str | None:
+        """戦域の適用範囲なら戦域名を返す。それ以外は None を返す.
+
+        Raises:
+            LookupError: 戦域がマスターに無い場合。
+        """
+        if scope.scope_type != DropScopeType.THEATER:
+            return None
+        theater = session.get(MasterTheater, scope.scope_key)
+        if theater is None:
+            raise LookupError(f"Theater '{scope.scope_key}' not found.")
+        return theater.name
 
     @staticmethod
     def _check_references(

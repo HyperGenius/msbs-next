@@ -189,6 +189,7 @@ describe("toDropTableUpdate", () => {
       win_rate_multiplier: 1.5,
       entries: [entry({ weight: 2, requires_win: true }), techEntry({ weight: 3 })],
       unobtainable_blueprints: [],
+      uses_common_table: false,
     };
     expect(toDropTableUpdate(toDropTableFormValues(detail))).toEqual({
       name: "定期バトル",
@@ -284,6 +285,7 @@ describe("unobtainableBlueprints", () => {
       techEntry(),
     ],
     unobtainable_blueprints: [summary("weapon:beam_rifle"), summary("mobile_suit:gundam")],
+    uses_common_table: false,
   };
 
   it("保存済みの一覧から、編集中に追加した設計図を除く", () => {

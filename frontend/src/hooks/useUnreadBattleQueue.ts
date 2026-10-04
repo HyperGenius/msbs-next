@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { BattleResult, BattleRewards, LootItem, MobileSuit } from "@/types/battle";
+import { formatTheaterLabel } from "@/utils/theater";
 
 interface ModalResult {
   winLoss: "WIN" | "LOSE" | "DRAW";
@@ -10,6 +11,7 @@ interface ModalResult {
   msSnapshot?: MobileSuit | null;
   kills?: number;
   loot?: LootItem[] | null;
+  theaterLabel?: string | null;
 }
 
 interface UseUnreadBattleQueueOptions {
@@ -82,6 +84,7 @@ export function useUnreadBattleQueue({
         msSnapshot: (next.ms_snapshot as MobileSuit | null) ?? null,
         kills: next.kills,
         loot: next.loot ?? null,
+        theaterLabel: formatTheaterLabel(next),
       });
       setShowResultModal(true);
     }

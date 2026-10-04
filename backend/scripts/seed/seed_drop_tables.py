@@ -3,7 +3,8 @@
 
 ドロップテーブルの初期データを drop_tables / drop_table_entries へ投入する。
 べき等に実行できる。既存のテーブル・エントリーは、デフォルトでは変更しない。
-設計図マスターが無い設計図のエントリーは投入しない。
+設計図・技術マスターが無いエントリーは投入しない。
+戦域マスターが無い戦域のテーブルは投入しない。
 
 Usage:
     python scripts/seed/seed_drop_tables.py [--force] [--dry-run]
@@ -34,21 +35,39 @@ sys.path.insert(0, str(_ROOT))
 load_dotenv(_ROOT / ".env")
 
 from app.models.models import (  # noqa: E402
+    DropRewardType,
     DropScopeType,
     DropTable,
     DropTableEntry,
     MasterBlueprint,
+    MasterTechnology,
+    MasterTheater,
 )
 from app.services.drop_service import BATCH_SCOPE_KEY  # noqa: E402
 
 
 @dataclass(frozen=True)
 class EntrySeed:
-    """投入するエントリー."""
+    """投入するエントリー。blueprint_id と tech_id の片方だけを指定する."""
 
-    blueprint_id: str
-    weight: int
+    blueprint_id: str | None = None
+    weight: int = 1
     requires_win: bool = False
+    tech_id: str | None = None
+
+    @property
+    def reward_type(self) -> DropRewardType:
+        """エントリーの報酬の種別."""
+        if self.tech_id is not None:
+            return DropRewardType.TECH_FRAGMENT
+        return DropRewardType.BLUEPRINT
+
+    @property
+    def reward_id(self) -> str:
+        """設計図IDまたは技術ID."""
+        reward_id = self.tech_id or self.blueprint_id
+        assert reward_id is not None
+        return reward_id
 
 
 @dataclass(frozen=True)
@@ -63,7 +82,14 @@ class TableSeed:
     entries: tuple[EntrySeed, ...]
 
 
+# 戦域の技術断片は両方の戦域で同じにする。
+_THEATER_TECH_FRAGMENTS = (
+    EntrySeed(tech_id="beam_generator_tech", weight=2),
+    EntrySeed(tech_id="psycommu_tech", weight=1),
+)
+
 # 値は運用しながら admin-tool で調整する前提の初期値。
+# 戦域のテーブルは、戦域向けの機体を追加するまでの暫定案。
 DROP_TABLE_SEEDS: tuple[TableSeed, ...] = (
     TableSeed(
         scope_type=DropScopeType.BATCH,
@@ -76,6 +102,30 @@ DROP_TABLE_SEEDS: tuple[TableSeed, ...] = (
             EntrySeed("mobile_suit:zaku_ii_f", weight=3),
             EntrySeed("mobile_suit:gelgoog", weight=1, requires_win=True),
             EntrySeed("mobile_suit:gundam", weight=1, requires_win=True),
+        ),
+    ),
+    TableSeed(
+        scope_type=DropScopeType.THEATER,
+        scope_key="solomon",
+        name="ソロモン宙域",
+        drop_rate=0.3,
+        win_rate_multiplier=1.5,
+        entries=(
+            EntrySeed("mobile_suit:zaku_ii_f", weight=3),
+            EntrySeed("mobile_suit:gelgoog", weight=1, requires_win=True),
+            *_THEATER_TECH_FRAGMENTS,
+        ),
+    ),
+    TableSeed(
+        scope_type=DropScopeType.THEATER,
+        scope_key="southeast_asia_jungle",
+        name="東南アジア密林",
+        drop_rate=0.3,
+        win_rate_multiplier=1.5,
+        entries=(
+            EntrySeed("mobile_suit:dom", weight=3),
+            EntrySeed("mobile_suit:gouf", weight=3),
+            *_THEATER_TECH_FRAGMENTS,
         ),
     ),
 )
@@ -124,26 +174,50 @@ def seed_drop_tables(session: Session, force: bool = False) -> dict[str, int]:
     コミットは呼び出し側で行う。
 
     Returns:
-        投入・上書き・スキップしたエントリーの件数。
+        投入・上書き・スキップしたエントリーの件数と、マスターが無く投入しなかった件数。
     """
-    counts = {"inserted": 0, "updated": 0, "skipped": 0, "missing_blueprint": 0}
+    counts = {
+        "inserted": 0,
+        "updated": 0,
+        "skipped": 0,
+        "missing_blueprint": 0,
+        "missing_tech": 0,
+        "missing_theater": 0,
+    }
     for seed in DROP_TABLE_SEEDS:
+        if (
+            seed.scope_type == DropScopeType.THEATER
+            and session.get(MasterTheater, seed.scope_key) is None
+        ):
+            print(f"[WARNING] 戦域マスターが無い: {seed.scope_key}")
+            counts["missing_theater"] += 1
+            continue
+
         table = _upsert_table(session, seed, force)
         for entry_seed in seed.entries:
-            if session.get(MasterBlueprint, entry_seed.blueprint_id) is None:
-                print(f"[WARNING] 設計図マスターが無い: {entry_seed.blueprint_id}")
-                counts["missing_blueprint"] += 1
+            is_tech = entry_seed.reward_type == DropRewardType.TECH_FRAGMENT
+            master = MasterTechnology if is_tech else MasterBlueprint
+            if session.get(master, entry_seed.reward_id) is None:
+                label = "技術" if is_tech else "設計図"
+                print(f"[WARNING] {label}マスターが無い: {entry_seed.reward_id}")
+                counts["missing_tech" if is_tech else "missing_blueprint"] += 1
                 continue
 
+            reward_column = (
+                DropTableEntry.tech_id if is_tech else DropTableEntry.blueprint_id
+            )
             entry = session.exec(
                 select(DropTableEntry).where(
                     DropTableEntry.drop_table_id == table.id,
-                    DropTableEntry.blueprint_id == entry_seed.blueprint_id,
+                    reward_column == entry_seed.reward_id,
                 )
             ).first()
             if entry is None:
                 entry = DropTableEntry(
-                    drop_table_id=table.id, blueprint_id=entry_seed.blueprint_id
+                    drop_table_id=table.id,
+                    reward_type=entry_seed.reward_type.value,
+                    blueprint_id=entry_seed.blueprint_id,
+                    tech_id=entry_seed.tech_id,
                 )
                 counts["inserted"] += 1
             elif force:
@@ -156,7 +230,7 @@ def seed_drop_tables(session: Session, force: bool = False) -> dict[str, int]:
             entry.requires_win = entry_seed.requires_win
             session.add(entry)
             print(
-                f"[INFO]   {entry_seed.blueprint_id}: 重み {entry_seed.weight}"
+                f"[INFO]   {entry_seed.reward_id}: 重み {entry_seed.weight}"
                 + ("・勝利時のみ" if entry_seed.requires_win else "")
             )
     return counts
@@ -185,7 +259,11 @@ def main() -> None:
             session.commit()
     print(
         f"[INFO] エントリー: {counts['inserted']} 件挿入, {counts['updated']} 件上書き, "
-        f"{counts['skipped']} 件スキップ, 設計図マスター無し {counts['missing_blueprint']} 件"
+        f"{counts['skipped']} 件スキップ, 設計図マスター無し {counts['missing_blueprint']} 件, "
+        f"技術マスター無し {counts['missing_tech']} 件"
+    )
+    print(
+        f"[INFO] 戦域マスター無しでスキップしたテーブル: {counts['missing_theater']} 件"
     )
     print("[INFO] シード完了")
 

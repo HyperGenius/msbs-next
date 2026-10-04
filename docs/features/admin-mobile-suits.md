@@ -62,6 +62,7 @@ X-API-Key: <ADMIN_API_KEY>
 - `beam_generator_lv`: 0以上の整数。`specs.weapons` 内に `type == "BEAM"` かつ `required_beam_generator_lv` が `beam_generator_lv` を超える武器が含まれる場合は `422`（Issue #383）
 - `blueprint.duplicate_credit_value`: 0以上の整数。負の場合は `422`（Issue #554）
 - `blueprint.tech_requirements`: 購入に必要な技術Lvの一覧。存在しない技術・最大Lv超え・1未満・重複は `422`。指定するとその内容で置き換え、省略すると変更しない（Issue #569）
+- `specs.terrain_adaptability`: 環境タイプID → 地形適正ランク（`S`〜`D`）。それ以外のランクは `422`。キーが無い環境は環境タイプの既定ランクを使う。PUT で `specs` に含めるとその内容で置き換え、含めなければ変更しない（Issue #579）
 - DELETE 時: 同名機体がプレイヤー所有の mobile_suits テーブルに存在する場合は `409`
 
 ### リクエスト例
@@ -334,6 +335,7 @@ admin-tool/src/
 │   │   ├── MobileSuitTable.tsx    # 機体一覧テーブル（ソート・フィルタ付き）
 │   │   ├── MobileSuitEditForm.tsx # 全パラメータ編集フォーム（Zod バリデーション）
 │   │   ├── BlueprintSettingsFields.tsx # 設計図設定の入力欄・一覧用バッジ・絞り込み（Issue #554）
+│   │   ├── TerrainAdaptabilityFields.tsx # 環境タイプごとの地形適正の入力欄（Issue #579）
 │   │   ├── MobileSuitRadarChart.tsx # バランス比較レーダーチャート（recharts）
 │   │   ├── CombatSimulationPanel.tsx # ダメージ・命中率シミュレーションパネル（Issue #381）
 │   │   └── CloneDialog.tsx        # Clone & Edit ダイアログ
@@ -359,6 +361,10 @@ admin-tool/src/
 - 全スペック・武装パラメータを編集可能（型番・日本語名・武器スロット数・ビームジェネレータLvを含む、Issue #383）
 - 購入画面用フレーバーテキスト（`flavor_text`、1〜2行推奨）入力欄を追加（`WeaponEditForm` と同様、未入力は `null` に正規化して送信、Issue #483）
 - 「設計図」欄で標準配備フラグと重複時の換金額を編集（Issue #554）。換金額の空欄は、新規作成では初期値（価格の20%）、編集では変更なしとして送る
+- 「地形適正」欄で、環境タイプのマスター（`GET /api/admin/environments`）ごとに `S`〜`D` か「既定」を選ぶ（Issue #579）
+  - 「既定」はキーを保存しない。戦闘時は環境タイプの既定ランク（`default_terrain_grade`）を使うため、既定ランクを変えると追従する
+  - 環境タイプのマスターに無いキー（初期データの `GROUND`・`COLONY`・`UNDERWATER` など）は入力欄を出さず、値をそのまま保存する
+  - 環境タイプの追加・編集は [admin-theaters.md](admin-theaters.md) の画面で行う
 - フィールド横にインラインエラーメッセージ表示
 - 武装リストの動的追加・削除
 - 武器数が武器スロット数を超える場合、およびBEAM武器の要求ビームジェネレータLvが機体のビームジェネレータLvを超える場合はクライアント側 (`zod.superRefine`) でもエラー表示（Issue #383）

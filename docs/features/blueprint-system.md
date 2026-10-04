@@ -196,8 +196,8 @@ player_blueprints (所持設計図)
 ```
 drop_tables (ドロップテーブル)
 ├── id: int
-├── scope_type: str              ← 適用範囲の種別 MISSION / BATCH (DropScopeType)
-├── scope_key: str               ← MISSION は missions.id の文字列、BATCH は "default"
+├── scope_type: str              ← 適用範囲の種別 MISSION / BATCH / THEATER (DropScopeType)
+├── scope_key: str               ← MISSION は missions.id の文字列、BATCH は "default"、THEATER は master_theaters.id
 ├── name: str                    ← 管理用の名前
 ├── drop_rate: float             ← 1回のバトルで何かがドロップする確率 (0〜1)
 ├── win_rate_multiplier: float   ← 勝利時に drop_rate に掛ける倍率 (1以上)
@@ -219,8 +219,7 @@ drop_table_entries (テーブルに含まれる設計図・技術断片)
 battle_results.loot: JSON|null   ← 戦利品の一覧 (LootItem)
 ```
 
-* 定期バトル（`BattleRoom`）にはミッションも戦闘環境も無いため、定期バトル全体で1つのテーブル（`BATCH` / `default`）を使う
-* 将来の戦域ローテーションでは、`DropScopeType` に戦域・環境単位の種別を追加する
+* 定期バトルは、ルームの戦域のテーブル（`THEATER` / 戦域ID）で抽選する。戦域のテーブルが無ければ共通テーブル（`BATCH` / `default`）で抽選する（「戦域別ドロップテーブル（Issue #580）」）
 * 同じ設計図を複数のテーブルに入れられる
 * マイグレーション `j4e5f6a7b8c9` はテーブル作成とカラム追加のみ。既存のバトル結果の `loot` は `NULL` のまま
 
@@ -229,7 +228,7 @@ battle_results.loot: JSON|null   ← 戦利品の一覧 (LootItem)
 `DropService.roll(session, user_id, scope, is_win, battle_result_id, rng)` がプレイヤー1人分の抽選と付与を行い、`list[LootItem]` を返す。コミットは呼び出し側で行う。
 
 1. パイロットが無い、または NPC パイロット（`Pilot.is_npc`）なら抽選しない
-2. `scope`（`DropScope.mission(mission_id)` / `DropScope.batch()`）に対応するテーブルが無ければドロップしない
+2. `scope`（`DropScope.mission(mission_id)` / `DropScope.batch()` / `DropScope.theater(theater_id)`）から抽選に使うテーブルを決める（`DropService.resolve_table()`）。戦域のテーブルが無ければ共通テーブルを使う。どちらも無ければドロップしない
 3. `rng.random()` がドロップ率未満ならドロップする。勝利時のドロップ率は `min(drop_rate × win_rate_multiplier, 1)`
 4. 抽選対象のエントリーから、`weight` の重みで1つ選ぶ（`rng.choices`）。次のエントリーは対象外
    * 敗北時の `requires_win = true` のエントリー
@@ -245,7 +244,7 @@ battle_results.loot: JSON|null   ← 戦利品の一覧 (LootItem)
 | 経路 | 場所 | 適用範囲 |
 |---|---|---|
 | ソロミッション | `main.py` の `POST /api/battle/simulate`（報酬付与の直後） | `DropScope.mission(mission_id)` |
-| 定期バトル | `scripts/run_batch.py` の `_save_battle_results`（プレイヤーごとの報酬付与の直後） | `DropScope.batch()` |
+| 定期バトル | `scripts/run_batch.py` の `_save_battle_results`（プレイヤーごとの報酬付与の直後） | `DropScope.for_battle(conditions.theater_id)`。戦域なしなら `DropScope.batch()` |
 
 * 所持設計図の `source_battle_id` に記録するため、`BattleResult.id` を先に `uuid.uuid4()` で決めてから抽選する
 * 付与した設計図・換金したクレジットは、`BattleResult` と同じコミットで確定する
@@ -279,14 +278,16 @@ battle_results.loot: JSON|null   ← 戦利品の一覧 (LootItem)
 
 | 状態 | 例 |
 |---|---|
-| ミッションと定期バトルで入手できる | 「『Mission 02: 防衛線突破』・定期バトルでドロップ」 |
-| すべて勝利時のみ | 「定期バトルでドロップ（勝利時のみ）」 |
-| 一部の戦闘だけ勝利時のみ | 「『Mission 02: 防衛線突破』・定期バトル（勝利時のみ）でドロップ」 |
+| ミッションと戦域で入手できる | 「『Mission 02: 防衛線突破』・東南アジア密林でドロップ」 |
+| すべて勝利時のみ | 「ソロモン宙域でドロップ（勝利時のみ）」 |
+| 一部の戦闘だけ勝利時のみ | 「ソロモン宙域（勝利時のみ）・東南アジア密林でドロップ」 |
+| 全戦域が共通テーブルを使う | 「全戦域でドロップ」 |
 | どのテーブルにも入っていない | 「現在は入手できません」（`UNAVAILABLE_UNLOCK_HINT`） |
 
-* ミッションはミッションID順に並べ、定期バトルを最後に置く
+* ミッションはミッションID順に並べ、その後に戦域を巡回順に並べる
+* 戦域の表示名は図鑑と同じ変換（`TheaterDropSources`、「戦域別ドロップテーブル（Issue #580）」）で決める。無効な戦域は出さない
 * ミッションが見つからない `MISSION` テーブルは、テーブル名で表示する
-* 未解放のアイテムのテーブルとエントリーは、ミッション名と合わせて1回のクエリで取得する
+* 未解放のアイテムのテーブルとエントリーは、ミッション名と合わせて1回のクエリで取得する。戦域とテーブルの有無の取得で、もう1回クエリを使う
 
 ### 初期データ（`scripts/seed/seed_drop_tables.py`）
 
@@ -294,7 +295,11 @@ battle_results.loot: JSON|null   ← 戦利品の一覧 (LootItem)
 
 | テーブル | `drop_rate` | `win_rate_multiplier` | エントリー |
 |---|---|---|---|
-| 定期バトル | 0.3 | 1.5 | dom（重み3）、zaku_ii_f（重み3）、gelgoog（重み1・勝利時のみ）、gundam（重み1・勝利時のみ） |
+| 定期バトル（共通テーブル） | 0.3 | 1.5 | dom（重み3）、zaku_ii_f（重み3）、gelgoog（重み1・勝利時のみ）、gundam（重み1・勝利時のみ） |
+| ソロモン宙域（`THEATER` / `solomon`） | 0.3 | 1.5 | zaku_ii_f（重み3）、gelgoog（重み1・勝利時のみ）、技術断片 beam_generator_tech（重み2）・psycommu_tech（重み1） |
+| 東南アジア密林（`THEATER` / `southeast_asia_jungle`） | 0.3 | 1.5 | dom（重み3）、gouf（重み3）、技術断片 beam_generator_tech（重み2）・psycommu_tech（重み1） |
+
+* 戦域のテーブルは暫定案。戦域向けの機体を追加するとき（Epic #573 Sub-Issue 10）に見直す
 
 ```bash
 cd backend
@@ -303,7 +308,7 @@ python scripts/seed/seed_drop_tables.py             # 投入（既存のテー�
 python scripts/seed/seed_drop_tables.py --force     # 既存の設定もこの値で上書きする
 ```
 
-* べき等に実行できる。設計図マスターが無い設計図のエントリーは投入しない
+* べき等に実行できる。設計図・技術マスターが無いエントリーと、戦域マスターが無い戦域のテーブルは投入しない
 * ミッションごとのテーブルは未投入。ソロミッションは直近30日の実績が0件のため、定期バトルを優先した
 * 本番DB（Neon）への投入は書き込みになるため、実行前に確認を取る
 * シードを実行していなくても、admin-tool で保存すれば定期バトルのテーブルが作成される
@@ -315,7 +320,7 @@ python scripts/seed/seed_drop_tables.py --force     # 既存の設定もこの�
 admin-tool の `/drop-tables` で、定期バトルのテーブル（`BATCH` / `default`）の設定とエントリーを編集できる。
 画面・API の仕様は `admin-drop-tables.md` を参照。
 
-* 編集対象は定期バトルのテーブル1つだけ。ミッションのテーブルは変更しない
+* 編集対象は定期バトルの共通テーブルと戦域のテーブル（Issue #580 で追加）。ミッションのテーブルは変更しない
 * 保存すると、ショップの `unlock_hint` と定期バトルの抽選に次のリクエスト・次のバッチから反映される（どちらもテーブルを都度DBから読む）
 * 抽選ロジック（`DropService.roll()`）は変更していない。テーブルの取得を `DropService.find_table()` に切り出し、admin API と共用している
 * 画面の出現率は `DropService.roll()` と同じ計算をフロントエンドで行う。抽選の計算を変える場合は `admin-tool/src/lib/dropTable.ts` の `dropChances()` もそろえる
@@ -405,22 +410,22 @@ admin-tool の `/drop-tables` で、定期バトルのテーブル（`BATCH` / `
 | `obtainable_theaters` | 入手できる戦域（`label` / `requires_win`）。未所持・要設計図・勢力内の設計図だけに入れる。それ以外は空配列 |
 
 * 機体・武器マスターが無い設計図（データ不整合）は返さない
-* 実装は `BlueprintCollectionService.get_collection()`（`app/services/blueprint_collection_service.py`）。パイロット・所持設計図・ドロップテーブルとエントリー・設計図マスターと機体・武器マスターをそれぞれ1回のクエリで取得し、設計図の数によらずクエリは4回
+* 実装は `BlueprintCollectionService.get_collection()`（`app/services/blueprint_collection_service.py`）。パイロット・所持設計図・ドロップテーブルとエントリー・有効な戦域とテーブルの有無・設計図マスターと機体・武器マスター・技術Lvをそれぞれ1回のクエリで取得し、設計図の数によらずクエリは8回
 * ドロップ率は返さない
 
 ### 適用範囲から戦域の表示への変換
 
-ドロップテーブルの適用範囲（`DropScope`）から図鑑の戦域名への変換は、`theater_label_for(scope)`（`blueprint_collection_service.py`）の1か所にまとめている。
+ドロップテーブルから図鑑の戦域名への変換は、`TheaterDropSources.sources_for()`（`app/services/drop_source_service.py`）の1か所にまとめている。ショップの `unlock_hint` も同じ変換を使う。
 
 | 適用範囲 | 図鑑での表示 |
 |---|---|
-| 定期バトル（`BATCH` / `default`） | 「全戦域」（`ALL_THEATERS_LABEL`） |
-| ミッション（`MISSION`） | 表示しない（`None`）。ソロミッションを運用していないため |
+| 戦域（`THEATER`） | 戦域名。戦域が無効なら表示しない |
+| 共通テーブル（`BATCH` / `default`） | 共通テーブルを使う有効な戦域の名前。すべての有効な戦域が共通テーブルを使うなら「全戦域」（`ALL_THEATERS_LABEL`）。共通テーブルを使う有効な戦域が無ければ表示しない |
+| ミッション（`MISSION`） | 表示しない。ソロミッションを運用していないため |
 
 * ミッションのテーブルにしか入っていない設計図は、`obtainable_theaters` が空になる（画面では「現在は入手できません」）
-* 同じ戦域に変換されるテーブルが複数あれば1件にまとめる。どれか1つでも敗北時にドロップするなら `requires_win = false`
-* 戦域単位の適用範囲（Sub-Issue 10）を追加したときは、`theater_label_for()` に変換を足せば実際の戦域名で表示できる
-* ショップの `unlock_hint` は変更していない（ミッション名・「定期バトル」のまま）
+* 戦域は巡回順に並べる。「全戦域」は先頭に置く
+* 同じ戦域が複数のテーブルにあれば1件にまとめる。どれか1つでも敗北時にドロップするなら `requires_win = false`
 
 ---
 
@@ -542,9 +547,9 @@ player_technologies (プレイヤーの累計断片数)
 | `GET /api/shop/listings`・`/api/shop/weapons` | `missing_tech_requirements` を追加（「ショップ一覧 API」） |
 | `GET/POST /api/admin/technologies`、`PUT/DELETE /api/admin/technologies/{tech_id}` | 技術マスターの CRUD（`admin-technologies.md`） |
 | `POST/PUT /api/admin/mobile-suits`・`/api/admin/weapons` | `blueprint.tech_requirements` を受け付ける。指定すると置き換え、省略すると変更しない。存在しない技術・最大Lv超え・重複は `422` |
-| `PUT /api/admin/drop-tables/batch` | 技術断片のエントリー（`{"reward_type": "TECH_FRAGMENT", "tech_id": ...}`）を受け付ける（`admin-drop-tables.md`） |
+| `PUT /api/admin/drop-tables/batch`（戦域のテーブルも同じ） | 技術断片のエントリー（`{"reward_type": "TECH_FRAGMENT", "tech_id": ...}`）を受け付ける（`admin-drop-tables.md`） |
 
-* `obtainable_theaters` は設計図と同じ変換（`theater_label_for()`）で組み立てる。`get_technologies()` は `blueprint_collection_service.py` に置いた。`TechnologyService` を抽選側（`drop_service.py`）からも使うため、`TechnologyService` は他のサービスに依存させていない
+* `obtainable_theaters` は設計図と同じ変換（`TheaterDropSources`）で組み立てる。`get_technologies()` は `blueprint_collection_service.py` に置いた。`TechnologyService` を抽選側（`drop_service.py`）からも使うため、`TechnologyService` は他のサービスに依存させていない
 
 ### 画面
 
@@ -568,7 +573,40 @@ player_technologies (プレイヤーの累計断片数)
 
 ---
 
+## 戦域別ドロップテーブル（Issue #580）
+
+ドロップテーブルを戦域単位で持てるようにした（Epic #573 Sub-Issue 7、Epic #550 Sub-Issue 10）。
+戦域ごとにドロップする設計図を変え、「その戦域に向いた機体を手に入れるために、向いていない構成で工夫して挑む」ループを作る。
+
+### 抽選
+
+* `DropScopeType.THEATER` を追加した。`scope_key` は戦域ID。`scope_type` は文字列カラムで制約も無いため、マイグレーションは無い
+* 定期バトルは `DropScope.for_battle(conditions.theater_id)` で抽選する。戦域なしのルームは共通テーブル（`BATCH` / `default`）を使う
+* `DropService.resolve_table()` は、戦域のテーブルがあればそれだけを使う。無ければ共通テーブルを使う
+* 戦域のテーブルにエントリーが無い場合は、共通テーブルを使わない（その戦域ではドロップしない）
+* 抽選の仕様（1バトル最大1個、勝利時の倍率、`requires_win`、勢力による除外、技術断片）は変えていない
+* 戦域を削除すると（`TheaterService.delete_theater()`）、その戦域のテーブルとエントリーも同じトランザクションで削除する
+
+### 入手先の表示
+
+* 図鑑の `obtainable_theaters` とショップの `unlock_hint` に戦域名を出す（「適用範囲から戦域の表示への変換」「ショップの入手ヒント」）
+* 共通テーブルは、共通テーブルを使う有効な戦域があるときだけ入手先に出す
+* 無効な戦域のテーブルは、現在は入手できないため入手先に出さない
+* フロントエンドは API の文言をそのまま表示するため、変更していない
+
+### admin-tool
+
+* `/drop-tables` で、共通テーブルと各戦域のテーブルを選んで編集できる（`admin-drop-tables.md`）
+* 戦域のテーブルが無い戦域は「共通テーブルを使用中」と表示する。保存すると戦域のテーブルを作成する。削除すると共通テーブルを使う状態に戻る
+
+### 本番DBへの反映
+
+* 戦域のテーブルの初期値は `seed_drop_tables.py` に追加した（「初期データ」）。本番DB（Neon）への投入は書き込みになるため、実行前に確認を取る
+* 投入しなくても、全戦域が共通テーブルを使うため、これまでどおり抽選される
+
+---
+
 ## 後続のSub-Issueで対応する事項
 
-* 戦域・環境単位のドロップテーブル（Sub-Issue 10）
+* 戦域のテーブルの本格的な初期値（戦域向けの機体の追加とあわせて決める。Epic #573 Sub-Issue 10）
 * 戦場（フィールド）ごとの標準配備設定。現状はアイテム単位の真偽値のみ

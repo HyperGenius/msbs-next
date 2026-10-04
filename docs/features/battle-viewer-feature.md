@@ -89,7 +89,9 @@ Three.js（`@react-three/fiber`）を使用した 3D バトルリプレイビュ
 | `enemies` | `MobileSuit[]` | 敵機体情報配列 |
 | `obstacles` | `Obstacle[]` (optional) | フィールド障害物配列 |
 | `currentTimestamp` | `number` | 現在の再生タイムスタンプ |
-| `environment` | `string` | 環境（`"SPACE"` 等） |
+| `environment` | `string` | 描画プリセット（`"SPACE"` 等）。未知の値は `SPACE` として描画する |
+| `theaterName` | `string \| null` (optional) | 戦域名。右上のラベルに表示する。無ければ「環境: {environment}」を表示する |
+| `minovskyDensity` | `number \| null` (optional) | ミノフスキー濃度（0〜1）。右上のラベルと、画面全体のもやの濃さに使う |
 
 ### 内部フック
 
@@ -268,6 +270,10 @@ interface UnitSnapshot {
 | `frontend/src/components/BattleViewer/scene/BattleScene.tsx` | Three.js シーン |
 | `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx` | MS 球体描画 |
 | `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx` | 障害物円柱描画 |
+| `frontend/src/components/BattleViewer/scene/EnvironmentEffects.tsx` | 環境ごとの照明・霧・地面 |
+| `frontend/src/components/BattleViewer/scene/ForestGroves.tsx` | 森林の障害物（木立）描画（Issue #581） |
+| `frontend/src/components/BattleViewer/utils/forestLayout.ts` | 木立の木の配置計算（Issue #581） |
+| `frontend/src/components/BattleViewer/ui/MinovskyHaze.tsx` | ミノフスキー粒子のもや（Issue #581） |
 | `frontend/src/components/BattleViewer/scene/TracerMesh.tsx` | 射線（ビーム／実弾）描画（Issue #531） |
 | `frontend/src/components/BattleViewer/scene/WeaponLabel.tsx` | 発射側の武器名ラベル（Issue #531） |
 | `frontend/src/components/BattleViewer/scene/ImpactMarker.tsx` | 着弾フラッシュとダメージ数字（Issue #531） |
@@ -329,6 +335,81 @@ POST /api/battle/simulate レスポンスの obstacles_info
 - バックエンドで障害物が生成されない設定（`obstacle_density: "NONE"` など）では `obstacles_info` は `null` として保存される
 - `/api/battle/simulate` の `BattleResponse` にも `obstacles_info` フィールドが含まれる（バトル実行直後のライブ観戦画面で障害物を描画するために必要）
 - `BattleResult` の生成箇所は `backend/main.py`（即時実行）と `backend/scripts/run_batch.py`（デイリーバトルロイヤル等のバッチ実行）の2箇所あり、`obstacles_info` の設定も両方で必要（片方だけだと `NULL` のままになる）。障害物のシリアライズ処理は `backend/app/engine/battle_utils.py` の `serialize_obstacles()` に共通化されているため、両呼び出し元はこれを呼ぶだけでよい
+
+---
+
+## 森林の描画とミノフスキー濃度の演出（Issue #581）
+
+### 概要
+
+戦域の描画プリセット（環境タイプの `viewer_preset`）が `FOREST` のリプレイを森林として描画する。
+あわせて、ミノフスキー濃度に応じて画面全体に粒子のもやをかけ、右上のラベルに戦域名と濃度を表示する。
+リプレイを見て、どの戦域で戦ったか、なぜ射線が通らなかったかがわかるようにするため。
+
+### 描画プリセットの決め方
+
+* `BattleDetailModal` が `getViewerEnvironment(battle)`（`viewer_preset` → `environment` → `"SPACE"` の順）で `environment` を渡す
+* `toSupportedEnvironment()`（`utils/index.ts`）が描画を用意している値（`SPACE`/`GROUND`/`COLONY`/`UNDERWATER`/`FOREST`）以外を `SPACE` にする。未知の値や null でも表示は崩れない
+* 右上のラベルは `environment` に渡された元の値を表示する（戦域名が無いバトルのみ）
+
+### `FOREST` プリセット（`EnvironmentEffects.tsx`）
+
+| 項目 | 内容 |
+|---|---|
+| 背景色・霧 | `#1f3626`（深緑）。霧を背景と同色にして地平線を馴染ませる。`near=35, far=140` |
+| 照明 | 平行光源（`#e8f0d0`, 0.9）＋半球光（空 `#b8d8a8` / 地面 `#1a2a1a`, 0.5） |
+| 林床 | `#2b3f24`。フィールド中心に一辺 `fieldSpan × 2` の平面を `FOREST_FLOOR_Y`（-2）に敷く。センサー範囲リング（機体の 1.8 下）より下にするため |
+| グリッド | 木立が見えるよう暗くする（section `#3f7a45` / cell `#1c3322`） |
+
+### 木立（`ForestGroves.tsx`）
+
+`FOREST` では `ObstacleMesh` の代わりに `ForestGroves` で障害物を木立として描く。
+
+* 木の配置は `layoutGrove()`（`utils/forestLayout.ts`）が計算する。障害物の半径の範囲に、ひまわりの種の配置（黄金角）で木を並べる
+* 配置は `obstacle_id` をシードにした疑似乱数で決まる。再描画やシークのたびに木が動かない
+* 木の本数は木立の面積に比例し、1 つの木立で 3〜9 本（`MIN_TREES_PER_GROVE` / `MAX_TREES_PER_GROVE`）。DENSE（最大 100 個）でも合計 900 本以下
+* 幹（5 角柱）と樹冠（7 角錐）を、全木立でそれぞれ 1 つの `InstancedMesh` にまとめる。描画呼び出しは木の数によらず 2 回で、スマートフォンでも重くならない
+* 木の高さは障害物の高さ（`max(height, radius × 2)`、`ObstacleMesh` と同じ）の 70〜100%
+* 接地影（半透明の黒い円）で木立の範囲（LOS 判定の半径）を示す
+
+LOS を遮っている木立の強調表示は `ObstacleMesh` に合わせる。
+
+| 状態 | 幹・樹冠 | 輪郭 |
+|---|---|---|
+| 通常 | 幹 `#4a3626`、樹冠 `#2f5a2c`/`#3d6b34`/`#284d2a`（木ごとに選ぶ） | なし |
+| LOS 遮断中 | `#8a3a3a` | 木立の半径に `#ff4444` のリング |
+
+* 接地影とリングは `renderOrder = -1` にする。グリッド（y=0）は深度を書き込むため、その下にある影を先に描かないと隠れる
+
+### ミノフスキー粒子のもや（`MinovskyHaze.tsx`）
+
+* Canvas の上（HUD の下）に、画面全体を覆う `pointer-events: none` のレイヤーを重ねる
+* 大きなノイズ（霧）と細かいノイズ（粒子）の 2 層。どちらも SVG の `feTurbulence` を data URI の背景画像にしたもので、3D パーティクルより軽い
+* 不透明度は `getMinovskyHazeOpacity(density)` = `min(density, 1) × 0.55`。濃度 0 以下・null では何も描画しない
+* CSS アニメーション（`bv-minovsky-drift`）で往復に漂わせる。`prefers-reduced-motion` では止める
+* ノイズのタイルに継ぎ目が出ないよう、タイル内の周期数を整数にし、フィルタ領域をタイルと同じ大きさにする
+
+### オーバーレイ（`BattleOverlay.tsx`）
+
+右上のラベルに次を表示する。左上の HUD と重ならないよう幅を 50% に抑え、はみ出す場合は省略する。
+
+* 1 行目: 戦域名があれば「戦域: 東南アジア密林」、無ければ「環境: {environment}」
+* 2 行目: 濃度があれば「ミノフスキー濃度: 42%」（`formatMinovskyDensity()`、`utils/theater.ts`）
+
+### Storybook
+
+`BattleViewer/Scenario` に次のストーリーを追加した。障害物は `buildSkirmishObstacles()`（`__stories__/battleScenarioFixtures.ts`）。
+
+| ストーリー | 内容 |
+|---|---|
+| `Forest` | 森林・濃度 30%。2 秒時点で LOS を ON にすると、自機とリック・ドムの間の木立が遮断表示になる |
+| `HighMinovskyDensity` | 森林・濃度 90% |
+| `SpaceWithoutMinovsky` | 宇宙・濃度 0%（もや無し、障害物は円柱） |
+| `UnknownViewerPreset` | 未知のプリセット `VOLCANO`（SPACE として描画） |
+
+### テスト
+
+`frontend/tests/unit/battleViewerEnvironment.test.ts`: 描画プリセットのフォールバック、もやの不透明度、木の本数と配置（半径内に収まる・同じ ID なら同じ配置）。
 
 ---
 
@@ -631,7 +712,9 @@ Three.js（`@react-three/fiber`）を使用した 3D バトルリプレイビュ
 | `enemies` | `MobileSuit[]` | 敵機体情報配列 |
 | `obstacles` | `Obstacle[]` (optional) | フィールド障害物配列 |
 | `currentTimestamp` | `number` | 現在の再生タイムスタンプ |
-| `environment` | `string` | 環境（`"SPACE"` 等） |
+| `environment` | `string` | 描画プリセット（`"SPACE"` 等）。未知の値は `SPACE` として描画する |
+| `theaterName` | `string \| null` (optional) | 戦域名。右上のラベルに表示する。無ければ「環境: {environment}」を表示する |
+| `minovskyDensity` | `number \| null` (optional) | ミノフスキー濃度（0〜1）。右上のラベルと、画面全体のもやの濃さに使う |
 
 ### 内部フック
 
@@ -724,6 +807,10 @@ function CameraInitializer({ px, py, pz, controlsRef }) {
 | `frontend/src/components/BattleViewer/scene/BattleScene.tsx` | Three.js シーン |
 | `frontend/src/components/BattleViewer/scene/MobileSuitMesh.tsx` | MS 球体描画 |
 | `frontend/src/components/BattleViewer/scene/ObstacleMesh.tsx` | 障害物円柱描画 |
+| `frontend/src/components/BattleViewer/scene/EnvironmentEffects.tsx` | 環境ごとの照明・霧・地面 |
+| `frontend/src/components/BattleViewer/scene/ForestGroves.tsx` | 森林の障害物（木立）描画（Issue #581） |
+| `frontend/src/components/BattleViewer/utils/forestLayout.ts` | 木立の木の配置計算（Issue #581） |
+| `frontend/src/components/BattleViewer/ui/MinovskyHaze.tsx` | ミノフスキー粒子のもや（Issue #581） |
 | `frontend/src/components/BattleViewer/scene/TracerMesh.tsx` | 射線（ビーム／実弾）描画（Issue #531） |
 | `frontend/src/components/BattleViewer/scene/WeaponLabel.tsx` | 発射側の武器名ラベル（Issue #531） |
 | `frontend/src/components/BattleViewer/scene/ImpactMarker.tsx` | 着弾フラッシュとダメージ数字（Issue #531） |
