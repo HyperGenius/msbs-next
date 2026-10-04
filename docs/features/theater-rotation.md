@@ -23,6 +23,7 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 | 6 | admin-tool の戦域・環境タイプ編集画面（Issue #579、実装済み。[admin-theaters.md](admin-theaters.md)） |
 | 7 | ドロップテーブルの適用範囲に `THEATER` を追加する |
 | 8 | BattleViewer: 森林の描画とミノフスキー濃度の演出（Issue #581、実装済み。[battle-viewer-feature.md](battle-viewer-feature.md#森林の描画とミノフスキー濃度の演出issue-581)） |
+| 11 | 戦域・機体・パイロットの総合バランス調整（#587）。地形適正の命中・回避補正の暫定値を確定する |
 
 ---
 
