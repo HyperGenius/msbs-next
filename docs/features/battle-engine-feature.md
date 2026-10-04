@@ -1907,7 +1907,7 @@ Copilotレビュー対応でカットオフ半径を現実的な大きさに縮�
 1. _detection_phase()            索敵
 2. _strategy_phase()             戦略評価（ユニットごとに1回のみ）
 3. _ai_decision_phase(unit) ×N   [呼び出し1] angle_to_target 計算用
-4. _update_body_heading(unit,dt) ×N  [呼び出し2] ATTACK/ENGAGE_MELEE 時のみ
+4. _update_body_heading(unit,dt) ×N  [呼び出し2] ATTACK/ENGAGE_MELEE 時と MOVE 時
 5. _action_phase(unit, dt) ×N    [呼び出し3] 実際の攻撃・移動対象決定
 6. _retreat_check_phase()
 7. _refresh_phase(dt)
@@ -1919,6 +1919,10 @@ Copilotレビュー対応でカットオフ半径を現実的な大きさに縮�
 攻撃・移動が、まだ処理されていない後続ユニットの候補（HP・位置）に影響しうる**。つまり
 呼び出し1・2はステップ内で安全に結果を共有できるが、呼び出し3の時点では対象が既に
 撃破されている可能性がある。
+
+> 注: Issue #596 で、フェーズ4と5を 1 つのループにまとめた（ユニットごとに胴体向き更新 → 行動）。
+> 呼び出し2も呼び出し3と同じく、先に行動したユニットの影響を受ける。撃破時に再計算する無効化条件は
+> そのまま有効。詳細は 31 章。
 
 ### 26.3 実装: ステップ内キャッシュ + 撃破時の即時無効化
 
@@ -2464,3 +2468,79 @@ Issue の初期案は 1 ランク 5 ポイント（S +5 〜 D −15）だった�
 * `MasterEnvironment` からのプロファイル作成、`battlefield_for()`
 
 `backend/tests/unit/test_admin_mobile_suits.py`: admin API で地形適正を登録でき、specs の部分更新で消えない
+
+## 31. 側面の敵への旋回と SNIPER の近距離行動
+
+Issue #596（Epic #594「交戦距離の制御と膠着の解消」の Sub-Issue 2）。
+
+### 31.1 背景
+
+SNIPER 同士の 1 対 1 が、毎回 500 秒の時間切れ引き分けになっていた。原因は 2 つある。
+
+1. MOVE 中の胴体が移動方向を向く。ファジィルール `arc_002` / `arc_003`（側面・背面の敵 → MOVE）は「旋回して正面に収める」意図だが、実際は敵の方へ旋回しない。密着した両機が互いの周りを回り続け、対目標角が FLANK のまま変わらない
+2. SNIPER は近距離（`CLOSE`）の敵に MOVE しか選ばない（旧 `snp_rule_002` / `snp_rule_008`）。ATTACK のルールはすべて MID / FAR が条件。MOVE は最寄りの敵へ引き寄せられるため距離も開かず、敵を正面に捉えても撃たない
+
+### 31.2 変更内容
+
+**胴体の向き（`AiDecisionMixin._update_body_heading()`）**
+
+| 行動 | 胴体の目標方向 |
+|---|---|
+| ATTACK / ENGAGE_MELEE（ターゲットあり） | ターゲット |
+| MOVE（ターゲットが装備武器の最大射程内） | ターゲット（追加） |
+| 上記以外 | `movement_heading_deg` |
+
+射程外の敵へ移動しているときは、従来どおり移動方向を向く。全戦略に効く。
+
+**胴体を向けるタイミング（`BattleSimulator.step()`）**
+
+胴体向きの更新を、全ユニット分まとめて行動フェーズの前に行うのをやめた。各ユニットの行動の直前に、その時点の位置で向ける。
+
+まとめて向けると、先に行動した敵の移動が反映されない。距離 5m 前後では敵が 1 ステップ（8m）で反対側へ抜ける。後から行動するユニットから見て射撃弧（30°）の外になり、撃てないまま時間切れになっていた。
+MOVE 中も敵を向くようにしたことで、側面・背面からの命中で決着していた戦闘がこの膠着に陥りやすくなった（`test_los_obstacle.py::test_full_simulation_without_obstacles_unchanged` が 56% の確率で失敗した）。この変更で失敗は 0/300 回になった。
+
+**SNIPER のルール（`sniper.json`）**
+
+| ルール | 条件 | 出力 |
+|---|---|---|
+| `sniper_arc_004`（追加） | FRONTAL かつ HP HIGH かつ CLOSE | ATTACK |
+| `sniper_arc_005`（追加） | FRONTAL かつ HP MEDIUM かつ CLOSE | ATTACK |
+| `snp_rule_002`（削除） | CLOSE | MOVE |
+| `snp_rule_008`（削除） | CLOSE かつ HP MEDIUM | MOVE |
+
+近距離の敵は、正面なら撃ち、側面・背面なら `sniper_arc_002` / `sniper_arc_003` で旋回する。HP LOW のときは従来どおり RETREAT が勝つ。
+DEFENSIVE / RETREAT の `arc_001`（FRONTAL かつ HIGH かつ CLOSE → ATTACK）と同じ形にそろえた。
+SNIPER が近距離で距離を取る動きは、#598（交戦距離の制御）で扱う。
+
+### 31.3 計測結果
+
+`engagement_bench.py`（各 10 試行、シード 595〜604、`tactics.range` は BALANCED×BALANCED）。値は「変更前 → 変更後」。
+
+| シナリオ | 戦略 | 戦闘時間 p50 | 時間切れ | A 勝率 |
+|---|---|---|---|---|
+| 格闘機同士（ガンダム vs グフ） | SNIPER | 500s → 44s | 100% → 0% | 0% → 90% |
+| | DEFENSIVE | 500s → 50s | 90% → 0% | 0% → 90% |
+| | AGGRESSIVE | 36s → 36s | 0% → 0% | 100% → 100% |
+| | ASSAULT | 42s → 41s | 0% → 0% | 100% → 100% |
+| ガンダム vs ザクII | SNIPER | 500s → 19s | 100% → 40% | 0% → 60% |
+| | DEFENSIVE | 98s → 49s | 0% → 40% | 60% → 60% |
+| | AGGRESSIVE | 261s → 14s | 50% → 0% | 50% → 100% |
+| | ASSAULT | 73s → 13s | 20% → 0% | 80% → 100% |
+| ゲルググ vs ガンダム | SNIPER | 500s → 70s | 100% → 0% | 0% → 20% |
+| | DEFENSIVE | 382s → 84s | 40% → 0% | 0% → 0% |
+| | AGGRESSIVE | 62s → 36s | 0% → 0% | 0% → 0% |
+| | ASSAULT | 95s → 91s | 0% → 0% | 20% → 30% |
+| グフ vs ガンダム | SNIPER | 500s → 52s | 100% → 0% | 0% → 0% |
+| | DEFENSIVE | 500s → 62s | 90% → 0% | 10% → 0% |
+| | AGGRESSIVE | 43s → 48s | 0% → 0% | 30% → 0% |
+| | ASSAULT | 43s → 46s | 0% → 0% | 0% → 0% |
+
+* 時間切れは 16 条件中 7 条件で減り、1 条件（ガンダム vs ザクII の DEFENSIVE）で増えた
+* 後から行動するユニットも撃てるようになり、決着が早くなった（ガンダム vs ザクII の AGGRESSIVE 261s → 14s など）
+* MOVE 中の機体も敵を向くため、攻撃セクタの FRONT 比率が上がった（例: ゲルググ vs ガンダムの DEFENSIVE で 60% → 97%）
+* 残る時間切れ（ガンダム vs ザクII の SNIPER・DEFENSIVE 各 40%）は奇数シードだけで起きる。距離 1〜2m で両機が毎ステップすれ違い、互いが交互に背面へ回る。HP LOW のザクII は RETREAT（撤退ポイントがないため MOVE）を選び続ける。#598 の最小間隔で解消する見込み
+
+### 31.4 テスト
+
+* `backend/tests/unit/test_phase_6_1_fire_arc.py`: MOVE 中の胴体が、射程内の敵には旋回し、射程外の敵では移動方向に追従する。後から行動するユニットが、先に動いた敵の移動後の位置へ向く
+* `backend/tests/unit/test_sniper_close_range.py`: SNIPER の行動選択（近距離で正面 → ATTACK、側面 → MOVE、HP LOW → RETREAT）と、SNIPER 同士の 1 対 1 が時間切れにならないこと

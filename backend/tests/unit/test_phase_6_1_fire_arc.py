@@ -215,6 +215,48 @@ def test_update_body_heading_fallback_when_no_target() -> None:
     assert new_heading > 0.0  # 45° 方向へ少し旋回したはず
 
 
+def _setup_move_with_enemy_on_flank(
+    enemy_distance: float,
+) -> tuple[BattleSimulator, MobileSuit]:
+    """敵を +z（90°）に置き、移動方向を -45° にした MOVE 中のシミュレータを返す."""
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), body_turn_rate=720.0
+    )
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=enemy_distance))
+    sim = BattleSimulator(player, [enemy])
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
+    sim._step_count += 1
+
+    uid = str(player.id)
+    sim.unit_resources[uid]["body_heading_deg"] = 0.0
+    sim.unit_resources[uid]["movement_heading_deg"] = -45.0
+    sim.unit_resources[uid]["current_action"] = "MOVE"
+    return sim, player
+
+
+def test_update_body_heading_move_faces_target_in_weapon_range() -> None:
+    """MOVE 中でも射程内の敵がいれば、移動方向ではなく敵の方へ旋回すること."""
+    # 武器の射程 500m に対して敵は 300m
+    sim, player = _setup_move_with_enemy_on_flank(300.0)
+
+    sim._update_body_heading(player, 0.1)
+
+    new_heading = sim.unit_resources[str(player.id)]["body_heading_deg"]
+    assert new_heading > 0.0
+
+
+def test_update_body_heading_move_follows_movement_when_target_out_of_range() -> None:
+    """MOVE 中の敵が射程外なら、従来どおり移動方向に追従すること."""
+    # 武器の射程 500m に対して敵は 1000m
+    sim, player = _setup_move_with_enemy_on_flank(1000.0)
+
+    sim._update_body_heading(player, 0.1)
+
+    new_heading = sim.unit_resources[str(player.id)]["body_heading_deg"]
+    assert new_heading < 0.0
+
+
 # ---------------------------------------------------------------------------
 # 5. DEFAULT_FIRE_ARC_DEG 定数のテスト
 # ---------------------------------------------------------------------------
@@ -436,3 +478,34 @@ def test_angle_to_target_180_via_fuzzy_log() -> None:
     assert "対目標角:180.0°" in ai_logs[0].message, (
         f"真後ろの敵は angle_to_target=180.0 になること: {ai_logs[0].message}"
     )
+
+
+def test_body_heading_tracks_enemy_moved_earlier_in_same_step() -> None:
+    """後から行動するユニットは、先に動いた敵の移動後の位置へ胴体を向けること."""
+    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=100, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
+    sim._step_count += 1
+
+    first, second = sim.units[0], sim.units[1]
+    sim.unit_resources[str(second.id)]["body_heading_deg"] = 45.0
+
+    def decide_attack(unit: MobileSuit) -> None:
+        sim.unit_resources[str(unit.id)]["current_action"] = "ATTACK"
+
+    def move_first_unit(unit: MobileSuit, dt: float = 0.1) -> None:
+        # 先に行動するユニットを、後のユニットから見て +z（90°）へ動かす
+        if unit is first:
+            pos = second.position
+            unit.position = Vector3(x=pos.x, y=0, z=pos.z + 50)
+
+    with (
+        patch("app.engine.targeting.random.random", return_value=0.0),
+        patch.object(sim, "_ai_decision_phase", side_effect=decide_attack),
+        patch.object(sim, "_action_phase", side_effect=move_first_unit),
+    ):
+        sim.step(0.1)
+
+    assert abs(sim.unit_resources[str(second.id)]["body_heading_deg"] - 90.0) < 1e-6

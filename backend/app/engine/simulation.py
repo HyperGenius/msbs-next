@@ -1021,26 +1021,24 @@ class BattleSimulator(
         for unit in alive_units:
             self._ai_decision_phase(unit)
 
-        # 5. 胴体向き更新フェーズ (Phase 6-1)
-        alive_units = [u for u in self.units if u.current_hp > 0]
-        for unit in alive_units:
-            self._update_body_heading(unit, dt)
-
-        # 6. 行動フェーズ（全ユニットを同一ステップで並列処理）
+        # 5. 胴体向き更新・行動フェーズ（全ユニットを同一ステップで並列処理）
+        # 胴体は各ユニットの行動の直前に向ける。先に行動した敵の移動後の位置を狙うため。
+        # 全ユニットを先にまとめて向けると、至近距離ですれ違った敵が射撃弧の外に出る。
         alive_units = [u for u in self.units if u.current_hp > 0]
         for unit in alive_units:
             if self.is_finished:
                 break
+            self._update_body_heading(unit, dt)
             self._action_phase(unit, dt)
 
-        # 7. 撤退離脱判定フェーズ (Phase 3-3)
+        # 6. 撤退離脱判定フェーズ (Phase 3-3)
         if self.retreat_points:
             self._retreat_check_phase()
 
-        # 8. リソース更新フェーズ（EN回復・クールダウン減少）
+        # 7. リソース更新フェーズ（EN回復・クールダウン減少）
         self._refresh_phase(dt)
 
-        # 9. 時間を進める
+        # 8. 時間を進める
         self.elapsed_time += dt
         self._step_count += 1
 
