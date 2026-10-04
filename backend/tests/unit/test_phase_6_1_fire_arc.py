@@ -478,3 +478,34 @@ def test_angle_to_target_180_via_fuzzy_log() -> None:
     assert "対目標角:180.0°" in ai_logs[0].message, (
         f"真後ろの敵は angle_to_target=180.0 になること: {ai_logs[0].message}"
     )
+
+
+def test_body_heading_tracks_enemy_moved_earlier_in_same_step() -> None:
+    """後から行動するユニットは、先に動いた敵の移動後の位置へ胴体を向けること."""
+    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=100, y=0, z=0))
+    sim = BattleSimulator(player, [enemy])
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
+    sim._step_count += 1
+
+    first, second = sim.units[0], sim.units[1]
+    sim.unit_resources[str(second.id)]["body_heading_deg"] = 45.0
+
+    def decide_attack(unit: MobileSuit) -> None:
+        sim.unit_resources[str(unit.id)]["current_action"] = "ATTACK"
+
+    def move_first_unit(unit: MobileSuit, dt: float = 0.1) -> None:
+        # 先に行動するユニットを、後のユニットから見て +z（90°）へ動かす
+        if unit is first:
+            pos = second.position
+            unit.position = Vector3(x=pos.x, y=0, z=pos.z + 50)
+
+    with (
+        patch("app.engine.targeting.random.random", return_value=0.0),
+        patch.object(sim, "_ai_decision_phase", side_effect=decide_attack),
+        patch.object(sim, "_action_phase", side_effect=move_first_unit),
+    ):
+        sim.step(0.1)
+
+    assert abs(sim.unit_resources[str(second.id)]["body_heading_deg"] - 90.0) < 1e-6
