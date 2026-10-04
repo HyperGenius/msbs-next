@@ -65,7 +65,7 @@ Garage の機体一覧と同じランクを表示する。
 
 * バトル結果の `ms_snapshot` は `MobileSuit`（DBテーブル）の `model_dump()` で、`hp_rank` などのランクを含まない。修正前はモーダルが常に `C` を表示していた
 * `getMobileSuitRanks()`（`src/utils/rankUtils.ts`）に算出を寄せた。API のランクがあればそれを使い、無ければ `backend/data/master/thresholds.json` と同じ閾値で算出する
-  * `getRank()` の HP・装甲・機動性の閾値は `STAT_CAPS` 基準（強化画面用）で、API のランクと値が異なる。そのため機体ランクには使わない
+  * Issue #604 で `getRank()` の HP・装甲・機動性も同じ閾値に揃えた（詳細は `mobile-suit-rank.md`）
   * `MobileSuitRankBadges`・`EntrySelectionModal`・`enrichMobileSuit()` が `getMobileSuitRanks()` を使う
 * 武器の威力ランクは `getWeaponPowerRank()`（`power_rank` が無ければ威力から算出）。Garage の `LoadoutManager` と同じ算出
 * 閾値がバックエンドとずれていないことを `tests/unit/rankUtils.test.ts` で `thresholds.json` を読んで確認している
