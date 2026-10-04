@@ -35,36 +35,46 @@ export function getRankModifier(rank: string): string {
 type RankThreshold = { rank: string; min: number };
 
 /**
- * フロントエンド用の閾値テーブル.
- * バックエンドの backend/data/master/thresholds.json と同じ値を定義する。
- * ショップ画面などバックエンドのランクフィールドが付与されないAPIレスポンス向けに使用する。
+ * 機体の HP・装甲・機動性ランクの閾値.
+ * API が付与する hp_rank 等（Garage の一覧表示）と同じ値にするため、
+ * backend/data/master/thresholds.json と同じ値を持つ。
  * 閾値を変更する場合は両方を同時に更新すること。
  */
-const THRESHOLDS: Record<string, RankThreshold[]> = {
+const MOBILE_SUIT_RANK_THRESHOLDS: Record<"hp" | "armor" | "mobility", RankThreshold[]> = {
   hp: [
-    { rank: "S", min: STAT_CAPS.hp * 0.9 },
-    { rank: "A", min: STAT_CAPS.hp * 0.8 },
-    { rank: "B", min: STAT_CAPS.hp * 0.7 },
-    { rank: "C", min: STAT_CAPS.hp * 0.5 },
-    { rank: "D", min: STAT_CAPS.hp * 0.25 },
-    { rank: "E", min: STAT_CAPS.hp * 0.2 },
+    { rank: "S", min: 2000 },
+    { rank: "A", min: 1500 },
+    { rank: "B", min: 1000 },
+    { rank: "C", min: 700 },
+    { rank: "D", min: 400 },
+    { rank: "E", min: 0 },
   ],
   armor: [
-    { rank: "S", min: STAT_CAPS.armor * 0.9 },
-    { rank: "A", min: STAT_CAPS.armor * 0.8 },
-    { rank: "B", min: STAT_CAPS.armor * 0.7 },
-    { rank: "C", min: STAT_CAPS.armor * 0.5 },
-    { rank: "D", min: STAT_CAPS.armor * 0.25 },
-    { rank: "E", min: STAT_CAPS.armor * 0.2 },
+    { rank: "S", min: 100 },
+    { rank: "A", min: 80 },
+    { rank: "B", min: 60 },
+    { rank: "C", min: 40 },
+    { rank: "D", min: 20 },
+    { rank: "E", min: 0 },
   ],
   mobility: [
-    { rank: "S", min: STAT_CAPS.mobility * 0.9 },
-    { rank: "A", min: STAT_CAPS.mobility * 0.8 },
-    { rank: "B", min: STAT_CAPS.mobility * 0.7 },
-    { rank: "C", min: STAT_CAPS.mobility * 0.5 },
-    { rank: "D", min: STAT_CAPS.mobility * 0.25 },
-    { rank: "E", min: STAT_CAPS.mobility * 0.2 },
+    { rank: "S", min: 2.0 },
+    { rank: "A", min: 1.5 },
+    { rank: "B", min: 1.2 },
+    { rank: "C", min: 0.9 },
+    { rank: "D", min: 0.6 },
+    { rank: "E", min: 0.0 },
   ],
+};
+
+/**
+ * フロントエンド用の閾値テーブル.
+ * HP・装甲・機動性・武器はバックエンドの backend/data/master/thresholds.json と同じ値を定義する。
+ * 適性・ボーナス系はバックエンドにランク定義が無いため、STAT_CAPS を基準にする。
+ * ショップ画面や強化画面などバックエンドのランクフィールドが付与されない箇所向けに使用する。
+ */
+const THRESHOLDS: Record<string, RankThreshold[]> = {
+  ...MOBILE_SUIT_RANK_THRESHOLDS,
   melee_aptitude: [
     { rank: "S", min: STAT_CAPS.melee_aptitude * 0.9 },
     { rank: "A", min: STAT_CAPS.melee_aptitude * 0.7 },
@@ -130,39 +140,6 @@ const THRESHOLDS: Record<string, RankThreshold[]> = {
     { rank: "C", min: 60 },
     { rank: "D", min: 50 },
     { rank: "E", min: 0 },
-  ],
-};
-
-/**
- * 機体の HP・装甲・機動性ランクの閾値.
- * API が付与する hp_rank 等（Garage の表示）と同じ値にするため、
- * backend/data/master/thresholds.json と同じ値を持つ。
- * STAT_CAPS を基準にする THRESHOLDS（強化画面用）とは値が異なる。
- */
-const MOBILE_SUIT_RANK_THRESHOLDS: Record<"hp" | "armor" | "mobility", RankThreshold[]> = {
-  hp: [
-    { rank: "S", min: 2000 },
-    { rank: "A", min: 1500 },
-    { rank: "B", min: 1000 },
-    { rank: "C", min: 700 },
-    { rank: "D", min: 400 },
-    { rank: "E", min: 0 },
-  ],
-  armor: [
-    { rank: "S", min: 100 },
-    { rank: "A", min: 80 },
-    { rank: "B", min: 60 },
-    { rank: "C", min: 40 },
-    { rank: "D", min: 20 },
-    { rank: "E", min: 0 },
-  ],
-  mobility: [
-    { rank: "S", min: 2.0 },
-    { rank: "A", min: 1.5 },
-    { rank: "B", min: 1.2 },
-    { rank: "C", min: 0.9 },
-    { rank: "D", min: 0.6 },
-    { rank: "E", min: 0.0 },
   ],
 };
 

@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import {
   enrichMobileSuit,
   getMobileSuitRanks,
+  getRank,
   getWeaponPowerRank,
 } from "@/utils/rankUtils";
 import { MobileSuit } from "@/types/battle";
@@ -85,6 +86,19 @@ describe("getMobileSuitRanks", () => {
       mobility: display.mobility.rank,
     });
   });
+});
+
+describe("getRank", () => {
+  it.each(["hp", "armor", "mobility"] as const)(
+    "%s は Garage 一覧と同じバックエンドの閾値で算出する（詳細モーダル・ショップ用）",
+    (stat) => {
+      for (const { min } of backendThresholds[stat]) {
+        for (const value of [min, min - 0.01]) {
+          expect(getRank(stat, value)).toBe(backendRank(stat, value));
+        }
+      }
+    },
+  );
 });
 
 describe("getWeaponPowerRank", () => {

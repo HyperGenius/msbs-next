@@ -444,7 +444,7 @@ interface MobileSuitDetailPanelProps {
 `MobileSuitCard.tsx`（一覧）の表示項目を以下の4点に整理した（`WeaponCard.tsx` と同じレイアウト方針）:
 
 - ラベル（`"{model_number} {name_ja}"`。`model_number`/`name_ja` が未設定の場合は英語名 `name` にフォールバックする `getMobileSuitShopLabel`（`frontend/src/utils/displayUtils.ts`）を使用）
-- ランク表記（最大耐久 `[hp]` / 装甲 `[armor]` / 機動性 `[mobility]`。既存の `getRank()` をそのまま使用）
+- ランク表記（最大耐久 `[hp]` / 装甲 `[armor]` / 機動性 `[mobility]`。既存の `getRank()` をそのまま使用。Issue #604 で閾値を Garage の一覧と同じ `thresholds.json` に揃えた）
 - 購入クレジット数
 - フレーバーテキスト（`flavor_text`。未設定時は非表示）
 
