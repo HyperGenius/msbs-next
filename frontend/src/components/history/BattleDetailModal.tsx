@@ -94,6 +94,8 @@ export default function BattleDetailModal({
                     mapBounds={battle.map_bounds}
                     currentTimestamp={currentTimestamp}
                     environment={getViewerEnvironment(battle)}
+                    theaterName={battle.theater_name}
+                    minovskyDensity={battle.minovsky_density}
                     recenterToken={recenterToken}
                   />
                   {/* ログを裏で読み込み中でも再生をブロックしない。読み込み継続中であることだけ

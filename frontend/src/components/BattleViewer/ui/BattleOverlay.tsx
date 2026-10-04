@@ -8,6 +8,7 @@ import { HpBar } from "./HpBar";
 import { getHpBarColor, getEnemyHpBarColor, DEFAULT_MAX_EN, EN_WARNING_THRESHOLD, HIT_EFFECT_COLORS } from "../utils";
 import { HudLogLine, useHudAttackLog } from "../hooks/useHudAttackLog";
 import { findLatestEnShortageEvent, isEnShortageLog } from "../hooks/useBattleSnapshot";
+import { formatMinovskyDensity } from "@/utils/theater";
 
 interface UnitState {
     pos: { x: number; y: number; z: number };
@@ -66,6 +67,10 @@ interface BattleOverlayProps {
     playerState: UnitState;
     enemyStates: Array<{ enemy: MobileSuit; state: UnitState }>;
     environment: string;
+    /** 戦域名。戦域の無いバトルは環境を表示する。 */
+    theaterName?: string | null;
+    /** ミノフスキー濃度 (0〜1)。未設定なら表示しない。 */
+    minovskyDensity?: number | null;
     currentTimestamp: number;
     /** 自機の現在ターゲット判定と HUD ログに使う全ログ */
     logs: BattleLog[];
@@ -80,6 +85,8 @@ export function BattleOverlay({
     playerState,
     enemyStates,
     environment,
+    theaterName,
+    minovskyDensity,
     currentTimestamp,
     logs,
     showLos,
@@ -195,9 +202,20 @@ export function BattleOverlay({
                 )}
             </div>
 
-            {/* Environment Label */}
-            <div className="absolute top-1 right-1 sm:top-2 sm:right-2 text-white bg-black/60 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-mono pointer-events-none rounded border border-green-900/50">
-                <span className="text-green-400">環境:</span> {environment}
+            {/* 戦域・環境ラベル。左上の HUD と重ならないよう幅を抑える */}
+            <div className="absolute top-1 right-1 sm:top-2 sm:right-2 max-w-[50%] text-white bg-black/60 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-mono pointer-events-none rounded border border-green-900/50 text-right">
+                <div className="truncate">
+                    {theaterName ? (
+                        <><span className="text-green-400">戦域:</span> {theaterName}</>
+                    ) : (
+                        <><span className="text-green-400">環境:</span> {environment}</>
+                    )}
+                </div>
+                {minovskyDensity != null && (
+                    <div className="truncate">
+                        <span className="text-green-400">ミノフスキー濃度:</span> {formatMinovskyDensity(minovskyDensity)}
+                    </div>
+                )}
             </div>
 
             {/* 直近の攻撃ログ。右下の LOS ボタンと重ならないよう幅を抑える */}

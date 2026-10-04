@@ -3,6 +3,7 @@ import { MinovskyLevel, MobileSuit, TheaterForecast } from "@/types/battle";
 import { getRankColor } from "@/utils/rankUtils";
 import {
   formatForecastDate,
+  formatMinovskyDensity,
   getEnvironmentVisual,
   getMinovskyLevelLabel,
   getTerrainGradeFor,
@@ -121,7 +122,7 @@ function CurrentTheater({
         <span className="text-[#00ff41]/50">ミノフスキー濃度</span>
         <span>
           <span className="text-white font-bold text-base">
-            {Math.round(forecast.minovsky_density * 100)}%
+            {formatMinovskyDensity(forecast.minovsky_density)}
           </span>{" "}
           <span className={MINOVSKY_LEVEL_COLORS[forecast.minovsky_level]}>
             （{getMinovskyLevelLabel(forecast.minovsky_level)}）

@@ -4,16 +4,26 @@ import BattleViewer from ".";
 import ChapterTrack from "./ui/ChapterTrack";
 import { useBattleChapters } from "./hooks/useBattleChapters";
 import TurnController from "@/components/history/TurnController";
-import { BattleScenario, buildEnShortageScenario, buildSkirmishScenario } from "./__stories__/battleScenarioFixtures";
+import { Obstacle } from "@/types/battle";
+import {
+    BattleScenario,
+    buildEnShortageScenario,
+    buildSkirmishObstacles,
+    buildSkirmishScenario,
+} from "./__stories__/battleScenarioFixtures";
 
 interface ScenarioStoryArgs {
     environment: string;
+    theaterName?: string | null;
+    minovskyDensity?: number | null;
     buildScenario: () => BattleScenario;
+    buildObstacles?: () => Obstacle[];
 }
 
 /** BattleDetailModal と同じ部品構成で、複数の演出を含むバトルを通し再生する。 */
-function ScenarioStory({ environment, buildScenario }: ScenarioStoryArgs) {
+function ScenarioStory({ environment, theaterName, minovskyDensity, buildScenario, buildObstacles }: ScenarioStoryArgs) {
     const { logs, player, enemies } = useMemo(() => buildScenario(), [buildScenario]);
+    const obstacles = useMemo(() => buildObstacles?.(), [buildObstacles]);
     const [currentTimestamp, setCurrentTimestamp] = useState(0);
     const [recenterToken, setRecenterToken] = useState(0);
     const chapters = useBattleChapters(logs, player, enemies);
@@ -30,8 +40,11 @@ function ScenarioStory({ environment, buildScenario }: ScenarioStoryArgs) {
                 logs={logs}
                 player={player}
                 enemies={enemies}
+                obstacles={obstacles}
                 currentTimestamp={currentTimestamp}
                 environment={environment}
+                theaterName={theaterName}
+                minovskyDensity={minovskyDensity}
                 recenterToken={recenterToken}
             />
             <ChapterTrack chapters={chapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
@@ -55,8 +68,10 @@ const meta: Meta<ScenarioStoryArgs> = {
     },
     args: { environment: "SPACE", buildScenario: buildSkirmishScenario },
     argTypes: {
-        environment: { control: "select", options: ["SPACE", "GROUND", "COLONY", "UNDERWATER"] },
+        environment: { control: "select", options: ["SPACE", "GROUND", "COLONY", "UNDERWATER", "FOREST"] },
+        minovskyDensity: { control: { type: "range", min: 0, max: 1, step: 0.05 } },
         buildScenario: { table: { disable: true } },
+        buildObstacles: { table: { disable: true } },
     },
 };
 
@@ -68,4 +83,44 @@ export const Skirmish: Story = {};
 /** ENゲージの追従・20%未満での赤色表示・EN不足イベントでの2回点滅（Issue #534） */
 export const EnShortage: Story = {
     args: { buildScenario: buildEnShortageScenario },
+};
+
+/** 森林の戦域。障害物は木立として描く。LOS を ON にすると遮断中の木立が赤くなる。 */
+export const Forest: Story = {
+    args: {
+        environment: "FOREST",
+        theaterName: "東南アジア密林",
+        minovskyDensity: 0.3,
+        buildObstacles: buildSkirmishObstacles,
+    },
+};
+
+/** ミノフスキー濃度が高い戦域。画面全体に粒子のもやがかかる。 */
+export const HighMinovskyDensity: Story = {
+    args: {
+        environment: "FOREST",
+        theaterName: "東南アジア密林",
+        minovskyDensity: 0.9,
+        buildObstacles: buildSkirmishObstacles,
+    },
+};
+
+/** 濃度 0 ではもやを出さない。宇宙の障害物は従来どおり円柱で描く。 */
+export const SpaceWithoutMinovsky: Story = {
+    args: {
+        environment: "SPACE",
+        theaterName: "ソロモン宙域",
+        minovskyDensity: 0,
+        buildObstacles: buildSkirmishObstacles,
+    },
+};
+
+/** 未知の描画プリセットは SPACE の描画にフォールバックする。 */
+export const UnknownViewerPreset: Story = {
+    args: {
+        environment: "VOLCANO",
+        theaterName: "未知の戦域",
+        minovskyDensity: 0.5,
+        buildObstacles: buildSkirmishObstacles,
+    },
 };

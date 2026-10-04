@@ -231,6 +231,27 @@ a:not(.no-min-size),
   100% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
 }
 
+/* BattleViewer のミノフスキー粒子のもや。タイルの継ぎ目が見えないよう、往復で漂わせる。 */
+@keyframes bv-minovsky-drift {
+  from { transform: translate(-32px, -16px); }
+  to   { transform: translate(32px, 16px); }
+}
+
+.bv-minovsky-drift {
+  animation: bv-minovsky-drift 18s ease-in-out infinite alternate;
+}
+
+.bv-minovsky-drift-fast {
+  animation: bv-minovsky-drift 7s linear infinite alternate-reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bv-minovsky-drift,
+  .bv-minovsky-drift-fast {
+    animation: none;
+  }
+}
+
 /* Custom Scrollbar */
 /* Firefox (標準仕様) */
 * {
