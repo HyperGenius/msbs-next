@@ -1907,7 +1907,7 @@ Copilotレビュー対応でカットオフ半径を現実的な大きさに縮�
 1. _detection_phase()            索敵
 2. _strategy_phase()             戦略評価（ユニットごとに1回のみ）
 3. _ai_decision_phase(unit) ×N   [呼び出し1] angle_to_target 計算用
-4. _update_body_heading(unit,dt) ×N  [呼び出し2] ATTACK/ENGAGE_MELEE 時のみ
+4. _update_body_heading(unit,dt) ×N  [呼び出し2] ATTACK/ENGAGE_MELEE 時と MOVE 時
 5. _action_phase(unit, dt) ×N    [呼び出し3] 実際の攻撃・移動対象決定
 6. _retreat_check_phase()
 7. _refresh_phase(dt)
@@ -2464,3 +2464,67 @@ Issue の初期案は 1 ランク 5 ポイント（S +5 〜 D −15）だった�
 * `MasterEnvironment` からのプロファイル作成、`battlefield_for()`
 
 `backend/tests/unit/test_admin_mobile_suits.py`: admin API で地形適正を登録でき、specs の部分更新で消えない
+
+## 31. 側面の敵への旋回と SNIPER の近距離行動
+
+Issue #596（Epic #594「交戦距離の制御と膠着の解消」の Sub-Issue 2）。
+
+### 31.1 背景
+
+SNIPER 同士の 1 対 1 が、毎回 500 秒の時間切れ引き分けになっていた。原因は 2 つある。
+
+1. MOVE 中の胴体が移動方向を向く。ファジィルール `arc_002` / `arc_003`（側面・背面の敵 → MOVE）は「旋回して正面に収める」意図だが、実際は敵の方へ旋回しない。密着した両機が互いの周りを回り続け、対目標角が FLANK のまま変わらない
+2. SNIPER は近距離（`CLOSE`）の敵に MOVE しか選ばない（旧 `snp_rule_002` / `snp_rule_008`）。ATTACK のルールはすべて MID / FAR が条件。MOVE は最寄りの敵へ引き寄せられるため距離も開かず、敵を正面に捉えても撃たない
+
+### 31.2 変更内容
+
+**胴体の向き（`AiDecisionMixin._update_body_heading()`）**
+
+| 行動 | 胴体の目標方向 |
+|---|---|
+| ATTACK / ENGAGE_MELEE（ターゲットあり） | ターゲット |
+| MOVE（ターゲットが装備武器の最大射程内） | ターゲット（追加） |
+| 上記以外 | `movement_heading_deg` |
+
+射程外の敵へ移動しているときは、従来どおり移動方向を向く。全戦略に効く。
+
+**SNIPER のルール（`sniper.json`）**
+
+| ルール | 条件 | 出力 |
+|---|---|---|
+| `sniper_arc_004`（追加） | FRONTAL かつ HP HIGH かつ CLOSE | ATTACK |
+| `sniper_arc_005`（追加） | FRONTAL かつ HP MEDIUM かつ CLOSE | ATTACK |
+| `snp_rule_002`（削除） | CLOSE | MOVE |
+| `snp_rule_008`（削除） | CLOSE かつ HP MEDIUM | MOVE |
+
+近距離の敵は、正面なら撃ち、側面・背面なら `sniper_arc_002` / `sniper_arc_003` で旋回する。HP LOW のときは従来どおり RETREAT が勝つ。
+DEFENSIVE / RETREAT の `arc_001`（FRONTAL かつ HIGH かつ CLOSE → ATTACK）と同じ形にそろえた。
+SNIPER が近距離で距離を取る動きは、#598（交戦距離の制御）で扱う。
+
+### 31.3 計測結果
+
+`engagement_bench.py`（各 10 試行、シード 595〜604、`tactics.range` は BALANCED×BALANCED）。値は「変更前 → 変更後」。
+
+| シナリオ | 戦略 | 戦闘時間 p50 | 時間切れ | A 勝率 |
+|---|---|---|---|---|
+| 格闘機同士（ガンダム vs グフ） | SNIPER | 500s → 43s | 100% → 0% | 0% → 90% |
+| | DEFENSIVE | 500s → 44s | 90% → 0% | 0% → 90% |
+| | AGGRESSIVE | 36s → 34s | 0% → 0% | 100% → 100% |
+| ガンダム vs ザクII | SNIPER | 500s → 269s | 100% → 50% | 0% → 50% |
+| | DEFENSIVE | 98s → 293s | 0% → 40% | 60% → 60% |
+| | AGGRESSIVE | 261s → 279s | 50% → 50% | 50% → 50% |
+| ゲルググ vs ガンダム | SNIPER | 500s → 103s | 100% → 0% | 0% → 10% |
+| | DEFENSIVE | 382s → 117s | 40% → 0% | 0% → 30% |
+| | AGGRESSIVE | 62s → 129s | 0% → 0% | 0% → 30% |
+| グフ vs ガンダム | SNIPER | 500s → 57s | 100% → 0% | 0% → 0% |
+| | DEFENSIVE | 500s → 61s | 90% → 0% | 10% → 0% |
+| | AGGRESSIVE | 43s → 56s | 0% → 0% | 30% → 0% |
+
+* ASSAULT は全シナリオで変化なし。近距離では常に ATTACK を選ぶため、MOVE の胴体向きが効かない
+* MOVE 中の機体も敵を向くため、攻撃セクタの FRONT 比率が上がった（例: ガンダム vs ザクII の DEFENSIVE で 31% → 100%）。正面は命中 ×0.35 のため、決着が遅くなる組み合わせがある
+* ガンダム vs ザクII の時間切れ（SNIPER 50%、DEFENSIVE 40%）は別の原因。距離 5m 前後で両機が ATTACK を選んでも、後から行動する機体の番には相手が反対側へ移動している。射撃弧（30°）の外になり撃てない。変更前の AGGRESSIVE（50%）と同じ現象で、#598 の最小間隔で解消する見込み
+
+### 31.4 テスト
+
+* `backend/tests/unit/test_phase_6_1_fire_arc.py`: MOVE 中の胴体が、射程内の敵には旋回し、射程外の敵では移動方向に追従する
+* `backend/tests/unit/test_sniper_close_range.py`: SNIPER の行動選択（近距離で正面 → ATTACK、側面 → MOVE、HP LOW → RETREAT）と、SNIPER 同士の 1 対 1 が時間切れにならないこと

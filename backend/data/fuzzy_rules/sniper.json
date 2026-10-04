@@ -32,6 +32,28 @@
       "comment": "背面に敵がいれば旋回を最優先"
     },
     {
+      "id": "sniper_arc_004",
+      "conditions": [
+        { "variable": "angle_to_target", "set": "FRONTAL" },
+        { "variable": "hp_ratio", "set": "HIGH" },
+        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" },
+      "comment": "近距離の敵は正面なら撃つ。側面・背面なら sniper_arc_002/003 で旋回する。MOVE は敵へ寄るため距離は開かない"
+    },
+    {
+      "id": "sniper_arc_005",
+      "conditions": [
+        { "variable": "angle_to_target", "set": "FRONTAL" },
+        { "variable": "hp_ratio", "set": "MEDIUM" },
+        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "ATTACK" },
+      "comment": "sniper_arc_004 の体力 MEDIUM 版"
+    },
+    {
       "id": "snp_rule_001",
       "conditions": [
         { "variable": "distance_to_nearest_enemy", "set": "FAR" },
@@ -39,14 +61,6 @@
       ],
       "operator": "AND",
       "output": { "variable": "action", "set": "ATTACK" }
-    },
-    {
-      "id": "snp_rule_002",
-      "conditions": [
-        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" }
-      ],
-      "operator": "AND",
-      "output": { "variable": "action", "set": "MOVE" }
     },
     {
       "id": "snp_rule_003",
@@ -88,15 +102,6 @@
       "conditions": [
         { "variable": "distance_to_nearest_enemy", "set": "MID" },
         { "variable": "hp_ratio", "set": "LOW" }
-      ],
-      "operator": "AND",
-      "output": { "variable": "action", "set": "MOVE" }
-    },
-    {
-      "id": "snp_rule_008",
-      "conditions": [
-        { "variable": "distance_to_nearest_enemy", "set": "CLOSE" },
-        { "variable": "hp_ratio", "set": "MEDIUM" }
       ],
       "operator": "AND",
       "output": { "variable": "action", "set": "MOVE" }

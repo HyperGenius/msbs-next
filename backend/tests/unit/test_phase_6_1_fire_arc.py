@@ -215,6 +215,48 @@ def test_update_body_heading_fallback_when_no_target() -> None:
     assert new_heading > 0.0  # 45° 方向へ少し旋回したはず
 
 
+def _setup_move_with_enemy_on_flank(
+    enemy_distance: float,
+) -> tuple[BattleSimulator, MobileSuit]:
+    """敵を +z（90°）に置き、移動方向を -45° にした MOVE 中のシミュレータを返す."""
+    player = _make_unit(
+        "Player", "PLAYER", "PT", Vector3(x=0, y=0, z=0), body_turn_rate=720.0
+    )
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=0, y=0, z=enemy_distance))
+    sim = BattleSimulator(player, [enemy])
+    with patch("app.engine.targeting.random.random", return_value=0.0):
+        sim._detection_phase()
+    sim._step_count += 1
+
+    uid = str(player.id)
+    sim.unit_resources[uid]["body_heading_deg"] = 0.0
+    sim.unit_resources[uid]["movement_heading_deg"] = -45.0
+    sim.unit_resources[uid]["current_action"] = "MOVE"
+    return sim, player
+
+
+def test_update_body_heading_move_faces_target_in_weapon_range() -> None:
+    """MOVE 中でも射程内の敵がいれば、移動方向ではなく敵の方へ旋回すること."""
+    # 武器の射程 500m に対して敵は 300m
+    sim, player = _setup_move_with_enemy_on_flank(300.0)
+
+    sim._update_body_heading(player, 0.1)
+
+    new_heading = sim.unit_resources[str(player.id)]["body_heading_deg"]
+    assert new_heading > 0.0
+
+
+def test_update_body_heading_move_follows_movement_when_target_out_of_range() -> None:
+    """MOVE 中の敵が射程外なら、従来どおり移動方向に追従すること."""
+    # 武器の射程 500m に対して敵は 1000m
+    sim, player = _setup_move_with_enemy_on_flank(1000.0)
+
+    sim._update_body_heading(player, 0.1)
+
+    new_heading = sim.unit_resources[str(player.id)]["body_heading_deg"]
+    assert new_heading < 0.0
+
+
 # ---------------------------------------------------------------------------
 # 5. DEFAULT_FIRE_ARC_DEG 定数のテスト
 # ---------------------------------------------------------------------------

@@ -411,7 +411,11 @@ class AiDecisionMixin:
 
         旋回ルール:
         - ATTACK / ENGAGE_MELEE かつターゲットあり → ターゲット方向
-        - MOVE / RETREAT / その他 → movement_heading_deg（実際の移動方向）
+        - MOVE かつターゲットが武器の射程内 → ターゲット方向
+        - 上記以外 → movement_heading_deg（実際の移動方向）
+
+        MOVE で射程内の敵を向くのは、側面・背面の敵を正面に収めるため。
+        移動方向に追従すると、密着した両機が互いの周りを回り続けて攻撃に移れない。
 
         Args:
             actor: 対象ユニット
@@ -430,14 +434,15 @@ class AiDecisionMixin:
         current_action = resources.get("current_action", "MOVE")
         movement_heading: float = resources.get("movement_heading_deg", 0.0)
 
-        # ターゲットを取得（攻撃アクション時のみ; 選択失敗時は None）
         target: MobileSuit | None = None
         if current_action in ("ATTACK", "ENGAGE_MELEE"):
             target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
+        elif current_action == "MOVE":
+            target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
+            if target is not None and not self._is_within_weapon_range(actor, target):
+                target = None
 
-        # 目標方向を決定
-        # 攻撃時のみ敵方向を向く。移動時はmovement_heading_degに追従する
-        if target is not None and current_action in ("ATTACK", "ENGAGE_MELEE"):
+        if target is not None:
             pos_actor = actor.position.to_numpy()
             pos_target = target.position.to_numpy()
             target_heading = math.degrees(
@@ -455,6 +460,17 @@ class AiDecisionMixin:
         angular_diff = ((target_heading - current_body_heading + 180) % 360) - 180
         actual_rotation = max(-max_rotation, min(max_rotation, angular_diff))
         resources["body_heading_deg"] = current_body_heading + actual_rotation
+
+    @staticmethod
+    def _is_within_weapon_range(actor: MobileSuit, target: MobileSuit) -> bool:
+        """装備武器の最大射程内にターゲットがいるかを返す."""
+        if not actor.weapons:
+            return False
+        max_range = max(w.range for w in actor.weapons)
+        distance = float(
+            np.linalg.norm(target.position.to_numpy() - actor.position.to_numpy())
+        )
+        return distance <= max_range
 
     def _refresh_phase(self, dt: float = 0.1) -> None:
         """リフレッシュフェーズ: ENの回復とクールダウンの減少."""
