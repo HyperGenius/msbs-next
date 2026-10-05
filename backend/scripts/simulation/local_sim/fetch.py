@@ -12,7 +12,13 @@ from datetime import UTC, datetime
 from sqlmodel import Session, select
 
 from app.core.gamedata import get_ace_pilots
-from app.models.models import AcePilot, MasterTheater, MobileSuit, Pilot
+from app.models.models import (
+    AcePilot,
+    MasterEnvironment,
+    MasterTheater,
+    MobileSuit,
+    Pilot,
+)
 from app.services.matching_service import (
     MatchingService,
     build_npc_entry_snapshot,
@@ -78,27 +84,37 @@ def resolve_conditions(
     """
     if minovsky_density is not None and not 0.0 <= minovsky_density <= 1.0:
         raise ValueError("ミノフスキー濃度は 0〜1 で指定してください。")
+    theater: MasterTheater | None = None
     if theater_id is None:
-        return conditions_to_roster(
-            BattleConditions(minovsky_density=minovsky_density or 0.0)
+        conditions = BattleConditions(minovsky_density=minovsky_density or 0.0)
+    else:
+        theater = session.get(MasterTheater, theater_id)
+        if theater is None:
+            raise ValueError(f"戦域 '{theater_id}' がマスターにありません。")
+        density = (
+            minovsky_density if minovsky_density is not None else theater.base_minovsky
         )
-
-    theater = session.get(MasterTheater, theater_id)
-    if theater is None:
-        raise ValueError(f"戦域 '{theater_id}' がマスターにありません。")
-    density = (
-        minovsky_density if minovsky_density is not None else theater.base_minovsky
+        conditions = TheaterService.battle_conditions(session, theater_id, density)
+        # battle_conditions() はマスターが欠けると既定の条件に落とす。黙って宇宙で戦わないように止める。
+        if conditions.theater_id is None:
+            raise ValueError(
+                f"戦域 '{theater_id}' の環境タイプ '{theater.environment_id}' がマスターにありません。"
+            )
+    environment = session.get(MasterEnvironment, conditions.environment)
+    return conditions_to_roster(
+        conditions,
+        theater_name=theater.name if theater else None,
+        environment_name=environment.name if environment else None,
+        viewer_preset=environment.viewer_preset if environment else None,
     )
-    conditions = TheaterService.battle_conditions(session, theater_id, density)
-    # battle_conditions() はマスターが欠けると既定の条件に落とす。黙って宇宙で戦わないように止める。
-    if conditions.theater_id is None:
-        raise ValueError(
-            f"戦域 '{theater_id}' の環境タイプ '{theater.environment_id}' がマスターにありません。"
-        )
-    return conditions_to_roster(conditions)
 
 
-def conditions_to_roster(conditions: BattleConditions) -> RosterConditions:
+def conditions_to_roster(
+    conditions: BattleConditions,
+    theater_name: str | None = None,
+    environment_name: str | None = None,
+    viewer_preset: str | None = None,
+) -> RosterConditions:
     """`BattleConditions` を JSON に保存できる形にする."""
     profile = conditions.environment_profile
     return RosterConditions(
@@ -107,6 +123,9 @@ def conditions_to_roster(conditions: BattleConditions) -> RosterConditions:
         environment_profile=(
             RosterEnvironmentProfile(**asdict(profile)) if profile else None
         ),
+        theater_name=theater_name,
+        environment_name=environment_name,
+        viewer_preset=viewer_preset,
         minovsky_density=conditions.minovsky_density,
         battlefield=conditions.battlefield.model_dump(mode="json"),
     )

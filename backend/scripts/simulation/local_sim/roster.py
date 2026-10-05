@@ -70,6 +70,14 @@ class RosterConditions(BaseModel):
     theater_id: str | None = None
     environment: str = "SPACE"
     environment_profile: RosterEnvironmentProfile | None = None
+    theater_name: str | None = Field(
+        default=None,
+        description="戦域の表示名。null なら結果には戦域IDを表示名として残す",
+    )
+    environment_name: str | None = Field(default=None, description="環境タイプの表示名")
+    viewer_preset: str | None = Field(
+        default=None, description="バトルビューアの背景プリセット"
+    )
     minovsky_density: float = Field(default=0.0, ge=0.0, le=1.0)
     battlefield: dict[str, Any] = Field(
         default_factory=dict, description="BattleField の model_dump()"
@@ -128,9 +136,21 @@ def save_roster(
     return path
 
 
-def load_roster(name_or_path: str, rosters_dir: Path = ROSTERS_DIR) -> Roster:
-    """ロスター名またはファイルパスからロスターを読む."""
+def resolve_roster_path(name_or_path: str, rosters_dir: Path = ROSTERS_DIR) -> Path:
+    """ロスター名またはファイルパス（`.json` で終わるもの）からパスを返す."""
     path = Path(name_or_path)
     if path.suffix != ".json":
         path = roster_path(name_or_path, rosters_dir)
+    return path
+
+
+def load_roster(name_or_path: str, rosters_dir: Path = ROSTERS_DIR) -> Roster:
+    """ロスター名またはファイルパスからロスターを読む.
+
+    Raises:
+        FileNotFoundError: ロスターが無い場合
+    """
+    path = resolve_roster_path(name_or_path, rosters_dir)
+    if not path.is_file():
+        raise FileNotFoundError(f"ロスター {path} が見つかりません。")
     return Roster.model_validate_json(path.read_text(encoding="utf-8"))
