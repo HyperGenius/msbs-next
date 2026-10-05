@@ -16,3 +16,4 @@ export * from "./teams";
 export * from "./blueprints";
 export * from "./technologies";
 export * from "./theaters";
+export * from "./localSim";
