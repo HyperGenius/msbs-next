@@ -110,6 +110,19 @@ describe("computeBattleChapters", () => {
     expect(computeBattleChapters(logs, PLAYER, [enemy])).toHaveLength(0);
   });
 
+  it("自機の仕切り直しをDISENGAGEチャプターとして抽出する", () => {
+    const logs = [makeLog({ action_type: "DISENGAGE", target_id: enemy.id })];
+    const chapters = computeBattleChapters(logs, PLAYER, [enemy]);
+    expect(chapters).toHaveLength(1);
+    expect(chapters[0].kind).toBe("DISENGAGE");
+    expect(chapters[0].label).toBe("Zaku IIから仕切り直し");
+  });
+
+  it("敵機の仕切り直しはチャプターにならない", () => {
+    const logs = [makeLog({ actor_id: enemy.id, action_type: "DISENGAGE", target_id: PLAYER.id })];
+    expect(computeBattleChapters(logs, PLAYER, [enemy])).toHaveLength(0);
+  });
+
   it("複数種のチャプターをログの時系列順のまま返す", () => {
     const logs = [
       makeLog({ timestamp: 1, action_type: "DETECTION", target_id: enemy.id }),

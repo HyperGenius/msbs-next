@@ -106,6 +106,8 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
 
   const isTargetSelectionMessage = log.action_type === "TARGET_SELECTION";
 
+  const isDisengageMessage = log.action_type === "DISENGAGE";
+
   const isAttributeMessage =
     msg.includes("BEAM") ||
     msg.includes("PHYSICAL") ||
@@ -135,6 +137,13 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
       borderStyle: "border-amber-500",
       bgStyle: "",
       textStyle: "text-amber-400 font-semibold",
+    };
+  }
+  if (isDisengageMessage) {
+    return {
+      borderStyle: "border-purple-500",
+      bgStyle: "",
+      textStyle: "text-purple-400 font-semibold",
     };
   }
   if (isResourceMessage) {

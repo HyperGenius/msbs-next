@@ -1,7 +1,8 @@
 /* frontend/src/components/BattleViewer/types.ts */
 
 // 警告アイコンの種類
-export type WarningType = 'ammo' | 'cooldown';
+/** 機体の上に出す状態表示。`disengage` は仕切り直しの直後に出す。 */
+export type WarningType = 'ammo' | 'cooldown' | 'disengage';
 
 /** 射線の描き方。BEAM は伸びる直線、BULLET は飛んでいく短い弾体。 */
 export type TracerKind = 'BEAM' | 'BULLET';

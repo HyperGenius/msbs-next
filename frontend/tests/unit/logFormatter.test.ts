@@ -664,3 +664,15 @@ describe("formatBattleLog – UNKNOWN機 メッセージ表示", () => {
   });
 });
 
+
+describe("formatBattleLog – 仕切り直し", () => {
+  it("DISENGAGE ログを太字の紫で表示する", () => {
+    const log = makeLog({
+      action_type: "DISENGAGE",
+      message: "[アムロ]のGundamはZakuとの攻防を互角と見て距離を取り、仕切り直す",
+    });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-purple-500");
+    expect(result.style.textStyle).toBe("text-purple-400 font-semibold");
+  });
+});

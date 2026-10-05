@@ -193,6 +193,27 @@ describe("getBattleSnapshot: EN残量の再構築（Issue #534）", () => {
     });
 });
 
+describe("getBattleSnapshot: 仕切り直しの表示", () => {
+    const disengageLog: BattleLog = {
+        timestamp: 2.0,
+        actor_id: "unit-1",
+        action_type: "DISENGAGE",
+        message: "仕切り直す",
+        position_snapshot: { x: 0, y: 0, z: 0 },
+    };
+
+    it("DISENGAGE ログの直後だけ disengage を出す", () => {
+        expect(getBattleSnapshot("unit-1", baseMs, [disengageLog], 1.9).warnings).toEqual([]);
+        expect(getBattleSnapshot("unit-1", baseMs, [disengageLog], 2.5).warnings).toEqual(["disengage"]);
+        expect(getBattleSnapshot("unit-1", baseMs, [disengageLog], 4.0).warnings).toEqual([]);
+    });
+
+    it("他ユニットの DISENGAGE では出さない", () => {
+        const otherLog = { ...disengageLog, actor_id: "unit-2" };
+        expect(getBattleSnapshot("unit-1", baseMs, [otherLog], 2.5).warnings).toEqual([]);
+    });
+});
+
 describe("EN不足イベントの検出（Issue #534）", () => {
     const pos = { x: 0, y: 0, z: 0 };
 
