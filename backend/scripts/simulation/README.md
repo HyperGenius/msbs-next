@@ -51,3 +51,18 @@ python scripts/simulation/run_simulation.py --mission-id 1 --output results/m1.j
 
 `logs` 配列には `BattleLog`（`timestamp` ベースの新スキーマ）が含まれます。  
 BattleViewer で読み込むことで戦闘を目視確認できます。
+
+---
+
+# local_sim（ローカルバトルシミュレータ）
+
+本番の参加機体を Read Only で取得し、ローカルでバトルを実行するツールです。
+接続には `NEON_DATABASE_URL` ではなく `NEON_READONLY_DATABASE_URL`（SELECT 権限だけのロール）を使います。
+
+```bash
+cd backend
+python -m scripts.simulation.local_sim check-readonly          # 書き込みが拒否されることを確認
+python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 7
+```
+
+詳細は `docs/features/local-battle-simulator.md` を参照してください。
