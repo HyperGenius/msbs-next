@@ -1519,7 +1519,9 @@ SPAWN_INITIAL_SPEED_RATIO: float = 0.3  # 初速 = 各ユニットの max_speed 
 1. **既に発見済みの敵**（`team_detected_units[team_id]`）: 索敵範囲外に出ていても
    LOS 喪失判定（障害物の陰に入った場合に発見済みリストから除外する挙動）のため、
    距離に関わらず引き続き処理する（従来の挙動を維持。Issue #446 のIMPORTANT注記
-   通り、この経路は新規実装しない）
+   通り、この経路は新規実装しない）。Issue #615 以降は、ユニットごとではなく
+   チーム×発見済みの敵ごとに 1 回判定し、チームの誰からも LOS が通らないときだけ
+   外す（`_drop_detections_without_team_los()`）
 2. **未発見の敵**: グリッドで絞り込んだ近傍候補のみを対象に新規索敵判定を行う
 
 ユニットID→ユニットの引き当ては `BattleSimulator._units_by_id`（`__init__` で
