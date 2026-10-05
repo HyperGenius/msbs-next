@@ -75,7 +75,7 @@ def normalize_parts(self) -> None:
 - `app/engine/simulation.py` の `BattleSimulator.__init__()` — 全ユニット（`self.units`）に対して一括呼び出し。**戦闘エンジンが実際に部位へアクセスする直前の単一の安全網**であり、他の呼び出し元での呼び出し漏れがあってもここで担保される
 - `app/services/matching_service.py` の `_coerce_suit_json_fields()` — NPC/エースのバトル参加準備時
 - `main.py` の `simulate_battle()` — プレイヤー機体・敵機体の準備時
-- `scripts/run_batch.py` の `_convert_snapshot_to_mobile_suit()` — バトルルームバッチ実行時
+- `app/services/battle_execution.py` の `snapshot_to_mobile_suit()` — バトルルームバッチ実行時
 - `app/models/models.py` の `MobileSuitResponse.from_mobile_suit()` — MS取得APIレスポンス生成時
 
 新たに `MobileSuit` を構築してバトルエンジンやAPIレスポンスに渡すコードパスを追加する場合、`normalize_parts()` の呼び出しが必要かどうか確認すること（`BattleSimulator.__init__()` を経由するパスであれば安全網でカバーされる）。

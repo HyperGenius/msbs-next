@@ -570,11 +570,10 @@ def _save_batch(
     rng: random.Random | None = None,
     conditions: BattleConditions | None = None,
 ) -> None:
-    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+    from app.services.battle_execution import snapshot_to_mobile_suit
+    from scripts.run_batch import _save_battle_results
 
-    units = [
-        _convert_snapshot_to_mobile_suit(dict(e.mobile_suit_snapshot)) for e in entries
-    ]
+    units = [snapshot_to_mobile_suit(dict(e.mobile_suit_snapshot)) for e in entries]
     for unit in units:
         unit.team_id = str(unit.id)
     simulator = MagicMock()

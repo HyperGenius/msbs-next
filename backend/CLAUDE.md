@@ -114,6 +114,7 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 2. `backend/scripts/run_batch.py` の `_save_battle_results`: `.github/workflows/scheduled-battle.yaml` から `cron` で
    定期実行される「デイリーバトルロイヤル」等のルーム対戦バッチ用。こちらは複数プレイヤー分の `BattleResult` をループで
    1回のバッチ実行につき複数件生成する
+   （機体の組み立て・戦闘実行・表示用フィールドの組み立ては DB なしで呼べる `app/services/battle_execution.py` にある）
 
 新たに `BattleResult` の生成箇所を追加・変更する場合は、集計ロジック自体は `battle_digest.py` のような独立モジュールを
 呼び出す形にして重複実装を避けつつ、**上記2箇所の両方**に確実に組み込むこと。①では `player`（`MobileSuit`）に

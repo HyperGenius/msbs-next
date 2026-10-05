@@ -149,7 +149,7 @@ Epic #573「戦域ローテーションと環境効果」の土台で、本ド�
 ### 戦闘の条件
 
 `scripts/run_batch.py` の `_process_room()` が、ルームの `theater_id`・`minovsky_density` から
-`TheaterService.battle_conditions()` で `BattleConditions` を作り、`_run_simulation()` と `_save_battle_results()` に渡す。
+`TheaterService.battle_conditions()` で `BattleConditions` を作り、`run_battle()`（`app/services/battle_execution.py`）と `_save_battle_results()` に渡す。
 
 | 項目 | `BattleSimulator` の引数 | 値 |
 |---|---|---|

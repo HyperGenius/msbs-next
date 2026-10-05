@@ -108,13 +108,13 @@ def test_save_battle_results_sets_detail_fields(in_memory_session):
     entry = _make_entry(session, room, "user_hero", snapshot)
 
     # シミュレーター: エントリー機体が生存（勝利）
-    from scripts.run_batch import _convert_snapshot_to_mobile_suit
+    from app.services.battle_execution import snapshot_to_mobile_suit
 
-    alive_unit = _convert_snapshot_to_mobile_suit(dict(snapshot))
+    alive_unit = snapshot_to_mobile_suit(dict(snapshot))
     alive_unit.current_hp = 500
     alive_unit.team_id = snapshot["team_id"]
 
-    player_unit = _convert_snapshot_to_mobile_suit(dict(snapshot))
+    player_unit = snapshot_to_mobile_suit(dict(snapshot))
     player_unit.side = "PLAYER"
     player_unit.team_id = snapshot["team_id"]
 
@@ -177,7 +177,8 @@ def test_save_battle_results_lose(in_memory_session):
     """敗北時は撃破ログが無ければ kills=0、報酬が少ないこと."""
     from sqlmodel import select
 
-    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+    from app.services.battle_execution import snapshot_to_mobile_suit
+    from scripts.run_batch import _save_battle_results
 
     session = in_memory_session
     room = _make_room(session)
@@ -201,7 +202,7 @@ def test_save_battle_results_lose(in_memory_session):
 
     simulator = _make_simulator_mock([other_unit])
 
-    player_unit = _convert_snapshot_to_mobile_suit(dict(snapshot))
+    player_unit = snapshot_to_mobile_suit(dict(snapshot))
     player_unit.side = "PLAYER"
 
     _save_battle_results(
@@ -237,7 +238,8 @@ def test_save_battle_results_lose_with_kills_are_preserved(in_memory_session):
     """
     from sqlmodel import select
 
-    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+    from app.services.battle_execution import snapshot_to_mobile_suit
+    from scripts.run_batch import _save_battle_results
 
     session = in_memory_session
     room = _make_room(session)
@@ -247,7 +249,7 @@ def test_save_battle_results_lose_with_kills_are_preserved(in_memory_session):
 
     entry = _make_entry(session, room, "user_doomed", snapshot)
 
-    player_unit = _convert_snapshot_to_mobile_suit(dict(snapshot))
+    player_unit = snapshot_to_mobile_suit(dict(snapshot))
     player_unit.side = "PLAYER"
     player_unit.team_id = snapshot["team_id"]
     player_unit.current_hp = 0  # 敗北（撃破された）
@@ -310,7 +312,8 @@ def test_save_battle_results_snapshot_immutability(in_memory_session):
     """BattleResult の ms_snapshot がエントリー時のスナップショットと一致すること."""
     from sqlmodel import select
 
-    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+    from app.services.battle_execution import snapshot_to_mobile_suit
+    from scripts.run_batch import _save_battle_results
 
     session = in_memory_session
     room = _make_room(session)
@@ -320,12 +323,12 @@ def test_save_battle_results_snapshot_immutability(in_memory_session):
 
     entry = _make_entry(session, room, "user_immutable", original_snapshot)
 
-    alive_unit = _convert_snapshot_to_mobile_suit(dict(original_snapshot))
+    alive_unit = snapshot_to_mobile_suit(dict(original_snapshot))
     alive_unit.current_hp = 100
     alive_unit.team_id = original_snapshot["team_id"]
 
     simulator = _make_simulator_mock([alive_unit])
-    player_unit = _convert_snapshot_to_mobile_suit(dict(original_snapshot))
+    player_unit = snapshot_to_mobile_suit(dict(original_snapshot))
     player_unit.side = "PLAYER"
     player_unit.team_id = original_snapshot["team_id"]
 
@@ -361,7 +364,8 @@ def test_save_battle_results_sets_digest_fields(in_memory_session):
     """
     from sqlmodel import select
 
-    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+    from app.services.battle_execution import snapshot_to_mobile_suit
+    from scripts.run_batch import _save_battle_results
 
     session = in_memory_session
     room = _make_room(session)
@@ -376,7 +380,7 @@ def test_save_battle_results_sets_digest_fields(in_memory_session):
 
     # player_unit はシミュレーション実行後を模して current_hp を更新しておく
     # （entry.mobile_suit_snapshot は常にエントリー時点=満タンHPのまま）
-    player_unit = _convert_snapshot_to_mobile_suit(dict(snapshot))
+    player_unit = snapshot_to_mobile_suit(dict(snapshot))
     player_unit.side = "PLAYER"
     player_unit.team_id = snapshot["team_id"]
     player_unit.current_hp = 100  # 最大1000に対し10% = 辛勝タグの閾値内
@@ -421,7 +425,8 @@ def test_save_battle_results_kills_are_per_unit_not_team_wide(in_memory_session)
     """
     from sqlmodel import select
 
-    from scripts.run_batch import _convert_snapshot_to_mobile_suit, _save_battle_results
+    from app.services.battle_execution import snapshot_to_mobile_suit
+    from scripts.run_batch import _save_battle_results
 
     session = in_memory_session
     room = _make_room(session)
@@ -436,11 +441,11 @@ def test_save_battle_results_kills_are_per_unit_not_team_wide(in_memory_session)
     snapshot_b["team_id"] = team_id
     entry_b = _make_entry(session, room, "user_support", snapshot_b)
 
-    player_unit_a = _convert_snapshot_to_mobile_suit(dict(snapshot_a))
+    player_unit_a = snapshot_to_mobile_suit(dict(snapshot_a))
     player_unit_a.side = "PLAYER"
     player_unit_a.team_id = team_id
 
-    player_unit_b = _convert_snapshot_to_mobile_suit(dict(snapshot_b))
+    player_unit_b = snapshot_to_mobile_suit(dict(snapshot_b))
     player_unit_b.side = "PLAYER"
     player_unit_b.team_id = team_id
 
