@@ -15,6 +15,7 @@ from app.core import gamedata
 from app.core.gamedata import get_ace_pilots
 from app.engine.rng import new_numpy_rng
 from scripts.simulation.local_sim import run as local_run
+from scripts.simulation.local_sim.analysis import REPORT_FILE
 from scripts.simulation.local_sim.fetch import FetchOptions, UnitSpec, build_roster
 from scripts.simulation.local_sim.generations import (
     MANIFEST_FILE,
@@ -108,6 +109,7 @@ def test_run_saves_generation_files(
         "battle_001.json",
         "battle_002.json",
         MANIFEST_FILE,
+        REPORT_FILE,
         ROSTER_FILE,
     ]
     assert (result.path / ROSTER_FILE).read_bytes() == roster_path.read_bytes()

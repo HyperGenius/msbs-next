@@ -29,6 +29,7 @@ from app.services.battle_execution import (
     snapshot_to_mobile_suit,
 )
 from app.services.theater_service import BattleConditions
+from scripts.simulation.local_sim.analysis import GenerationAnalyzer, write_report
 from scripts.simulation.local_sim.generations import (
     GENERATIONS_DIR,
     KEEP_UNPINNED_GENERATIONS,
@@ -218,6 +219,7 @@ def run_generation(
     try:
         writer.write_roster(roster_path)
         battles: list[BattleSummary] = []
+        analyzer = GenerationAnalyzer()
         with _roster_battle_state(roster):
             for index in range(1, options.rounds + 1):
                 record = run_one_battle(
@@ -229,6 +231,7 @@ def run_generation(
                     options.max_steps,
                 )
                 summary = writer.write_battle(record)
+                analyzer.add(record)
                 battles.append(summary)
                 print(
                     f"  [{index}/{options.rounds}] seed={summary.seed}"
@@ -256,6 +259,7 @@ def run_generation(
             summary=GenerationSummary.of(battles),
             battles=battles,
         )
+        write_report(writer.tmp_dir, analyzer.result(writer.generation_id))
         path = writer.commit(manifest)
     except BaseException:
         writer.discard()
