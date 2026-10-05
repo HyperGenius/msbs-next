@@ -90,6 +90,7 @@ TTL キャッシュ方式で `gamedata.py` から提供する。
 | `gamedata.get_ace_pilots()` | 全件を TTL キャッシュ経由で返す（`mobile_suit.weapons` は `Weapon` インスタンス） |
 | `gamedata.get_ace_pilot_by_id(ace_id)` | ID で1件取得。見つからない場合は `None` |
 | `gamedata.invalidate_ace_pilots_cache()` | キャッシュ無効化。管理 API の作成・更新・削除時に呼ばれる |
+| `gamedata.use_static_ace_pilots(raw_aces)` | DB を読まずに、渡した `ace_pilots` の行を返すようにする。`None` で DB 参照に戻す。ローカルバトルシミュレータの `run` が使う（`docs/features/local-battle-simulator.md`） |
 
 - TTL は機体・武器と同じ `MASTER_DATA_CACHE_TTL_SEC`（デフォルト60秒）だが、有効期限は独立して管理する
 - `POST /api/admin/reload-master` でもエースのキャッシュがクリアされ、レスポンスに `ace_pilots` 件数が含まれる
