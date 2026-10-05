@@ -3,6 +3,24 @@
   "layer": "behavior_selection",
   "rules": [
     {
+      "id": "snp_dis_001",
+      "conditions": [
+        { "variable": "stalemate", "set": "HIGH" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "DISENGAGE" },
+      "comment": "攻防が互角のまま長引いたら、距離を取って仕切り直す。同点なら先のラベルが選ばれるため先頭に置く"
+    },
+    {
+      "id": "snp_dis_002",
+      "conditions": [
+        { "variable": "dominance", "set": "DISADVANTAGED" }
+      ],
+      "operator": "AND",
+      "output": { "variable": "action", "set": "DISENGAGE" },
+      "comment": "攻防で劣勢なら、距離を取って仕切り直す"
+    },
+    {
       "id": "sniper_arc_001",
       "conditions": [
         { "variable": "angle_to_target", "set": "FRONTAL" },
@@ -169,9 +187,19 @@
       "FLANK":   { "type": "triangle",  "params": [25, 60, 120] },
       "REAR":    { "type": "trapezoid", "params": [100, 130, 180, 180] }
     },
+    "stalemate": {
+      "LOW":  { "type": "trapezoid", "params": [0.0, 0.0, 0.4, 0.7] },
+      "HIGH": { "type": "trapezoid", "params": [0.6, 0.95, 1.0, 1.0] }
+    },
+    "dominance": {
+      "DISADVANTAGED": { "type": "trapezoid", "params": [-1.0, -1.0, -0.2, -0.1] },
+      "EVEN":          { "type": "triangle",  "params": [-0.25, 0.0, 0.25] },
+      "ADVANTAGED":    { "type": "trapezoid", "params": [0.1, 0.2, 1.0, 1.0] }
+    },
     "action": {
       "ATTACK":  { "type": "trapezoid", "params": [0.0, 0.0, 0.15, 0.30] },
       "MOVE":    { "type": "triangle",  "params": [0.25, 0.50, 0.75] },
+      "DISENGAGE": { "type": "triangle",  "params": [0.55, 0.70, 0.85] },
       "RETREAT": { "type": "trapezoid", "params": [0.70, 0.85, 1.0, 1.0] }
     }
   }
