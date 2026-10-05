@@ -34,6 +34,8 @@ _cache_expires_at: datetime | None = None
 # エースパイロットは機体/武器と更新契機が独立しているため有効期限を別管理する
 _ace_pilots_cache: list[dict] | None = None
 _ace_pilots_cache_expires_at: datetime | None = None
+# use_static_ace_pilots() で設定する。設定中は DB もキャッシュも使わない。
+_static_ace_pilots: list[dict] | None = None
 
 
 # 練習機マスターデータ（ショップには並ばない専用機体）
@@ -247,26 +249,25 @@ def _load_ace_pilots_from_db() -> list[dict]:
 
     with Session(_app_db.engine) as db_session:
         records = db_session.exec(select(AcePilot)).all()
+    return [_ace_pilot_to_data(record.model_dump()) for record in records]
 
-    aces = []
-    for record in records:
-        ms_raw = record.mobile_suit
-        weapons = [Weapon(**w) for w in ms_raw.get("weapons", [])]
-        aces.append(
-            {
-                "id": record.id,
-                "name": record.name,
-                "pilot_name": record.pilot_name,
-                "description": record.description,
-                "personality": record.personality,
-                "mobile_suit": {**ms_raw, "weapons": weapons},
-                "bounty_exp": record.bounty_exp,
-                "bounty_credits": record.bounty_credits,
-                "stats": dict(record.stats),
-                "skills": dict(record.skills),
-            }
-        )
-    return aces
+
+def _ace_pilot_to_data(raw: dict) -> dict:
+    """`ace_pilots` の1行を `get_ace_pilots()` が返す形にする."""
+    ms_raw = raw["mobile_suit"]
+    weapons = [Weapon(**w) for w in ms_raw.get("weapons", [])]
+    return {
+        "id": raw["id"],
+        "name": raw["name"],
+        "pilot_name": raw["pilot_name"],
+        "description": raw.get("description", ""),
+        "personality": raw["personality"],
+        "mobile_suit": {**ms_raw, "weapons": weapons},
+        "bounty_exp": raw.get("bounty_exp", 0),
+        "bounty_credits": raw.get("bounty_credits", 0),
+        "stats": dict(raw.get("stats") or {}),
+        "skills": dict(raw.get("skills") or {}),
+    }
 
 
 def _get_shop_listings() -> list[dict]:
@@ -296,6 +297,8 @@ def get_ace_pilots() -> list[dict]:
         list[dict]: エースパイロットデータのリスト
     """
     global _ace_pilots_cache, _ace_pilots_cache_expires_at
+    if _static_ace_pilots is not None:
+        return _static_ace_pilots
     now = datetime.now(UTC)
     if (
         _ace_pilots_cache is None
@@ -323,6 +326,18 @@ def get_ace_pilot_by_id(ace_id: str) -> dict | None:
         if ace["id"] == ace_id:
             return ace
     return None
+
+
+def use_static_ace_pilots(raw_aces: list[dict] | None) -> None:
+    """DB を読まずに、渡した `ace_pilots` の行をエースのデータとして返すようにする.
+
+    戦闘中のエンジンは DB からエースのスキルを読む。オフラインで戦闘を回すときに使う。
+    None を渡すと DB の参照に戻す。
+    """
+    global _static_ace_pilots
+    _static_ace_pilots = (
+        None if raw_aces is None else [_ace_pilot_to_data(raw) for raw in raw_aces]
+    )
 
 
 def invalidate_ace_pilots_cache() -> None:

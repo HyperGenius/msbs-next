@@ -41,6 +41,7 @@ from app.engine.environment import EnvironmentProfile
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.movement import MovementMixin
+from app.engine.rng import new_numpy_rng
 from app.engine.spatial_grid import PointSpatialGrid, UnitSpatialGrid
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
 from app.engine.targeting import TargetingMixin
@@ -627,7 +628,7 @@ class BattleSimulator(
             ]
             radius = SPAWN_ZONE_RADIUS_4TEAM
 
-        rng = np.random.default_rng()
+        rng = new_numpy_rng()
         centers = [
             self._find_clear_spawn_center(center, radius, rng) for center in centers
         ]
@@ -755,13 +756,13 @@ class BattleSimulator(
             zone: スポーン領域
             placed_grid: 既に配置されたユニット位置を格納したグリッド
             min_dist: 既配置ユニットとの最小距離 (m)
-            rng: 乱数生成器。None の場合は numpy のデフォルト RNG を使用する。
+            rng: 乱数生成器。None の場合は `new_numpy_rng()` で作る。
 
         Returns:
             配置位置 np.ndarray([x, y, z])
         """
         if rng is None:
-            rng = np.random.default_rng()
+            rng = new_numpy_rng()
 
         # radius=0 の場合は常に中心座標を返す（計算省略）
         if zone.radius == 0.0:
@@ -821,7 +822,7 @@ class BattleSimulator(
         map_min, map_max = self.map_bounds
         field_center = (map_min + map_max) / 2.0
 
-        rng = np.random.default_rng()
+        rng = new_numpy_rng()
         for team_id, units in team_units.items():
             zone = zone_map[team_id]
 
@@ -881,7 +882,7 @@ class BattleSimulator(
         cell_size = (map_max - map_min) / n
 
         obstacles: list[Obstacle] = []
-        rng = np.random.default_rng()
+        rng = new_numpy_rng()
         obs_counter = 0
 
         for i in range(n):
