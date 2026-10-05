@@ -181,12 +181,12 @@ class ReportGenerator:
         for file_path in existing:
             with file_path.open(encoding="utf-8") as f:
                 data = json.load(f)
-            self._process_file(data, report)
+            self.add_result(data, report)
 
         return report
 
-    def _process_file(self, data: dict[str, Any], report: Report) -> None:
-        """1ファイル分のデータをレポートに積算する."""
+    def add_result(self, data: dict[str, Any], report: Report) -> None:
+        """1戦分の結果（`win_loss` と `logs` を持つ dict）をレポートに積算する."""
         # 勝敗集計
         win_loss = data.get("win_loss", "UNKNOWN")
         report.win_counts[win_loss] = report.win_counts.get(win_loss, 0) + 1
