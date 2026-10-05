@@ -32,7 +32,8 @@ DB の読み書きとフェーズ制御だけを持つ。本番バッチの挙�
 | `snapshot_to_mobile_suit(snapshot)` | `BattleEntry.mobile_suit_snapshot` から `MobileSuit` を組み立てる |
 | `prepare_battle_units(player_snapshot, enemy_snapshots)` | 先頭をプレイヤー機、残りを敵機にする。`team_id` が無いユニットにはユニット ID を入れる |
 | `run_battle(player_unit, enemy_units, conditions, max_steps)` | `BattleSimulator` を決着まで（最大 `max_steps`）回し、`BattleOutcome` を返す |
-| `build_result_view_fields(entry_unit, units, simulator)` | `BattleResult` の `player_info`・`enemies_info`・`obstacles_info`・`map_bounds` を組み立てる |
+| `build_unit_view_fields(entry_unit, units)` | `BattleResult` の `player_info`・`enemies_info` を組み立てる。プレイヤーごとに値が変わる |
+| `build_battlefield_view_fields(simulator)` | `BattleResult` の `obstacles_info`・`map_bounds` を組み立てる。ルーム内で共通のため、本番バッチはプレイヤーのループの外で1回だけ呼ぶ |
 | `resolve_team_id(unit)` / `alive_team_ids(units)` | チームの解決と、生き残ったチームの集合 |
 
 `BattleOutcome` は `simulator`・`player_win`・`kills`（プレイヤー機自身の撃墜数）・`steps_used` を持つ。

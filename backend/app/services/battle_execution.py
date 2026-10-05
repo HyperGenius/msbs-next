@@ -134,27 +134,30 @@ def run_battle(
     )
 
 
-def build_result_view_fields(
-    entry_unit: MobileSuit,
-    units: list[MobileSuit],
-    simulator: BattleSimulator,
-) -> dict[str, Any]:
-    """`BattleResult` の表示用フィールドを組み立てる.
+def build_battlefield_view_fields(simulator: BattleSimulator) -> dict[str, Any]:
+    """`BattleResult` の `obstacles_info`・`map_bounds` を組み立てる.
 
-    返す dict のキーは `player_info`・`enemies_info`・`obstacles_info`・
-    `map_bounds` である。
+    ルーム内の全プレイヤーで同じ値になる。
+    """
+    return {
+        "obstacles_info": serialize_obstacles(simulator.obstacles),
+        "map_bounds": list(simulator.map_bounds),
+    }
+
+
+def build_unit_view_fields(
+    entry_unit: MobileSuit, units: list[MobileSuit]
+) -> dict[str, Any]:
+    """`BattleResult` の `player_info`・`enemies_info` を組み立てる.
 
     Args:
         entry_unit: 結果を受け取るプレイヤーの機体。`player_info` になる。
         units: 戦闘に参加した全ユニット。`entry_unit` と ID が同じユニットを
             除いて `enemies_info` にする。
-        simulator: 戦闘を実行したシミュレーター。障害物とマップ範囲を読む。
     """
     return {
         "player_info": entry_unit.model_dump(),
         "enemies_info": [
             u.model_dump() for u in units if str(u.id) != str(entry_unit.id)
         ],
-        "obstacles_info": serialize_obstacles(simulator.obstacles),
-        "map_bounds": list(simulator.map_bounds),
     }

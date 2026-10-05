@@ -6,7 +6,8 @@ from app.engine.battle_utils import serialize_obstacles
 from app.models.models import MobileSuit, Vector3, Weapon
 from app.services.battle_execution import (
     alive_team_ids,
-    build_result_view_fields,
+    build_battlefield_view_fields,
+    build_unit_view_fields,
     prepare_battle_units,
     resolve_team_id,
     run_battle,
@@ -144,20 +145,28 @@ def test_run_battle_judges_by_player_team() -> None:
     assert win.kills == 0
 
 
-# --- build_result_view_fields ---
+# --- 表示用フィールド ---
 
 
-def test_build_result_view_fields_splits_player_and_enemies() -> None:
+def test_build_unit_view_fields_splits_player_and_enemies() -> None:
     """結果を受け取るユニットを player_info、残りを enemies_info にする."""
     player, enemies = prepare_battle_units(
         _snapshot("Hero"), [_snapshot("Rival"), _snapshot("NPC")]
     )
-    simulator = run_battle(player, enemies, max_steps=0).simulator
     entry_unit = enemies[0].model_copy()
 
-    fields = build_result_view_fields(entry_unit, [player, *enemies], simulator)
+    fields = build_unit_view_fields(entry_unit, [player, *enemies])
 
     assert fields["player_info"] == entry_unit.model_dump()
     assert [e["name"] for e in fields["enemies_info"]] == ["Hero", "NPC"]
+
+
+def test_build_battlefield_view_fields_reads_simulator() -> None:
+    """障害物とマップ範囲をシミュレーターから組み立てる."""
+    player, enemies = prepare_battle_units(_snapshot("Hero"), [_snapshot("Enemy")])
+    simulator = run_battle(player, enemies, max_steps=0).simulator
+
+    fields = build_battlefield_view_fields(simulator)
+
     assert fields["obstacles_info"] == serialize_obstacles(simulator.obstacles)
     assert fields["map_bounds"] == list(simulator.map_bounds)

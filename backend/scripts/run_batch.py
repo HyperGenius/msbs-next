@@ -35,7 +35,8 @@ from app.services.battle_digest_service import compute_battle_digest_fields
 from app.services.battle_execution import (
     DEFAULT_MAX_STEPS,
     alive_team_ids,
-    build_result_view_fields,
+    build_battlefield_view_fields,
+    build_unit_view_fields,
     prepare_battle_units,
     resolve_team_id,
     run_battle,
@@ -152,6 +153,7 @@ def _save_battle_results(
     # ダイジェスト集計にはシミュレーションで実際に更新された live なユニットを使う
     all_units = [player_unit, *enemy_units]
     live_units_by_id = {str(u.id): u for u in all_units}
+    battlefield_fields = build_battlefield_view_fields(simulator)
 
     # バトルログをルーム単位で1件保存（全参加者で共有）
     #
@@ -236,9 +238,7 @@ def _save_battle_results(
 
         # player_info はエントリー時点、enemies_info は戦闘後の状態を保存する。
         entry_unit_for_info = snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
-        view_fields = build_result_view_fields(
-            entry_unit_for_info, all_units, simulator
-        )
+        unit_fields = build_unit_view_fields(entry_unit_for_info, all_units)
 
         # 戦闘ダイジェスト（一言ログ）を生成する（Issue #415）
         # live_units_by_id から取れない場合（テスト等）はHPが不明なため pre-battle
@@ -276,7 +276,8 @@ def _save_battle_results(
             level_up=level_up,
             is_read=False,
             loot=[item.model_dump() for item in loot],
-            **view_fields,
+            **unit_fields,
+            **battlefield_fields,
             **digest_fields,
         )
         session.add(battle_result)
