@@ -7,7 +7,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from app.engine.battle_utils import en_log_details
+from app.engine.battle_utils import en_log_details, is_melee_weapon
 from app.engine.combat import has_los
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
@@ -18,6 +18,10 @@ from app.engine.constants import (
     DEFAULT_BOOST_EN_COST,
     DEFAULT_BOOST_MAX_DURATION,
     DEFAULT_BOOST_SPEED_MULTIPLIER,
+    DISENGAGE_LATERAL_ANGLE_DEG,
+    DISENGAGE_REENTRY_FLANK_COEFF,
+    DISENGAGE_REENTRY_FLANK_OFFSET,
+    DISENGAGE_REPULSION_COEFF,
     EN_DEPLETED_REASON_CODE,
     ENEMY_MIN_SEPARATION,
     ENEMY_SEPARATION_COEFF,
@@ -270,6 +274,16 @@ class MovementMixin:
         force = self._engagement_spring(pos_unit, pos_target, engagement, coeff)
         if float(np.dot(force, pos_target - pos_unit)) >= 0.0:
             return force
+        return self._suppress_boundary_approach(pos_unit, force)
+
+    def _suppress_boundary_approach(
+        self, pos_unit: np.ndarray, force: np.ndarray
+    ) -> np.ndarray:
+        """`BOUNDARY_MARGIN` 以内で、境界へ向かう力の成分を消して返す.
+
+        敵から離れる力に使う。`_boundary_repulsion()` だけでは境界の外へ押し出される。
+        """
+        force = force.copy()
         map_min, map_max = self.map_bounds  # type: ignore[attr-defined]
         for axis in (0, 2):
             if pos_unit[axis] - map_min < BOUNDARY_MARGIN and force[axis] < 0.0:
@@ -452,6 +466,20 @@ class MovementMixin:
         if target is not None:
             selected = self._select_weapon_fuzzy(unit, target)  # type: ignore[attr-defined]
             if selected is not None:
+                # 射撃優先中は、再使用待ちの射撃武器を基準に残す。
+                # 格闘武器を基準にすると、撃つたびに格闘の間合いへ詰めてしまう。
+                if is_melee_weapon(selected) and self._prefers_ranged(str(unit.id)):  # type: ignore[attr-defined]
+                    waiting = next(
+                        (
+                            w
+                            for w in unit.weapons
+                            if not is_melee_weapon(w)
+                            and self._cooldown_only_remaining_sec(unit, w) is not None  # type: ignore[attr-defined]
+                        ),
+                        None,
+                    )
+                    if waiting is not None:
+                        return waiting
                 return selected
 
         usable_weapons = [
@@ -506,12 +534,16 @@ class MovementMixin:
         up = np.array([0.0, 1.0, 0.0])
         tangent = np.cross(up, radial_vec / dist)  # 正規化済みの接線ベクトル
 
-        # ユニット ID の決定論的ハッシュで旋回方向を固定 (-1 or +1)
-        # hash() は session ごとに変わるため UUID 文字列の数値変換を使用
-        uid_int = int(str(unit.id).replace("-", ""), 16)
-        direction = 1 if uid_int % 2 == 0 else -1
+        return STRAFE_ATTRACTION_COEFF * self._unit_side_sign(unit) * tangent
 
-        return STRAFE_ATTRACTION_COEFF * direction * tangent
+    @staticmethod
+    def _unit_side_sign(unit: MobileSuit) -> int:
+        """ユニットごとに固定の左右（+1 / -1）を返す.
+
+        `hash()` はプロセスごとに変わるため、UUID 文字列を数値に変換して使う。
+        """
+        uid_int = int(str(unit.id).replace("-", ""), 16)
+        return 1 if uid_int % 2 == 0 else -1
 
     def _obstacle_repulsion(self, pos_unit: np.ndarray) -> np.ndarray:
         """障害物への斥力ベクトルを返す (Phase A — LOS システム)."""
@@ -534,6 +566,76 @@ class MovementMixin:
             dist = float(np.linalg.norm(vec_away))
             if dist > 0:
                 force += 2.0 * vec_away / dist
+        return force
+
+    def _disengage_force(
+        self, unit: MobileSuit, pos_unit: np.ndarray, target: MobileSuit | None
+    ) -> np.ndarray:
+        """仕切り直しの力を返す. ターゲットから離れる向きを横へ傾ける.
+
+        真後ろに下がると、追ってくる相手との距離が開かないため。
+        横の向きは `_unit_side_sign()` で固定し、毎ステップ左右が入れ替わらないようにする。
+        """
+        if target is None:
+            return np.zeros(3)
+        away = pos_unit - target.position.to_numpy()
+        away[1] = 0.0
+        dist = float(np.linalg.norm(away))
+        away = away / dist if dist > 1e-6 else np.array([1.0, 0.0, 0.0])
+        lateral = np.cross(np.array([0.0, 1.0, 0.0]), away) * self._unit_side_sign(unit)
+        angle = math.radians(DISENGAGE_LATERAL_ANGLE_DEG)
+        force = DISENGAGE_REPULSION_COEFF * (
+            math.cos(angle) * away + math.sin(angle) * lateral
+        )
+        return self._suppress_boundary_approach(pos_unit, force)
+
+    def _needs_flank_reentry(self, unit: MobileSuit) -> bool:
+        """射撃武器の無い機体が、仕切り直しの後に再突入する期間かを返す."""
+        resources = self.unit_resources[str(unit.id)]  # type: ignore[attr-defined]
+        return (
+            resources.get("disengage") is None
+            and float(self.elapsed_time) < resources.get("ranged_preference_until", 0.0)  # type: ignore[attr-defined]
+            and all(is_melee_weapon(w) for w in unit.weapons)
+        )
+
+    def _reentry_flank_attraction(
+        self, pos_unit: np.ndarray, target: MobileSuit
+    ) -> np.ndarray:
+        """ターゲットの側面への引力を返す.
+
+        ターゲットの胴体の向きに対して、自機に近い側の側面を目指す。
+        """
+        pos_target = target.position.to_numpy()
+        heading = self.unit_resources[str(target.id)].get("body_heading_deg", 0.0)  # type: ignore[attr-defined]
+        side_rad = math.radians(heading + 90.0)
+        side = np.array([math.cos(side_rad), 0.0, math.sin(side_rad)])
+        if float(np.dot(pos_unit - pos_target, side)) < 0.0:
+            side = -side
+        vec = pos_target + side * DISENGAGE_REENTRY_FLANK_OFFSET - pos_unit
+        vec[1] = 0.0
+        dist = float(np.linalg.norm(vec))
+        if dist < 1e-6:
+            return np.zeros(3)
+        return DISENGAGE_REENTRY_FLANK_COEFF * vec / dist
+
+    def _maneuver_forces(
+        self,
+        unit: MobileSuit,
+        pos_unit: np.ndarray,
+        target: MobileSuit,
+        current_action: str,
+        reference_weapon: Weapon | None,
+        dt: float,
+    ) -> np.ndarray:
+        """ターゲットの周りを回る力（フランキング・ストレイフ・再突入の回り込み）を返す."""
+        force = np.zeros(3)
+        if current_action not in ("ATTACK", "MOVE"):
+            return force
+        force += self._flanking_attraction(unit, target, dt)
+        if current_action == "ATTACK":
+            force += self._strafe_attraction(unit, target, reference_weapon)
+        if self._needs_flank_reentry(unit):
+            force += self._reentry_flank_attraction(pos_unit, target)
         return force
 
     def _calculate_potential_field(
@@ -589,6 +691,10 @@ class MovementMixin:
         if current_action == "HIT_AND_AWAY":
             total_force += self._hit_and_away_target_repulsion(pos_unit, target)
 
+        # 2c. DISENGAGE: ターゲットから斜め後ろへ下がる
+        if current_action == "DISENGAGE":
+            total_force += self._disengage_force(unit, pos_unit, target)
+
         # 3. 高脅威敵（自機射程外）への斥力
         weapon_range = float(reference_weapon.range) if reference_weapon else 0.0
         total_force += self._threat_enemy_repulsion(unit, pos_unit, weapon_range)
@@ -614,12 +720,11 @@ class MovementMixin:
         # 7. 障害物への斥力 (Phase A — LOS システム)
         total_force += self._obstacle_repulsion(pos_unit)
 
-        # 8. フランキング引力・ストレイフ引力（ターゲット存在時のみ）
+        # 8. フランキング・ストレイフ・再突入の回り込み（ターゲット存在時のみ）
         if target is not None:
-            if current_action in ("ATTACK", "MOVE"):
-                total_force += self._flanking_attraction(unit, target, dt)
-            if current_action == "ATTACK":
-                total_force += self._strafe_attraction(unit, target, reference_weapon)
+            total_force += self._maneuver_forces(
+                unit, pos_unit, target, current_action, reference_weapon, dt
+            )
 
         # 正規化 — ゼロベクトル時はランダム方向でローカルミニマムを回避
         total_force[1] = 0.0  # Y 成分を XZ 平面に固定
@@ -795,7 +900,6 @@ class MovementMixin:
         boost_max_duration = getattr(
             actor, "boost_max_duration", DEFAULT_BOOST_MAX_DURATION
         )
-        boost_cooldown = getattr(actor, "boost_cooldown", DEFAULT_BOOST_COOLDOWN)
         boost_elapsed = resources.get("boost_elapsed", 0.0)
         current_en = resources.get("current_en", 0.0)
 
@@ -870,12 +974,39 @@ class MovementMixin:
         if cancel_reason is None:
             return False
 
-        # ブースト終了処理
-        resources["is_boosting"] = False
-        resources["boost_cooldown_remaining"] = boost_cooldown
-
-        self._log_boost_end(actor, cancel_reason, reason_code, current_en)
+        self._end_boost(actor, cancel_reason, reason_code)
         return True
+
+    def _start_boost(self, actor: MobileSuit) -> None:
+        """ブーストを開始して BOOST_START ログを記録する."""
+        resources = self.unit_resources[str(actor.id)]  # type: ignore[attr-defined]
+        resources["is_boosting"] = True
+        resources["boost_elapsed"] = 0.0
+        self.logs.append(  # type: ignore[attr-defined]
+            BattleLog(
+                timestamp=float(self.elapsed_time),  # type: ignore[attr-defined]
+                actor_id=actor.id,
+                action_type="BOOST_START",
+                message=(
+                    f"{self._format_actor_name(actor)} がブーストダッシュを開始した！"  # type: ignore[attr-defined]
+                ),
+                position_snapshot=actor.position,
+                details=en_log_details(resources["current_en"]),
+            )
+        )
+
+    def _end_boost(
+        self, actor: MobileSuit, cancel_reason: str, reason_code: str | None = None
+    ) -> None:
+        """ブーストを終えて再使用待ちを始め、BOOST_END ログを記録する."""
+        resources = self.unit_resources[str(actor.id)]  # type: ignore[attr-defined]
+        resources["is_boosting"] = False
+        resources["boost_cooldown_remaining"] = getattr(
+            actor, "boost_cooldown", DEFAULT_BOOST_COOLDOWN
+        )
+        self._log_boost_end(
+            actor, cancel_reason, reason_code, resources.get("current_en", 0.0)
+        )
 
     def _log_boost_end(
         self,

@@ -412,6 +412,12 @@ class BattleSimulator(
                 "flanking_skill_level": 0,  # フランキングスキルレベル (Phase E-3.5)
                 "active_weapon_id": None,  # 現在の手持ち武器ID
                 "weapon_switch_lock_remaining_sec": 0.0,  # 持ち替え中の残り行動不能タイム
+                "engagement": None,  # 現在のターゲットとの交戦記録 (EngagementRecord)
+                "disengage": None,  # 実行中の仕切り直し (DisengageState)
+                "disengage_cooldown_until": 0.0,  # 次の仕切り直しを始められる時刻 (s)
+                "ranged_preference_until": 0.0,  # 射撃武器を優先する期限の時刻 (s)
+                "last_attack_exchange_at": 0.0,  # 最後に攻撃した・された時刻 (s)
+                "idle_stalemate_until": 0.0,  # 撃たない膠着とみなし続ける期限の時刻 (s)
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:

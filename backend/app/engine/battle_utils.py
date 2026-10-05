@@ -5,7 +5,7 @@ import random
 from typing import TYPE_CHECKING, Any
 
 from app.core.npc_data import BATTLE_CHATTER
-from app.models.models import BattleLog, MobileSuit
+from app.models.models import BattleLog, MobileSuit, Weapon
 
 if TYPE_CHECKING:
     from app.models.models import Obstacle
@@ -34,6 +34,14 @@ def serialize_obstacles(obstacles: "list[Obstacle]") -> list[dict[str, Any]] | N
         }
         for obs in obstacles
     ]
+
+
+def is_melee_weapon(weapon: Weapon) -> bool:
+    """格闘武器かを返す. `weapon_type` と `is_melee` のどちらかで判定する."""
+    return (
+        getattr(weapon, "weapon_type", "RANGED") == "MELEE"
+        or getattr(weapon, "is_melee", False) is True
+    )
 
 
 def en_log_details(current_en: float) -> dict[str, int]:
@@ -81,7 +89,7 @@ class BattleUtilsMixin:
 
         Args:
             unit: ユニット
-            chatter_type: セリフの種類 (attack/hit/destroyed/miss)
+            chatter_type: セリフの種類 (attack/hit/destroyed/miss/disengage)
 
         Returns:
             str | None: セリフ。NPCでない場合や確率で発言しない場合はNone

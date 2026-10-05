@@ -487,3 +487,34 @@ FLANKING_ACTIVATION_PROBS: dict[int, float] = {
     2: 0.60,  # Lv.2: 60%（ベテラン）
     3: 0.90,  # Lv.3: 90%（エース級）
 }
+
+# 交戦記録と仕切り直し（DISENGAGE）の定数。値はすべて暫定で、調整は総合バランス調整で行う。
+# 相手がこの距離 (m) 以内に入ったら交戦記録を始める。
+ENGAGEMENT_RECORD_RANGE: float = 250.0
+# 交戦記録の距離の外にこの時間 (s) いたら記録を捨てる。
+ENGAGEMENT_RECORD_RESET_SEC: float = 5.0
+# 膠着度が最大になる自分の攻撃回数と経過時間 (s)。どちらも自分の最後の命中から数える。
+STALEMATE_FULL_ATTACKS: int = 3
+STALEMATE_FULL_ELAPSED_SEC: float = 5.0
+# 優勢度の絶対値がこの値以下なら互角とみなす。上限で膠着度を 0 にする。
+STALEMATE_DOMINANCE_EVEN: float = 0.15
+STALEMATE_DOMINANCE_LIMIT: float = 0.3
+# 両機が攻撃しないままこの時間 (s) が過ぎたら、撃たない膠着とみなす。
+IDLE_STALEMATE_SEC: float = 10.0
+# 仕切り直しの後退の向き。真後ろからこの角度 (度) だけ横へずらす。
+DISENGAGE_LATERAL_ANGLE_DEG: float = 35.0
+DISENGAGE_REPULSION_COEFF: float = 4.0
+# 仕切り直しの目標距離 (m)。射撃武器が無い機体は下限まで下がる。
+DISENGAGE_DISTANCE_MIN: float = 150.0
+DISENGAGE_DISTANCE_MAX: float = 300.0
+# 目標距離に着かなくても、この時間 (s) で仕切り直しを終える。
+DISENGAGE_MAX_SEC: float = 3.0
+# 仕切り直しの後、射撃武器を優先する時間 (s)。命中させたらその時点で終える。
+DISENGAGE_RANGED_PREFERENCE_SEC: float = 5.0
+# 仕切り直しを終えてから、次の仕切り直しを始められるまでの時間 (s)。
+DISENGAGE_COOLDOWN_SEC: float = 5.0
+# 射撃武器の無い機体が再突入するとき、ターゲットの側面のどこを目指すか (m)。
+DISENGAGE_REENTRY_FLANK_OFFSET: float = 100.0
+DISENGAGE_REENTRY_FLANK_COEFF: float = 2.0
+# 撃たない膠着とみなした後、撤退先の無い RETREAT を攻撃に変える時間 (s)。
+IDLE_STALEMATE_ATTACK_SEC: float = 5.0

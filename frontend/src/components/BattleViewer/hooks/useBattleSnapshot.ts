@@ -17,6 +17,9 @@ const TIMESTAMP_EPSILON = 1e-9;
  */
 const MAX_VELOCITY_EXTRAPOLATION_SECONDS = 1.0;
 
+/** DISENGAGE ログの後、機体の上に「仕切り直し」を出す時間（秒）。 */
+const DISENGAGE_INDICATOR_SECONDS = 1.5;
+
 /** 角度を最短回転方向で線形補間する（度数法） */
 function lerpAngle(from: number, to: number, t: number): number {
     const diff = ((to - from + 180) % 360) - 180;
@@ -64,6 +67,8 @@ interface SnapshotCacheEntry {
     lastVelocityTs?: number;
     /** 直近（currentTimestamp以下）の自ユニットのATTACK発生時刻。クールダウン判定用（未攻撃時は -Infinity） */
     lastAttackTimestamp: number;
+    /** 直近（currentTimestamp以下）の自ユニットの DISENGAGE 発生時刻（未発生時は -Infinity） */
+    lastDisengageTimestamp: number;
 }
 
 /** targetId（+任意のサフィックス）ごとに SnapshotCacheEntry を保持するキャッシュ */
@@ -90,6 +95,7 @@ function createInitialEntry(initialMs: MobileSuit, logs: BattleLog[]): SnapshotC
         // 「直近0秒に攻撃した」とみなされクールダウン警告が誤表示されるため、
         // 「まだ攻撃していない」ことを表す -Infinity で初期化する
         lastAttackTimestamp: -Infinity,
+        lastDisengageTimestamp: -Infinity,
     };
 }
 
@@ -178,6 +184,7 @@ export function getBattleSnapshot(
             }
             if (log.action_type === "BOOST_START") entry.isBoosting = true;
             if (log.action_type === "BOOST_END") entry.isBoosting = false;
+            if (log.action_type === "DISENGAGE") entry.lastDisengageTimestamp = log.timestamp;
         }
 
         // リソース消費・クールダウン基準時刻の更新: log.weapon_id から実際に使用した武器を特定する
@@ -249,6 +256,10 @@ export function getBattleSnapshot(
     const cooldownSeconds = (firstWeapon?.cool_down_turn || 0) * 0.1;
     if (cooldownSeconds > 0 && currentTimestamp - entry.lastAttackTimestamp < cooldownSeconds) {
         warnings.push('cooldown');
+    }
+
+    if (currentTimestamp - entry.lastDisengageTimestamp < DISENGAGE_INDICATOR_SECONDS) {
+        warnings.push('disengage');
     }
 
     if (cache) cache.set(cacheKey, entry);

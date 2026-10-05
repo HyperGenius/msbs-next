@@ -152,7 +152,8 @@ export function MobileSuitMesh({
     // 警告アイコンのマッピング
     const warningIcons: Record<WarningType, { icon: string; color: string; label: string }> = {
         ammo: { icon: '⚠️', color: '#ff9800', label: '弾切れ' },
-        cooldown: { icon: '⏳', color: '#2196f3', label: 'クールダウン' }
+        cooldown: { icon: '⏳', color: '#2196f3', label: 'クールダウン' },
+        disengage: { icon: '↩', color: '#6fe6ff', label: '仕切り直し' },
     };
 
     return (

@@ -49,6 +49,7 @@ from app.engine.constants import (
     TERRAIN_ADAPTABILITY_HIT_BONUS,
     get_weapon_slot_role_for_weapon,
 )
+from app.engine.engagement import record_attack
 from app.models.models import (
     DEFAULT_AIM_DISTRIBUTION,
     BattleLog,
@@ -619,6 +620,7 @@ class CombatMixin:
         # 攻撃時のセリフ生成
         attack_chatter = self._generate_chatter(actor, "attack")  # type: ignore[attr-defined]
 
+        hp_before = target.current_hp
         if is_hit:
             self._process_hit(
                 actor,
@@ -647,7 +649,33 @@ class CombatMixin:
                 en_details=en_details,
                 minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
+        # 格闘コンボと LUK による完全回避を含めるため、HP の差をダメージとする。
+        self._record_attack_exchange(
+            actor, target, hp_before - max(0, target.current_hp)
+        )
         return True
+
+    def _record_attack_exchange(
+        self, actor: MobileSuit, target: MobileSuit, damage: int
+    ) -> None:
+        """攻撃 1 回を両機の交戦記録に加え、最後に攻撃した・された時刻を更新する.
+
+        ダメージを与えた側は、仕切り直しの後の射撃優先を終える。
+        """
+        actor_resources = self.unit_resources[str(actor.id)]  # type: ignore[attr-defined]
+        target_resources = self.unit_resources[str(target.id)]  # type: ignore[attr-defined]
+        record_attack(
+            actor_resources.get("engagement"),
+            target_resources.get("engagement"),
+            str(actor.id),
+            str(target.id),
+            damage,
+            self.elapsed_time,  # type: ignore[attr-defined]
+        )
+        actor_resources["last_attack_exchange_at"] = self.elapsed_time  # type: ignore[attr-defined]
+        target_resources["last_attack_exchange_at"] = self.elapsed_time  # type: ignore[attr-defined]
+        if damage > 0:
+            actor_resources["ranged_preference_until"] = 0.0
 
     def _is_fire_arc_blocked(
         self,

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from app.engine.battle_utils import is_melee_weapon
 from app.engine.calculator import PilotStats, calculate_weapon_switch_lock_sec
 from app.engine.combat import has_los
 from app.engine.constants import (
@@ -583,6 +584,12 @@ class TargetingMixin:
         if not usable_weapons:
             return None
 
+        # 仕切り直しの後は射撃武器から選ぶ。使える射撃武器が無ければ格闘武器も選ぶ。
+        if self._prefers_ranged(str(actor.id)):  # type: ignore[attr-defined]
+            usable_ranged = [w for w in usable_weapons if not is_melee_weapon(w)]
+            if usable_ranged:
+                usable_weapons = usable_ranged
+
         unit_id = str(actor.id)
         resources = self.unit_resources[unit_id]  # type: ignore[attr-defined]
 
@@ -686,6 +693,28 @@ class TargetingMixin:
             return 1.0
         return min(distance / optimal_range, _WEAPON_SELECTION_MAX_RANGE_RATIO)
 
+    def _balanced_should_switch(
+        self, unit_id: str, active_weapon: Weapon | None, candidate: Weapon
+    ) -> bool:
+        """BALANCED（おまかせ）で持ち替えるかを返す.
+
+        期待効果が拘束コストに見合う場合だけ持ち替える。
+        射撃優先中は格闘武器から必ず持ち替える。射撃武器しか候補に無く、
+        格闘武器のスコアが無いため、スコア差では判断できない。
+        """
+        if (
+            active_weapon is not None
+            and is_melee_weapon(active_weapon)
+            and self._prefers_ranged(unit_id)  # type: ignore[attr-defined]
+        ):
+            return True
+        scores = self._weapon_score_cache.get(unit_id, {})
+        active_score = (
+            scores.get(str(active_weapon.id), 0.0) if active_weapon is not None else 0.0
+        )
+        candidate_score = scores.get(str(candidate.id), 0.0)
+        return candidate_score - active_score >= WEAPON_SWITCH_BALANCED_SCORE_MARGIN
+
     def _select_weapon_with_switch_policy(
         self, actor: MobileSuit, target: MobileSuit
     ) -> Weapon | None:
@@ -757,13 +786,9 @@ class TargetingMixin:
         elif policy == WEAPON_SWITCH_POLICY_AGGRESSIVE:
             should_switch = True
         else:
-            # BALANCED（おまかせ）: 期待効果が拘束コストに見合う場合のみ持ち替える
-            scores = self._weapon_score_cache.get(unit_id, {})
-            active_score = scores.get(str(active_weapon_id), 0.0)
-            candidate_score = scores.get(str(fuzzy_best.id), 0.0)
-            should_switch = (
-                candidate_score - active_score
-            ) >= WEAPON_SWITCH_BALANCED_SCORE_MARGIN
+            should_switch = self._balanced_should_switch(
+                unit_id, active_weapon, fuzzy_best
+            )
 
         if not should_switch:
             return active_weapon if active_usable else None

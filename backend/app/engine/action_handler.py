@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from app.engine.battle_utils import en_log_details
+from app.engine.battle_utils import is_melee_weapon
 from app.engine.constants import MELEE_BOOST_ARRIVAL_RANGE, POST_MELEE_DISTANCE
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 
@@ -59,20 +59,15 @@ class ActionHandlerMixin:
         if weapon is None:
             weapon = self._resolve_fallback_weapon(actor, unit_id)
 
-        if current_action == "ATTACK":
-            self._handle_attack_action(
-                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
-            )
-        elif current_action == "ENGAGE_MELEE":
-            self._handle_engage_melee_action(
-                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
-            )
-        elif current_action == "BOOST_DASH":
-            self._handle_boost_dash_action(
-                actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
-            )
-        elif current_action == "HIT_AND_AWAY":
-            self._handle_hit_and_away_action(
+        handler = {
+            "ATTACK": self._handle_attack_action,
+            "ENGAGE_MELEE": self._handle_engage_melee_action,
+            "BOOST_DASH": self._handle_boost_dash_action,
+            "HIT_AND_AWAY": self._handle_hit_and_away_action,
+            "DISENGAGE": self._handle_disengage_action,
+        }.get(current_action)
+        if handler is not None:
+            handler(
                 actor, target, weapon, pos_actor, pos_target, diff_vector, distance, dt
             )
         else:
@@ -201,6 +196,34 @@ class ActionHandlerMixin:
             )
             self.unit_resources[unit_id]["current_action"] = "HIT_AND_AWAY"  # type: ignore[attr-defined]
 
+    def _handle_disengage_action(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        weapon: object,
+        pos_actor: np.ndarray,
+        pos_target: np.ndarray,
+        diff_vector: np.ndarray,
+        distance: float,
+        dt: float,
+    ) -> None:
+        """仕切り直し行動処理: 射撃武器が射程内なら撃ち、ターゲットから離れる.
+
+        格闘武器では攻撃しない。ブーストは最大継続時間か EN 枯渇で終える。
+        ブーストの終了判定にはターゲットを渡さない。ターゲットに近いと終える条件が、
+        後退と食い違うため。
+        """
+        if (
+            isinstance(weapon, Weapon)
+            and not is_melee_weapon(weapon)
+            and distance <= weapon.range
+        ):
+            self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
+        self._check_boost_cancel(actor, None, dt)  # type: ignore[attr-defined]
+        self._process_movement(  # type: ignore[attr-defined]
+            actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+        )
+
     def _handle_boost_dash_action(
         self,
         actor: MobileSuit,
@@ -219,21 +242,7 @@ class ActionHandlerMixin:
         cooldown_remaining = resources.get("boost_cooldown_remaining", 0.0)
 
         if not is_boosting and cooldown_remaining <= 0.0:
-            # ブースト開始
-            resources["is_boosting"] = True
-            resources["boost_elapsed"] = 0.0
-            self.logs.append(  # type: ignore[attr-defined]
-                BattleLog(
-                    timestamp=float(self.elapsed_time),  # type: ignore[attr-defined]
-                    actor_id=actor.id,
-                    action_type="BOOST_START",
-                    message=(
-                        f"{self._format_actor_name(actor)} がブーストダッシュを開始した！"  # type: ignore[attr-defined]
-                    ),
-                    position_snapshot=actor.position,
-                    details=en_log_details(resources["current_en"]),
-                )
-            )
+            self._start_boost(actor)  # type: ignore[attr-defined]
 
         # ブーストキャンセル判定
         cancelled = self._check_boost_cancel(actor, target, dt)  # type: ignore[attr-defined]
