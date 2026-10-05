@@ -207,7 +207,7 @@ IF hp_ratio IS HIGH AND distance_to_nearest_enemy IS CLOSE THEN action IS ENGAGE
 |---|---|---|
 | `MELEE_RANGE` | `50 m` | 格闘武器の有効射程（外部パラメータ化済み） |
 | `MELEE_BOOST_ARRIVAL_RANGE` | `MELEE_RANGE × 2 = 100 m` | BOOST_DASH の到達目標距離。ここでブースト終了し格闘へ移行 |
-| `POST_MELEE_DISTANCE` | `10 m` | 格闘攻撃命中後、自機がターゲットと保つ距離（外部パラメータ化済み） |
+| `POST_MELEE_DISTANCE` | `20 m`（= `MELEE_ENGAGEMENT_RANGE_MIN`） | 格闘攻撃後、自機をターゲットから離す距離（外部パラメータ化済み） |
 | `CLOSE_RANGE` | `200 m` | 遠距離武器の命中率ペナルティ / 近距離ボーナス開始 |
 | `DASH_TRIGGER_DISTANCE` | `800 m` | `ENGAGE_MELEE` のトリガー距離 |
 
@@ -540,16 +540,17 @@ LOS チェック成功 → 従来の命中判定へ
 5. 毎ステップ「3.6 ブーストキャンセル判定」を実行
    → 停止予想位置から遠距離射撃可能 → ブーストキャンセル、ATTACK（遠距離）へ遷移
 6. ターゲットが MELEE_BOOST_ARRIVAL_RANGE 内に入った → BOOST_DASH 終了
-7. ATTACK（格闘武器）へ遷移 → 命中時に POST_MELEE_DISTANCE（10m）まで接近配置
+7. ATTACK（格闘武器）へ遷移 → 攻撃したら POST_MELEE_DISTANCE（20m）の位置へ再配置
 ```
 
 **格闘攻撃後のポジショニング:**
 
-格闘命中後、自機をターゲットから `POST_MELEE_DISTANCE` の距離に強制的に再配置する。  
-これにより次のステップで再度格闘攻撃・コンボ継続が可能な状態を維持する。
+格闘攻撃（命中判定まで進んだ攻撃）の後、自機をターゲットから `POST_MELEE_DISTANCE` の距離に強制的に再配置する。  
+再使用待ちなどで攻撃しなかったステップでは再配置せず、ATTACK と同じ間合い制御で移動する（Issue #598）。  
+`POST_MELEE_DISTANCE` は格闘の目標交戦距離の下限（`MELEE_ENGAGEMENT_RANGE_MIN`）と同じ値で、敵との最小間隔（`ENEMY_MIN_SEPARATION`）より外側に置く。
 
 ```
-格闘命中後:
+格闘攻撃後:
   dir_away = normalize(pos_self - pos_target)
   pos_self  = pos_target + dir_away × POST_MELEE_DISTANCE
   velocity_vec = [0, 0, 0]  # 速度リセット（次ステップから再加速）
@@ -668,7 +669,7 @@ class Obstacle:
 # 距離定義（外部パラメータ化：constants.py から上書き可能）
 MELEE_RANGE: float = 50.0                           # 格闘武器の有効射程（m）
 MELEE_BOOST_ARRIVAL_RANGE: float = MELEE_RANGE * 2  # BOOST_DASH 終了距離（m）= 100.0
-POST_MELEE_DISTANCE: float = 10.0                   # 格闘命中後の対象との距離（m）
+POST_MELEE_DISTANCE: float = MELEE_ENGAGEMENT_RANGE_MIN  # 格闘攻撃後の対象との距離（m）= 20.0
 CLOSE_RANGE: float = 200.0                          # 近距離判定閾値（m）
 DASH_TRIGGER_DISTANCE: float = 800.0                # ENGAGE_MELEE トリガー距離（m）
 
@@ -778,7 +779,7 @@ RANGED_MID_ACCURACY_PENALTY: float = 0.7  # d <= CLOSE_RANGE
 | 障害物の配置生成 | 初期実装は静的定義のみ。ランダム生成はバックログへ（[issue_drafts/random-obstacle-placement.md](../issue_drafts/random-obstacle-placement.md)） |
 | LOS のパフォーマンス | 射撃武器の最大射程内ユニットのみに LOS チェックを限定し O(K×M) に削減（Section 7.2 `_get_units_in_weapon_range()`） |
 | コンボの BattleViewer 表現 | `combo_message` フィールドに `"2Combo 300ダメージ!!"`形式で格納、フロントエンドでコンボエフェクトを表示（Section 5.3.1） |
-| 格闘武器の射程定義 | BOOST_DASH 終了距離を `MELEE_RANGE × 2 = 100m` とし、格闘命中後は対象から `POST_MELEE_DISTANCE = 10m` に再配置。両定数は外部パラメータ化（Section 3.6, 8.1, 10） |
+| 格闘武器の射程定義 | BOOST_DASH 終了距離を `MELEE_RANGE × 2 = 100m` とし、格闘攻撃後は対象から `POST_MELEE_DISTANCE = 20m` に再配置（Issue #598 で 10m から変更）。両定数は外部パラメータ化（Section 3.6, 8.1, 10） |
 | 障害物の高さと 3D LOS | Y 軸を含む 3D Ray-Sphere 交差判定を採用。`Obstacle.position` は球体中心（3D座標）として扱う（Section 7.2） |
 | 移動 AI の基準武器（複数武器編成） | `unit.get_active_weapon()`（先頭武器固定）ではなく `_select_weapon_fuzzy()` の選択結果、または使用可能な武器のうち最大射程のものを基準とする（Section 6.6、Issue #393） |
 

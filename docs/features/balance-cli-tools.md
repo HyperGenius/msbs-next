@@ -329,6 +329,7 @@ python scripts/simulation/engagement_bench.py diff \
 | `ranged_gundam_zaku` | ガンダム［ビームライフル］ vs ザクII［ザクマシンガン］ | 1000m | BALANCED×BALANCED、RANGED×RANGED |
 | `ranged_gelgoog_gundam` | ゲルググ［ビームライフル］ vs ガンダム［ビームライフル］ | 1000m | BALANCED×BALANCED、RANGED×RANGED |
 | `melee_vs_ranged` | グフ［ヒートロッド＋ザクマシンガン］ vs ガンダム［ビームライフル］ | 1000m | BALANCED×BALANCED、MELEE×RANGED |
+| `melee_only_vs_ranged` | ガンダム［ビームサーベル］ vs ザクII［ザクマシンガン］ | 1000m | BALANCED×BALANCED、MELEE×RANGED |
 
 シナリオはスクリプト内の `SCENARIOS` で定義しています。両機のパイロットステータスは全項目 1 にそろえます。
 

@@ -204,6 +204,24 @@ STRAFE_MIN_RANGE_RATIO: float = (
     0.8  # 射程のこの割合以内のとき発動（0.8 = 射程の80%以内）
 )
 
+# 交戦距離（間合い）制御定数。値はすべて暫定で、調整は総合バランス調整で行う。
+ATTACK_TARGET_ATTRACTION_COEFF: float = 2.0  # ATTACK 中のターゲット引力係数
+CLOSEST_ENEMY_ATTRACTION_COEFF: float = 1.5  # MOVE 中の最寄りの敵への引力係数
+# 目標交戦距離に対する許容幅の割合（0.2 = ±20%）。
+ENGAGEMENT_RANGE_TOLERANCE_RATIO: float = 0.2
+# 許容幅の端での力の大きさ（引力係数に対する割合）。
+# 許容幅の中ではストレイフ（STRAFE_ATTRACTION_COEFF）より弱くし、周回を主にする。
+ENGAGEMENT_BAND_FORCE_RATIO: float = 0.25
+# 戦略モードごとの目標交戦距離の倍率。載っていないモードは 1.0 とする。
+ENGAGEMENT_RANGE_STRATEGY_MULTIPLIERS: dict[str, float] = {
+    "SNIPER": 1.2,
+    "ASSAULT": 0.8,
+}
+MELEE_ENGAGEMENT_RANGE_MIN: float = 20.0  # 格闘武器の目標交戦距離の下限 (m)
+# 敵ユニット同士の最小間隔 (m)。これより近いと強い斥力が働く。
+ENEMY_MIN_SEPARATION: float = 10.0
+ENEMY_SEPARATION_COEFF: float = 10.0  # 最小間隔の斥力係数（距離 0 での大きさ）
+
 # 戦略評価インターバル (Phase 4-2)
 STRATEGY_UPDATE_INTERVAL: int = 10  # 何ステップごとに戦略評価を行うか
 
@@ -298,7 +316,9 @@ EN_SHORTAGE_REASON_CODE: str = "EN_SHORTAGE"  # EN 不足で武器を使えず�
 EN_DEPLETED_REASON_CODE: str = "EN_DEPLETED"  # EN 枯渇でブーストが終了した
 
 # 近接戦闘システム定数 (Phase C)
-POST_MELEE_DISTANCE: float = 10.0  # 格闘命中後の再配置距離 (m)
+# 格闘攻撃後の再配置距離 (m)。格闘の目標交戦距離の下限に合わせる。
+# 敵との最小間隔より内側に置くと、再配置の直後に斥力で弾かれる。
+POST_MELEE_DISTANCE: float = MELEE_ENGAGEMENT_RANGE_MIN
 CLOSE_RANGE: float = 200.0  # 近距離定義 (m)
 DASH_TRIGGER_DISTANCE: float = 800.0  # ブーストダッシュ発動距離しきい値 (m)
 

@@ -537,24 +537,29 @@ class CombatMixin:
         distance: float,
         pos_actor: np.ndarray,
         weapon: Weapon | None = None,
-    ) -> None:
-        """攻撃処理を実行する."""
+    ) -> bool:
+        """攻撃処理を実行する.
+
+        Returns:
+            命中判定まで進んだ場合 True。武器が無い場合と、射撃弧・LOS・
+            リソース不足で攻撃しなかった場合は False。
+        """
         if weapon is None:
             weapon = actor.get_active_weapon()
         if not weapon:
-            return
+            return False
 
         snapshot = Vector3.from_numpy(pos_actor)
         unit_id = str(actor.id)
 
         # --- Phase 6-1: fire_arc_deg ゲートチェック ---
         if self._is_fire_arc_blocked(actor, target, weapon, pos_actor, snapshot):  # type: ignore[attr-defined]
-            return
+            return False
         resources = self.unit_resources[unit_id]  # type: ignore[attr-defined]
 
         # LOS チェック（格闘武器はスキップ、障害物がある場合のみ）
         if self._is_los_blocked(actor, target, weapon, pos_actor, snapshot):  # type: ignore[attr-defined]
-            return
+            return False
 
         # リソース状態を取得または初期化
         weapon_state = self._get_or_init_weapon_state(weapon, resources)
@@ -566,7 +571,7 @@ class CombatMixin:
 
         if not can_attack:
             self._log_attack_wait(actor, weapon, weapon_state, failure_reason, snapshot)
-            return
+            return False
 
         # 命中率計算
         hit_chance, distance_from_optimal, attack_sector = self._calculate_hit_chance(
@@ -642,6 +647,7 @@ class CombatMixin:
                 en_details=en_details,
                 minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
+        return True
 
     def _is_fire_arc_blocked(
         self,

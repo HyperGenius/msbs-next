@@ -118,27 +118,23 @@ def test_potential_field_move_attracts_to_nearest_enemy() -> None:
     assert direction[0] > 0, "MOVE 時に最近敵方向 (+x) への引力が働くこと"
 
 
-def test_potential_field_attack_no_attraction_without_target() -> None:
-    """ATTACK 行動でも target=None の場合は攻撃引力が 0 であること.
+def test_potential_field_attack_without_target_seeks_nearest_enemy() -> None:
+    """ATTACK 行動で target=None（索敵が外れた）なら、最近敵へ向かうこと.
 
-    current_action="ATTACK" かつ target=None の場合:
-    - ATTACK 引力ブロック: スキップ (target is None のため)
-    - MOVE/RETREAT 引力ブロック: スキップ (current_action が "ATTACK" のため)
-    → 脅威斥力・味方斥力・境界斥力のみが合成される。
+    ATTACK 引力は target が無いため加算されない。
+    代わりに MOVE と同じ最近敵への引力で探しに行く。
     """
-    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
+    # 2ユニット時の動的フィールドは 2000m なので中心 (1000, 1000) 付近を使用する
+    player = _make_unit("Player", "PLAYER", "PT", Vector3(x=800, y=0, z=1000))
     enemy = _make_unit(
-        "Enemy", "ENEMY", "ET", Vector3(x=3000, y=0, z=2500), weapon_power=10.0
+        "Enemy", "ENEMY", "ET", Vector3(x=1200, y=0, z=1000), weapon_power=10.0
     )
     sim = BattleSimulator(player, [enemy])
 
-    # ATTACK に設定するが target=None（MOVE attraction に変わる）
     sim.unit_resources[str(player.id)]["current_action"] = "ATTACK"
     direction = sim._calculate_potential_field(player, target=None)
 
-    # target=None では攻撃引力 2.0 は加算されない → MOVE 引力 0 のみ
-    # ゼロベクトルにならないことを確認（フォールバック）
-    assert np.linalg.norm(direction) > 0.99
+    assert direction[0] > 0, "最近敵方向 (+x) への引力が働くこと"
 
 
 def test_potential_field_returns_unit_vector() -> None:
@@ -701,8 +697,9 @@ def test_search_movement_no_log_when_distance_short() -> None:
 def test_potential_field_retreat_points_attract() -> None:
     """retreat_points が指定された場合に引力が働くこと."""
     player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
+    # 敵と重ねると、最小間隔の斥力が撤退ポイントへの引力を上回る。
     enemy = _make_unit(
-        "Enemy", "ENEMY", "ET", Vector3(x=2500, y=0, z=2500), weapon_power=1.0
+        "Enemy", "ENEMY", "ET", Vector3(x=2500, y=0, z=3500), weapon_power=1.0
     )
     sim = BattleSimulator(player, [enemy])
     sim.unit_resources[str(player.id)]["current_action"] = "RETREAT"

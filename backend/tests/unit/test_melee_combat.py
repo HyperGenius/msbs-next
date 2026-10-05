@@ -665,6 +665,32 @@ class TestProcessEngageMelee:
         velocity = sim.unit_resources[unit_id]["velocity_vec"]
         assert float(np.linalg.norm(velocity)) == pytest.approx(0.0)
 
+    def test_no_repositioning_while_cooling_down(self) -> None:
+        """再使用待ちで攻撃しなかったときは再配置せず、通常の移動にする."""
+        melee_w = _make_melee_weapon()
+        player = _make_unit(
+            "P", "PLAYER", "PT", Vector3(x=1000, y=0, z=1000), weapons=[melee_w]
+        )
+        enemy = _make_unit("E", "ENEMY", "ET", Vector3(x=1080, y=0, z=1000), hp=10000)
+        sim = BattleSimulator(player, [enemy])
+        unit_id = str(player.id)
+        resources = sim.unit_resources[unit_id]
+        sim._get_or_init_weapon_state(melee_w, resources)["cooldown_remaining_sec"] = (
+            2.0
+        )
+        resources["current_action"] = "ENGAGE_MELEE"
+        resources["velocity_vec"] = np.array([10.0, 0.0, 0.0])
+
+        sim._process_engage_melee(player, enemy, player.position.to_numpy(), melee_w)
+
+        dist_after = float(
+            np.linalg.norm(player.position.to_numpy() - enemy.position.to_numpy())
+        )
+        assert dist_after != pytest.approx(POST_MELEE_DISTANCE, abs=1.0)
+        assert float(np.linalg.norm(resources["velocity_vec"])) > 0.0
+        assert resources["current_action"] == "ENGAGE_MELEE"
+        assert enemy.current_hp == 10000
+
 
 # ---------------------------------------------------------------------------
 # 6. ファジィ入力変数の検証 (Phase C)
