@@ -21,7 +21,7 @@ from sqlmodel import Session, select
 
 from app.db import engine
 from app.engine.battle_digest import compute_unit_kills
-from app.engine.battle_utils import serialize_obstacles, strip_debug_fields
+from app.engine.battle_utils import strip_debug_fields
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleEntry,
@@ -30,10 +30,18 @@ from app.models.models import (
     BattleRoom,
     LootItem,
     MobileSuit,
-    Vector3,
-    Weapon,
 )
 from app.services.battle_digest_service import compute_battle_digest_fields
+from app.services.battle_execution import (
+    DEFAULT_MAX_STEPS,
+    alive_team_ids,
+    build_battlefield_view_fields,
+    build_unit_view_fields,
+    prepare_battle_units,
+    resolve_team_id,
+    run_battle,
+    snapshot_to_mobile_suit,
+)
 from app.services.battle_room_service import BattleRoomService
 from app.services.drop_service import DropScope, DropService
 from app.services.matching_service import MatchingService
@@ -45,8 +53,7 @@ from app.services.theater_service import BattleConditions, TheaterService
 _CLOUD_RUN_TASK_INDEX = int(os.environ.get("CLOUD_RUN_TASK_INDEX", 0))
 _CLOUD_RUN_TASK_COUNT = int(os.environ.get("CLOUD_RUN_TASK_COUNT", 1))
 
-# シミュレーションの最大ステップ数 (1 step = 0.1 s, デフォルト 3000 step = 300 s)
-_MAX_SIMULATION_STEPS = int(os.environ.get("MAX_SIMULATION_STEPS", 3000))
+_MAX_SIMULATION_STEPS = int(os.environ.get("MAX_SIMULATION_STEPS", DEFAULT_MAX_STEPS))
 
 
 def _check_env() -> None:
@@ -109,125 +116,6 @@ def run_simulation_phase(session: Session) -> None:
             continue
 
 
-def _resolve_team_id(unit: MobileSuit) -> str:
-    """ユニットのteam_idを解決する（未設定の場合はユニットIDを使用）.
-
-    Args:
-        unit: 対象ユニット
-
-    Returns:
-        解決されたteam_id
-    """
-    return unit.team_id or str(unit.id)
-
-
-def _convert_snapshot_to_mobile_suit(snapshot: dict) -> MobileSuit:
-    """スナップショットをMobileSuitオブジェクトに変換.
-
-    Args:
-        snapshot: MobileSuitのスナップショット辞書
-
-    Returns:
-        変換されたMobileSuitオブジェクト
-    """
-    # positionとvelocityをVector3オブジェクトに変換
-    if "position" in snapshot and isinstance(snapshot["position"], dict):
-        snapshot["position"] = Vector3(**snapshot["position"])
-    if "velocity" in snapshot and isinstance(snapshot["velocity"], dict):
-        snapshot["velocity"] = Vector3(**snapshot["velocity"])
-    # weaponsフィールドをWeaponオブジェクトに変換
-    if "weapons" in snapshot and isinstance(snapshot["weapons"], list):
-        snapshot["weapons"] = [
-            Weapon(**w) if isinstance(w, dict) else w for w in snapshot["weapons"]
-        ]
-    # id が str で渡された場合（model_dump() 経由） uuid.UUID に変換
-    if "id" in snapshot and isinstance(snapshot["id"], str):
-        import uuid as _uuid
-
-        snapshot["id"] = _uuid.UUID(snapshot["id"])
-    # MobileSuit モデルにないスナップショット固有のキーを除去
-    ms_fields = set(MobileSuit.model_fields.keys())
-    filtered = {k: v for k, v in snapshot.items() if k in ms_fields}
-    mobile_suit = MobileSuit(**filtered)
-    # parts (Issue #503) を PartState 辞書として正規化（未設定なら自動生成）
-    mobile_suit.normalize_parts()
-    return mobile_suit
-
-
-def _prepare_battle_units(
-    player_entries: list[BattleEntry], npc_entries: list[BattleEntry]
-) -> tuple[MobileSuit, list[MobileSuit], dict]:
-    """プレイヤーと敵ユニットを準備.
-
-    Args:
-        player_entries: プレイヤーエントリーのリスト
-        npc_entries: NPCエントリーのリスト
-
-    Returns:
-        (プレイヤーユニット, 敵ユニットリスト, ユニットIDとエントリーのマッピング)
-    """
-    # 最初のプレイヤーをplayerとして設定
-    player_unit = _convert_snapshot_to_mobile_suit(
-        player_entries[0].mobile_suit_snapshot
-    )
-    player_unit.side = "PLAYER"
-
-    # 他のユニットは全員敵として扱う
-    enemy_units = []
-    unit_to_entry_map = {}
-
-    for entry in player_entries[1:] + npc_entries:
-        enemy_unit = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
-        enemy_unit.side = "ENEMY"
-        enemy_units.append(enemy_unit)
-        unit_to_entry_map[enemy_unit.id] = entry
-
-    # team_id が未設定のユニットにはソロ参加用のIDを自動付与
-    all_units = [player_unit] + enemy_units
-    for unit in all_units:
-        if unit.team_id is None:
-            unit.team_id = str(unit.id)
-
-    return player_unit, enemy_units, unit_to_entry_map
-
-
-def _run_simulation(
-    player_unit: MobileSuit,
-    enemy_units: list[MobileSuit],
-    conditions: BattleConditions | None = None,
-) -> tuple[BattleSimulator, bool, int, int]:
-    """戦闘シミュレーションを実行.
-
-    Args:
-        player_unit: プレイヤーユニット
-        enemy_units: 敵ユニットリスト
-        conditions: ルームの戦域の条件。省略時は既定の条件（宇宙・濃度0）
-
-    Returns:
-        (シミュレーター, 勝利フラグ, プレイヤー自身の撃墜数, 消費ステップ数)
-    """
-    conditions = conditions or BattleConditions()
-    simulator = BattleSimulator(
-        player_unit, enemy_units, **conditions.simulator_kwargs()
-    )
-
-    steps_used = 0
-    for _step_count in range(_MAX_SIMULATION_STEPS):
-        if simulator.is_finished:
-            break
-        simulator.step()
-        steps_used += 1
-
-    print(f"  戦闘終了 (経過時間: {simulator.elapsed_time:.1f}s)")
-
-    # 勝敗判定 (team_idベース: プレイヤーのteam_idが生存していれば勝利)
-    alive_team_ids = {u.team_id for u in simulator.units if u.current_hp > 0}
-    primary_player_win = player_unit.team_id in alive_team_ids
-    kills = compute_unit_kills(simulator.logs, player_unit.id)
-
-    return simulator, primary_player_win, kills, steps_used
-
-
 def _save_battle_results(
     session: Session,
     room: BattleRoom,
@@ -263,8 +151,9 @@ def _save_battle_results(
     drop_rng = rng or random.Random()
     # entry.mobile_suit_snapshot はエントリー時点（バトル前）のHPしか持たないため、
     # ダイジェスト集計にはシミュレーションで実際に更新された live なユニットを使う
-    live_units_by_id = {str(u.id): u for u in [player_unit, *enemy_units]}
-    obstacles_data = serialize_obstacles(simulator.obstacles)
+    all_units = [player_unit, *enemy_units]
+    live_units_by_id = {str(u.id): u for u in all_units}
+    battlefield_fields = build_battlefield_view_fields(simulator)
 
     # バトルログをルーム単位で1件保存（全参加者で共有）
     #
@@ -281,16 +170,15 @@ def _save_battle_results(
     session.add(battle_log_record)
     session.flush()
 
-    # 生存しているteam_idを取得
-    alive_team_ids = {u.team_id for u in simulator.units if u.current_hp > 0}
+    surviving_team_ids = alive_team_ids(simulator.units)
 
     # 抽選は全プレイヤーで同じ drop_rng を使う。
     # DBの取得順は保証されないため、処理順をエントリー日時で固定する。
     for entry in sorted(player_entries, key=lambda e: (e.created_at, str(e.id))):
         # 各プレイヤーの勝敗を判定 (team_idが生存チームに含まれているか)
-        entry_unit = _convert_snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
-        entry_team_id = _resolve_team_id(entry_unit)
-        individual_win_loss = "WIN" if entry_team_id in alive_team_ids else "LOSE"
+        entry_unit = snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
+        entry_team_id = resolve_team_id(entry_unit)
+        individual_win_loss = "WIN" if entry_team_id in surviving_team_ids else "LOSE"
         # 勝敗に関わらず自機の撃破数をそのまま使う（main.py のソロミッション経路と
         # 揃える）。敗北時に0へ丸めると、LOSE時のダイジェストタグ判定
         # （kills>=1 なら「力戦及ばず」）が常に「完敗」にしかならず、報酬の
@@ -348,16 +236,9 @@ def _save_battle_results(
                 print(f"  警告: 戦利品の抽選エラー ({entry.user_id}): {e}")
                 traceback.print_exc()
 
-        # そのエントリーのユニットを player_info、残りを enemies_info として保存
-        entry_unit_for_info = _convert_snapshot_to_mobile_suit(
-            entry.mobile_suit_snapshot
-        )
-        all_units_info = [player_unit] + enemy_units
-        enemies_info_for_entry = [
-            u.model_dump()
-            for u in all_units_info
-            if str(u.id) != str(entry_unit_for_info.id)
-        ]
+        # player_info はエントリー時点、enemies_info は戦闘後の状態を保存する。
+        entry_unit_for_info = snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
+        unit_fields = build_unit_view_fields(entry_unit_for_info, all_units)
 
         # 戦闘ダイジェスト（一言ログ）を生成する（Issue #415）
         # live_units_by_id から取れない場合（テスト等）はHPが不明なため pre-battle
@@ -386,11 +267,7 @@ def _save_battle_results(
             environment=conditions.environment,
             theater_id=conditions.theater_id,
             minovsky_density=conditions.minovsky_density,
-            player_info=entry_unit_for_info.model_dump(),
-            enemies_info=enemies_info_for_entry,
-            obstacles_info=obstacles_data,
             ms_snapshot=entry.mobile_suit_snapshot,
-            map_bounds=list(simulator.map_bounds),
             kills=individual_kills,
             exp_gained=exp_gained,
             credits_gained=credits_gained,
@@ -399,6 +276,8 @@ def _save_battle_results(
             level_up=level_up,
             is_read=False,
             loot=[item.model_dump() for item in loot],
+            **unit_fields,
+            **battlefield_fields,
             **digest_fields,
         )
         session.add(battle_result)
@@ -410,11 +289,9 @@ def _save_battle_results(
                 npc_pilot = pilot_service.get_npc_pilot(npc_entry.user_id)
                 if npc_pilot:
                     # NPC の勝敗も team_id ベースで判定
-                    npc_unit = _convert_snapshot_to_mobile_suit(
-                        npc_entry.mobile_suit_snapshot
-                    )
-                    npc_team_id = _resolve_team_id(npc_unit)
-                    npc_win = npc_team_id in alive_team_ids
+                    npc_unit = snapshot_to_mobile_suit(npc_entry.mobile_suit_snapshot)
+                    npc_team_id = resolve_team_id(npc_unit)
+                    npc_win = npc_team_id in surviving_team_ids
                     exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
                         win=npc_win,
                         kills=0,
@@ -457,8 +334,10 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         print("  警告: プレイヤーエントリーがありません")
         return
 
-    # ユニット準備
-    player_unit, enemy_units, _ = _prepare_battle_units(player_entries, npc_entries)
+    player_unit, enemy_units = prepare_battle_units(
+        player_entries[0].mobile_suit_snapshot,
+        [e.mobile_suit_snapshot for e in player_entries[1:] + npc_entries],
+    )
 
     print(f"  プレイヤー: {player_unit.name}")
     print(f"  敵機: {len(enemy_units)} 機")
@@ -471,15 +350,15 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         f" / ミノフスキー濃度: {conditions.minovsky_density}"
     )
 
-    # シミュレーション実行
-    simulator, primary_player_win, kills, steps_used = _run_simulation(
-        player_unit, enemy_units, conditions
+    outcome = run_battle(
+        player_unit, enemy_units, conditions, max_steps=_MAX_SIMULATION_STEPS
     )
+    print(f"  戦闘終了 (経過時間: {outcome.simulator.elapsed_time:.1f}s)")
 
-    if primary_player_win:
-        print(f"  結果: プレイヤー勝利 (撃墜: {kills}機)")
+    if outcome.player_win:
+        print(f"  結果: プレイヤー勝利 (撃墜: {outcome.kills}機)")
     else:
-        print(f"  結果: プレイヤー敗北 (撃墜: {kills}機)")
+        print(f"  結果: プレイヤー敗北 (撃墜: {outcome.kills}機)")
 
     # 結果保存
     _save_battle_results(
@@ -487,11 +366,11 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         room,
         player_entries,
         npc_entries,
-        simulator,
-        primary_player_win,
+        outcome.simulator,
+        outcome.player_win,
         player_unit,
         enemy_units,
-        steps_used,
+        outcome.steps_used,
         conditions=conditions,
     )
 

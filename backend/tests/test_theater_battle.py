@@ -18,6 +18,11 @@ from app.models.models import (
     Vector3,
     Weapon,
 )
+from app.services.battle_execution import (
+    BattleOutcome,
+    run_battle,
+    snapshot_to_mobile_suit,
+)
 from app.services.theater_service import BattleConditions, TheaterService
 from main import app
 from scripts import run_batch
@@ -126,16 +131,13 @@ def test_conditions_fall_back_when_environment_is_missing(
 # --- 定期バトル ---
 
 
-def test_run_simulation_applies_conditions(
-    session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_battle_applies_conditions(session: Session) -> None:
     """定期バトルのシミュレーターに戦域の条件を渡す."""
-    monkeypatch.setattr(run_batch, "_MAX_SIMULATION_STEPS", 1)
     conditions = TheaterService.battle_conditions(session, "southeast_asia_jungle", 0.6)
 
-    simulator, *_ = run_batch._run_simulation(
-        _make_unit("A", "PLAYER"), [_make_unit("B", "ENEMY")], conditions
-    )
+    simulator = run_battle(
+        _make_unit("A", "PLAYER"), [_make_unit("B", "ENEMY")], conditions, max_steps=1
+    ).simulator
 
     assert simulator.environment == "FOREST"
     assert simulator.minovsky_density == 0.6
@@ -166,7 +168,7 @@ def _make_room_with_entry(
     session.add(entry)
     session.commit()
     session.refresh(entry)
-    return room, entry, run_batch._convert_snapshot_to_mobile_suit(dict(snapshot))
+    return room, entry, snapshot_to_mobile_suit(dict(snapshot))
 
 
 @pytest.mark.parametrize(
@@ -190,13 +192,14 @@ def test_process_room_records_theater(
     simulator.logs = []
     simulator.obstacles = []
     simulator.map_bounds = (0.0, 1000.0)
+    simulator.elapsed_time = 0.1
     captured: dict[str, BattleConditions | None] = {}
 
-    def fake_run_simulation(player_unit, enemy_units, conditions=None):  # type: ignore[no-untyped-def]
+    def fake_run_battle(player_unit, enemy_units, conditions=None, max_steps=0):  # type: ignore[no-untyped-def]
         captured["conditions"] = conditions
-        return simulator, True, 0, 1
+        return BattleOutcome(simulator, player_win=True, kills=0, steps_used=1)
 
-    monkeypatch.setattr(run_batch, "_run_simulation", fake_run_simulation)
+    monkeypatch.setattr(run_batch, "run_battle", fake_run_battle)
     npc = BattleEntry(
         room_id=room.id,
         mobile_suit_id=unit.id,

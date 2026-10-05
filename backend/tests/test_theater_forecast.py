@@ -17,6 +17,7 @@ from app.models.models import (
     Vector3,
     Weapon,
 )
+from app.services.battle_execution import BattleOutcome, snapshot_to_mobile_suit
 from app.services.battle_room_service import BattleRoomService
 from app.services.theater_forecast_service import (
     MINOVSKY_LEVEL_LOW_MAX,
@@ -221,14 +222,17 @@ def _battle_result_of(
     session.commit()
 
     simulator = MagicMock()
-    simulator.units = [run_batch._convert_snapshot_to_mobile_suit(dict(snapshot))]
+    simulator.units = [snapshot_to_mobile_suit(dict(snapshot))]
     simulator.logs = []
     simulator.obstacles = []
     simulator.map_bounds = (0.0, 1000.0)
+    simulator.elapsed_time = 0.1
     monkeypatch.setattr(
         run_batch,
-        "_run_simulation",
-        lambda player_unit, enemy_units, conditions=None: (simulator, True, 0, 1),
+        "run_battle",
+        lambda player_unit, enemy_units, conditions=None, max_steps=0: BattleOutcome(
+            simulator, player_win=True, kills=0, steps_used=1
+        ),
     )
     run_batch._process_room(session, room)
 
