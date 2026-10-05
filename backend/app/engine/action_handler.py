@@ -318,7 +318,7 @@ class ActionHandlerMixin:
                 weapon if isinstance(weapon, Weapon) else None,
             )
             if melee_weapon and isinstance(melee_weapon, Weapon):
-                self._process_engage_melee(actor, target, pos_actor, melee_weapon)
+                self._process_engage_melee(actor, target, pos_actor, melee_weapon, dt)
             elif weapon and isinstance(weapon, Weapon):
                 self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
             else:
@@ -338,27 +338,36 @@ class ActionHandlerMixin:
         target: MobileSuit,
         pos_actor: np.ndarray,
         weapon: Weapon,
+        dt: float = 0.1,
     ) -> None:
-        """格闘攻撃を処理し、命中後に再配置を行う (Phase C).
+        """格闘攻撃を処理し、攻撃後に再配置を行う (Phase C).
 
-        格闘命中後のポジショニング:
-            dir_away = normalize(pos_self - pos_target)
-            pos_self  = pos_target + dir_away × POST_MELEE_DISTANCE (10m)
-            velocity_vec = [0, 0, 0]  # 速度リセット
+        攻撃した場合はターゲットから `POST_MELEE_DISTANCE` 離れた位置へ移し、
+        速度をゼロにする。再使用待ちなどで攻撃しなかった場合は通常の移動にする。
+        毎ステップ再配置すると、攻撃していない間も密着したまま止まるため。
 
         Args:
             actor: 格闘攻撃するユニット
             target: 攻撃対象
             pos_actor: アクターの現在位置
             weapon: 使用する格闘武器
+            dt: 時間ステップ幅 (s)
         """
         pos_target = target.position.to_numpy()
-        distance = float(np.linalg.norm(pos_target - pos_actor))
+        diff_vector = pos_target - pos_actor
+        distance = float(np.linalg.norm(diff_vector))
 
-        # 格闘攻撃を実行
-        self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
+        attacked = self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
+        if not attacked:
+            # ENGAGE_MELEE にはターゲットへの力が無いため、ATTACK として間合いを取る。
+            resources = self.unit_resources[str(actor.id)]  # type: ignore[attr-defined]
+            resources["current_action"] = "ATTACK"
+            self._process_movement(  # type: ignore[attr-defined]
+                actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
+            )
+            resources["current_action"] = "ENGAGE_MELEE"
+            return
 
-        # 格闘命中後の再配置（ターゲットが生存している場合）
         if target.current_hp > 0:
             dir_away_vec = pos_actor - pos_target
             dir_away_dist = float(np.linalg.norm(dir_away_vec))

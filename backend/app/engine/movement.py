@@ -3,24 +3,33 @@
 
 import math
 import random
+from typing import NamedTuple
 
 import numpy as np
 
 from app.engine.battle_utils import en_log_details
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
+    ATTACK_TARGET_ATTRACTION_COEFF,
     BOUNDARY_MARGIN,
+    CLOSEST_ENEMY_ATTRACTION_COEFF,
     DEFAULT_BOOST_COOLDOWN,
     DEFAULT_BOOST_EN_COST,
     DEFAULT_BOOST_MAX_DURATION,
     DEFAULT_BOOST_SPEED_MULTIPLIER,
     EN_DEPLETED_REASON_CODE,
+    ENEMY_MIN_SEPARATION,
+    ENEMY_SEPARATION_COEFF,
+    ENGAGEMENT_BAND_FORCE_RATIO,
+    ENGAGEMENT_RANGE_STRATEGY_MULTIPLIERS,
+    ENGAGEMENT_RANGE_TOLERANCE_RATIO,
     FLANKING_ACTIVATION_PROBS,
     FLANKING_ATTRACTION_WEIGHT,
     FLANKING_ENERGY_COST_RATE,
     FLANKING_OFFSET_DISTANCE,
     HIGH_THREAT_THRESHOLD,
     MELEE_BOOST_ARRIVAL_RANGE,
+    MELEE_ENGAGEMENT_RANGE_MIN,
     MOVE_LOG_MIN_DIST,
     OBSTACLE_MARGIN,
     OBSTACLE_REPULSION_COEFF,
@@ -35,6 +44,18 @@ from app.engine.constants import (
 )
 from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
+
+
+class EngagementRange(NamedTuple):
+    """目標交戦距離（間合い）と許容幅."""
+
+    distance: float
+    tolerance: float
+
+    @property
+    def far(self) -> float:
+        """許容幅の外側の端 (m)."""
+        return self.distance + self.tolerance
 
 
 class MovementMixin:
@@ -169,38 +190,180 @@ class MovementMixin:
                 force += 3.0 * (-direction) / max(dist_max, 1.0)
         return force
 
-    def _attack_target_attraction(
-        self, unit: MobileSuit, pos_unit: np.ndarray, target: MobileSuit | None = None
+    def _engagement_range(
+        self, unit: MobileSuit, weapon: Weapon | None
+    ) -> EngagementRange | None:
+        """武器と戦略モードから目標交戦距離を求める.
+
+        許容幅の外側の端が武器の射程を超えないよう、目標距離を抑える。
+
+        Returns:
+            目標交戦距離。武器が無い・弾切れや EN 不足で使えない場合は None。
+            再使用待ちだけで使えない武器は、間合いの基準として扱う。
+        """
+        if weapon is None:
+            return None
+        if (
+            not self._is_weapon_usable(unit, weapon)  # type: ignore[attr-defined]
+            and self._cooldown_only_remaining_sec(unit, weapon) is None  # type: ignore[attr-defined]
+        ):
+            return None
+
+        multiplier = ENGAGEMENT_RANGE_STRATEGY_MULTIPLIERS.get(
+            self._resolve_strategy_mode(unit),  # type: ignore[attr-defined]
+            1.0,
+        )
+        distance = min(
+            float(weapon.optimal_range) * multiplier,
+            float(weapon.range) / (1.0 + ENGAGEMENT_RANGE_TOLERANCE_RATIO),
+        )
+        if getattr(weapon, "is_melee", False):
+            distance = max(distance, MELEE_ENGAGEMENT_RANGE_MIN)
+        return EngagementRange(distance, distance * ENGAGEMENT_RANGE_TOLERANCE_RATIO)
+
+    @staticmethod
+    def _engagement_spring(
+        pos_unit: np.ndarray,
+        pos_target: np.ndarray,
+        engagement: EngagementRange,
+        coeff: float,
     ) -> np.ndarray:
-        """攻撃ターゲットへの引力ベクトルを返す（ATTACK行動時）."""
-        force = np.zeros(3)
-        if target is not None:
-            vec = target.position.to_numpy() - pos_unit
-            dist = float(np.linalg.norm(vec))
-            if dist > 0:
-                force += 2.0 * vec / dist
+        """目標交戦距離を中心とした「ばね」の力を返す.
+
+        遠いと引き寄せ、近いと押し戻す。許容幅の中では、端で
+        `coeff * ENGAGEMENT_BAND_FORCE_RATIO` になるよう距離の差に比例させる。
+        許容幅の外では許容幅 1 つ分の距離で `coeff` まで強め、以降は一定にする。
+        """
+        vec = pos_target - pos_unit
+        dist = float(np.linalg.norm(vec))
+        if dist < 1e-6 or engagement.tolerance <= 0.0:
+            return np.zeros(3)
+        # 許容幅を 1 とした目標距離からのずれ。正なら遠い。
+        offset = (dist - engagement.distance) / engagement.tolerance
+        if abs(offset) <= 1.0:
+            ratio = ENGAGEMENT_BAND_FORCE_RATIO * offset
+        else:
+            ratio = math.copysign(
+                min(
+                    1.0,
+                    ENGAGEMENT_BAND_FORCE_RATIO
+                    + (1.0 - ENGAGEMENT_BAND_FORCE_RATIO) * (abs(offset) - 1.0),
+                ),
+                offset,
+            )
+        return coeff * ratio * vec / dist
+
+    def _engagement_force(
+        self,
+        pos_unit: np.ndarray,
+        pos_target: np.ndarray,
+        engagement: EngagementRange,
+        coeff: float,
+    ) -> np.ndarray:
+        """間合いのばねの力を、マップ境界の手前で後退しないよう補正して返す.
+
+        `_boundary_repulsion()` は境界の数 m 手前でしか押し返さない。
+        そのため後退の力を残すと、境界の外へ押し出される。
+        `BOUNDARY_MARGIN` 以内では、境界へ向かう成分を消して壁沿いに動かす。
+        """
+        force = self._engagement_spring(pos_unit, pos_target, engagement, coeff)
+        if float(np.dot(force, pos_target - pos_unit)) >= 0.0:
+            return force
+        map_min, map_max = self.map_bounds  # type: ignore[attr-defined]
+        for axis in (0, 2):
+            if pos_unit[axis] - map_min < BOUNDARY_MARGIN and force[axis] < 0.0:
+                force[axis] = 0.0
+            if map_max - pos_unit[axis] < BOUNDARY_MARGIN and force[axis] > 0.0:
+                force[axis] = 0.0
         return force
 
+    def _attack_target_attraction(
+        self,
+        unit: MobileSuit,
+        pos_unit: np.ndarray,
+        target: MobileSuit | None = None,
+        engagement: EngagementRange | None = None,
+    ) -> np.ndarray:
+        """攻撃ターゲットへの力を返す（ATTACK行動時）.
+
+        目標交戦距離があればばねの力にする。無ければターゲットへ一定の力で引き寄せる。
+        """
+        if target is None:
+            return np.zeros(3)
+        pos_target = target.position.to_numpy()
+        if engagement is not None:
+            return self._engagement_force(
+                pos_unit, pos_target, engagement, ATTACK_TARGET_ATTRACTION_COEFF
+            )
+        vec = pos_target - pos_unit
+        dist = float(np.linalg.norm(vec))
+        if dist <= 0:
+            return np.zeros(3)
+        return ATTACK_TARGET_ATTRACTION_COEFF * vec / dist
+
     def _closest_enemy_attraction(
-        self, unit: MobileSuit, pos_unit: np.ndarray
+        self,
+        unit: MobileSuit,
+        pos_unit: np.ndarray,
+        weapon: Weapon | None = None,
+        engagement: EngagementRange | None = None,
     ) -> np.ndarray:
         """最近敵への引力ベクトルを返す（MOVE行動時）.
 
         `UnitSpatialGrid.nearest()` の環状探索を使い、近傍セルに候補がいない場合は
         探索範囲を自動的に拡張することで、単純な近傍セル限定探索とは異なり常に
         真のグローバル最近敵を選択する（Issue #450）。
+        索敵済みの最近敵が `weapon` の射程内にいるときは、目標交戦距離のばねにする。
         """
-        force = np.zeros(3)
         grid = self._get_movement_grid()  # type: ignore[attr-defined]
         closest_enemy = grid.nearest(
             pos_unit,
             lambda u: u.current_hp > 0 and u.team_id != unit.team_id,
         )
-        if closest_enemy is not None:
-            vec = closest_enemy.position.to_numpy() - pos_unit
-            dist = float(np.linalg.norm(vec))
-            if dist > 0:
-                force += 1.5 * vec / dist
+        if closest_enemy is None:
+            return np.zeros(3)
+        pos_enemy = closest_enemy.position.to_numpy()
+        vec = pos_enemy - pos_unit
+        dist = float(np.linalg.norm(vec))
+        if dist <= 0:
+            return np.zeros(3)
+        if (
+            engagement is not None
+            and weapon is not None
+            and dist <= float(weapon.range)
+            and closest_enemy.id in self.team_detected_units.get(unit.team_id, set())  # type: ignore[attr-defined]
+        ):
+            return self._engagement_force(
+                pos_unit, pos_enemy, engagement, CLOSEST_ENEMY_ATTRACTION_COEFF
+            )
+        return CLOSEST_ENEMY_ATTRACTION_COEFF * vec / dist
+
+    def _enemy_separation_repulsion(
+        self, unit: MobileSuit, pos_unit: np.ndarray
+    ) -> np.ndarray:
+        """`ENEMY_MIN_SEPARATION` より近い敵からの斥力ベクトルを返す.
+
+        距離 0 で `ENEMY_SEPARATION_COEFF`、最小間隔で 0 になるよう線形に弱める。
+        """
+        force = np.zeros(3)
+        grid = self._get_movement_grid()  # type: ignore[attr-defined]
+        for enemy in grid.neighbors(pos_unit):
+            if enemy.current_hp <= 0 or enemy.team_id == unit.team_id:
+                continue
+            vec_away = pos_unit - enemy.position.to_numpy()
+            vec_away[1] = 0.0
+            dist = float(np.linalg.norm(vec_away))
+            if dist >= ENEMY_MIN_SEPARATION:
+                continue
+            if dist < 1e-6:
+                # 完全に重なったときは ID の大小で逆向きに分ける。
+                sign = 1.0 if str(unit.id) < str(enemy.id) else -1.0
+                direction = np.array([sign, 0.0, 0.0])
+            else:
+                direction = vec_away / dist
+            force += (
+                ENEMY_SEPARATION_COEFF * (1.0 - dist / ENEMY_MIN_SEPARATION) * direction
+            )
         return force
 
     def _retreat_points_attraction(
@@ -399,23 +562,33 @@ class MovementMixin:
         current_action = self.unit_resources[unit_id].get("current_action", "MOVE")  # type: ignore[attr-defined]
         total_force = np.zeros(3)
 
-        # 1. 攻撃ターゲットへの引力 (ATTACK 行動かつターゲット選択済みの場合)
+        # 移動判断の基準武器は _select_weapon_fuzzy の選択結果に揃える (Issue #393)
+        reference_weapon = self._get_reference_weapon(unit, target)
+        engagement = self._engagement_range(unit, reference_weapon)
+        self.unit_resources[unit_id]["engagement_range"] = engagement  # type: ignore[attr-defined]
+
+        # 1. 攻撃ターゲットへの力 (ATTACK 行動かつターゲット選択済みの場合)
         if current_action == "ATTACK":
-            total_force += self._attack_target_attraction(unit, pos_unit, target)
+            total_force += self._attack_target_attraction(
+                unit, pos_unit, target, engagement
+            )
 
         # 2. MOVE 行動時の最近敵への引力（RETREAT 時は撤退ポイントへ向かうため除外）
         if current_action == "MOVE":
-            total_force += self._closest_enemy_attraction(unit, pos_unit)
+            total_force += self._closest_enemy_attraction(
+                unit, pos_unit, reference_weapon, engagement
+            )
 
         # 2b. HIT_AND_AWAY: ターゲットを斥力源として離脱移動 (Issue #368)
         if current_action == "HIT_AND_AWAY":
             total_force += self._hit_and_away_target_repulsion(pos_unit, target)
 
         # 3. 高脅威敵（自機射程外）への斥力
-        # 移動判断の基準武器は _select_weapon_fuzzy の選択結果に揃える (Issue #393)
-        reference_weapon = self._get_reference_weapon(unit, target)
         weapon_range = float(reference_weapon.range) if reference_weapon else 0.0
         total_force += self._threat_enemy_repulsion(unit, pos_unit, weapon_range)
+
+        # 3b. 敵との最小間隔 (ENEMY_MIN_SEPARATION 以内)
+        total_force += self._enemy_separation_repulsion(unit, pos_unit)
 
         # 4. 味方ユニットへの弱い斥力 (ALLY_REPULSION_RADIUS 以内)
         total_force += self._ally_repulsion(unit, pos_unit)

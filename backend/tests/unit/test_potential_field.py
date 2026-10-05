@@ -701,8 +701,9 @@ def test_search_movement_no_log_when_distance_short() -> None:
 def test_potential_field_retreat_points_attract() -> None:
     """retreat_points が指定された場合に引力が働くこと."""
     player = _make_unit("Player", "PLAYER", "PT", Vector3(x=2500, y=0, z=2500))
+    # 敵と重ねると、最小間隔の斥力が撤退ポイントへの引力を上回る。
     enemy = _make_unit(
-        "Enemy", "ENEMY", "ET", Vector3(x=2500, y=0, z=2500), weapon_power=1.0
+        "Enemy", "ENEMY", "ET", Vector3(x=2500, y=0, z=3500), weapon_power=1.0
     )
     sim = BattleSimulator(player, [enemy])
     sim.unit_resources[str(player.id)]["current_action"] = "RETREAT"

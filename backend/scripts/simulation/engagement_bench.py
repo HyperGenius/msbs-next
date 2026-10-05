@@ -81,6 +81,7 @@ _GUNDAM_MELEE = Loadout(
     "ガンダム[サーベル+ライフル]", "gundam", ("beam_saber", "beam_rifle")
 )
 _GOUF_MELEE = Loadout("グフ[ヒートロッド+MG]", "gouf", ("heat_rod", "zaku_mg"))
+_GUNDAM_SABER = Loadout("ガンダム[サーベル]", "gundam", ("beam_saber",))
 _GUNDAM_RANGED = Loadout("ガンダム[ライフル]", "gundam", ("beam_rifle",))
 _ZAKU_RANGED = Loadout("ザクII[MG]", "zaku_ii", ("zaku_mg",))
 _GELGOOG_RANGED = Loadout("ゲルググ[ライフル]", "gelgoog", ("beam_rifle_gelgoog",))
@@ -117,6 +118,15 @@ SCENARIOS: dict[str, Scenario] = {
             "格闘機 vs 射撃機",
             _GOUF_MELEE,
             _GUNDAM_RANGED,
+            1000.0,
+            (("BALANCED", "BALANCED"), ("MELEE", "RANGED")),
+        ),
+        # 射撃武器を持たない格闘機が、引き撃ちする射撃機に接近できるかを見る。
+        Scenario(
+            "melee_only_vs_ranged",
+            "格闘専用機 vs 射撃機",
+            _GUNDAM_SABER,
+            _ZAKU_RANGED,
             1000.0,
             (("BALANCED", "BALANCED"), ("MELEE", "RANGED")),
         ),
