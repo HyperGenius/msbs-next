@@ -40,6 +40,35 @@ def _coerce_suit_json_fields(suit: MobileSuit) -> None:
     suit.normalize_parts()
 
 
+def build_npc_entry_snapshot(suit: MobileSuit, pilot: Pilot | None = None) -> dict:
+    """NPC・エースのバトルエントリー用スナップショットを作る.
+
+    プレイヤー機と違い、地形適正は機体マスターで上書きしない。
+
+    Args:
+        suit: 出撃する機体。JSON 列の型をその場で直す
+        pilot: 永続化NPCのパイロット。エースは None
+
+    Returns:
+        `BattleEntry.mobile_suit_snapshot` に入れる辞書
+    """
+    _coerce_suit_json_fields(suit)
+    snapshot = suit.model_dump()
+    if pilot is not None:
+        snapshot["npc_pilot_level"] = pilot.level
+    return snapshot
+
+
+def reset_npc_for_battle(suit: MobileSuit) -> None:
+    """永続化NPCの機体を出撃前の状態（ランダムな初期位置・HP全快）に戻す."""
+    suit.position = Vector3(
+        x=random.uniform(-500, 500),
+        y=random.uniform(-500, 500),
+        z=random.uniform(0, 500),
+    )
+    suit.current_hp = suit.max_hp
+
+
 class MatchingService:
     """マッチング処理サービス."""
 
@@ -125,12 +154,11 @@ class MatchingService:
                     self.session.add(ace_suit)
                     self.session.flush()
 
-                    _coerce_suit_json_fields(ace_suit)
                     npc_entry = BattleEntry(
                         user_id=None,
                         room_id=room.id,
                         mobile_suit_id=ace_suit.id,
-                        mobile_suit_snapshot=ace_suit.model_dump(),
+                        mobile_suit_snapshot=build_npc_entry_snapshot(ace_suit),
                         is_npc=True,
                     )
                     self.session.add(npc_entry)
@@ -148,18 +176,9 @@ class MatchingService:
                 new_count = npc_count - len(persistent_npcs)
 
                 for npc_suit, npc_pilot in persistent_npcs:
-                    # 位置をリセット
-                    npc_suit.position = Vector3(
-                        x=random.uniform(-500, 500),
-                        y=random.uniform(-500, 500),
-                        z=random.uniform(0, 500),
-                    )
-                    npc_suit.current_hp = npc_suit.max_hp
+                    reset_npc_for_battle(npc_suit)
                     self.session.add(npc_suit)
-
-                    _coerce_suit_json_fields(npc_suit)
-                    snapshot = npc_suit.model_dump()
-                    snapshot["npc_pilot_level"] = npc_pilot.level
+                    snapshot = build_npc_entry_snapshot(npc_suit, npc_pilot)
 
                     npc_entry = BattleEntry(
                         user_id=npc_pilot.user_id,
@@ -242,9 +261,7 @@ class MatchingService:
 
         new_entries: list[BattleEntry] = []
         for npc_suit, npc_pilot in new_npcs:
-            _coerce_suit_json_fields(npc_suit)
-            snapshot = npc_suit.model_dump()
-            snapshot["npc_pilot_level"] = npc_pilot.level
+            snapshot = build_npc_entry_snapshot(npc_suit, npc_pilot)
 
             npc_entry = BattleEntry(
                 user_id=npc_pilot.user_id,
@@ -261,15 +278,36 @@ class MatchingService:
     def select_npcs_for_room(self, count: int) -> list[tuple[MobileSuit, Pilot]]:
         """DBから既存の永続化NPCをランダムに選択する.
 
-        各NPCは `Pilot.active_mobile_suit_id` の機体で出撃する。未設定または
-        所有機（side='ENEMY'）を指していない場合は所有機から1機を選んで保存する。
-        所有機が0機のNPCは選ばれない。
+        選び方は `choose_npcs()` と同じ。出撃機体が未設定・無効だったNPCには、
+        選んだ機体を出撃機体として保存する。
 
         Args:
             count: 取得するNPC数
 
         Returns:
             (MobileSuit, Pilot) のタプルのリスト
+        """
+        result = self.choose_npcs(count)
+        for suit, pilot in result:
+            if pilot.active_mobile_suit_id != suit.id:
+                # 保存しておかないと ORDER BY なしの取得順に依存して出撃機体が毎回変わりうる
+                pilot.active_mobile_suit_id = suit.id
+                pilot.updated_at = datetime.now(UTC)
+                self.session.add(pilot)
+        return result
+
+    def choose_npcs(self, count: int) -> list[tuple[MobileSuit, Pilot]]:
+        """DBから既存の永続化NPCをランダムに選択する。DBには書き込まない.
+
+        各NPCは `Pilot.active_mobile_suit_id` の機体で出撃する。未設定または
+        所有機（side='ENEMY'）を指していない場合は所有機の先頭を使う。
+        所有機が0機のNPCは選ばれない。
+
+        Args:
+            count: 取得するNPC数
+
+        Returns:
+            (MobileSuit, Pilot) のタプルのリスト。所有機の無いNPCを除くため count より少ないことがある
         """
         if count <= 0:
             return []
@@ -303,15 +341,9 @@ class MatchingService:
             if not owned_suits:
                 continue
             active_suit = next(
-                (s for s in owned_suits if s.id == pilot.active_mobile_suit_id), None
+                (s for s in owned_suits if s.id == pilot.active_mobile_suit_id),
+                owned_suits[0],
             )
-            if active_suit is None:
-                # 出撃機体が未設定・無効な場合は所有機から1機を選んで固定する（Issue #542）。
-                # 保存しておかないと ORDER BY なしの取得順に依存して出撃機体が毎回変わりうる
-                active_suit = owned_suits[0]
-                pilot.active_mobile_suit_id = active_suit.id
-                pilot.updated_at = datetime.now(UTC)
-                self.session.add(pilot)
             result.append((active_suit, pilot))
 
         return result
@@ -444,9 +476,18 @@ class MatchingService:
         aces = get_ace_pilots()
         if not aces:
             return None
+        return self.build_ace_mobile_suit(random.choice(aces))
 
-        # ランダムにエースパイロットを選択
-        ace_data = random.choice(aces)
+    @staticmethod
+    def build_ace_mobile_suit(ace_data: dict[str, Any]) -> MobileSuit:
+        """エースパイロットのマスターデータから出撃するモビルスーツを作る.
+
+        Args:
+            ace_data: `get_ace_pilots()` が返す1件
+
+        Returns:
+            初期位置をランダムに決めたモビルスーツ。DBには保存しない
+        """
         ms_data = cast(dict[str, Any], ace_data["mobile_suit"])
 
         # ランダムな初期位置（1000m x 1000m x 500m の空間）
