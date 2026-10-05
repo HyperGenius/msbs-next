@@ -305,6 +305,50 @@ Python ループ版と同一の式を評価しているため、出力値その�
 
 `RETREAT` の出力は、呼び出し側で撤退ポイントの有無チェックを行うこと。  
 撤退ポイント未設定の場合は `MOVE` にフォールバックする。
+ただし、武器の射程内に敵がいるのに攻撃のやり取りが一定時間無いときは `ATTACK` にする（撃たない膠着、Issue #599。`battle-engine-feature.md` 32.6 節）。
+
+### 6.5 膠着度・優勢度と DISENGAGE（AGGRESSIVE / DEFENSIVE / SNIPER / ASSAULT、Issue #599）
+
+行動判断に、交戦記録から求めた入力を 2 つ追加した（計算方法は `battle-engine-feature.md` 32.3 節）。
+
+| 入力 | 範囲 | 意味 |
+|------|------|------|
+| `stalemate` | 0〜1 | 膠着度。自分の最後の命中から 3 回以上攻撃し、5 秒以上たち、互角なら 1 |
+| `dominance` | -1〜1 | 優勢度。与えた割合 − 受けた割合。正なら優勢 |
+
+**メンバーシップ関数:**
+
+| 変数 | 集合 | 形 | パラメータ |
+|------|------|----|-----------|
+| `stalemate` | LOW | trapezoid | [0.0, 0.0, 0.4, 0.7] |
+| | HIGH | trapezoid | [0.6, 0.95, 1.0, 1.0] |
+| `dominance` | DISADVANTAGED | trapezoid | 戦略ごと（下表） |
+| | EVEN | triangle | [-0.25, 0.0, 0.25] |
+| | ADVANTAGED | trapezoid | DISADVANTAGED を 0 で反転した形 |
+
+| 戦略 | DISADVANTAGED | 意図 |
+|------|------|------|
+| AGGRESSIVE | [-1.0, -1.0, -0.35, -0.2] | 多少の劣勢では引かない |
+| ASSAULT | [-1.0, -1.0, -0.4, -0.25] | 最も引かない |
+| DEFENSIVE / SNIPER | [-1.0, -1.0, -0.2, -0.1] | 早めに引く |
+
+**出力集合:** `action` に `DISENGAGE` を追加した。BOOST_DASH のある AGGRESSIVE / ASSAULT は triangle [0.70, 0.80, 0.90]（BOOST_DASH と RETREAT の間）、DEFENSIVE / SNIPER は triangle [0.55, 0.70, 0.85]（MOVE と RETREAT の間）。
+
+**ルール:**
+
+| 戦略 | 膠着度 HIGH → DISENGAGE | 優勢度 DISADVANTAGED → DISENGAGE |
+|------|------|------|
+| AGGRESSIVE | dis_001 | dis_002 |
+| DEFENSIVE | def_dis_001 | def_dis_002 |
+| SNIPER | snp_dis_001 | snp_dis_002 |
+| ASSAULT | asl_dis_001 | asl_dis_002 |
+
+* 行動は活性化度が最も高いラベルで決まる。同点なら先に出たラベルが選ばれる（`max()` は最初の最大値を返す）
+* 近距離で正面の敵には、ATTACK のルール（`arc_001` など）が 1.0 で発火する。DISENGAGE が同点で勝つよう、2 つのルールをルール一覧の先頭に置いた
+* ルールの重みを 1 未満にすると、1.0 で発火する ATTACK に常に負ける。戦略ごとの差は、重みではなく DISADVANTAGED の境界で付けた
+* 優勢な側が仕切り直さないことは、膠着度の側で担保している。優勢度の差が 0.3 以上なら膠着度は 0 になる
+* RETREAT 戦略（`retreat.json`）には追加していない。RETREAT 戦略中は既存の撤退を優先し、仕切り直しを始めないため
+* DISENGAGE が選ばれても、始められる条件（格闘武器がある・交戦記録がある・前回から 5 秒たっている など）を満たさないときは、DISENGAGE を除いて選び直す（`AiDecisionMixin._decide_action()`）
 
 ---
 

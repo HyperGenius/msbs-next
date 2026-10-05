@@ -1012,12 +1012,23 @@ BattleDetailModal
 | `CRITICAL` | `action_type === "ATTACK"` かつ `is_crit === true`、自機が `actor_id`/`target_id` のいずれか |
 | `DESTROYED_ENEMY` / `DESTROYED_SELF` | `action_type === "DESTROYED"`、`actor_id` が敵機体/自機 |
 | `DETECTION` | `action_type === "DETECTION"` かつ自機が `actor_id` |
+| `DISENGAGE` | `action_type === "DISENGAGE"` かつ自機が `actor_id`（Issue #599。ラベルは「{相手}から仕切り直し」） |
 
 表示文言は `message` の自由文ではなく、`weapon_name`/`damage`/`combo_count`/`action_type` 等の構造化フィールドから
 組み立てる（`computeBattleChapters()`、`frontend/src/components/BattleViewer/hooks/useBattleChapters.ts`）。
 
 `currentTimestamp` に同期して該当チャプターをハイライトし自動スクロールで追従、クリックで `onSeek` を呼び出して
 その時刻へシークする（字幕トラック的な挙動）。
+
+### 仕切り直し（DISENGAGE）の表示（Issue #599）
+
+バックエンドが仕切り直しの開始時に記録する `DISENGAGE` ログ（`battle-engine-feature.md` 32.7 節）を、次の 3 か所で表示する。
+
+| 場所 | 表示 |
+|---|---|
+| ログ一覧（`formatBattleLog()`、`utils/logFormatter.ts`） | 太字の紫（`border-purple-500` / `text-purple-400 font-semibold`） |
+| 3D シーン（`MobileSuitMesh.tsx`） | DISENGAGE の後 1.5 秒、機体の上に「↩ 仕切り直し」を出す。弾切れ・クールダウンと同じ状態表示（`WarningType` の `disengage`）で、`getBattleSnapshot()` が判定する。色は既存パレットのビーム射線の色（`#6fe6ff`） |
+| チャプタートラック | 自機の仕切り直しだけを出す（上表） |
 
 ### 敵機HPパネルの複数機対応（`BattleOverlay.tsx`）
 

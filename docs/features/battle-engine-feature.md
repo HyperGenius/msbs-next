@@ -2620,3 +2620,186 @@ SNIPER が近距離で距離を取る動きは、#598（交戦距離の制御）
 
 * `backend/tests/unit/test_phase_6_1_fire_arc.py`: MOVE 中の胴体が、射程内の敵には旋回し、射程外の敵では移動方向に追従する。後から行動するユニットが、先に動いた敵の移動後の位置へ向く
 * `backend/tests/unit/test_sniper_close_range.py`: SNIPER の行動選択（近距離で正面 → ATTACK、側面 → MOVE、HP LOW → RETREAT）と、SNIPER 同士の 1 対 1 が時間切れにならないこと
+
+---
+
+## 32. 膠着検知と仕切り直し（DISENGAGE）
+
+Issue #599（Epic #594「交戦距離の制御と膠着の解消」の Sub-Issue 5）。
+
+### 32.1 背景
+
+行動判断がその瞬間の値だけで決まるため、外れ続ける格闘を同じように繰り返していた。
+格闘機同士（ガンダム vs グフ）では、格闘ミスが 15〜33 秒続く戦闘があった。
+攻撃が正面（セクタ倍率 ×0.35）に集中し、グフのヒートロッドは命中率 5〜15% 程度しかない。
+
+そこで、ユニットごとに相手との「交戦記録」を持たせる。
+記録から膠着度と優勢度を求めて行動判断の入力にし、互角の攻防が続いたら距離を取って攻撃方法を切り替える行動 DISENGAGE（仕切り直し）を追加した。
+
+### 32.2 交戦記録（`backend/app/engine/engagement.py`）
+
+記録の更新と膠着度・優勢度の計算は、エンジンの状態に依存しない独立モジュールにした（将来のマニューバ層へ移しやすくするため）。
+記録は `unit_resources[unit_id]["engagement"]`（`EngagementRecord`）に置く。
+
+| フィールド | 内容 |
+|---|---|
+| `opponent_id` | 相手のユニット ID |
+| `started_at` | 交戦開始時刻（相手が `ENGAGEMENT_RECORD_RANGE` 以内に入った時刻） |
+| `last_in_range_at` | 最後に `ENGAGEMENT_RECORD_RANGE` 以内にいた時刻 |
+| `attacks` / `hits` | 自分の攻撃回数・命中数 |
+| `attacked` / `attacked_hits` | 相手からの被攻撃回数・被命中数 |
+| `damage_dealt` / `damage_taken` | 与えたダメージ・受けたダメージ |
+| `last_hit_at` / `attacks_since_hit` | 自分の最後の命中時刻と、それ以降の攻撃回数 |
+
+- **開始・継続・リセット**（`track_engagement()`）: 行動判断のたびに、現在のターゲットとの距離で更新する。ターゲットが変わったら記録を捨てる。`ENGAGEMENT_RECORD_RANGE` の外に `ENGAGEMENT_RECORD_RESET_SEC` いたら記録を捨てる
+- **多対多**: 現在のターゲットとの記録だけを持つ。複数の相手を同時に記録すると、どの相手との膠着かを行動に結び付けにくいため
+- **攻撃の記録**（`record_attack()`）: `CombatMixin._process_attack()` が命中・ミスの処理の後に `_record_attack_exchange()` を呼ぶ。攻撃側と防御側のうち、記録の相手が一致する側だけを更新する。ダメージは攻撃前後の HP の差で数える（格闘コンボと LUK の完全回避を含めるため）。命中はダメージが入った攻撃とする
+- 攻撃のたびに、両機の `last_attack_exchange_at` も更新する（32.6 の「撃たない膠着」に使う）
+
+### 32.3 膠着度・優勢度
+
+**優勢度（-1〜1）**（`dominance()`）: `与ダメ ÷ 相手の最大 HP − 被ダメ ÷ 自分の最大 HP`。正なら優勢。
+
+**膠着度（0〜1）**（`stalemate()`）: 次の 3 つのうち最も低い値（ファジィの AND と同じ min）。
+
+| 要素 | 1 になる条件 |
+|---|---|
+| 攻撃回数 | 自分の最後の命中から `STALEMATE_FULL_ATTACKS`（3）回以上攻撃した |
+| 経過時間 | 自分の最後の命中（無ければ交戦開始）から `STALEMATE_FULL_ELAPSED_SEC`（5s）以上たった |
+| 互角さ | 優勢度の絶対値が `STALEMATE_DOMINANCE_EVEN`（0.15）以下。`STALEMATE_DOMINANCE_LIMIT`（0.3）で 0 |
+
+攻撃回数と経過時間を「自分の最後の命中から」数えるのは、自分の攻め方が通じていないことを測るため。
+交戦開始から数えると、序盤に一度当てただけで優勢度の差が残り、その後に外し続けても膠着と判定されなかった。
+相手だけが当てている場合は、優勢度の低下として扱う。
+
+どちらも行動判断のファジィ入力 `stalemate` / `dominance` として渡す（`AiDecisionMixin._compute_engagement_inputs()`）。
+ルールとメンバーシップ関数は `fuzzy-engine.md` 6.5 節を参照。
+
+### 32.4 行動判断（`AiDecisionMixin._decide_action()`）
+
+活性化度が最も高い行動を選ぶ処理に、仕切り直しの状態管理を加えた。
+
+1. 実行中の仕切り直しがあれば、終える条件を満たすまで DISENGAGE を続ける（最低継続時間）
+2. 仕切り直しを始められないときは、活性化度から DISENGAGE を除いて選び直す
+3. 既存の制約ガード（`_resolve_final_action()`）を適用する
+4. DISENGAGE になったら仕切り直しを始める
+
+**始められる条件**（`_can_start_disengage()`）
+
+- RETREAT 戦略中でない（既存の撤退を優先する）
+- 格闘武器を持っている。射撃武器しか持たない機体には切り替える攻撃方法が無く、仕切り直しが後退するだけになるため。計測では、ザクII（MG のみ）が格闘専用機から下がり続け、HP が減ると RETREAT（撤退ポイントが無いため MOVE）で間合いを保って逃げ切る戦闘が 400 秒を超えた
+- 交戦記録がある
+- 前の仕切り直しから `DISENGAGE_COOLDOWN_SEC` たっている
+- ターゲットとの距離が目標距離より近い
+
+**続ける条件**（`_should_continue_disengage()`）
+
+- ターゲットとの距離が目標距離未満で、開始から `DISENGAGE_MAX_SEC` 未満
+- RETREAT 戦略になった、または撤退ポイントがあって RETREAT が最も高い活性化度のときは終える
+- ターゲットが変わった、索敵済みの敵がいなくなったときも終える
+
+### 32.5 仕切り直しの実行
+
+**開始**（`_start_disengage()`）
+
+- 目標距離（`_disengage_target_distance()`）: 射撃武器の目標交戦距離（#598 の間合い）を `DISENGAGE_DISTANCE_MIN`〜`DISENGAGE_DISTANCE_MAX` に収める。射撃武器が無ければ下限
+- 自分の交戦記録は捨てる。相手の記録は優勢度の累計だけ 0 に戻す（`restart_bout()`）。昔の命中による優勢が残ると、相手がいつまでも膠着とみなさないため。最後の命中からの数えは残す
+- ブーストが使えれば使う（`MovementMixin._start_boost()`）。最大継続時間・EN 枯渇で止まり、仕切り直しを終えるときにも止める
+- `DISENGAGE` ログを記録する（32.7）
+
+**移動**（`MovementMixin._disengage_force()`）: ターゲットから離れる向きを `DISENGAGE_LATERAL_ANGLE_DEG`（35°）横へ傾けた力（`DISENGAGE_REPULSION_COEFF`）。真後ろに下がると、追ってくる相手との距離が開かないため。左右はユニット ID で固定する（ストレイフと同じ `_unit_side_sign()`）。マップ境界の手前では境界へ向かう成分を消す（#598 の間合いと同じ `_suppress_boundary_approach()`）。
+
+**胴体**: ターゲットを向いたまま下がる（`_update_body_heading()`）。背を向けると背面から撃たれるため。
+
+**攻撃**（`ActionHandlerMixin._handle_disengage_action()`）: 射撃武器が射程内なら撃つ。格闘武器では攻撃しない。
+
+**仕切り直しの後**（`_end_disengage()`）
+
+- `DISENGAGE_RANGED_PREFERENCE_SEC` の間、射撃武器を優先する（`_prefers_ranged()`）。この間に命中させたら、その時点で終える
+  - 武器選択（`_select_weapon_fuzzy()`）は、使える射撃武器があれば射撃武器だけから選ぶ
+  - ENGAGE_MELEE は ATTACK にする
+  - 持ち替えポリシー BALANCED は、格闘武器から射撃武器へ必ず持ち替える（候補が射撃武器だけになり、スコア差では判断できないため）。NEVER / RACK_ONLY / AGGRESSIVE の意味は変えない
+  - 移動の基準武器（`_get_reference_weapon()`）は、射撃武器が再使用待ちの間も射撃武器のままにする。格闘武器を基準にすると、撃つたびに格闘の間合いへ詰めてしまうため
+- 射撃武器を持たない機体は、この期間にターゲットの側面（胴体の向きに対して自機に近い側、`DISENGAGE_REENTRY_FLANK_OFFSET` 先）へ引き寄せられて再突入する（`_reentry_flank_attraction()`）
+
+### 32.6 撃たない膠着（撤退先の無い RETREAT）
+
+#598 の後、射撃機同士の 1 対 1 で新しい膠着が見つかった（Issue コメント）。
+両機の HP が下がり、DEFENSIVE の `def_rule_002`（HP LOW → RETREAT）で両機とも RETREAT を選ぶ。
+撤退ポイントが無いと RETREAT は MOVE になり、MOVE は撃たないため、間合いを保って周回したまま時間切れになる。
+
+`_resolve_final_action()` で、撤退先の無い RETREAT は次のように決める（`_is_idle_stalemate()`）。
+
+- 武器の射程内に敵がいるのに、`IDLE_STALEMATE_SEC` 攻撃のやり取り（自分の攻撃・被攻撃）が無ければ ATTACK にする
+- 一度そう判定したら、`IDLE_STALEMATE_ATTACK_SEC` は ATTACK を続ける。1 発撃つたびに判定が解けて撃たなくなるのを防ぐため
+- それ以外は従来どおり MOVE
+
+撤退ポイントが無い戦場での RETREAT 自体の見直しは、逃走度（#623）・逃走モード（#624）で扱う。
+
+### 32.7 ログ・セリフ・BattleViewer
+
+**`DISENGAGE` ログ**（`BattleLog.action_type`）: 仕切り直しの開始時に 1 件記録する。
+
+| フィールド | 内容 |
+|---|---|
+| `target_id` | 仕切り直した相手 |
+| `message` | 例: 「[アムロ]のガンダムはグフとの攻防を互角と見て距離を取り、仕切り直す」（劣勢のときは「劣勢と見て」） |
+| `chatter` | 性格ごとのセリフ（`BATTLE_CHATTER[...]["disengage"]`、例: 「互角か…一度引く！」）。他のセリフと同じく 30% の確率で付く |
+| `details` | `reason`（`STALEMATE` / `DISADVANTAGE`）、`stalemate`、`dominance`、`target_distance`、交戦記録の攻撃・命中・被攻撃・被命中の回数 |
+
+`AI_DECISION` ログのメッセージにも膠着度・優勢度を追加した。
+
+**BattleViewer**（`battle-viewer-feature.md` 参照）: ログ一覧で太字の紫で表示する。3D シーンでは DISENGAGE の後 1.5 秒、機体の上に「↩ 仕切り直し」を出す。自機の仕切り直しはチャプタートラックにも出す。
+
+### 32.8 定数（`backend/app/engine/constants.py`）
+
+値はすべて暫定で、調整は総合バランス調整（#587）で行う。
+
+| 定数 | 値 | 内容 |
+|---|---|---|
+| `ENGAGEMENT_RECORD_RANGE` | 250m | 交戦記録を始める距離 |
+| `ENGAGEMENT_RECORD_RESET_SEC` | 5s | 記録の距離の外にこの時間いたら記録を捨てる |
+| `STALEMATE_FULL_ATTACKS` | 3 | 膠着度が最大になる、自分の最後の命中からの攻撃回数 |
+| `STALEMATE_FULL_ELAPSED_SEC` | 5s | 膠着度が最大になる、自分の最後の命中からの経過時間 |
+| `STALEMATE_DOMINANCE_EVEN` / `STALEMATE_DOMINANCE_LIMIT` | 0.15 / 0.3 | 互角とみなす優勢度の幅と、膠着度を 0 にする優勢度 |
+| `IDLE_STALEMATE_SEC` / `IDLE_STALEMATE_ATTACK_SEC` | 10s / 5s | 撃たない膠着とみなす時間と、その後 ATTACK を続ける時間 |
+| `DISENGAGE_LATERAL_ANGLE_DEG` | 35° | 後退の向きを真後ろから横へずらす角度 |
+| `DISENGAGE_REPULSION_COEFF` | 4.0 | 後退の力の係数 |
+| `DISENGAGE_DISTANCE_MIN` / `DISENGAGE_DISTANCE_MAX` | 150m / 300m | 目標距離の下限・上限 |
+| `DISENGAGE_MAX_SEC` | 3s | 仕切り直しの最大継続時間 |
+| `DISENGAGE_RANGED_PREFERENCE_SEC` | 5s | 仕切り直しの後に射撃武器を優先する時間 |
+| `DISENGAGE_COOLDOWN_SEC` | 5s | 次の仕切り直しを始められるまでの時間 |
+| `DISENGAGE_REENTRY_FLANK_OFFSET` / `DISENGAGE_REENTRY_FLANK_COEFF` | 100m / 2.0 | 射撃武器の無い機体が再突入で目指す側面の位置と、引力の係数 |
+
+### 32.9 計測結果
+
+`engagement_bench.py`（各 10 試行、シード 595〜604、`tactics.range` は BALANCED×BALANCED）。値は「変更前（main）→ 変更後」。
+
+| シナリオ | 戦略 | 格闘ミス最長 | 持ち替え/分 | 戦闘時間 p50 | 時間切れ | A 勝率 |
+|---|---|---|---|---|---|---|
+| 格闘機同士（ガンダム vs グフ） | AGGRESSIVE | 23.3s → 7.4s | 7.5 → 5.9 | 26s → 18s | 0% → 0% | 100% → 100% |
+| | DEFENSIVE | 14.8s → 0.0s | 6.3 → 3.5 | 24s → 23s | 0% → 0% | 100% → 100% |
+| | SNIPER | 33.0s → 13.3s | 0.6 → 2.5 | 40s → 28s | 0% → 0% | 100% → 100% |
+| | ASSAULT | 14.3s → 25.8s | 8.8 → 8.3 | 27s → 23s | 0% → 0% | 100% → 100% |
+| 格闘専用機 vs 射撃機（ガンダム[サーベル] vs ザクII） | AGGRESSIVE | 13.2s → 15.7s | - | 26s → 31s | 0% → 0% | 100% → 100% |
+| | DEFENSIVE | 7.7s → 14.7s | - | 27s → 26s | 0% → 0% | 100% → 100% |
+| | SNIPER | 8.8s → 10.6s | - | 34s → 35s | 0% → 0% | 100% → 100% |
+| | ASSAULT | 6.6s → 6.6s | - | 21s → 22s | 0% → 0% | 100% → 100% |
+| ゲルググ vs ガンダム | DEFENSIVE | - | - | 63s → 50s | 10% → 0% | 60% → 50% |
+
+* 射撃機同士（ガンダム vs ザクII）は全指標が変わらない。射撃武器しか持たない機体は仕切り直さないため
+* グフ vs ガンダム（射撃機）は、ASSAULT の戦闘時間 p50 が 23s → 24s になった以外は変わらない
+* ゲルググ vs ガンダムは DEFENSIVE だけが変わった。時間切れ（10%）は、32.6 の撃たない膠着の対策で 0% になった
+* 格闘機同士の 150m 未満の割合は、AGGRESSIVE・DEFENSIVE・ASSAULT で 46〜50% → 31〜42% に下がった（仕切り直しで距離を取る時間が増えたため）。SNIPER は 16% → 20%
+
+**格闘ミス最長 8 秒以内（完了条件）について**: AGGRESSIVE（7.4s）と DEFENSIVE（0.0s）は達成した。SNIPER（13.3s）と ASSAULT（25.8s）は未達。
+
+* 残る長い連続は、どちらも 1〜2 戦の外れ値。正面への攻撃（×0.35）では、サーベルでも約 30%、ヒートロッドは約 15%、ライフル・MG は 5〜25% しか当たらない。格闘ミスの連続は「その機体が何かを命中させる」まで途切れないため、射撃に切り替えても射撃も外し続けると、次の格闘ミスまでが 1 つの連続として数えられる
+* 例: ASSAULT のシード 596 では、ガンダムが接近のたびにサーベルを 1 回外し、間のライフルも外し続けて 25.8s（格闘ミス 3 回）になった
+* 主要な定数（攻撃回数 2〜3、経過時間 3〜5s、射撃優先 3〜8s、再使用までの時間 3〜5s）を 20 シードで振ったが、全戦略で 8 秒以内に収まる組み合わせは無く、最悪値は外れ値で入れ替わった。そのため Issue の例の値（3 回・5 秒・5 秒）のままにした
+* 命中率の底上げ（正面のセクタ倍率など）は総合バランス調整（#587）で扱う
+
+### 32.10 テスト
+
+* `backend/tests/unit/test_engagement_disengage.py`: 交戦記録の開始・継続・リセット、攻撃による更新、膠着度・優勢度の計算、ファジィ推論の DISENGAGE 選択（膠着・劣勢で選び、優勢では選ばない）、DISENGAGE の最低継続時間と終了条件・RETREAT の優先・再使用までの時間、射撃優先と持ち替え、射撃武器の無い機体の回り込み、後退の向き、撃たない膠着
+* `frontend/tests/unit/battleChapters.test.ts` / `battleSnapshot.test.ts` / `logFormatter.test.ts`: 仕切り直しのチャプター・機体上の表示・ログの配色
