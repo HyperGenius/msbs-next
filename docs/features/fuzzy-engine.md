@@ -367,6 +367,8 @@ Python ループ版と同一の式を評価しているため、出力値その�
 | `target_beam_resistance` | 0.0〜1.0 | LOW / HIGH | ターゲットのビーム耐性 |
 | `target_physical_resistance` | 0.0〜1.0 | LOW / HIGH | ターゲットの実弾耐性 |
 | `weapon_is_beam` | 0.0 or 1.0 | FALSE / TRUE | 対象武器がビーム武器か実弾武器か |
+| `optimal_range_ratio` | 0.0〜3.0 | TOO_CLOSE / WITHIN_OPTIMAL / OUT_OF_RANGE | 現在の距離 ÷ 対象武器の `optimal_range`（8.6 節） |
+| `weapon_is_melee` | 0.0 or 1.0 | FALSE / TRUE | 対象武器が格闘武器か（`weapon_type == "MELEE"` または `is_melee`） |
 
 ### 8.2 出力変数
 
@@ -392,6 +394,9 @@ Python ループ版と同一の式を評価しているため、出力値その�
 | ws_rule_012 | beam_resistance=HIGH AND weapon_is_beam=TRUE | weapon_score=LOW |
 | ws_rule_013 | physical_resistance=HIGH AND weapon_is_beam=FALSE | weapon_score=LOW |
 | ws_rule_014 | FAR AND beam_resistance=LOW AND weapon_is_beam=TRUE | weapon_score=MEDIUM |
+| ws_rule_015 | range_ratio=TOO_CLOSE AND weapon_is_melee=FALSE | weapon_score=LOW |
+| ws_rule_016 | range_ratio=WITHIN_OPTIMAL AND weapon_is_melee=TRUE | weapon_score=HIGH |
+| ws_rule_017 | range_ratio=OUT_OF_RANGE | weapon_score=LOW |
 
 ### 8.4 推論結果の利用
 
@@ -441,6 +446,47 @@ EN HIGH 時は `asl_ws_rule_002` / `asl_ws_rule_006` が同じ HIGH を出すた
 | RETREAT | 2000 (FAR) | 0.9 | 0.883 | 0.883 |
 
 ※ 耐性 0・弾薬満タン時の `weapon_score`。
+
+### 8.6 最適距離との比による武器選択（全戦略共通、Issue #597）
+
+`distance_to_target` は全武器で同じ値（絶対距離）なので、それだけでは武器ごとの得意な距離を区別できない。
+同じビーム武器のサーベルとライフルが至近距離で同じスコアになり、ライフルへの持ち替えが起きていた。
+そのため、武器ごとの入力 `optimal_range_ratio`（距離 ÷ `optimal_range`、上限 3.0）と `weapon_is_melee` を追加した。
+
+**メンバーシップ関数（全戦略で同じ）:**
+
+| 集合 | 形 | パラメータ | 意味 |
+|------|----|-----------|------|
+| TOO_CLOSE | trapezoid | [0.0, 0.0, 0.15, 0.30] | 射撃武器の至近距離。ライフル（400m）では 60m まで最大、120m で 0 |
+| WITHIN_OPTIMAL | trapezoid | [0.0, 0.0, 1.0, 1.30] | 最適距離以内 |
+| OUT_OF_RANGE | trapezoid | [1.30, 1.60, 3.0, 3.0] | 射程外。射程 ÷ 最適距離はマスターの武器で 1.33〜1.5 |
+
+**ルール:**
+
+| 戦略 | 射撃武器が近すぎる → LOW | 格闘武器が最適距離以内 → HIGH | 射程外 → LOW |
+|------|------|------|------|
+| AGGRESSIVE | ws_rule_015 | ws_rule_016 | ws_rule_017 |
+| DEFENSIVE | def_ws_rule_013 | def_ws_rule_014 | def_ws_rule_015 |
+| SNIPER | snp_ws_rule_013 | snp_ws_rule_014 | snp_ws_rule_015 |
+| ASSAULT | asl_ws_rule_014 | asl_ws_rule_015 | asl_ws_rule_016 |
+| RETREAT | ret_ws_rule_014 | ret_ws_rule_015 | ret_ws_rule_016 |
+
+重心法では HIGH と LOW が同時に発火すると約 0.5 になる。
+既存ルールで HIGH のライフルも、至近距離では約 0.5 に下がる。
+
+**スコア例**（EN 0.9・弾薬 1.0・耐性 0.1。サーベル 最適 100m / 射程 150m、ライフル 最適 400m / 射程 600m）:
+
+| 戦略 | 距離 | サーベル | ライフル |
+|------|------|--------|--------|
+| AGGRESSIVE | 1m | 0.88 | 0.50 |
+| AGGRESSIVE | 40m | 0.88 | 0.50 |
+| AGGRESSIVE | 200m | 0.50 | 0.88 |
+| SNIPER | 40m | 0.50 | 0.12 |
+| ASSAULT | 40m | 0.88 | 0.50 |
+| RETREAT | 40m | 0.68 | 0.50 |
+
+SNIPER は既存ルール（`snp_ws_rule_008`: CLOSE AND weapon_is_beam=TRUE → LOW）で、300m 未満のビーム武器を一律 LOW にしている。
+そのため SNIPER の 300m 未満では、射程外のサーベルと射程内のライフルが同じスコアになることがある。
 
 ---
 

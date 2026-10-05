@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 _TARGET_SELECTION_MAX_DIST = 3000.0
 # 武器選択ファジィ推論: 距離の最大値 (m)
 _WEAPON_SELECTION_MAX_DIST = 3000.0
+# 武器選択ファジィ推論: 最適距離比の最大値。メンバーシップ関数の上端と揃える。
+_WEAPON_SELECTION_MAX_RANGE_RATIO = 3.0
 
 
 class TargetingMixin:
@@ -529,6 +531,27 @@ class TargetingMixin:
         can_use, _ = self._check_attack_resources(weapon, weapon_state, resources)  # type: ignore[attr-defined]
         return can_use
 
+    def _cooldown_only_remaining_sec(
+        self, actor: MobileSuit, weapon: Weapon
+    ) -> float | None:
+        """武器が再使用待ちだけで使用不能なとき、その残り時間を返す.
+
+        Returns:
+            再使用待ちの残り秒数。弾切れ・EN 不足でも使えない場合と、
+            再使用待ちでない場合は None。
+        """
+        unit_id = str(actor.id)
+        resources = self.unit_resources[unit_id]  # type: ignore[attr-defined]
+        weapon_state = self._get_or_init_weapon_state(weapon, resources)  # type: ignore[attr-defined]
+        remaining = float(weapon_state.get("cooldown_remaining_sec", 0.0))
+        if remaining <= 0.0:
+            return None
+        # 再使用待ちを外した状態で判定し、弾薬・EN が足りるかだけを見る。
+        can_use_after_cooldown, _ = self._check_attack_resources(  # type: ignore[attr-defined]
+            weapon, {**weapon_state, "cooldown_remaining_sec": 0.0}, resources
+        )
+        return remaining if can_use_after_cooldown else None
+
     def _select_weapon_fuzzy(
         self, actor: MobileSuit, target: MobileSuit
     ) -> Weapon | None:
@@ -595,14 +618,22 @@ class TargetingMixin:
                 weapon_is_beam = (
                     1.0 if getattr(weapon, "type", "PHYSICAL") == "BEAM" else 0.0
                 )
+                weapon_is_melee = (
+                    1.0
+                    if getattr(weapon, "weapon_type", "RANGED") == "MELEE"
+                    or getattr(weapon, "is_melee", False)
+                    else 0.0
+                )
 
                 fuzzy_inputs = {
                     "distance_to_target": distance,
+                    "optimal_range_ratio": self._optimal_range_ratio(distance, weapon),
                     "current_en_ratio": current_en_ratio,
                     "ammo_ratio": ammo_ratio,
                     "target_beam_resistance": target_beam_resistance,
                     "target_physical_resistance": target_physical_resistance,
                     "weapon_is_beam": weapon_is_beam,
+                    "weapon_is_melee": weapon_is_melee,
                 }
 
                 result, debug = weapon_engine.infer_with_debug(fuzzy_inputs)
@@ -634,6 +665,17 @@ class TargetingMixin:
             # 推論失敗時は最初の使用可能武器をフォールバックとして返す
             self._weapon_score_cache[unit_id] = {}
             return usable_weapons[0]
+
+    @staticmethod
+    def _optimal_range_ratio(distance: float, weapon: Weapon) -> float:
+        """現在の距離を武器の最適距離で割った比を返す.
+
+        1.0 が最適距離。射程外になる比は武器ごとに異なる（射程 ÷ 最適距離）。
+        """
+        optimal_range = float(getattr(weapon, "optimal_range", 0.0) or 0.0)
+        if optimal_range <= 0.0:
+            return 1.0
+        return min(distance / optimal_range, _WEAPON_SELECTION_MAX_RANGE_RATIO)
 
     def _select_weapon_with_switch_policy(
         self, actor: MobileSuit, target: MobileSuit
@@ -681,10 +723,23 @@ class TargetingMixin:
         )
 
         policy = actor.tactics.get("weapon_switch_policy", DEFAULT_WEAPON_SWITCH_POLICY)
+        pilot_stats = self.unit_pilot_stats.get(unit_id, PilotStats())
+        lock_sec = calculate_weapon_switch_lock_sec(
+            WEAPON_SWITCH_LOCK_BASE_SEC, pilot_stats.ref
+        )
 
         if not active_usable:
-            # 現在の手持ち武器が使用不能（弾切れ・クールタイム中）: NEVER以外は強制的に持ち替える
-            should_switch = policy != WEAPON_SWITCH_POLICY_NEVER
+            # 再使用待ちが持ち替え時間以内に終わるなら、待つ方が早く撃てる。
+            # AGGRESSIVE も待つ。待っても失う攻撃機会は無いため。
+            # 弾切れ・EN 不足のときは持ち替える。
+            cooldown_remaining = (
+                self._cooldown_only_remaining_sec(actor, active_weapon)
+                if active_weapon is not None
+                else None
+            )
+            should_switch = policy != WEAPON_SWITCH_POLICY_NEVER and (
+                cooldown_remaining is None or cooldown_remaining > lock_sec
+            )
         elif policy == WEAPON_SWITCH_POLICY_NEVER:
             should_switch = False
         elif policy == WEAPON_SWITCH_POLICY_RACK_ONLY:
@@ -705,10 +760,6 @@ class TargetingMixin:
             return active_weapon if active_usable else None
 
         # 持ち替えを実行: 行動不能タイムを開始する（このステップは攻撃不可）
-        pilot_stats = self.unit_pilot_stats.get(unit_id, PilotStats())
-        lock_sec = calculate_weapon_switch_lock_sec(
-            WEAPON_SWITCH_LOCK_BASE_SEC, pilot_stats.ref
-        )
         resources["weapon_switch_lock_remaining_sec"] = lock_sec
         resources["active_weapon_id"] = fuzzy_best.id
         self.logs.append(  # type: ignore[attr-defined]

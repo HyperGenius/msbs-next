@@ -130,6 +130,7 @@ def determine_hit_part(attacker, target, weapon, attack_sector, distance) -> str
   - `RACK_ONLY`: 手持ち武器が使用不能になった時だけ強制的に持ち替える
   - `BALANCED`（おまかせ）: 候補武器のファジィ武器選択スコア（`_select_weapon_fuzzy()` が既存で算出している `weapon_score`）が手持ち武器のスコアより `WEAPON_SWITCH_BALANCED_SCORE_MARGIN`（0.15）以上高い場合のみ持ち替える閾値ベースの判断。Phase 4（#505）の部位別命中確率・ダメージ期待値そのものではなく、既存のファジィスコア（距離・EN比率・弾薬比率・耐性を統合済み）を「期待効果」の代理指標として採用した（新たに命中率/ダメージ期待値を武器選択レイヤーに露出する設計変更を避けるための現実的な簡略化）
   - `AGGRESSIVE`: 拘束コストを無視し、スコアが少しでも高ければ毎回持ち替える貪欲型
+  - 再使用待ちの扱い（Issue #597）: 手持ち武器が再使用待ちだけで使用不能で、残り時間が持ち替えの行動不能時間以下なら、`RACK_ONLY`/`BALANCED`/`AGGRESSIVE` は持ち替えずに待つ。弾切れ・EN 不足のときは従来どおり持ち替える。詳細は `dynamic-combat-system.md` 5.5 節
 - **行動不能タイム**: `unit_resources[unit_id]["weapon_switch_lock_remaining_sec"]`（Issue #506）に、持ち替え開始時 `calculate_weapon_switch_lock_sec()`（`app/engine/calculator.py`）の結果をセットする。既存の `boost_cooldown_remaining`/`cooldown_remaining_sec` と同じ「ランタイム専用カウントダウン」パターンを踏襲し、`_refresh_phase()`（`app/engine/ai_decision.py`）で dt ずつ減算する。基礎値は `WEAPON_SWITCH_LOCK_BASE_SEC`（1.5秒）
   - **行動不能タイムを短縮するステータス**: 「器用」(DEX) は Phase E-1 で廃止済みのため使用不可（`backend/CLAUDE.md`）。既存の `PilotStats` のうち、イニシアチブ・機動性乗算補正を担う `ref`（反応）を採用し、`calculate_initiative()` と同系統の「REFで最大30%短縮（-1%/REF）」という捷減パターンで実装した（REF=0で従来互換の挙動になる既存関数の設計方針を踏襲）
   - 持ち替え中は `_action_phase()`（`app/engine/action_handler.py`）が全アクション（ATTACK/ENGAGE_MELEE/BOOST_DASH/HIT_AND_AWAY）を移動のみに強制する（攻撃・格闘突入・ブーストダッシュ等は一切実行されない）。攻撃を試みようとしていた場合は既存の弾切れ/クールダウン待機ログと同様の `WAIT` ログを毎ステップ記録する
