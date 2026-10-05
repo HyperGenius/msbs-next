@@ -252,13 +252,15 @@ def test_build_roster_requires_two_entries(session: Session) -> None:
 # --- 戦域条件 ---
 
 
-def test_resolve_conditions_defaults_to_space() -> None:
+def test_resolve_conditions_defaults_to_space(session: Session) -> None:
     """戦域を指定しなければ既定の条件（宇宙・濃度0）になること."""
-    conditions = resolve_conditions(None, None, None)  # type: ignore[arg-type]
+    conditions = resolve_conditions(session, None, None)
     assert conditions.theater_id is None
     assert conditions.environment == "SPACE"
     assert conditions.minovsky_density == 0.0
     assert conditions.environment_profile is None
+    assert conditions.theater_name is None
+    assert conditions.environment_name == "宇宙"
 
 
 def test_resolve_conditions_uses_theater_master(session: Session) -> None:
@@ -270,6 +272,10 @@ def test_resolve_conditions_uses_theater_master(session: Session) -> None:
     assert conditions.environment_profile.environment_id == "FOREST"
     # 濃度を省略すると戦域の基準濃度になる。
     assert conditions.minovsky_density == 0.6
+    # run は DB を読まないため、結果に載せる表示名もロスターに保存する。
+    assert conditions.theater_name == "東南アジア密林"
+    assert conditions.environment_name == "森林"
+    assert conditions.viewer_preset == "FOREST"
 
     assert resolve_conditions(session, "solomon", 0.1).minovsky_density == 0.1
 

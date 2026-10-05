@@ -63,6 +63,9 @@ BattleViewer で読み込むことで戦闘を目視確認できます。
 cd backend
 python -m scripts.simulation.local_sim check-readonly          # 書き込みが拒否されることを確認
 python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 7
+python -m scripts.simulation.local_sim run --roster <ロスター名> --rounds 20 --seed 611   # DB に接続しない
+python -m scripts.simulation.local_sim list                    # 保存した世代の一覧
+python -m scripts.simulation.local_sim pin <世代>               # 世代管理で削除しないようにする
 ```
 
 詳細は `docs/features/local-battle-simulator.md` を参照してください。

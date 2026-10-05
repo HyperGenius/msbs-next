@@ -2,6 +2,8 @@
 
 backend/ で実行する:
     python -m scripts.simulation.local_sim fetch --pilot <パイロットID> --npc 7
+    python -m scripts.simulation.local_sim run --roster <ロスター名> --rounds 20
+    python -m scripts.simulation.local_sim list
     python -m scripts.simulation.local_sim check-readonly
 """
 
@@ -14,13 +16,25 @@ from sqlalchemy import Engine
 # python scripts/simulation/local_sim のようにディレクトリを指定して実行したときも import できるようにする。
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from scripts.simulation.local_sim.generations import (  # noqa: E402
+    GENERATIONS_DIR,
+    KEEP_UNPINNED_GENERATIONS,
+    Manifest,
+    list_generations,
+    set_pinned,
+)
 from scripts.simulation.local_sim.readonly_db import (  # noqa: E402
     ReadOnlyConfigError,
     assert_read_only_session,
     check_writes_rejected,
     use_readonly_database,
 )
-from scripts.simulation.local_sim.roster import ROSTERS_DIR, save_roster  # noqa: E402
+from scripts.simulation.local_sim.roster import (  # noqa: E402
+    ROSTERS_DIR,
+    load_roster,
+    resolve_roster_path,
+    save_roster,
+)
 
 
 def _connect_readonly() -> Engine:
@@ -73,6 +87,78 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
             f" / {source.pilot_name or '-'} / チーム: {team}"
         )
     print(f"{len(roster.entries)} 機を保存しました: {path}")
+    return 0
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    roster = load_roster(args.roster)
+    roster_path = resolve_roster_path(args.roster)
+
+    from scripts.simulation.local_sim.run import RunOptions, forbid_database
+
+    forbid_database()
+    from scripts.simulation.local_sim.run import run_generation
+
+    options = RunOptions(
+        rounds=args.rounds,
+        seed=args.seed,
+        label=args.label,
+        pinned=args.pin,
+    )
+    if args.steps is not None:
+        options.max_steps = args.steps
+    print(
+        f"ロスター {roster.name} で {args.rounds} 戦を実行します（{len(roster.entries)} 機）"
+    )
+    result = run_generation(roster, roster_path, options)
+    manifest = result.manifest
+    summary = manifest.summary
+    print(
+        f"{summary.wins} 勝 {summary.losses} 敗（打ち切り {summary.timeouts}）"
+        f" / 判定する機体: {manifest.player_name} / seed: {manifest.seed}"
+    )
+    print(f"保存しました: {result.path}")
+    for path in result.removed:
+        print(f"  古い世代を削除しました: {path.name}")
+    return 0
+
+
+def _format_generation(manifest: Manifest) -> str:
+    summary = manifest.summary
+    return (
+        f"{'*' if manifest.pinned else ' '} {manifest.generation_id:<40}"
+        f" {manifest.created_at:%Y-%m-%d %H:%M:%S}"
+        f" {manifest.label:<20} {summary.battles:>4} 戦"
+        f" {summary.wins:>3} 勝 {summary.losses:>3} 敗"
+    )
+
+
+def _cmd_list(_args: argparse.Namespace) -> int:
+    generations = list_generations()
+    if not generations:
+        print(f"世代がありません（{GENERATIONS_DIR}）")
+        return 0
+    print(f"  {'世代':<40} {'日時':<19} {'ラベル':<20}   戦闘数  勝敗")
+    for _path, manifest in generations:
+        print(_format_generation(manifest))
+    print(
+        f"* はピン留め。ピン留めしていない世代は新しい {KEEP_UNPINNED_GENERATIONS} 世代だけ残します。"
+    )
+    return 0
+
+
+def _cmd_pin(args: argparse.Namespace) -> int:
+    path, _manifest = set_pinned(args.generation, True)
+    print(f"ピン留めしました: {path.name}")
+    return 0
+
+
+def _cmd_unpin(args: argparse.Namespace) -> int:
+    path, _manifest = set_pinned(args.generation, False)
+    print(
+        f"ピン留めを外しました: {path.name}"
+        f"（次の run で、新しい {KEEP_UNPINNED_GENERATIONS} 世代に入らなければ削除します）"
+    )
     return 0
 
 
@@ -163,6 +249,63 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fetch.set_defaults(func=_cmd_fetch)
 
+    run = sub.add_parser(
+        "run",
+        help="ロスターの機体でバトルを実行し、1世代として保存する（DB に接続しない）",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=f"""
+保存先: {GENERATIONS_DIR}/<日時>_<ラベル>/
+ピン留めしていない世代は新しい {KEEP_UNPINNED_GENERATIONS} 世代だけ残し、古い世代を削除する。
+
+使用例:
+  python -m scripts.simulation.local_sim run --roster solomon_test --rounds 20
+  python -m scripts.simulation.local_sim run --roster solomon_test --rounds 20 --seed 611 --label before
+""",
+    )
+    run.add_argument(
+        "--roster",
+        required=True,
+        help="ロスター名、またはロスターの JSON ファイルのパス",
+    )
+    run.add_argument(
+        "--rounds", type=int, default=1, metavar="N", help="戦闘数（既定 1）"
+    )
+    run.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="1戦の最大ステップ数。省略すると本番バッチの既定値（battle_execution.DEFAULT_MAX_STEPS）",
+    )
+    run.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="1戦目のシード。N 戦目は seed + N - 1。省略するとランダムに決めて記録する",
+    )
+    run.add_argument(
+        "--label",
+        default=None,
+        help="世代の名前。ディレクトリ名と一覧に使う。省略するとロスター名",
+    )
+    run.add_argument(
+        "--pin",
+        action="store_true",
+        help="保存する世代をピン留めする。世代管理で削除されない",
+    )
+    run.set_defaults(func=_cmd_run)
+
+    list_parser = sub.add_parser("list", help="保存した世代を一覧表示する")
+    list_parser.set_defaults(func=_cmd_list)
+
+    for name, func, help_text in (
+        ("pin", _cmd_pin, "世代をピン留めする。世代管理で削除されない"),
+        ("unpin", _cmd_unpin, "世代のピン留めを外す"),
+    ):
+        pin = sub.add_parser(name, help=help_text)
+        pin.add_argument("generation", help="世代ID（前方一致可）、またはラベル")
+        pin.set_defaults(func=func)
+
     check = sub.add_parser(
         "check-readonly",
         help="Read Only の接続で本番DBへの書き込みが拒否されることを確かめる",
@@ -176,7 +319,12 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
-    except (ReadOnlyConfigError, ValueError, FileExistsError) as exc:
+    except (
+        ReadOnlyConfigError,
+        ValueError,
+        FileExistsError,
+        FileNotFoundError,
+    ) as exc:
         print(f"エラー: {exc}", file=sys.stderr)
         return 1
 
