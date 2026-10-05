@@ -1,10 +1,12 @@
 """ローカルシミュレータの run（ロスターからの実行と世代管理）のテスト."""
 
+import json
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from sqlmodel import Session
 
 import app
@@ -207,6 +209,22 @@ def test_failed_run_leaves_no_generation(
         _run(roster_path, generations_dir, seed=1)
 
     assert list(generations_dir.iterdir()) == []
+    assert gamedata._static_ace_pilots is None
+
+
+def test_invalid_roster_leaves_no_state(
+    roster_path: Path, generations_dir: Path
+) -> None:
+    """手で壊したロスターでも、エースの参照を DB に戻し、世代を残さないこと."""
+    data = json.loads(roster_path.read_text(encoding="utf-8"))
+    data["conditions"]["battlefield"]["obstacles"] = "broken"
+    roster_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValidationError):
+        _run(roster_path, generations_dir, seed=1)
+
+    assert gamedata._static_ace_pilots is None
+    assert not generations_dir.exists() or list(generations_dir.iterdir()) == []
 
 
 @pytest.mark.parametrize(

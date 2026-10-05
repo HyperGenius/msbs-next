@@ -8,6 +8,8 @@ import copy
 import secrets
 import sys
 import types
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -169,6 +171,20 @@ def run_one_battle(
     )
 
 
+@contextmanager
+def _roster_battle_state(roster: Roster) -> Iterator[None]:
+    """ロスターのエースを渡す。抜けるときに、エースの参照と numpy の乱数を元に戻す.
+
+    どちらもプロセス全体の状態のため、例外で抜けても必ず戻す。
+    """
+    use_static_ace_pilots(roster.ace_pilots)
+    try:
+        yield
+    finally:
+        use_static_ace_pilots(None)
+        seed_numpy_rngs(None)
+
+
 def run_generation(
     roster: Roster,
     roster_path: Path,
@@ -196,29 +212,30 @@ def run_generation(
     )
     created_at = now or datetime.now().astimezone()
 
-    use_static_ace_pilots(roster.ace_pilots)
     conditions = roster_to_conditions(roster.conditions)
     player_index = player_entry_index(roster)
     writer = GenerationWriter(label, created_at, generations_dir)
     try:
         writer.write_roster(roster_path)
         battles: list[BattleSummary] = []
-        for index in range(1, options.rounds + 1):
-            record = run_one_battle(
-                roster,
-                conditions,
-                player_index,
-                index,
-                seed + index - 1,
-                options.max_steps,
-            )
-            summary = writer.write_battle(record)
-            battles.append(summary)
-            print(
-                f"  [{index}/{options.rounds}] seed={summary.seed} {summary.win_loss}"
-                f" 撃墜 {summary.kills} / {summary.elapsed_time:.1f}s"
-                + (" (打ち切り)" if summary.timed_out else "")
-            )
+        with _roster_battle_state(roster):
+            for index in range(1, options.rounds + 1):
+                record = run_one_battle(
+                    roster,
+                    conditions,
+                    player_index,
+                    index,
+                    seed + index - 1,
+                    options.max_steps,
+                )
+                summary = writer.write_battle(record)
+                battles.append(summary)
+                print(
+                    f"  [{index}/{options.rounds}] seed={summary.seed}"
+                    f" {summary.win_loss} 撃墜 {summary.kills}"
+                    f" / {summary.elapsed_time:.1f}s"
+                    + (" (打ち切り)" if summary.timed_out else "")
+                )
 
         manifest = Manifest(
             generation_id=writer.generation_id,
@@ -243,9 +260,6 @@ def run_generation(
     except BaseException:
         writer.discard()
         raise
-    finally:
-        use_static_ace_pilots(None)
-        seed_numpy_rngs(None)
 
     removed = prune_generations(generations_dir, keep)
     return RunResult(path=path, manifest=manifest, removed=removed)
