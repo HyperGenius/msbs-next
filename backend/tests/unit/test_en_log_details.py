@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.engine.calculator import PilotStats
 from app.engine.constants import EN_DEPLETED_REASON_CODE, EN_SHORTAGE_REASON_CODE
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
@@ -65,6 +66,9 @@ def _make_sim(
     # 射撃弧と LOS の判定で攻撃が止まらないよう、条件を固定する。
     sim.obstacles = []
     sim.unit_resources[str(player.id)]["body_heading_deg"] = 0.0
+    # 敵機は NPC として LUK を持ち、命中しても低確率で完全回避（MISS）になる。
+    # 命中のロールだけ固定するテストが乱数で落ちないよう、LUK を 0 にする。
+    sim.unit_pilot_stats[str(enemy.id)] = PilotStats()
     return sim, player, enemy
 
 

@@ -3,11 +3,12 @@
 ## 概要
 
 本番の参加機体を使って、バトルをローカルで実行する開発用のツール。
-Epic #608 で作る。このドキュメントは Sub-Issue 1（Issue #609）と Sub-Issue 2（Issue #610）の範囲を書く。
+Epic #608 で作る。このドキュメントは Sub-Issue 1〜3（Issue #609〜#611）の範囲を書く。
 
 * 戦闘処理は本番バッチと同じモジュール（`app/services/battle_execution.py`）を使う
 * `fetch` で本番DBから参加機体・NPC・エースと戦域条件を読み、手元の JSON（ロスター）に保存する
-* 本番DBへの接続は `fetch` の1回だけ。以降の実行（`run`、Sub-Issue 3）はロスターだけで行う
+* 本番DBへの接続は `fetch` の1回だけ。以降の実行（`run`）はロスターだけで行い、DB には接続しない
+* `run` は同じロスター・同じシードなら同じログを再現する。1回の `run` を1世代として保存し、直近5世代を残す
 * 本番DBには書き込まない。SELECT 権限だけのロールと `default_transaction_read_only` の2つで防ぐ
 
 ### 今後の予定（Epic #608）
@@ -16,7 +17,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1（Issue #609）と
 |---|---|
 | 1 | 本番バッチの戦闘実行処理を `app/services/` へ切り出す（Issue #609、実装済み。本ドキュメントの「[戦闘実行の共通モジュール](#戦闘実行の共通モジュール)」） |
 | 2 | Read Only 接続と参加機体の取得 `fetch`（Issue #610、実装済み。本ドキュメントの「[fetch: 参加機体の取得](#fetch-参加機体の取得)」） |
-| 3 | ロスターからの実行と世代管理 `run`（Issue #611） |
+| 3 | ロスターからの実行と世代管理 `run`（Issue #611、実装済み。本ドキュメントの「[run: ロスターからの実行](#run-ロスターからの実行)」「[世代管理](#世代管理-list--pin--unpin)」） |
 | 4 | 開発用バトルビューア `/dev/sim`（Issue #612） |
 | 5 | 世代間の比較とバランス分析表示（Issue #613） |
 | 6 | エースパイロットの参加必須指定（Issue #614） |
@@ -37,6 +38,7 @@ DB の読み書きとフェーズ制御だけを持つ。本番バッチの挙�
 | `build_unit_view_fields(entry_unit, units)` | `BattleResult` の `player_info`・`enemies_info` を組み立てる。プレイヤーごとに値が変わる |
 | `build_battlefield_view_fields(simulator)` | `BattleResult` の `obstacles_info`・`map_bounds` を組み立てる。ルーム内で共通のため、本番バッチはプレイヤーのループの外で1回だけ呼ぶ |
 | `resolve_team_id(unit)` / `alive_team_ids(units)` | チームの解決と、生き残ったチームの集合 |
+| `seed_battle_rngs(seed)` | 戦闘で使う乱数をすべて固定する（[再現性](#再現性)）。本番バッチは呼ばない |
 
 `BattleOutcome` は `simulator`・`player_win`・`kills`（プレイヤー機自身の撃墜数）・`steps_used` を持つ。
 
@@ -164,6 +166,9 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
     "theater_id": "solomon",
     "environment": "SPACE",
     "environment_profile": { "environment_id": "SPACE", "sensor_range_multiplier": 1.0, "...": "..." },
+    "theater_name": "ソロモン宙域",
+    "environment_name": "宇宙",
+    "viewer_preset": "SPACE",
     "minovsky_density": 0.6,
     "battlefield": { "obstacles": [], "spawn_zones": [], "obstacle_density": "MEDIUM" }
   },
@@ -187,6 +192,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | 項目 | 内容 |
 |---|---|
 | `conditions` | `TheaterService.battle_conditions()` で解決した戦域条件（`BattleConditions` と同じ項目） |
+| `conditions.theater_name` / `environment_name` / `viewer_preset` | 戦域・環境タイプの表示名とビューアの背景プリセット。`run` は DB を読まないため、結果に載せる値を取得時に保存する |
 | `entries[].source.kind` | `mobile_suit` / `pilot` / `npc` / `generated_npc` / `ace` |
 | `entries[].snapshot` | 本番の `BattleEntry.mobile_suit_snapshot` と同じ形式 |
 | `ace_pilots` | 参加エースの `ace_pilots` マスター。エンジンは戦闘中に `get_ace_pilot_by_id()` でエースのスキルを読むため、`run` はこの値を使って DB を読まずに実行する |
@@ -206,3 +212,156 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 
 * `tests/unit/test_local_sim_fetch.py`: 機体の選択、DB に書かないこと、戦域条件、ロスターの保存、Read Only の接続文字列
 * ローカルの PostgreSQL に上記の SQL で SELECT 権限だけのロールを作り、`check-readonly` で2つの書き込みが拒否されることと、`fetch` の前後で全テーブルの内容（`pg_dump`）と `pg_stat_user_tables` の書き込み件数が変わらないことを確認した
+
+---
+
+## run: ロスターからの実行
+
+```bash
+cd backend
+python -m scripts.simulation.local_sim run --roster solomon_test --rounds 20
+python -m scripts.simulation.local_sim run --roster solomon_test --rounds 20 --seed 611 --label before
+python -m scripts.simulation.local_sim run --roster ../battle_logs/local_sim/rosters/edited.json --pin
+```
+
+| オプション | 説明 |
+|---|---|
+| `--roster <名前>` | ロスター名、またはロスターの JSON ファイルのパス（必須） |
+| `--rounds N` | 戦闘数（既定 1） |
+| `--steps N` | 1戦の最大ステップ数。既定は本番バッチと同じ `battle_execution.DEFAULT_MAX_STEPS`（3000 = 300秒） |
+| `--seed N` | 1戦目のシード。N 戦目は `seed + N - 1`。省略するとランダムに決め、`manifest.json` に記録する |
+| `--label <名前>` | 世代の名前。ディレクトリ名と一覧に使う。省略するとロスター名 |
+| `--pin` | 保存する世代を最初からピン留めする |
+
+### 戦闘の組み立て
+
+戦闘は本番バッチと同じ `battle_execution` の関数で行う。
+
+* 勝敗と撃墜数を判定する機体（以下「判定する機体」）は、`is_npc` が `false` の先頭の機体。全機が NPC なら先頭の機体。本番の `player_entries[0]` と同じ選び方
+* 判定する機体を `prepare_battle_units()` のプレイヤー機にし、残りを敵機にする。チームは `team_id` で決まる
+* 勝敗は判定する機体のチームが生き残ったか。最大ステップ数で打ち切ったときも、生き残っていれば `WIN`（本番と同じ）
+* スナップショットは戦闘ごとにコピーしてから渡す（`snapshot_to_mobile_suit()` が dict を書き換えるため）
+
+### DB に接続しない仕組み
+
+* CLI は `app` 配下を import する前に `run.forbid_database()` を呼び、`app.db` を「参照するとエラーになるモジュール」に差し替える。
+  `backend/.env` に `NEON_DATABASE_URL` があっても接続しない
+* エンジンは戦闘中に `get_ace_pilot_by_id()` でエースのスキルを読む。`run` はロスターの `ace_pilots` を
+  `gamedata.use_static_ace_pilots()` で渡し、DB を読まずに返す。実行後は DB 参照に戻す
+* 戦域名・環境名はロスターの `conditions` から読む。ロスターに無ければ、戦域名は戦域IDにする
+
+### 再現性
+
+`seed_battle_rngs(seed)` を各戦闘の前に呼び、エンジンが使う次の3つの乱数を固定する。
+
+| 乱数 | 使う処理 |
+|---|---|
+| `random`（グローバル） | 命中・クリティカル・ダメージ乱数・格闘コンボなど |
+| `combat._part_hit_rng` | 被弾部位の選択 |
+| `app/engine/rng.py` の `new_numpy_rng()` | スポーン位置・障害物の配置・初速 |
+
+`np.random.default_rng()` は `np.random.seed()` で固定できない。そのため、エンジンは numpy の生成器を `new_numpy_rng()` で作る。
+`seed_numpy_rngs()` でシードを固定すると、作るたびに固定したシードから派生した系列を返す。
+固定しなければ毎回シードなしで作るため、本番の挙動は変わらない。
+
+* N 戦目の結果は `seed + N - 1` だけで決まり、前の戦闘に左右されない（`--seed 612` の1戦目と `--seed 611 --rounds 2` の2戦目は一致する）
+* 別プロセス・別の `PYTHONHASHSEED` で実行しても、`battle_NNN.json` はバイト単位で一致することを確認した
+* コード・ファジィルールが変われば結果も変わる。`manifest.json` の `git` と `fuzzy_rules_hash` で実行時の状態を確かめる
+
+### 保存形式
+
+```text
+battle_logs/local_sim/
+  rosters/                         # fetch のロスター（世代管理の対象外）
+  generations/
+    20261005-213000_<label>/       # 1世代 = 1回の run
+      manifest.json                # 実行条件・再現情報・勝敗サマリー・ピン留め状態
+      roster.json                  # 実行時のロスターのコピー（ファイルをそのままコピー）
+      battle_001.json              # 1戦分
+      battle_002.json
+```
+
+* スキーマは `backend/scripts/simulation/local_sim/generations.py` の Pydantic モデル（`Manifest` / `BattleRecord`）。Sub-Issue 4 のビューアはこれで読む
+* 世代は一時ディレクトリ（`.tmp-<世代ID>`）に書き、全部書けてから世代ディレクトリへ移す。途中で失敗した世代は残らない
+* 同じ秒・同じラベルの世代があれば、ディレクトリ名に `-2` などを付ける
+
+#### manifest.json
+
+```json
+{
+  "schema_version": 1,
+  "generation_id": "20261005-213000_before",
+  "label": "before",
+  "created_at": "2026-10-05T21:30:00+09:00",
+  "pinned": false,
+  "roster_name": "solomon_test",
+  "roster_file": "roster.json",
+  "player_entry_index": 0,
+  "player_name": "Zaku II",
+  "seed": 611,
+  "rounds": 20,
+  "max_steps": 3000,
+  "git": { "commit": "0be8a5d…", "dirty": true },
+  "fuzzy_rules_hash": "ae1c1073…",
+  "theater_id": "solomon",
+  "environment": "SPACE",
+  "minovsky_density": 0.35,
+  "summary": { "battles": 20, "wins": 8, "losses": 12, "timeouts": 1, "total_kills": 15 },
+  "battles": [
+    { "index": 1, "file": "battle_001.json", "seed": 611, "win_loss": "LOSE", "kills": 2,
+      "elapsed_time": 128.9, "steps_used": 1289, "timed_out": false }
+  ]
+}
+```
+
+| 項目 | 内容 |
+|---|---|
+| `player_entry_index` / `player_name` | 判定する機体の、ロスターの `entries` での位置と機体名 |
+| `seed` | 1戦目のシード。N 戦目は `seed + N - 1`（`battles[].seed`） |
+| `git.commit` / `git.dirty` | 実行時の HEAD と、未コミットの変更（未追跡のファイルを含む）の有無。git が無ければ `null` |
+| `fuzzy_rules_hash` | `backend/data/fuzzy_rules/` の全ファイルの相対パスと中身から作った SHA-256 |
+| `summary` | 戦闘数・勝ち・負け・打ち切り（`timed_out`）の数・判定する機体の撃墜数の合計 |
+| `battles[].timed_out` | 最大ステップ数で打ち切ったか |
+
+#### battle_NNN.json
+
+本番の `BattleResult` の表示用の項目と、ログを持つ。
+
+| 項目 | 内容 |
+|---|---|
+| `index` / `seed` | 戦闘番号（1 始まり）とシード |
+| `win_loss` / `kills` | 判定する機体の勝敗（`WIN` / `LOSE`）と撃墜数 |
+| `elapsed_time` / `steps_used` / `timed_out` | 戦闘の経過時間（秒）・使ったステップ数・打ち切ったか |
+| `environment` / `theater_id` / `theater_name` / `environment_name` / `viewer_preset` / `minovsky_density` | 戦域条件と表示名 |
+| `player_info` | エントリー時点の判定する機体（本番と同じく戦闘前の状態） |
+| `enemies_info` | 判定する機体以外の全ユニット（戦闘後の状態） |
+| `obstacles_info` / `map_bounds` | 障害物と、戦闘終了時のフィールド範囲 |
+| `logs` | `BattleLog` の一覧。`strip_debug_fields()` を通さず、`fuzzy_scores` などのデバッグ項目を残す |
+
+1戦のサイズはログの行数に比例する。5機・約1300ステップの戦闘で約1.5万行・約14MB だった
+（Issue の見積もりの 650KB は 601行の `battle_logs/sample.json` の値）。
+20戦×5世代では 1GB を超えうるため、不要な世代は消すかピン留めを外す。
+ログはインデントを付けずに保存し、`manifest.json` だけ整形する。
+
+---
+
+## 世代管理: list / pin / unpin
+
+```bash
+cd backend
+python -m scripts.simulation.local_sim list
+python -m scripts.simulation.local_sim pin before
+python -m scripts.simulation.local_sim unpin 20261005-2130
+```
+
+* `run` の保存後、ピン留めしていない世代が5つを超えたら古い順に削除する（`generations.KEEP_UNPINNED_GENERATIONS`）
+* ピン留めした世代は5世代の数に含めず、削除しない。`run --pin` で最初からピン留めできる
+* `pin` / `unpin` の引数は世代ID、その前方一致、またはラベル。複数の世代に該当するとエラーにする
+* ピン留めを外した世代は、次の `run` で新しい5世代に入らなければ削除される
+* `list` は世代を古い順に、世代ID・日時・ラベル・戦闘数・勝敗・ピン留め（行頭の `*`）で表示する
+* `manifest.json` が無いディレクトリと一時ディレクトリは、一覧にも削除の対象にもならない
+
+### 検証（run）
+
+* `tests/unit/test_local_sim_run.py`: 保存する内容、同じシードでのログの一致、戦闘ごとの独立性、DB を参照しないこと、失敗時に世代を残さないこと、6回目の実行での削除とピン留め、`pin` / `unpin`
+* SQLite のテストDBで作ったロスターを、`NEON_READONLY_DATABASE_URL` を外した状態で `run --seed 611 --rounds 2` を2回（`PYTHONHASHSEED` を変えて）実行し、`battle_001.json`・`battle_002.json` が一致することを確認した

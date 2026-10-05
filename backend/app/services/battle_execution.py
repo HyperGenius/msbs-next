@@ -4,13 +4,16 @@
 どの関数も DB セッションを使わない。
 """
 
+import random
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
+from app.engine import combat
 from app.engine.battle_digest import compute_unit_kills
 from app.engine.battle_utils import serialize_obstacles
+from app.engine.rng import seed_numpy_rngs
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
 from app.services.theater_service import BattleConditions
@@ -90,6 +93,17 @@ def prepare_battle_units(
             unit.team_id = str(unit.id)
 
     return player_unit, enemy_units
+
+
+def seed_battle_rngs(seed: int) -> None:
+    """戦闘で使う乱数をすべて固定する.
+
+    同じシード・同じユニットで `run_battle()` を呼ぶと、同じログになる。
+    部位選択は `random` と別の RNG を使うため、個別に固定する。
+    """
+    random.seed(seed)
+    combat._part_hit_rng.seed(seed)
+    seed_numpy_rngs(seed)
 
 
 def run_battle(
