@@ -72,26 +72,16 @@ class TargetingMixin:
         )
         grid = UnitSpatialGrid(alive_units, max_effective_range)
 
+        # 1) 既に発見済みの敵: 索敵範囲外に出ていてもLOS喪失チェックのため処理する
+        if self.obstacles:  # type: ignore[attr-defined]
+            self._drop_detections_without_team_los(alive_units)
+
         for unit in alive_units:
             if unit.team_id is None:
                 continue
             pos_unit = unit.position.to_numpy()
             effective_sensor_range = unit.sensor_range * sensor_multiplier
             team_detected = self.team_detected_units[unit.team_id]  # type: ignore[attr-defined]
-
-            # 1) 既に発見済みの敵: 索敵範囲外に出ていてもLOS喪失チェックのため処理する
-            already_detected_ids = list(team_detected)
-            for target_id in already_detected_ids:
-                target = self._units_by_id.get(target_id)  # type: ignore[attr-defined]
-                if (
-                    target is None
-                    or target.current_hp <= 0
-                    or target.team_id == unit.team_id
-                ):
-                    continue
-                self._process_single_detection(
-                    unit, target, pos_unit, effective_sensor_range, falloff_exponent
-                )
 
             # 2) 未発見の敵: グリッドで絞り込んだ近傍候補のみ新規索敵判定を行う
             for target in grid.neighbors(pos_unit):
@@ -100,6 +90,40 @@ class TargetingMixin:
                 self._process_single_detection(
                     unit, target, pos_unit, effective_sensor_range, falloff_exponent
                 )
+
+    def _drop_detections_without_team_los(self, alive_units: list[MobileSuit]) -> None:
+        """チームの誰からも射線が通らない敵を、そのチームの発見済みから外す.
+
+        発見済みはチームで共有する。そのため 1 機の射線だけで外すと、
+        射線が通る味方まで敵を見失う。
+        外した敵の座標は、そのチームの生存ユニット全員の最終座標に残す。
+        """
+        members_by_team: dict[str, list[MobileSuit]] = {}
+        for unit in alive_units:
+            if unit.team_id is not None:
+                members_by_team.setdefault(unit.team_id, []).append(unit)
+
+        for team_id, members in members_by_team.items():
+            team_detected = self.team_detected_units[team_id]  # type: ignore[attr-defined]
+            for target_id in list(team_detected):
+                target = self._units_by_id.get(target_id)  # type: ignore[attr-defined]
+                if target is None or target.current_hp <= 0:
+                    continue
+                pos_target = target.position.to_numpy()
+                if any(
+                    has_los(
+                        member.position.to_numpy(),
+                        pos_target,
+                        self.obstacles,  # type: ignore[attr-defined]
+                    )
+                    for member in members
+                ):
+                    continue
+                team_detected.discard(target_id)
+                for member in members:
+                    self.unit_resources[str(member.id)]["last_known_enemy_position"][  # type: ignore[attr-defined]
+                        str(target_id)
+                    ] = pos_target.tolist()
 
     def _minovsky_detection_params(self) -> tuple[float, float]:
         """ミノフスキー濃度 m から (索敵範囲の倍率, 距離減衰指数) を返す.
@@ -121,25 +145,10 @@ class TargetingMixin:
         effective_sensor_range: float,
         falloff_exponent: float,
     ) -> None:
-        """単一ターゲットへの索敵判定を処理する."""
+        """未発見の単一ターゲットへの索敵判定を処理する."""
         assert unit.team_id is not None  # 呼び出し元で None チェック済み
-        unit_id = str(unit.id)
         pos_target = target.position.to_numpy()
         distance = float(np.linalg.norm(pos_target - pos_unit))
-
-        if target.id in self.team_detected_units[unit.team_id]:  # type: ignore[attr-defined]
-            # 既に発見済み — LOS が失われていないか再チェック（障害物がある場合）
-            if self.obstacles and not has_los(  # type: ignore[attr-defined]
-                pos_unit,
-                pos_target,
-                self.obstacles,  # type: ignore[attr-defined]
-            ):
-                # LOS 喪失: 発見済みリストから除外し最終座標を記憶
-                self.team_detected_units[unit.team_id].discard(target.id)  # type: ignore[attr-defined]
-                self.unit_resources[unit_id]["last_known_enemy_position"][  # type: ignore[attr-defined]
-                    str(target.id)
-                ] = pos_target.tolist()
-            return
 
         # 索敵範囲外なら終了
         if distance > effective_sensor_range:
