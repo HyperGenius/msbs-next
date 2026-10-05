@@ -2,8 +2,10 @@ import useSWR from "swr";
 import {
   BattleResult,
   LocalSimBattle,
+  LocalSimDecisionLog,
   LocalSimGenerationList,
   LocalSimManifest,
+  LocalSimReport,
 } from "@/types/battle";
 import { fetcher } from "./auth";
 import { useNdjsonBattleLogs } from "./battle";
@@ -50,6 +52,36 @@ export function useLocalSimBattleLogs(generationId: string | null, index: number
   return useNdjsonBattleLogs(
     generationId && index !== null ? `${localSimBattleUrl(generationId, index)}/logs` : null
   );
+}
+
+/** 世代の集計値（report.json）を取得するSWRフック。generationId が null ならフェッチしない */
+export function useLocalSimReport(generationId: string | null) {
+  const { data, error, isLoading } = useSWR<LocalSimReport>(
+    generationId ? `${LOCAL_SIM_API}/${encodeURIComponent(generationId)}/report` : null,
+    fetcher,
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+
+  return {
+    report: data,
+    isLoading,
+    isError: error as (Error & { status?: number }) | undefined,
+  };
+}
+
+/** 1機の AI の判断ログを取得するSWRフック。unitId が null ならフェッチしない */
+export function useLocalSimDecisionLogs(generationId: string, index: number, unitId: string | null) {
+  const { data, error, isLoading } = useSWR<LocalSimDecisionLog[]>(
+    unitId ? `${localSimBattleUrl(generationId, index)}/decisions?unit=${encodeURIComponent(unitId)}` : null,
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  );
+
+  return {
+    decisions: data,
+    isLoading,
+    isError: error,
+  };
 }
 
 /**

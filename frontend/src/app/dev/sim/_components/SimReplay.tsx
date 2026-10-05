@@ -10,6 +10,7 @@ import {
 } from "@/services/api";
 import ModalHeader from "@/components/history/ModalHeader";
 import BattleReplayPanel from "@/components/history/BattleReplayPanel";
+import SimDebugPanel from "./SimDebugPanel";
 
 interface SimReplayProps {
   manifest: LocalSimManifest;
@@ -17,7 +18,7 @@ interface SimReplayProps {
   onClose: () => void;
 }
 
-/** 1戦を履歴詳細と同じ部品で再生する。 */
+/** 1戦を履歴詳細と同じ部品で再生し、選んだ機体の AI の判断を再生位置に合わせて表示する。 */
 export default function SimReplay({ manifest, index, onClose }: SimReplayProps) {
   const { battle, isError } = useLocalSimBattle(manifest.generation_id, index);
   const {
@@ -30,6 +31,7 @@ export default function SimReplay({ manifest, index, onClose }: SimReplayProps) 
     () => (battle ? localSimBattleToResult(manifest, battle) : null),
     [manifest, battle]
   );
+  const units = useMemo(() => (battle ? [battle.player_info, ...battle.enemies_info] : []), [battle]);
 
   if (isError || logsError) {
     return (
@@ -55,6 +57,14 @@ export default function SimReplay({ manifest, index, onClose }: SimReplayProps) 
         logs={logs ?? []}
         logsLoading={logsLoading}
         logsStreaming={logsStreaming}
+        renderTimelinePanel={(currentTimestamp) => (
+          <SimDebugPanel
+            generationId={manifest.generation_id}
+            index={index}
+            units={units}
+            currentTimestamp={currentTimestamp}
+          />
+        )}
       />
     </div>
   );
