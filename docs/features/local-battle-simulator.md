@@ -3,13 +3,14 @@
 ## 概要
 
 本番の参加機体を使って、バトルをローカルで実行する開発用のツール。
-Epic #608 で作る。このドキュメントは Sub-Issue 1〜3（Issue #609〜#611）の範囲を書く。
+Epic #608 で作る。このドキュメントは Sub-Issue 1〜4（Issue #609〜#612）の範囲を書く。
 
 * 戦闘処理は本番バッチと同じモジュール（`app/services/battle_execution.py`）を使う
 * `fetch` で本番DBから参加機体・NPC・エースと戦域条件を読み、手元の JSON（ロスター）に保存する
 * 本番DBへの接続は `fetch` の1回だけ。以降の実行（`run`）はロスターだけで行い、DB には接続しない
 * `run` は同じロスター・同じシードなら同じログを再現する。1回の `run` を1世代として保存し、直近5世代を残す
 * 本番DBには書き込まない。SELECT 権限だけのロールと `default_transaction_read_only` の2つで防ぐ
+* 保存した結果は、開発環境の `/dev/sim` で本番の履歴詳細と同じ画面で再生できる
 
 ### 今後の予定（Epic #608）
 
@@ -18,7 +19,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜3（Issue #609�
 | 1 | 本番バッチの戦闘実行処理を `app/services/` へ切り出す（Issue #609、実装済み。本ドキュメントの「[戦闘実行の共通モジュール](#戦闘実行の共通モジュール)」） |
 | 2 | Read Only 接続と参加機体の取得 `fetch`（Issue #610、実装済み。本ドキュメントの「[fetch: 参加機体の取得](#fetch-参加機体の取得)」） |
 | 3 | ロスターからの実行と世代管理 `run`（Issue #611、実装済み。本ドキュメントの「[run: ロスターからの実行](#run-ロスターからの実行)」「[世代管理](#世代管理-list--pin--unpin)」） |
-| 4 | 開発用バトルビューア `/dev/sim`（Issue #612） |
+| 4 | 開発用バトルビューア `/dev/sim`（Issue #612、実装済み。本ドキュメントの「[/dev/sim: 開発用バトルビューア](#devsim-開発用バトルビューア)」） |
 | 5 | 世代間の比較とバランス分析表示（Issue #613） |
 | 6 | エースパイロットの参加必須指定（Issue #614） |
 
@@ -365,3 +366,77 @@ python -m scripts.simulation.local_sim unpin 20261005-2130
 
 * `tests/unit/test_local_sim_run.py`: 保存する内容、同じシードでのログの一致、戦闘ごとの独立性、DB を参照しないこと、失敗時に世代を残さないこと、6回目の実行での削除とピン留め、`pin` / `unpin`
 * SQLite のテストDBで作ったロスターを、`NEON_READONLY_DATABASE_URL` を外した状態で `run --seed 611 --rounds 2` を2回（`PYTHONHASHSEED` を変えて）実行し、`battle_001.json`・`battle_002.json` が一致することを確認した
+
+---
+
+## /dev/sim: 開発用バトルビューア
+
+`run` で保存した世代を、本番の履歴詳細と同じ部品でブラウザ再生する。開発環境（`npm run dev`）専用。
+
+```bash
+cd frontend
+npm run dev
+# http://localhost:3000/dev/sim を開く
+```
+
+1. 左の「世代」に世代が新しい順に並ぶ（ラベル・日時・戦闘数・勝敗・撃墜数・ロスター名・コミット。ピン留めは 📌）
+2. 世代を選ぶと「バトル」に戦闘の一覧が出る（戦闘番号・勝敗・経過時間・撃墜数・打ち切り・シード）
+3. バトルを選ぶと右側で再生する
+
+* 選んだ世代とバトルは URL（`/dev/sim?gen=<世代ID>&battle=<戦闘番号>`）に入る。再読み込みしても同じバトルを開く
+* 世代が無いときは、`fetch` と `run` の実行方法を表示する
+* 読み込み元は環境変数 `LOCAL_SIM_DIR`。省略するとリポジトリ直下の `battle_logs/local_sim`（`npm run dev` を動かす `frontend/` の親）。
+  変えたときは `npm run dev` を起動し直す
+* 世代の一覧は開いたときに1回だけ読む。新しく `run` した世代を出すにはページを再読み込みする
+
+### 本番の履歴詳細との共通化
+
+`BattleDetailModal` の再生部分を `frontend/src/components/history/BattleReplayPanel.tsx` に切り出した。
+`BattleReplayPanel` はログと機体情報を props で受け取り、`BattleViewer`・`ChapterTrack`・`useBattleChapters`・`TurnController`・`BattleSummaryPanel` で描画する。
+ヘッダーも履歴詳細と同じ `ModalHeader` を使う（✕ でバトルの選択を外す）。
+
+| | 履歴詳細（`BattleDetailModal`） | `/dev/sim`（`SimReplay`） |
+|---|---|---|
+| バトルの情報 | API の `BattleResult` | `battle_NNN.json` を `localSimBattleToResult()` で `BattleResult` に変換 |
+| ログ | `useBattleLogs()`（バックエンドの NDJSON） | `useLocalSimBattleLogs()`（Route Handler の NDJSON） |
+
+どちらも `useNdjsonBattleLogs()` でログを段階的に読む。全件が届く前から再生でき、続きの読み込み中は表示が出る。
+`battle_NNN.json` に無い項目（被攻撃回数・戦利品・ダイジェストなど本番のバッチで作る項目）は「—」か非表示になる。
+
+### Route Handler
+
+`frontend/src/app/api/dev/sim/`。ファイルの読み込みは `_lib/localSimStore.ts` にまとめた。
+
+| パス | 返す内容 |
+|---|---|
+| `GET /api/dev/sim/generations` | 読み込み元の絶対パスと、全世代の `manifest.json`（新しい順） |
+| `GET /api/dev/sim/generations/{世代ID}/battles/{戦闘番号}` | `battle_NNN.json` のログ以外の項目と、ログの件数（`log_count`） |
+| `GET /api/dev/sim/generations/{世代ID}/battles/{戦闘番号}/logs` | ログの NDJSON（本番の `/api/battles/{id}/logs` と同じ形式） |
+
+* 一覧は `manifest.json` だけで作る。`battle_NNN.json`（1戦で数MB〜十数MB）はバトルを選んだときにだけ読む
+* ログからは表示に使わない `fuzzy_scores` を除いて返す。転送量が約1/4減る（7.5MB のファイルで 5.75MB）。ファイルはそのまま
+* 世代ID は CLI のラベルと同じく、英数字で始まり英数字と `_.-` だけのものに限る（`..` と書き込み中の `.tmp-` を弾く）
+* 戦闘のファイル名は `manifest.json` の `battles[].file` から引き、`battle_<数字>.json` の形に限る
+* シンボリックリンクを辿った先が読み込み元の外なら読まない
+
+### 開発環境だけで使えるようにする仕組み
+
+| 層 | `NODE_ENV !== "development"` のとき |
+|---|---|
+| ページ（`app/dev/sim/page.tsx`） | `notFound()` で 404 |
+| Route Handler | `{"detail": "Not Found"}` を 404 で返す |
+| Clerk（`middleware.ts`） | `/dev(.*)`・`/api/dev(.*)` を公開ルートに入れない（未ログインなら Clerk が 404 にする） |
+
+### 保存形式についての判断
+
+1戦が十数MBになる問題（Issue #612 のコメント）は、保存形式を変えずにビューア側で対応した（案 A）。
+
+* 一覧は `manifest.json` だけで作り、バトルは選んだときに1戦ずつ読む
+* `fuzzy_scores` は Route Handler で除く
+* 値が null の項目を省く案（B）と gzip の案（C）は採らなかった。ディスクの使用量は、世代管理（直近5世代）と不要な世代のピン留めを外す運用で抑える
+
+### 検証（/dev/sim）
+
+* `frontend/tests/unit/localSimStore.test.ts`: 世代の並び順・一時ディレクトリの除外・パスの検証・シンボリックリンク・`fuzzy_scores` の除去・NDJSON・開発環境の判定
+* `run --rounds 3` で作った世代（1戦 7〜10MB）を `npm run dev` で開き、世代一覧・バトル一覧・再生・チャプター・戦果サマリーが表示されることを確認した
+* `npm run build && npm run start` で `/dev/sim` と `/api/dev/sim/...` が 404 になることを確認した。`middleware.ts` を外した状態でも、ページと Route Handler 自身が 404 を返すことを確認した

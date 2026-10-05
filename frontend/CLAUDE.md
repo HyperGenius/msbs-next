@@ -16,6 +16,7 @@ services/
 ├── entry.ts        ← バトルエントリー
 ├── friends.ts      ← フレンド申請・承認・拒否・解除
 ├── leaderboard.ts  ← リーダーボード・プレイヤー検索
+├── localSim.ts     ← ローカルシミュレーション結果（/dev/sim、開発環境専用）
 ├── mobileSuit.ts   ← 機体の取得・更新
 ├── pilot.ts        ← パイロット CRUD・ステータス配分
 ├── shop.ts         ← ショップ商品一覧・購入
@@ -55,6 +56,7 @@ types/
 ├── blueprint.ts    ← 設計図コレクション（図鑑）・技術Lvの進捗
 ├── geometry.ts     ← Position 型など空間座標
 ├── leaderboard.ts  ← ランキング・EnrichedPlayerProfile
+├── localSim.ts     ← ローカルシミュレーションの世代・1戦分（/dev/sim）
 ├── mobileSuit.ts   ← MobileSuit・戦術設定など
 ├── pilot.ts        ← Pilot・Faction・ステータス
 ├── shop.ts         ← ショップ商品・強化プレビュー・武器管理
@@ -81,6 +83,7 @@ social     → (なし)
 blueprint  → shop
 admin      → weapon
 theater    → (なし)
+localSim   → geometry, mobileSuit
 ```
 
 ---
