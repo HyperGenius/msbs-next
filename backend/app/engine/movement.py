@@ -8,6 +8,7 @@ from typing import NamedTuple
 import numpy as np
 
 from app.engine.battle_utils import en_log_details
+from app.engine.combat import has_los
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
     ATTACK_TARGET_ATTRACTION_COEFF,
@@ -286,12 +287,14 @@ class MovementMixin:
     ) -> np.ndarray:
         """攻撃ターゲットへの力を返す（ATTACK行動時）.
 
-        目標交戦距離があればばねの力にする。無ければターゲットへ一定の力で引き寄せる。
+        目標交戦距離があり射線が通るときは、ばねの力にする。
+        それ以外はターゲットへ一定の力で引き寄せる。
+        射線が遮られたまま間合いを保つと、撃てないまま止まるため。
         """
         if target is None:
             return np.zeros(3)
         pos_target = target.position.to_numpy()
-        if engagement is not None:
+        if engagement is not None and has_los(pos_unit, pos_target, self.obstacles):  # type: ignore[attr-defined]
             return self._engagement_force(
                 pos_unit, pos_target, engagement, ATTACK_TARGET_ATTRACTION_COEFF
             )
@@ -313,7 +316,8 @@ class MovementMixin:
         `UnitSpatialGrid.nearest()` の環状探索を使い、近傍セルに候補がいない場合は
         探索範囲を自動的に拡張することで、単純な近傍セル限定探索とは異なり常に
         真のグローバル最近敵を選択する（Issue #450）。
-        索敵済みの最近敵が `weapon` の射程内にいるときは、目標交戦距離のばねにする。
+        索敵済みの最近敵が `weapon` の射程内にいて射線が通るときは、
+        目標交戦距離のばねにする。
         """
         grid = self._get_movement_grid()  # type: ignore[attr-defined]
         closest_enemy = grid.nearest(
@@ -332,6 +336,7 @@ class MovementMixin:
             and weapon is not None
             and dist <= float(weapon.range)
             and closest_enemy.id in self.team_detected_units.get(unit.team_id, set())  # type: ignore[attr-defined]
+            and has_los(pos_unit, pos_enemy, self.obstacles)  # type: ignore[attr-defined]
         ):
             return self._engagement_force(
                 pos_unit, pos_enemy, engagement, CLOSEST_ENEMY_ATTRACTION_COEFF
@@ -574,7 +579,8 @@ class MovementMixin:
             )
 
         # 2. MOVE 行動時の最近敵への引力（RETREAT 時は撤退ポイントへ向かうため除外）
-        if current_action == "MOVE":
+        # ATTACK でもターゲットを見失った（索敵が外れた）ときは同じ引力で探しに行く。
+        if current_action == "MOVE" or (current_action == "ATTACK" and target is None):
             total_force += self._closest_enemy_attraction(
                 unit, pos_unit, reference_weapon, engagement
             )

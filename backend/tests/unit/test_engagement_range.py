@@ -14,10 +14,19 @@ from app.engine.constants import (
 )
 from app.engine.movement import EngagementRange, MovementMixin
 from app.engine.simulation import BattleSimulator
-from app.models.models import MobileSuit, Vector3, Weapon
+from app.models.models import MobileSuit, Obstacle, Vector3, Weapon
 
 # 2 機のときのフィールドは 2000m 四方。境界の影響を受けない中央付近を使う。
 _CENTER = 1000.0
+
+
+@pytest.fixture(autouse=True)
+def _no_flanking(monkeypatch: pytest.MonkeyPatch) -> None:
+    """フランキングを発動させない.
+
+    スキルなしでも確率で発動し、移動方向が敵の背後へ向くため。
+    """
+    monkeypatch.setattr("app.engine.movement.random.random", lambda: 1.0)
 
 
 def _make_weapon(
@@ -278,6 +287,23 @@ class TestPotentialFieldEngagement:
         # ストレイフの接線成分が加わるため、真っすぐには向かわない。
         assert _radial(direction, player, enemy) > 0.8
         assert resources["engagement_range"] is None
+
+    def test_attack_approaches_when_line_of_sight_blocked(self) -> None:
+        """射線が障害物で遮られているときは、近すぎても間合いを取らず近づく."""
+        # 障害物の斥力が届かない位置に置く。
+        sim, player, enemy = _setup(_CENTER - 200, _CENTER)
+        sim.obstacles = [
+            Obstacle(
+                obstacle_id="wall",
+                position=Vector3(x=_CENTER - 100, y=0, z=_CENTER),
+                radius=20.0,
+            )
+        ]
+        sim.unit_resources[str(player.id)]["current_action"] = "ATTACK"
+
+        direction = sim._calculate_potential_field(player, target=enemy)
+
+        assert _radial(direction, player, enemy) > 0.0
 
     def test_move_backs_off_from_detected_enemy_in_range(self) -> None:
         """MOVE 中、射程内の索敵済みの敵が近すぎると離れる."""
