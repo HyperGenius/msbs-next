@@ -443,6 +443,9 @@ EN HIGH 時は `asl_ws_rule_002` / `asl_ws_rule_006` が同じ HIGH を出すた
 | RETREAT | 200 (CLOSE) | 0.1 | 0.117 | 0.681 |
 | RETREAT | 900 (MID) | 0.1 | 0.500 | 0.883 |
 | RETREAT | 2000 (FAR) | 0.1 | 0.500 | 0.883 |
+| RETREAT | 2000 (FAR) | 0.9 | 0.883 | 0.883 |
+
+※ 耐性 0・弾薬満タン時の `weapon_score`。
 
 ### 8.6 最適距離との比による武器選択（全戦略共通、Issue #597）
 
@@ -484,9 +487,6 @@ EN HIGH 時は `asl_ws_rule_002` / `asl_ws_rule_006` が同じ HIGH を出すた
 
 SNIPER は既存ルール（`snp_ws_rule_008`: CLOSE AND weapon_is_beam=TRUE → LOW）で、300m 未満のビーム武器を一律 LOW にしている。
 そのため SNIPER の 300m 未満では、射程外のサーベルと射程内のライフルが同じスコアになることがある。
-| RETREAT | 2000 (FAR) | 0.9 | 0.883 | 0.883 |
-
-※ 耐性 0・弾薬満タン時の `weapon_score`。
 
 ---
 
