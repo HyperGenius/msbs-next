@@ -248,6 +248,43 @@ def test_detection_los_lost_stores_last_known_position() -> None:
     )
 
 
+def _setup_team_los(
+    second_ally_blocked: bool,
+) -> tuple[BattleSimulator, MobileSuit, MobileSuit, MobileSuit]:
+    """味方 2 機と発見済みの敵 1 機を置く（1 機目の味方からは射線が通らない）."""
+    ally_blocked = _make_unit("AllyBlocked", "PLAYER", "PT", Vector3(x=0, y=0, z=0))
+    ally_z = 0.0 if second_ally_blocked else 600.0
+    ally = _make_unit("Ally", "PLAYER", "PT", Vector3(x=0, y=0, z=ally_z))
+    enemy = _make_unit("Enemy", "ENEMY", "ET", Vector3(x=1000, y=0, z=0))
+    sim = BattleSimulator(ally_blocked, [ally, enemy])
+    sim.team_detected_units["PT"].add(enemy.id)
+    # x=0〜1000 の z=0 の射線だけを遮る。
+    sim.obstacles = [_make_obstacle("obs1", 500.0, 0.0, 0.0, 100.0)]
+    return sim, ally_blocked, ally, enemy
+
+
+def test_detection_kept_while_any_ally_has_los() -> None:
+    """味方の誰か 1 機から射線が通れば、敵はチームの発見済みに残ること."""
+    sim, _, ally, enemy = _setup_team_los(second_ally_blocked=False)
+
+    sim._detection_phase()
+
+    assert enemy.id in sim.team_detected_units["PT"]
+    assert sim._select_target_fuzzy(ally) is enemy
+
+
+def test_detection_dropped_when_no_ally_has_los() -> None:
+    """味方の全員から射線が切れたら、敵を発見済みから外し、全員に最終座標を残すこと."""
+    sim, ally_blocked, ally, enemy = _setup_team_los(second_ally_blocked=True)
+
+    sim._detection_phase()
+
+    assert enemy.id not in sim.team_detected_units["PT"]
+    for unit in (ally_blocked, ally):
+        last_known = sim.unit_resources[str(unit.id)]["last_known_enemy_position"]
+        assert last_known[str(enemy.id)] == [1000.0, 0.0, 0.0]
+
+
 def test_detection_no_obstacles_backward_compatible() -> None:
     """obstacles=[] の場合、従来通りに発見されること（後方互換性）."""
     player = _make_unit(
