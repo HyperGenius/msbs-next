@@ -184,10 +184,16 @@ export async function fetchBattleLogsNdjson(
  * `isLoading`、「まだバックグラウンドで読み込み中か」を`isStreaming`で判別できる。
  */
 export function useBattleLogs(battleResultId: string | null) {
-  const key = battleResultId ? `${API_BASE_URL}/api/battles/${battleResultId}/logs` : null;
+  return useNdjsonBattleLogs(battleResultId ? `${API_BASE_URL}/api/battles/${battleResultId}/logs` : null);
+}
 
+/**
+ * NDJSON のバトルログを段階的に取得するSWRフック。url が null ならフェッチしない。
+ * 返す値は `useBattleLogs` と同じ。
+ */
+export function useNdjsonBattleLogs(url: string | null) {
   const { data, error, isLoading, isValidating } = useSWR<BattleLog[]>(
-    key,
+    url,
     (fetchUrl: string) =>
       fetchBattleLogsNdjson(fetchUrl, (partialLogs) => {
         // 既存データより件数が少ない更新は無視し、単調増加のみ許可する。
