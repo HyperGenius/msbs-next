@@ -68,6 +68,8 @@ python -m scripts.simulation.local_sim list                    # 保存した世
 python -m scripts.simulation.local_sim pin <世代>               # 世代管理で削除しないようにする
 python -m scripts.simulation.local_sim report <世代>            # 勝敗・戦闘時間・行動分布・機体ごとの撃墜数を集計
 python -m scripts.simulation.local_sim compare <世代A> <世代B>   # 2つの世代の集計値と差を表示
+python -m scripts.simulation.local_sim log-bench --roster <ロスター名>   # 50機の戦闘でログのサイズとパースの負荷を測る
+python -m scripts.simulation.local_sim log-compare <計測A> <計測B>        # 2つの計測結果を並べる
 ```
 
 詳細は `docs/features/local-battle-simulator.md` を参照してください。

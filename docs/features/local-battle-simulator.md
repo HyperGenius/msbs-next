@@ -12,6 +12,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609�
 * 本番DBには書き込まない。SELECT 権限だけのロールと `default_transaction_read_only` の2つで防ぐ
 * 保存した結果は、開発環境の `/dev/sim` で本番の履歴詳細と同じ画面で再生できる
 * `report` / `compare` で世代の勝率・戦闘時間・行動分布などを集計し、2つの世代を比べられる。`/dev/sim` でも比べられ、再生中に AI の判断（ファジィスコア）を確かめられる
+* `log-bench` / `log-compare` で、シード固定の50機の戦闘のログのサイズと端末の負荷を、保存形式ごとに測って比べられる（Epic #631 の計測基準。Issue #632）
 
 ### 今後の予定（Epic #608）
 
@@ -268,6 +269,9 @@ python -m scripts.simulation.local_sim run --roster ../battle_logs/local_sim/ros
 
 * N 戦目の結果は `seed + N - 1` だけで決まり、前の戦闘に左右されない（`--seed 612` の1戦目と `--seed 611 --rounds 2` の2戦目は一致する）
 * 別プロセス・別の `PYTHONHASHSEED` で実行しても、`battle_NNN.json` はバイト単位で一致することを確認した
+* チームの戦略コントローラ（`BattleSimulator._strategy_controllers`）はユニットの順に並ぶ。
+  以前は `set` から作っていたため、同じステップで複数のチームの戦略が変わると、`STRATEGY_CHANGED` の行の順序が
+  `PYTHONHASHSEED` で変わった（チームが多い50機の個人戦で起きる。行の中身と戦闘の結果は変わらない）
 * コード・ファジィルールが変われば結果も変わる。`manifest.json` の `git` と `fuzzy_rules_hash` で実行時の状態を確かめる
 
 ### 保存形式
@@ -587,3 +591,112 @@ npm run dev
 * `frontend/tests/unit/localSimAnalysis.test.ts`: 比較表の値と差、機体の対応付け、実行条件の違い、再生位置の判断の引き方、選んだ行動の取り出し
 * `frontend/tests/unit/localSimStore.test.ts`: `report.json` の読み込み、判断ログの抽出
 * `run --rounds 3` で作った2世代を `npm run dev` で開き、比較画面、`report.json` が無い世代への案内、再生位置と機体の切り替えで AI の判断が変わることを確認した
+
+---
+
+## log-bench / log-compare: ログのサイズと端末負荷の計測
+
+Epic #631（配信用ログと解析用ログの分離）の計測基準。Issue #632 で作った。
+ロスターの機体で1戦を回し、同じログを保存形式ごとに変換して、サイズとパースの負荷を測る。
+配信用の形式（Issue #634）の前後を、同じ条件の数字で比べるために使う。
+
+```bash
+cd backend
+python -m scripts.simulation.local_sim log-bench --roster bench50 --label before
+python -m scripts.simulation.local_sim log-bench --roster small5 --units 50 --formats stored,draft
+python -m scripts.simulation.local_sim log-compare before after
+```
+
+| オプション | 説明 |
+|---|---|
+| `--roster <名前>` | ロスター名、またはロスターの JSON ファイルのパス（必須） |
+| `--units N` | 戦闘に出す機体数。既定は本番の定員（`MatchingService` の `room_size` = 50） |
+| `--seed N` | 戦闘のシード。既定は固定値（`log_bench.DEFAULT_SEED` = 632） |
+| `--steps N` | 最大ステップ数。既定は本番バッチと同じ `DEFAULT_MAX_STEPS` |
+| `--label <名前>` | 計測結果の名前。省略するとロスター名 |
+| `--formats a,b` | 測る形式（下記）。省略すると全部 |
+| `--runs N` | パースを測る回数（既定 5）。中央値を使う |
+| `--no-parse` | Node でのパースの計測を省く |
+| `--keep-ndjson <DIR>` | 形式ごとの NDJSON を残す。ブラウザ（DevTools のスロットリング）で確かめるときに使う |
+| `--format json` | 計測結果を JSON で標準出力に出す（経過の表示と保存先は標準エラー） |
+
+* DB には接続しない（`run` と同じく `forbid_database()` を呼ぶ）
+* 結果は `battle_logs/local_sim/log_bench/<日時>_<ラベル>.json` に保存する（gitignore 済み）。世代管理の対象外で、自動では消さない
+* `log-compare` の引数は、ファイルのパス・ID（ファイル名から `.json` を除いたもの）・その前方一致・ラベル
+
+### 戦闘の組み立て
+
+本番の基準（50機・全機が個人戦）に合わせる。
+
+* ロスターの全機の `team_id` を `null` にする（実行時に `team_id` = 機体ID の個人戦になる）
+* ロスターの機体が `--units` に足りなければ、先頭から順に複製する。複製した機体の ID は、元の ID と複製の番号から
+  `uuid5` で決める。名前とスナップショットは元の機体と同じ
+* ロスターの機体が `--units` より多いとエラーにする
+* 判定する機体の選び方・乱数の固定は `run` と同じ（`seed_battle_rngs()` / `run_battle()`）
+
+50機のロスターは `fetch --npc 49` などで作る。手元に50機のロスターが無ければ、少ない機体のロスターを `--units 50` で複製する。
+
+### 形式
+
+実装は `backend/scripts/simulation/local_sim/log_bench.py` の `LOG_FORMATS`。同じ戦闘のログ（`simulator.logs`）を変換する。
+
+| 形式 | 内容 |
+|---|---|
+| `stored` | 本番が保存・配信している形式。`strip_debug_fields()` の出力 |
+| `draft` | 目標値を決めるための試算。`AI_DECISION` を除く。`TARGET_SELECTION` は機体ごとに相手が変わった行だけ残す。null の項目を省き、小数を1桁に丸める |
+| `draft_no_message` | `draft` から、MOVE・WAIT・TARGET_SELECTION の `message` も省く |
+
+配信用の形式（Issue #634）は、変換関数を `LOG_FORMATS` に足すと同じ戦闘で並べて測れる。
+`draft` はビューアで再生できることを確かめていない。サイズの見積もりだけに使う。
+
+### 計測する項目
+
+| 項目 | 測り方 |
+|---|---|
+| 行数・`action_type` ごとの行数と展開後のサイズ | NDJSON の行ごと |
+| 展開後のサイズ | 本番と同じ `logs_to_ndjson_text()`（`ensure_ascii=False`）で書いた NDJSON のバイト数 |
+| gzip 後のサイズ | `GZipMiddleware` と同じ圧縮。圧縮レベルは既定値（9）。GCS から読む単位（256KB）ごとに `Z_SYNC_FLUSH` する。テストで、実際の `GZipMiddleware` の転送量と一致することを確かめている |
+| 項目ごとのサイズ | `"key": value, ` の分を項目ごとに足す。値が null の分も出す。残り（括弧・改行）は1行1バイト |
+| パース時間 | `parse_bench.mjs` を `node --expose-gc` で実行する。`fetchBattleLogsNdjson()` と同じ手順（64KB ごとに `TextDecoder` で読み、改行で区切って `JSON.parse`、500件ごとに配列をコピー）。`--runs` 回の中央値 |
+| ヒープ（保持分） | GC の後、パースした配列を持ったまま GC して、`heapUsed` の増えた分 |
+
+表示では、gzip 後のサイズから Lighthouse の Slow 4G（1.6Mbps）での転送時間と、パース時間を4倍した値（Chrome DevTools の CPU 4倍スロットリングの目安）も出す。
+
+### 再現性
+
+* 同じロスター・同じシード・同じコードなら、行数・サイズ・項目の内訳・ヒープは同じ値になる。`PYTHONHASHSEED` を変えても NDJSON はバイト単位で一致する
+* パース時間はマシンと、そのときの負荷で変わる。同じマシンで続けて測った値だけを比べる。負荷の高いときは、同じ NDJSON でも1.5〜1.8倍になった
+* 計測結果には、コミット・ファジィルールのハッシュ・OS・CPU・Node のバージョンを記録する。`log-compare` は条件や環境が違うと警告を出す
+
+### 計測結果（Issue #632 時点）
+
+M1 Mac・Node 20.19.6。ロスターは本番DBを使わず、テスト用の SQLite でマスターから作った（生成 NPC とエースだけ）。
+パース時間は、マシンの負荷が低いときの値。
+
+| ロスター | 戦闘 | 形式 | 行数 | 展開後 | gzip | Slow 4G | パース | ×4 | ヒープ |
+|---|---|---|---|---|---|---|---|---|---|
+| 50機（生成 NPC 47・エース 3） | 191.6秒 | `stored` | 112,679 | 83.5MB | 6.09MB | 29.0秒 | 322ms | 1.29秒 | 66.9MB |
+| | | `draft` | 47,231 | 15.7MB | 1.12MB | 5.4秒 | 80ms | 0.32秒 | 20.5MB |
+| | | `draft_no_message` | 47,231 | 11.9MB | 0.95MB | 4.5秒 | 69ms | 0.27秒 | 15.9MB |
+| 5機を50機に複製 | 213.1秒 | `stored` | 110,446 | 81.5MB | 5.53MB | 26.3秒 | 335ms | 1.34秒 | 65.3MB |
+| | | `draft` | 52,658 | 17.4MB | 1.16MB | 5.5秒 | 87ms | 0.35秒 | 23.0MB |
+| | | `draft_no_message` | 52,658 | 13.2MB | 0.96MB | 4.6秒 | 79ms | 0.32秒 | 17.8MB |
+
+* `stored` の行数の53〜59%は `AI_DECISION` と `TARGET_SELECTION`。`TARGET_SELECTION` を相手が変わった行だけにすると、約3万行が約470行になる
+* `stored` の展開後のサイズの約44%は値が null の項目。最も大きい項目は `message`（約18%）
+* 本番の50機ルームの試算（PR #630 のコメント、約211秒・10.8万行・展開後 73〜78MB・gzip 4.7〜4.8MB）と同じ規模になった
+
+### 目標値
+
+計測結果と次の想定から、50機・約200秒の個人戦（`log-bench` の既定の条件）で、配信用ログが満たす値を決めた。Epic #631 の決定事項に書いている。
+
+| 項目 | 目標 | 想定と根拠 |
+|---|---|---|
+| gzip 後のサイズ | 1.2MB 以下 | Slow 4G（1.6Mbps）で全量の転送が約6秒以内。NDJSON のストリーミングで、最初の500件（gzip で十数KB）が届けば再生は始まる。全量が届くまでの時間は、終盤へのシークとチャプターが使えるまでの時間になる。現状は約26〜29秒 |
+| 展開後のサイズ | 20MB 以下 | パース時間とヒープは展開後のサイズにほぼ比例する（`stored` で 82MB・パース約330ms・ヒープ約66MB） |
+| パース時間 | M1 Mac の Node で 100ms 以下（CPU 4倍で 400ms 以下） | ミドルレンジの Android を CPU 4倍スロットリングで見込む。パースはストリーミング中にチャンクごとに分かれて動くため、1回の長いタスクにはならない |
+| ヒープ（保持分） | 25MB 以下 | ビューア（three.js）と同じタブで持つ。現状の約66MBを3分の1程度にする |
+
+* `draft` はどちらのロスターでも全項目を満たす。ただし gzip 後のサイズの余裕は小さい（1.12〜1.16MB）。本番のロスターで戦闘が長いと超えうる
+* `draft_no_message`（gzip 0.95MB）なら余裕がある。`message` を省くかは Issue #634 で決める
+
