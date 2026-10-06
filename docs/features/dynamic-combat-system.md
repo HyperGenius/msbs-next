@@ -85,13 +85,13 @@ DB マイグレーション: `alembic/versions/o9p0q1r2s3t4_add_boost_params_to_
 ブースト時有効最大速度 = max_speed × boost_speed_multiplier
 
 速度更新（慣性モデルを維持したまま速度上限を差し替え）:
-  IF is_boosting:
-    effective_max_speed = max_speed × boost_speed_multiplier
-  ELSE:
-    effective_max_speed = max_speed
+  effective_max_speed = max_speed × 地形補正 × 向きの係数
+  IF is_boosting AND NOT 後退中:
+    effective_max_speed *= boost_speed_multiplier
 ```
 
 実装: `BattleSimulator._apply_inertia()` の `effective_max_speed` 計算部分。
+向きの係数と「後退中」の判定は `battle-engine-feature.md` の「2.3.1 慣性モデル」を参照。
 
 ### 3.5 ブースト終了条件
 
@@ -99,11 +99,14 @@ DB マイグレーション: `alembic/versions/o9p0q1r2s3t4_add_boost_params_to_
 
 1. `boost_elapsed >= boost_max_duration`
 2. `current_en <= 0`（EN 切れ）
-3. ターゲットが `MELEE_BOOST_ARRIVAL_RANGE`（`MELEE_RANGE × 2 = 100m`）内に入った
-4. 慣性考慮キャンセル（「3.6 ブーストキャンセル判定」参照）
+3. 後退中（胴体の向きと移動の向きのずれが `BACKPEDAL_ANGLE_DEG` を超えている）
+4. ターゲットが `MELEE_BOOST_ARRIVAL_RANGE`（`MELEE_RANGE × 2 = 100m`）内に入った
+5. 慣性考慮キャンセル（「3.6 ブーストキャンセル判定」参照）
 
 ブースト終了時: `boost_cooldown_remaining = boost_cooldown` をセットし、毎ステップデクリメントする。  
 `boost_cooldown_remaining > 0` の間は `BOOST_DASH` アクションを選択できない。
+
+後退中はブーストを開始しない（`BOOST_DASH` と仕切り直しの開始のどちらも）。
 
 ### 3.6 ブーストキャンセル判定（慣性考慮）
 
