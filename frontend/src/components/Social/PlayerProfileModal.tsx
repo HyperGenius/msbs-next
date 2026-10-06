@@ -26,10 +26,10 @@ export default function PlayerProfileModal({
     }[tactics.priority] || tactics.priority;
 
     const range = {
-      MELEE: "近接戦",
-      RANGED: "遠距離",
+      MELEE: "近接突撃",
+      RANGED: "射撃距離維持",
       BALANCED: "バランス",
-      FLEE: "回避重視",
+      FLEE: "射程限界",
     }[tactics.range] || tactics.range;
 
     return `${priority} / ${range}`;

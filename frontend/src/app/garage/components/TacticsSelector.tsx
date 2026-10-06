@@ -25,10 +25,20 @@ const PRIORITY_OPTIONS = [
 
 const RANGE_OPTIONS = [
   { value: "MELEE", label: "MELEE - 近接突撃" },
-  { value: "RANGED", label: "RANGED - 遠距離維持" },
+  { value: "RANGED", label: "RANGED - 射撃距離維持" },
   { value: "BALANCED", label: "BALANCED - バランス型" },
-  { value: "FLEE", label: "FLEE - 回避優先" },
+  { value: "FLEE", label: "FLEE - 射程限界から射撃" },
 ];
+
+// バトルエンジンの挙動（backend/app/engine/engagement_style.py）と一致させる
+const RANGE_HELP_TEXTS: Record<TacticsData["range"], string> = {
+  MELEE:
+    "格闘武器の間合いまで詰めて戦います。互角でも粘り、仕切り直した後はすぐ再突入します。格闘武器が無い機体は射撃の間合いで戦います",
+  RANGED:
+    "射撃武器の最適距離を保ち、近づかれたら離れます。自分から格闘へ突入せず、互角なら早めに仕切り直します。射撃武器が無い機体は格闘で戦います",
+  BALANCED: "そのとき選んだ武器に合わせて、格闘と射撃の間合いを切り替えます",
+  FLEE: "射撃武器の射程ぎりぎりを保ち、格闘を避けます。仕切り直した後も距離を取り続けます。射撃武器が無い機体は格闘で戦います",
+};
 
 // 武装持ち替えポリシー選択肢 (Issue #506)
 const WEAPON_SWITCH_POLICY_OPTIONS = [
@@ -67,7 +77,7 @@ export default function TacticsSelector({
       <div className="mb-4">
         <SciFiSelect
           label="交戦距離設定"
-          helpText="戦闘時の移動パターンを設定します"
+          helpText={RANGE_HELP_TEXTS[tactics.range]}
           variant="accent"
           value={tactics.range}
           onChange={(e) =>
