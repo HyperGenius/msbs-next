@@ -40,6 +40,7 @@ from app.engine.constants import (
 from app.engine.environment import EnvironmentProfile
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
+from app.engine.melee_clash import MeleeClashMixin
 from app.engine.movement import MovementMixin
 from app.engine.rng import new_numpy_rng
 from app.engine.spatial_grid import PointSpatialGrid, UnitSpatialGrid
@@ -193,6 +194,7 @@ class BattleSimulator(
     TargetingMixin,
     AiDecisionMixin,
     ActionHandlerMixin,
+    MeleeClashMixin,
 ):
     """戦闘シミュレータ."""
 
@@ -418,6 +420,8 @@ class BattleSimulator(
                 "ranged_preference_until": 0.0,  # 射撃武器を優先する期限の時刻 (s)
                 "last_attack_exchange_at": 0.0,  # 最後に攻撃した・された時刻 (s)
                 "idle_stalemate_until": 0.0,  # 撃たない膠着とみなし続ける期限の時刻 (s)
+                "knockback": None,  # 鍔迫り合いで受けている押し離し (Knockback)
+                "last_melee_clash_at": None,  # 最後に鍔迫り合いをした時刻 (s)
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:

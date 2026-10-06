@@ -47,6 +47,7 @@ from app.engine.constants import (
     THREAT_REPULSION_CUTOFF_RADIUS,
     THREAT_REPULSION_DECAY_SCALE,
 )
+from app.engine.melee_clash import advance_knockback
 from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
 
@@ -785,7 +786,8 @@ class MovementMixin:
 
         旋回制限・加速制限を適用したうえで速度ベクトルと位置を更新する。
         `unit_resources` の `velocity_vec` / `movement_heading_deg` を更新し、
-        `actor.position` を書き換える。
+        `actor.position` を書き換える。鍔迫り合いの押し離しは、
+        機体自身の速度とは別に位置へ加える。
 
         Args:
             actor: 移動対象ユニット
@@ -836,7 +838,11 @@ class MovementMixin:
 
         # 3. 位置更新
         pos_actor = actor.position.to_numpy()
-        new_pos = pos_actor + new_velocity * dt
+        new_pos = (
+            pos_actor
+            + new_velocity * dt
+            + self._advance_knockback(resources, pos_actor, dt)
+        )
 
         # unit_resources を更新
         resources["velocity_vec"] = new_velocity
@@ -844,6 +850,26 @@ class MovementMixin:
 
         # 位置を更新
         actor.position = Vector3.from_numpy(new_pos)
+
+    def _advance_knockback(
+        self, resources: dict, pos_unit: np.ndarray, dt: float
+    ) -> np.ndarray:
+        """鍔迫り合いの押し離しを `dt` 秒進め、その間の移動量を返す.
+
+        マップの外へ出る分は境界で止める。`_boundary_repulsion()` では押し戻せない速さのため。
+        """
+        knockback = resources.get("knockback")
+        if knockback is None:
+            return np.zeros(3)
+        displacement, resources["knockback"] = advance_knockback(knockback, dt)
+        map_min, map_max = self.map_bounds  # type: ignore[attr-defined]
+        for axis in (0, 2):
+            moved = pos_unit[axis] + displacement[axis]
+            if displacement[axis] < 0.0 and moved < map_min:
+                displacement[axis] = min(0.0, map_min - pos_unit[axis])
+            elif displacement[axis] > 0.0 and moved > map_max:
+                displacement[axis] = max(0.0, map_max - pos_unit[axis])
+        return displacement
 
     def _get_terrain_grade(self, unit: MobileSuit) -> str:
         """現在の環境での地形適正ランクを返す.

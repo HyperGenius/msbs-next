@@ -366,10 +366,10 @@ class ActionHandlerMixin:
         diff_vector = pos_target - pos_actor
         distance = float(np.linalg.norm(diff_vector))
 
+        resources = self.unit_resources[str(actor.id)]  # type: ignore[attr-defined]
         attacked = self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
         if not attacked:
             # ENGAGE_MELEE にはターゲットへの力が無いため、ATTACK として間合いを取る。
-            resources = self.unit_resources[str(actor.id)]  # type: ignore[attr-defined]
             resources["current_action"] = "ATTACK"
             self._process_movement(  # type: ignore[attr-defined]
                 actor, pos_actor, pos_target, diff_vector, distance, dt, target=target
@@ -377,7 +377,8 @@ class ActionHandlerMixin:
             resources["current_action"] = "ENGAGE_MELEE"
             return
 
-        if target.current_hp > 0:
+        # 鍔迫り合いで押し離されている間は、再配置で押し離しを打ち消さない。
+        if target.current_hp > 0 and resources.get("knockback") is None:
             dir_away_vec = pos_actor - pos_target
             dir_away_dist = float(np.linalg.norm(dir_away_vec))
             if dir_away_dist > 1e-6:
@@ -388,8 +389,7 @@ class ActionHandlerMixin:
             new_pos = pos_target + dir_away * POST_MELEE_DISTANCE
             actor.position = Vector3.from_numpy(new_pos)
 
-            unit_id = str(actor.id)
-            self.unit_resources[unit_id]["velocity_vec"] = np.zeros(3)  # type: ignore[attr-defined]
+            resources["velocity_vec"] = np.zeros(3)
 
     def _log_target_selection(
         self,
