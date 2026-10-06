@@ -49,6 +49,11 @@ from app.engine.constants import (
     THREAT_REPULSION_DECAY_SCALE,
 )
 from app.engine.engagement_style import disengage_turn_multiplier, tactics_range
+from app.engine.facing import (
+    facing_speed_modifier,
+    is_backpedaling,
+    is_unit_backpedaling,
+)
 from app.engine.melee_clash import advance_knockback
 from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
@@ -834,17 +839,21 @@ class MovementMixin:
 
         # 2. 加速・減速制限
         current_speed = float(np.linalg.norm(current_velocity))
-        terrain_modifier = self._get_terrain_modifier(actor)
-
-        # ブースト中は effective_max_speed を boost_speed_multiplier 倍にする (Phase B)
-        boost_multiplier = getattr(
-            actor, "boost_speed_multiplier", DEFAULT_BOOST_SPEED_MULTIPLIER
+        body_heading: float = resources.get("body_heading_deg", new_heading)
+        effective_max_speed = (
+            actor.max_speed
+            * self._get_terrain_modifier(actor)
+            * facing_speed_modifier(body_heading, new_heading)
         )
-        if resources.get("is_boosting", False):
-            effective_max_speed = actor.max_speed * boost_multiplier * terrain_modifier
-        else:
-            effective_max_speed = actor.max_speed * terrain_modifier
+        # 後退中はブースト中でも倍率を掛けない。ブーストを終えるのは `_check_boost_cancel()`。
+        if resources.get("is_boosting", False) and not is_backpedaling(
+            body_heading, new_heading
+        ):
+            effective_max_speed *= getattr(
+                actor, "boost_speed_multiplier", DEFAULT_BOOST_SPEED_MULTIPLIER
+            )
 
+        # 上限を超えた分は減速度で落とす。向きを変えた瞬間に止まらないようにするため。
         if current_speed < effective_max_speed:
             new_speed = min(
                 current_speed + actor.acceleration * dt, effective_max_speed
@@ -926,12 +935,13 @@ class MovementMixin:
         以下いずれかの条件を満たすとブーストを終了させる:
         1. boost_elapsed >= boost_max_duration
         2. current_en <= 0 (EN 切れ)
-        3. ターゲットが MELEE_BOOST_ARRIVAL_RANGE (100m) 以内
-        4. 慣性考慮キャンセル: 停止予想位置から遠距離武器の max_range 以内に入っている
+        3. 後退中（胴体を向けた方と逆へ動いている）
+        4. ターゲットが MELEE_BOOST_ARRIVAL_RANGE (100m) 以内
+        5. 慣性考慮キャンセル: 停止予想位置から遠距離武器の max_range 以内に入っている
 
         Args:
             actor: ブースト中のユニット
-            target: 現在のターゲット（None の場合は条件 3/4 をスキップ）
+            target: 現在のターゲット（None の場合は条件 4/5 をスキップ）
             dt: 時間ステップ幅 (s)
 
         Returns:
@@ -962,67 +972,70 @@ class MovementMixin:
             cancel_reason = "EN 枯渇"
             reason_code = EN_DEPLETED_REASON_CODE
 
+        # 条件 3: 後退中
+        elif is_unit_backpedaling(resources):
+            cancel_reason = "後退中"
+
         elif target is not None:
-            pos_actor = actor.position.to_numpy()
-            pos_target = target.position.to_numpy()
-            distance_to_target = float(np.linalg.norm(pos_target - pos_actor))
-
-            # 条件 3: ターゲットが格闘到達射程内
-            if distance_to_target <= MELEE_BOOST_ARRIVAL_RANGE:
-                cancel_reason = f"格闘到達射程 ({MELEE_BOOST_ARRIVAL_RANGE}m) 以内"
-
-            else:
-                # 条件 4: 慣性考慮キャンセル判定
-                # 使用予定の遠距離武器を取得
-                ranged_weapon = next(
-                    (
-                        w
-                        for w in actor.weapons
-                        if not w.is_melee
-                        and resources["weapon_states"]
-                        .get(str(w.id), {})
-                        .get("cooldown_remaining_sec", 0.0)
-                        == 0.0
-                        and (
-                            resources["weapon_states"]
-                            .get(str(w.id), {})
-                            .get("current_ammo")
-                            is None
-                            or resources["weapon_states"]
-                            .get(str(w.id), {})
-                            .get("current_ammo", 0)
-                            > 0
-                        )
-                    ),
-                    None,
-                )
-
-                if ranged_weapon is not None:
-                    current_velocity: np.ndarray = resources["velocity_vec"]
-                    current_speed = float(np.linalg.norm(current_velocity))
-                    deceleration = actor.deceleration
-
-                    # 停止距離: d_stop = v² / (2 × deceleration)
-                    if deceleration > 0 and current_speed > 0:
-                        d_stop = (current_speed**2) / (2.0 * deceleration)
-                        stop_direction = current_velocity / current_speed
-
-                        stop_pos = pos_actor + stop_direction * d_stop
-                        d_to_target_from_stop = float(
-                            np.linalg.norm(pos_target - stop_pos)
-                        )
-
-                        if d_to_target_from_stop <= ranged_weapon.range:
-                            cancel_reason = (
-                                f"慣性考慮キャンセル (停止予想位置からの射程内: "
-                                f"{d_to_target_from_stop:.0f}m <= {ranged_weapon.range}m)"
-                            )
+            cancel_reason = self._target_boost_cancel_reason(actor, target)
 
         if cancel_reason is None:
             return False
 
         self._end_boost(actor, cancel_reason, reason_code)
         return True
+
+    def _target_boost_cancel_reason(
+        self, actor: MobileSuit, target: MobileSuit
+    ) -> str | None:
+        """ターゲットとの位置関係でブーストを終える理由を返す. 終えないなら None."""
+        resources = self.unit_resources[str(actor.id)]  # type: ignore[attr-defined]
+        pos_actor = actor.position.to_numpy()
+        pos_target = target.position.to_numpy()
+        distance_to_target = float(np.linalg.norm(pos_target - pos_actor))
+
+        # 条件 4: ターゲットが格闘到達射程内
+        if distance_to_target <= MELEE_BOOST_ARRIVAL_RANGE:
+            return f"格闘到達射程 ({MELEE_BOOST_ARRIVAL_RANGE}m) 以内"
+
+        # 条件 5: 慣性考慮キャンセル判定
+        # 使用予定の遠距離武器を取得
+        ranged_weapon = next(
+            (
+                w
+                for w in actor.weapons
+                if not w.is_melee
+                and resources["weapon_states"]
+                .get(str(w.id), {})
+                .get("cooldown_remaining_sec", 0.0)
+                == 0.0
+                and (
+                    resources["weapon_states"].get(str(w.id), {}).get("current_ammo")
+                    is None
+                    or resources["weapon_states"]
+                    .get(str(w.id), {})
+                    .get("current_ammo", 0)
+                    > 0
+                )
+            ),
+            None,
+        )
+        current_velocity: np.ndarray = resources["velocity_vec"]
+        current_speed = float(np.linalg.norm(current_velocity))
+        deceleration = actor.deceleration
+        if ranged_weapon is None or deceleration <= 0 or current_speed <= 0:
+            return None
+
+        # 停止距離: d_stop = v² / (2 × deceleration)
+        d_stop = (current_speed**2) / (2.0 * deceleration)
+        stop_pos = pos_actor + current_velocity / current_speed * d_stop
+        d_to_target_from_stop = float(np.linalg.norm(pos_target - stop_pos))
+        if d_to_target_from_stop > ranged_weapon.range:
+            return None
+        return (
+            f"慣性考慮キャンセル (停止予想位置からの射程内: "
+            f"{d_to_target_from_stop:.0f}m <= {ranged_weapon.range}m)"
+        )
 
     def _start_boost(self, actor: MobileSuit) -> None:
         """ブーストを開始して BOOST_START ログを記録する."""

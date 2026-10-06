@@ -311,6 +311,14 @@ DEFAULT_BOOST_EN_COST: float = 5.0  # ブースト中 EN 消費量 (/s)
 DEFAULT_BOOST_MAX_DURATION: float = 3.0  # 1 回のブーストの最大継続時間 (s)
 DEFAULT_BOOST_COOLDOWN: float = 5.0  # ブースト終了後の再使用不可時間 (s)
 
+# 胴体の向きと移動の向きのずれ θ による最高速度の係数。値はすべて暫定で、調整は総合バランス調整で行う。
+# 前 (θ=0°)・横 (θ=90°)・後ろ (θ=180°) の値。横を小さく割り引くのは、周回しながら撃つ動きの価値を残すため。
+FACING_SPEED_MODIFIER_FRONT: float = 1.0
+FACING_SPEED_MODIFIER_SIDE: float = 0.85
+FACING_SPEED_MODIFIER_BACK: float = 0.6
+# θ がこの角度 (度) を超えている間は後退中とみなす。後退中はブーストを使えない。
+BACKPEDAL_ANGLE_DEG: float = 90.0
+
 # BattleLog.details["reason_code"] の値。フロントエンドが EN 不足イベントの判定に使う。
 EN_SHORTAGE_REASON_CODE: str = "EN_SHORTAGE"  # EN 不足で武器を使えず待機した
 EN_DEPLETED_REASON_CODE: str = "EN_DEPLETED"  # EN 枯渇でブーストが終了した
