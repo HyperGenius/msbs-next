@@ -16,6 +16,9 @@ interface SimDebugPanelProps {
 
 type NumberRecord = Record<string, number>;
 
+// 同じ名前の候補を見分けるために付ける機体 ID の桁数。
+const ID_DIGITS = 4;
+
 function isNumberRecord(value: unknown): value is NumberRecord {
   return (
     typeof value === "object" && value !== null && Object.values(value).every((v) => typeof v === "number")
@@ -123,20 +126,24 @@ function TargetSelectionView({
   const allScores = isNumberRecord(scores.all_scores) ? scores.all_scores : {};
   const inputs = isNumberRecord(scores.inputs) ? scores.inputs : {};
   const selectedId = typeof scores.selected_target_id === "string" ? scores.selected_target_id : null;
-  const candidates = Object.fromEntries(
-    Object.entries(allScores).map(([id, score]) => [names.get(id) ?? id.slice(0, 8), score]),
-  );
+  // 同じ機体名の NPC が複数いることがあるため、候補は機体 ID で持ち、名前は表示にだけ使う。
+  const nameCounts = new Map<string, number>();
+  for (const id of Object.keys(allScores)) {
+    const name = names.get(id) ?? id;
+    nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+  }
+  const candidateLabel = (id: string) => {
+    const name = names.get(id);
+    if (!name) return id.slice(0, ID_DIGITS);
+    return (nameCounts.get(name) ?? 0) > 1 ? `${name} #${id.slice(0, ID_DIGITS)}` : name;
+  };
   return (
     <div>
       <p className="mb-1">
         <span className="text-gray-500">ターゲット選択</span> t=
         {decision.timestamp.toFixed(1)}s
       </p>
-      <ScoreBars
-        title="target_priority"
-        scores={candidates}
-        highlight={selectedId ? (names.get(selectedId) ?? selectedId.slice(0, 8)) : null}
-      />
+      <ScoreBars title="target_priority" scores={allScores} highlight={selectedId} label={candidateLabel} />
       <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 text-[10px] text-gray-400">
         {Object.entries(inputs).map(([name, value]) => (
           <div key={name} className="contents">
@@ -149,27 +156,29 @@ function TargetSelectionView({
   );
 }
 
-/** 0〜1 のスコアを、高い順に横棒で並べる */
+/** 0〜1 のスコアを、高い順に横棒で並べる。scores と highlight のキーは一意な値（集合名・機体 ID） */
 function ScoreBars({
   title,
   scores,
   highlight,
+  label = (key) => key,
 }: {
   title: string;
   scores: NumberRecord;
   highlight: string | null;
+  label?: (key: string) => string;
 }) {
   const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
   return (
     <div className="mb-1">
       <p className="text-[10px] text-gray-500">{title}</p>
       <ul>
-        {sorted.map(([name, score]) => {
-          const selected = name === highlight;
+        {sorted.map(([key, score]) => {
+          const selected = key === highlight;
           return (
-            <li key={name} className="grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-2">
+            <li key={key} className="grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-2">
               <span className={`truncate ${selected ? "font-bold text-green-300" : "text-gray-400"}`}>
-                {name}
+                {label(key)}
               </span>
               <span className="h-2 rounded bg-gray-800">
                 <span
