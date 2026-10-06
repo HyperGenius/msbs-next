@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts", "simulation")
 )
@@ -107,6 +109,7 @@ def test_summarize_rates() -> None:
             longest_melee_miss_sec=5.0,
             longest_melee_miss_count=3,
             melee_clashes=1,
+            disengages=6,
         ),
         eb.BattleMetrics(
             seed=2,
@@ -134,6 +137,8 @@ def test_summarize_rates() -> None:
     # 鍔迫り合い 1 回 / 2 分。格闘 1 回と、鍔迫り合いの格闘 2 回のうち 2 回。
     assert summary["melee_clashes_per_min"] == 0.5
     assert abs(summary["melee_clash_rate"] - 2 / 3) < 1e-9
+    # 6 回 / 2 分 / 2 機。
+    assert summary["disengages_per_min"] == 1.5
     assert summary["longest_melee_miss_seed"] == 1
     assert summary["ranged_optimal_ratio"]["p50"] is None
 
@@ -142,3 +147,17 @@ def test_diff_cell_formats_rate_delta_in_points() -> None:
     """割合の差はパーセントポイントで表示する."""
     assert eb._diff_cell(0.5, 0.75, ".0%") == "50% → 75% (+25pt)"
     assert eb._diff_cell(None, 1.0, ".1f") == "- → 1.0"
+
+
+def test_parse_pilot_sets_only_given_stats() -> None:
+    """書いた能力だけを設定し、書かない能力は 0 にする."""
+    pilot = eb.parse_pilot("mel=20, ref=5")
+    assert (pilot.mel, pilot.ref, pilot.intel, pilot.sht) == (20, 5, 0, 0)
+    assert eb.parse_pilot("") == eb.PilotStats()
+
+
+@pytest.mark.parametrize("value", ["dex=1", "mel", "mel=x"])
+def test_parse_pilot_rejects_invalid_items(value: str) -> None:
+    """未知の能力名・値の無い項目・数でない値は拒否する."""
+    with pytest.raises(ValueError):
+        eb.parse_pilot(value)

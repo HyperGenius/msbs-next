@@ -323,6 +323,9 @@ python scripts/simulation/engagement_bench.py run \
 # 両機の tactics.range を指定する（既定はシナリオごとの組）
 python scripts/simulation/engagement_bench.py run --ranges BALANCED,RANGED
 
+# 両機のパイロット能力を指定する（書かない能力は 0。Issue #601）
+python scripts/simulation/engagement_bench.py run --ranges BALANCED,MELEE --pilot mel=20
+
 # 2 つの結果 JSON を比べる（変更前 → 変更後）
 python scripts/simulation/engagement_bench.py diff \
   results/engagement_before.json results/engagement_after.json
@@ -339,6 +342,7 @@ python scripts/simulation/engagement_bench.py diff \
 | `--scenarios` | 全シナリオ | カンマ区切りのシナリオキー |
 | `--strategies` | `AGGRESSIVE,DEFENSIVE,SNIPER,ASSAULT` | 両機に設定する戦略モード |
 | `--ranges` | シナリオごとの組 | 両機に同じ `tactics.range` を設定する |
+| `--pilot` | `sht=1,mel=1,intel=1,ref=1,tou=1,luk=1` | 両機のパイロット能力（`PilotStats` のフィールド名）。書かない能力は 0。`--pilot ""` で全能力 0 |
 | `--output` | なし | 結果 JSON の保存先 |
 
 ### シナリオ
@@ -352,7 +356,7 @@ python scripts/simulation/engagement_bench.py diff \
 | `melee_vs_ranged` | グフ［ヒートロッド＋ザクマシンガン］ vs ガンダム［ビームライフル］ | 1000m | BALANCED×BALANCED、MELEE×RANGED |
 | `melee_only_vs_ranged` | ガンダム［ビームサーベル］ vs ザクII［ザクマシンガン］ | 1000m | BALANCED×BALANCED、MELEE×RANGED |
 
-シナリオはスクリプト内の `SCENARIOS` で定義しています。両機のパイロットステータスは全項目 1 にそろえます。
+シナリオはスクリプト内の `SCENARIOS` で定義しています。両機のパイロットステータスは同じ値にそろえます（既定は全項目 1、`--pilot` で変更）。
 
 ### 指標
 
@@ -365,6 +369,7 @@ python scripts/simulation/engagement_bench.py diff \
 | 格闘ミス最長 | 同じユニットの格闘 MISS が、そのユニットの命中を挟まずに続いた最長の時間と回数（射撃の MISS では途切れない） |
 | 持ち替え/分 | `WEAPON_SWITCH_START` の 1 機・1 分あたりの回数 |
 | 鍔迫り合い/分 (格闘比) | `MELEE_CLASH` の両機あわせた 1 分あたりの回数と、格闘の攻撃（命中判定した格闘 + 鍔迫り合い 1 回につき 2 回）のうち鍔迫り合いになった割合（Issue #600） |
+| 仕切り直し/分 | `DISENGAGE` の 1 機・1 分あたりの回数（Issue #601） |
 | セクタ F/FS/RS/R % | 攻撃セクタ FRONT / FRONT_SIDE / REAR_SIDE / REAR の割合 |
 | 戦闘時間 p50 / 時間切れ / 勝率 | 戦闘時間の中央値、最大ステップまで両機が生存した割合、A・B の勝率（時間切れは引き分け） |
 
@@ -372,6 +377,6 @@ python scripts/simulation/engagement_bench.py diff \
 * 再現性のため `random`・`numpy.random`・部位選択用の RNG（`combat._part_hit_rng`）をすべて試行ごとに固定します。ユニット ID も固定値にします
 * 行動順の偏りを消すため、奇数シードの試行では B を PLAYER 側にします
 * 結果 JSON には `meta`（作成日時・git リビジョン・シード等）と、シナリオ・条件ごとの集計値（`results.<シナリオ>.<戦略>/<rangeA>x<rangeB>`）、試行ごとの戦闘時間・勝者・格闘ミス最長が入ります
-* `diff` はシードまたは試行回数が異なると警告を出します
+* `diff` はシードまたは試行回数が異なると警告を出します。パイロット能力が異なるときは、両方の値を表示します
 
 本 Epic 着手前の計測結果は Issue #595 のコメントに残しています。

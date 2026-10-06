@@ -139,6 +139,7 @@ def stalemate(
     now: float,
     own_max_hp: int,
     opponent_max_hp: int,
+    patience: float = 1.0,
 ) -> float:
     """膠着度を 0〜1 で返す.
 
@@ -146,12 +147,13 @@ def stalemate(
     3 つがそろったときだけ高くするため。記録が無ければ 0。
     攻撃回数と経過時間は、自分の最後の命中から数える。
     相手だけが命中させている場合は、優勢度の低下として扱う。
+    `patience` は、膠着度が最大になる攻撃回数と経過時間に掛ける倍率。大きいほど粘る。
     """
     if record is None:
         return 0.0
     since = record.started_at if record.last_hit_at is None else record.last_hit_at
-    attacks = min(1.0, record.attacks_since_hit / STALEMATE_FULL_ATTACKS)
-    elapsed = min(1.0, (now - since) / STALEMATE_FULL_ELAPSED_SEC)
+    attacks = min(1.0, record.attacks_since_hit / (STALEMATE_FULL_ATTACKS * patience))
+    elapsed = min(1.0, (now - since) / (STALEMATE_FULL_ELAPSED_SEC * patience))
     gap = abs(dominance(record, own_max_hp, opponent_max_hp))
     evenness = 1.0 - (gap - STALEMATE_DOMINANCE_EVEN) / (
         STALEMATE_DOMINANCE_LIMIT - STALEMATE_DOMINANCE_EVEN
