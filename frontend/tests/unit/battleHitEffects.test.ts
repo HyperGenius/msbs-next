@@ -1,10 +1,12 @@
 /* frontend/tests/unit/battleHitEffects.test.ts */
 import { describe, it, expect } from "vitest";
-import { computeAttackEvents } from "@/components/BattleViewer/hooks/useBattleEvents";
+import { computeAttackEvents, computeAttackingUnitIds } from "@/components/BattleViewer/hooks/useBattleEvents";
 import {
+  CLASH_TEXT,
   EFFECT_TIMING,
   AttackEffects,
   missTracerEnd,
+  pruneExpiredEffects,
   spawnAttackEffects,
 } from "@/components/BattleViewer/hooks/useAttackEffectQueue";
 import {
@@ -44,6 +46,14 @@ function makeAttack(overrides: Partial<AttackEvent> = {}): AttackEvent {
     ...overrides,
   };
 }
+
+const CLASH_LOG = makeLog({
+  action_type: "MELEE_CLASH",
+  damage: 0,
+  weapon_name: "ビームサーベル",
+  message: "ガンダムの[ビームサーベル]とザクIIの[ヒートホーク]が鍔迫り合い！ 両機が弾かれて間合いが開く",
+  details: { target_weapon_name: "ヒートホーク", actor_push_m: 50, target_push_m: 50 },
+});
 
 const EMPTY: AttackEffects = { tracers: [], labels: [], impacts: [] };
 const POSITIONS = new Map([
@@ -98,6 +108,24 @@ describe("computeAttackEvents", () => {
 
   it("ダメージ 0 の ATTACK は演出を作らない", () => {
     expect(computeAttackEvents([makeLog({ damage: 0 })])).toEqual([]);
+  });
+
+  it("MELEE_CLASH を両機の武器を持つ鍔迫り合いの演出に変換する", () => {
+    const [event] = computeAttackEvents([CLASH_LOG]);
+    expect(event).toMatchObject({
+      attackerId: PLAYER_ID,
+      targetId: ENEMY_ID,
+      impact: "clash",
+      damage: 0,
+      weaponName: "ビームサーベル",
+      targetWeaponName: "ヒートホーク",
+    });
+  });
+});
+
+describe("computeAttackingUnitIds", () => {
+  it("鍔迫り合いでは両機を攻撃中にする", () => {
+    expect([...computeAttackingUnitIds([CLASH_LOG])].sort()).toEqual([ENEMY_ID, PLAYER_ID].sort());
   });
 });
 
@@ -182,6 +210,32 @@ describe("spawnAttackEffects", () => {
     expect(tracers[0].to).not.toEqual(POSITIONS.get(ENEMY_ID));
   });
 
+  it("鍔迫り合いは射線を出さず、両機の武器名と両機の中間の文字を出す", () => {
+    const { tracers, labels, impacts } = spawn([
+      makeAttack({ impact: "clash", damage: 0, weaponName: "ビームサーベル", targetWeaponName: "ヒートホーク" }),
+    ]);
+    expect(tracers).toHaveLength(0);
+    expect(labels.map((l) => [l.attackerId, l.weaponName])).toEqual([
+      [PLAYER_ID, "ビームサーベル"],
+      [ENEMY_ID, "ヒートホーク"],
+    ]);
+    expect(impacts).toHaveLength(1);
+    expect(impacts[0]).toMatchObject({ kind: "clash", text: CLASH_TEXT, position: { x: 200, y: 0, z: 0 }, delayMs: 0 });
+  });
+
+  it("鍔迫り合いの文字はダメージ数字より長く残す", () => {
+    const active = spawn([makeAttack({ impact: "clash", damage: 0 })], { now: 1000 });
+    const later = 1000 + EFFECT_TIMING.damageNumberMs + 1;
+    expect(pruneExpiredEffects(active, later).impacts).toHaveLength(1);
+    expect(pruneExpiredEffects(active, 1000 + EFFECT_TIMING.clashTextMs).impacts).toHaveLength(0);
+  });
+
+  it("片方の位置が分からない鍔迫り合いは、中間の文字を出さない", () => {
+    const positions = new Map([[PLAYER_ID, { x: 0, y: 0, z: 0 }]]);
+    const { impacts } = spawn([makeAttack({ impact: "clash", damage: 0 })], { positions });
+    expect(impacts).toHaveLength(0);
+  });
+
   it("発射側の位置が分からない攻撃は、着弾演出だけを出す", () => {
     const positions = new Map([[PLAYER_ID, { x: 0, y: 0, z: 0 }]]);
     const { tracers, labels, impacts } = spawn([makeAttack({ attackerId: "unknown", targetId: PLAYER_ID })], {
@@ -216,6 +270,14 @@ describe("HUD ログ", () => {
     expect(miss?.tone).toBe("miss");
     expect(combo?.text.endsWith("-750 (2HIT COMBO)")).toBe(true);
     expect(crit?.text.endsWith("-350 CRITICAL")).toBe(true);
+  });
+
+  it("鍔迫り合いを両機の名前と結果で出す", () => {
+    expect(extractHudAttackLogs([CLASH_LOG])).toHaveLength(1);
+    expect(formatHudLogLine(CLASH_LOG, names, PLAYER_ID)).toEqual({
+      text: "ガンダム ⚔ ザクII  鍔迫り合い",
+      tone: "clash",
+    });
   });
 
   it("名前の分からないユニットが絡むログは出さない", () => {

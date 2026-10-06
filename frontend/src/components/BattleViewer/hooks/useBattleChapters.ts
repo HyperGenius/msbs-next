@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { BattleLog, MobileSuit } from "@/types/battle";
 
 /** チャプターの種別。演出用のアイコン・配色の出し分けに使う */
-export type ChapterKind = "COMBO" | "CRITICAL" | "DESTROYED_ENEMY" | "DESTROYED_SELF" | "DETECTION" | "DISENGAGE";
+export type ChapterKind = "COMBO" | "CRITICAL" | "DESTROYED_ENEMY" | "DESTROYED_SELF" | "DETECTION" | "DISENGAGE" | "CLASH";
 
 /** チャプタートラックに表示する1件分のイベント（Issue #521） */
 export interface ChapterEvent {
@@ -23,6 +23,7 @@ const KIND_STYLE: Record<ChapterKind, { icon: string; accentColor: string }> = {
   DESTROYED_SELF: { icon: "☠", accentColor: "#ef4444" },
   DETECTION: { icon: "📡", accentColor: "#22d3ee" },
   DISENGAGE: { icon: "↩", accentColor: "#6fe6ff" },
+  CLASH: { icon: "⚡", accentColor: "#ffd84a" },
 };
 
 function nameOf(id: string, player: { id: string; name: string }, enemies: MobileSuit[]): string {
@@ -32,7 +33,7 @@ function nameOf(id: string, player: { id: string; name: string }, enemies: Mobil
 
 /**
  * 自機関連ログから「読むログ」ではなく「ジャンプ先」としてのチャプターのみを抽出する。
- * 通常のATTACK/MISSは対象外とし、格闘コンボ・クリティカル・撃破・自機起点の索敵成功・自機の仕切り直しのみを拾う
+ * 通常のATTACK/MISSは対象外とし、格闘コンボ・クリティカル・撃破・自機起点の索敵成功・自機の仕切り直し・自機が絡む鍔迫り合いのみを拾う
  * （方針の詳細はIssue #521のモックアップ: https://claude.ai/artifact/RNmQeBem8BFxyuYDXhontS）。
  * 表示文言は message の自由文ではなく action_type 等の構造化フィールドから組み立てる。
  */
@@ -111,6 +112,20 @@ export function computeBattleChapters(
         icon: style.icon,
         accentColor: style.accentColor,
         label: log.target_id ? `${nameOf(log.target_id, player, enemies)}から仕切り直し` : "仕切り直し",
+      });
+      return;
+    }
+
+    if (log.action_type === "MELEE_CLASH" && (isSelfActor || isSelfTarget)) {
+      const style = KIND_STYLE.CLASH;
+      const opponentId = isSelfActor ? log.target_id : log.actor_id;
+      chapters.push({
+        id: `${index}-clash`,
+        timestamp: log.timestamp,
+        kind: "CLASH",
+        icon: style.icon,
+        accentColor: style.accentColor,
+        label: opponentId ? `${nameOf(opponentId, player, enemies)}と鍔迫り合い` : "鍔迫り合い",
       });
       return;
     }

@@ -676,3 +676,15 @@ describe("formatBattleLog – 仕切り直し", () => {
     expect(result.style.textStyle).toBe("text-purple-400 font-semibold");
   });
 });
+
+describe("formatBattleLog – 鍔迫り合い", () => {
+  it("MELEE_CLASH ログを太字の橙で表示する", () => {
+    const log = makeLog({
+      action_type: "MELEE_CLASH",
+      message: "[アムロ]のGundamの[Beam Saber]とZakuの[Heat Hawk]が鍔迫り合い！ 両機が弾かれて間合いが開く",
+    });
+    const result = formatBattleLog(log, true, PLAYER_ID);
+    expect(result.style.borderStyle).toBe("border-orange-400");
+    expect(result.style.textStyle).toBe("text-orange-300 font-bold");
+  });
+});
