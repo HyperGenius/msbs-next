@@ -649,3 +649,15 @@ def test_retreat_without_retreat_point_attacks_after_idle_stalemate() -> None:
     sim.elapsed_time += 1.0
     action = sim._decide_action(player, {"RETREAT": 1.0}, "DEFENSIVE", enemy, {})
     assert action == "ATTACK"
+
+
+def test_move_attacks_after_idle_stalemate() -> None:
+    """射程内の敵と撃ち合わないまま時間がたつと、MOVE を攻撃にすること."""
+    sim, player, enemy = _setup(distance=300.0)
+
+    action = sim._decide_action(player, {"MOVE": 1.0}, "DEFENSIVE", enemy, {})
+    assert action == "MOVE"
+
+    sim.elapsed_time = IDLE_STALEMATE_SEC
+    action = sim._decide_action(player, {"MOVE": 1.0}, "DEFENSIVE", enemy, {})
+    assert action == "ATTACK"

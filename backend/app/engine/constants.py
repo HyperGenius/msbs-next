@@ -519,6 +519,39 @@ DISENGAGE_REENTRY_FLANK_COEFF: float = 2.0
 # 撃たない膠着とみなした後、撤退先の無い RETREAT を攻撃に変える時間 (s)。
 IDLE_STALEMATE_ATTACK_SEC: float = 5.0
 
+# 戦術設定（tactics.range）とパイロット能力による交戦挙動の補正。
+# 値はすべて暫定で、調整は総合バランス調整で行う。載っていない設定は補正しない（1.0 / 0.0）。
+# 膠着とみなすまでの攻撃回数と経過時間に掛ける倍率。大きいほど粘る。
+TACTICS_STALEMATE_PATIENCE: dict[str, float] = {
+    "MELEE": 1.5,
+    "RANGED": 0.6,
+    "FLEE": 0.6,
+}
+# 仕切り直しの後に射撃武器を優先する時間に掛ける倍率。小さいほど早く再突入する。
+TACTICS_RANGED_PREFERENCE_MULTIPLIERS: dict[str, float] = {
+    "MELEE": 0.4,
+    "RANGED": 1.6,
+    "FLEE": 2.0,
+}
+# 武器選択で格闘武器のスコアに足す値。スコアは 0〜1。
+TACTICS_MELEE_WEAPON_SCORE_BIAS: dict[str, float] = {
+    "MELEE": 0.1,
+    "RANGED": -0.1,
+    "FLEE": -0.2,
+}
+# MEL 1 あたりの膠着への粘りの増分と、その上限。
+PILOT_MEL_PATIENCE_PER_POINT: float = 0.02
+PILOT_MEL_PATIENCE_MAX: float = 0.4
+# INT 1 あたりの劣勢の見積もりの増分と、その上限。劣勢（優勢度が負）のときだけ掛ける。
+PILOT_INT_CAUTION_PER_POINT: float = 0.02
+PILOT_INT_CAUTION_MAX: float = 0.4
+# REF 1 あたりの、仕切り直し中の旋回速度の増分と、その上限。
+PILOT_REF_DISENGAGE_TURN_PER_POINT: float = 0.02
+PILOT_REF_DISENGAGE_TURN_MAX: float = 0.3
+# REF 1 あたりの、仕切り直しの最長時間の短縮率と、その上限。
+PILOT_REF_DISENGAGE_SEC_REDUCTION_PER_POINT: float = 0.01
+PILOT_REF_DISENGAGE_SEC_REDUCTION_MAX: float = 0.3
+
 # 鍔迫り合いの定数。値はすべて暫定で、調整は総合バランス調整で行う。
 # 相手の格闘がこの時間 (s) 以内に出せるなら、同時の攻撃とみなす。
 MELEE_CLASH_WINDOW_SEC: float = 0.3

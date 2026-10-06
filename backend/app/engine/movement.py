@@ -8,6 +8,7 @@ from typing import NamedTuple
 import numpy as np
 
 from app.engine.battle_utils import en_log_details, is_melee_weapon
+from app.engine.calculator import PilotStats
 from app.engine.combat import has_los
 from app.engine.constants import (
     ALLY_REPULSION_RADIUS,
@@ -47,6 +48,7 @@ from app.engine.constants import (
     THREAT_REPULSION_CUTOFF_RADIUS,
     THREAT_REPULSION_DECAY_SCALE,
 )
+from app.engine.engagement_style import disengage_turn_multiplier, tactics_range
 from app.engine.melee_clash import advance_knockback
 from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, RetreatPoint, Vector3, Weapon
@@ -199,9 +201,10 @@ class MovementMixin:
     def _engagement_range(
         self, unit: MobileSuit, weapon: Weapon | None
     ) -> EngagementRange | None:
-        """武器と戦略モードから目標交戦距離を求める.
+        """武器と戦略モードと `tactics.range` から目標交戦距離を求める.
 
         許容幅の外側の端が武器の射程を超えないよう、目標距離を抑える。
+        FLEE の射撃武器は、戦略モードの倍率によらず、その上限を目標にする。
 
         Returns:
             目標交戦距離。武器が無い・弾切れや EN 不足で使えない場合は None。
@@ -219,12 +222,12 @@ class MovementMixin:
             self._resolve_strategy_mode(unit),  # type: ignore[attr-defined]
             1.0,
         )
-        distance = min(
-            float(weapon.optimal_range) * multiplier,
-            float(weapon.range) / (1.0 + ENGAGEMENT_RANGE_TOLERANCE_RATIO),
-        )
+        range_limit = float(weapon.range) / (1.0 + ENGAGEMENT_RANGE_TOLERANCE_RATIO)
+        distance = min(float(weapon.optimal_range) * multiplier, range_limit)
         if getattr(weapon, "is_melee", False):
             distance = max(distance, MELEE_ENGAGEMENT_RANGE_MIN)
+        elif tactics_range(unit) == "FLEE":
+            distance = range_limit
         return EngagementRange(distance, distance * ENGAGEMENT_RANGE_TOLERANCE_RATIO)
 
     @staticmethod
@@ -467,21 +470,7 @@ class MovementMixin:
         if target is not None:
             selected = self._select_weapon_fuzzy(unit, target)  # type: ignore[attr-defined]
             if selected is not None:
-                # 射撃優先中は、再使用待ちの射撃武器を基準に残す。
-                # 格闘武器を基準にすると、撃つたびに格闘の間合いへ詰めてしまう。
-                if is_melee_weapon(selected) and self._prefers_ranged(str(unit.id)):  # type: ignore[attr-defined]
-                    waiting = next(
-                        (
-                            w
-                            for w in unit.weapons
-                            if not is_melee_weapon(w)
-                            and self._cooldown_only_remaining_sec(unit, w) is not None  # type: ignore[attr-defined]
-                        ),
-                        None,
-                    )
-                    if waiting is not None:
-                        return waiting
-                return selected
+                return self._preferred_reference_weapon(unit, selected)
 
         usable_weapons = [
             w
@@ -493,6 +482,35 @@ class MovementMixin:
 
         # 使用可能な武器が無い場合（全弾切れ等）は従来通り先頭武器にフォールバック
         return unit.get_active_weapon()
+
+    def _preferred_reference_weapon(self, unit: MobileSuit, selected: Weapon) -> Weapon:
+        """間合いの基準武器を、射撃優先と `tactics.range` に合わせて選び直す.
+
+        射撃優先中・RANGED・FLEE は射撃武器、MELEE は格闘武器を基準にする。
+        再使用待ちの武器も候補に含める。撃つたびに基準が入れ替わり、間合いが揺れるため。
+        合う武器が無ければ `selected` を使う。
+        """
+        setting = tactics_range(unit)
+        if self._prefers_ranged(str(unit.id)) or setting in ("RANGED", "FLEE"):  # type: ignore[attr-defined]
+            wants_melee = False
+        elif setting == "MELEE":
+            wants_melee = True
+        else:
+            return selected
+        if is_melee_weapon(selected) == wants_melee:
+            return selected
+        candidates = [
+            w
+            for w in unit.weapons
+            if is_melee_weapon(w) == wants_melee
+            and (
+                self._is_weapon_usable(unit, w)  # type: ignore[attr-defined]
+                or self._cooldown_only_remaining_sec(unit, w) is not None  # type: ignore[attr-defined]
+            )
+        ]
+        if not candidates:
+            return selected
+        return max(candidates, key=lambda w: w.range)
 
     def _strafe_attraction(
         self,
@@ -807,6 +825,9 @@ class MovementMixin:
 
         # 1. 旋回制限
         max_rotation = actor.max_turn_rate * dt
+        if resources.get("current_action") == "DISENGAGE":
+            pilot = self.unit_pilot_stats.get(unit_id, PilotStats())  # type: ignore[attr-defined]
+            max_rotation *= disengage_turn_multiplier(pilot)
         angular_diff = ((desired_heading - current_heading + 180) % 360) - 180
         actual_rotation = max(-max_rotation, min(max_rotation, angular_diff))
         new_heading = current_heading + actual_rotation

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from app.engine.battle_utils import is_melee_weapon
+from app.engine.calculator import PilotStats
 from app.engine.combat import has_los
 from app.engine.constants import (
     DEFAULT_BOOST_EN_COST,
@@ -24,6 +25,13 @@ from app.engine.engagement import (
     restart_bout,
     stalemate,
     track_engagement,
+)
+from app.engine.engagement_style import (
+    disengage_max_sec,
+    perceived_dominance,
+    ranged_preference_multiplier,
+    stalemate_patience,
+    tactics_range,
 )
 from app.models.models import BattleLog, MobileSuit, Vector3
 
@@ -185,6 +193,7 @@ class AiDecisionMixin:
         unit_id: str,
         strategy_mode: str,
         idle_stalemate: bool = False,
+        keeps_range: bool = False,
     ) -> str:
         """ファジィ推論結果に制約ガードを適用して最終アクションを決定する.
 
@@ -193,13 +202,16 @@ class AiDecisionMixin:
             unit_id: ユニットの文字列 ID
             strategy_mode: 現在の戦略モード
             idle_stalemate: 撃たない膠着が続いているか（`_is_idle_stalemate()`）
+            keeps_range: 格闘へ突入せず射撃で戦うか（`_keeps_range()`）
 
         Returns:
             制約ガード適用後の最終アクション名
         """
+        # MOVE は撃たない。両機が撃たずに周回すると、時間切れまで決着しない。
         if action == "RETREAT" and not self.retreat_points:  # type: ignore[attr-defined]
-            # MOVE は撃たない。両機が撃たずに周回すると、時間切れまで決着しない。
             return "ATTACK" if idle_stalemate else "MOVE"
+        if action == "MOVE" and idle_stalemate:
+            return "ATTACK"
 
         if action == "BOOST_DASH":
             cooldown_remaining = self.unit_resources[unit_id].get(  # type: ignore[attr-defined]
@@ -211,7 +223,7 @@ class AiDecisionMixin:
         if action == "ENGAGE_MELEE":
             if strategy_mode == "RETREAT":
                 return "MOVE"
-            if self._prefers_ranged(unit_id):
+            if keeps_range or self._prefers_ranged(unit_id):
                 return "ATTACK"
 
         if action == "HIT_AND_AWAY":
@@ -224,7 +236,10 @@ class AiDecisionMixin:
     def _compute_engagement_inputs(
         self, unit: MobileSuit, target: MobileSuit | None
     ) -> dict[str, float]:
-        """現在のターゲットとの交戦記録を更新し、膠着度と優勢度を返す."""
+        """現在のターゲットとの交戦記録を更新し、膠着度と優勢度を返す.
+
+        どちらも `tactics.range` とパイロット能力で補正した、判断用の値を返す。
+        """
         resources = self.unit_resources[str(unit.id)]  # type: ignore[attr-defined]
         if target is None:
             resources["engagement"] = None
@@ -238,10 +253,38 @@ class AiDecisionMixin:
             resources.get("engagement"), str(target.id), distance, now
         )
         resources["engagement"] = record
+        pilot = self._pilot_stats(unit)
+        patience = stalemate_patience(tactics_range(unit), pilot)
         return {
-            "stalemate": stalemate(record, now, unit.max_hp, target.max_hp),
-            "dominance": dominance(record, unit.max_hp, target.max_hp),
+            "stalemate": stalemate(record, now, unit.max_hp, target.max_hp, patience),
+            "dominance": perceived_dominance(
+                dominance(record, unit.max_hp, target.max_hp), pilot
+            ),
         }
+
+    def _pilot_stats(self, unit: MobileSuit) -> PilotStats:
+        """機体のパイロット能力を返す. 未登録なら全能力 0 とする."""
+        return self.unit_pilot_stats.get(str(unit.id), PilotStats())  # type: ignore[attr-defined]
+
+    def _keeps_range(self, unit: MobileSuit) -> bool:
+        """格闘へ突入せず、射撃で戦う設定かを返す.
+
+        `tactics.range` が RANGED / FLEE で、射撃武器を持つときに真。
+        射撃武器が無ければ、設定より使える武器を優先する。
+        """
+        return tactics_range(unit) in ("RANGED", "FLEE") and any(
+            not is_melee_weapon(w) for w in unit.weapons
+        )
+
+    def _disengage_max_sec(self, unit: MobileSuit) -> float:
+        """仕切り直しの最長時間 (s) を返す."""
+        return disengage_max_sec(DISENGAGE_MAX_SEC, self._pilot_stats(unit))
+
+    def _ranged_preference_sec(self, unit: MobileSuit) -> float:
+        """仕切り直しの後に射撃武器を優先する時間 (s) を返す."""
+        return DISENGAGE_RANGED_PREFERENCE_SEC * ranged_preference_multiplier(
+            tactics_range(unit)
+        )
 
     def _decide_action(
         self,
@@ -277,8 +320,9 @@ class AiDecisionMixin:
             action,
             unit_id,
             strategy_mode,
-            idle_stalemate=action == "RETREAT"
+            idle_stalemate=action in ("RETREAT", "MOVE")
             and self._is_idle_stalemate(unit, target),
+            keeps_range=self._keeps_range(unit),
         )
         if action == "DISENGAGE" and target is not None:
             self._start_disengage(unit, target, fuzzy_inputs)
@@ -317,7 +361,7 @@ class AiDecisionMixin:
     ) -> bool:
         """実行中の仕切り直しを続けるかを返す.
 
-        目標距離に着くか、`DISENGAGE_MAX_SEC` が過ぎたら終える。
+        目標距離に着くか、最長時間（`_disengage_max_sec()`）が過ぎたら終える。
         撤退（RETREAT 戦略と、撤退ポイントへの RETREAT）は仕切り直しより優先する。
         """
         state: DisengageState = self.unit_resources[str(unit.id)]["disengage"]  # type: ignore[attr-defined]
@@ -329,7 +373,7 @@ class AiDecisionMixin:
                 return False
         if target is None or str(target.id) != state.opponent_id:
             return False
-        if float(self.elapsed_time) - state.started_at >= DISENGAGE_MAX_SEC:  # type: ignore[attr-defined]
+        if float(self.elapsed_time) - state.started_at >= self._disengage_max_sec(unit):  # type: ignore[attr-defined]
             return False
         distance = float(
             np.linalg.norm(target.position.to_numpy() - unit.position.to_numpy())
@@ -379,7 +423,7 @@ class AiDecisionMixin:
             restart_bout(target_record)
         # 終了時に `_end_disengage()` が期限を付け直す。仕切り直し中の命中で 0 になる。
         resources["ranged_preference_until"] = (
-            now + DISENGAGE_MAX_SEC + DISENGAGE_RANGED_PREFERENCE_SEC
+            now + self._disengage_max_sec(unit) + self._ranged_preference_sec(unit)
         )
 
         boost_en_cost = getattr(unit, "boost_en_cost", DEFAULT_BOOST_EN_COST)
@@ -426,7 +470,9 @@ class AiDecisionMixin:
         resources["disengage"] = None
         resources["disengage_cooldown_until"] = now + DISENGAGE_COOLDOWN_SEC
         if resources.get("ranged_preference_until", 0.0) > now:
-            resources["ranged_preference_until"] = now + DISENGAGE_RANGED_PREFERENCE_SEC
+            resources["ranged_preference_until"] = now + self._ranged_preference_sec(
+                unit
+            )
         if resources.get("is_boosting", False):
             self._end_boost(unit, "仕切り直し完了")  # type: ignore[attr-defined]
 

@@ -21,6 +21,7 @@ from app.engine.constants import (
     WEAPON_SWITCH_POLICY_NEVER,
     WEAPON_SWITCH_POLICY_RACK_ONLY,
 )
+from app.engine.engagement_style import melee_weapon_score_bias, tactics_range
 from app.engine.environment import EnvironmentProfile
 from app.engine.spatial_grid import UnitSpatialGrid
 from app.models.models import BattleLog, MobileSuit, Weapon
@@ -569,6 +570,7 @@ class TargetingMixin:
 
         使用可能な武器（クールダウン=0・EN残量≥コスト・弾薬残量>0）に対して
         ファジィ推論を実行し、最高 weapon_score の武器を選択する。
+        格闘武器のスコアには `tactics.range` ごとの値を足す。
         推論失敗時は最初の使用可能武器にフォールバックする。
 
         Args:
@@ -592,6 +594,7 @@ class TargetingMixin:
 
         unit_id = str(actor.id)
         resources = self.unit_resources[unit_id]  # type: ignore[attr-defined]
+        melee_bias = melee_weapon_score_bias(tactics_range(actor))
 
         # ターゲットの耐性値を取得
         target_beam_resistance = float(getattr(target, "beam_resistance", 0.0))
@@ -654,6 +657,8 @@ class TargetingMixin:
 
                 result, debug = weapon_engine.infer_with_debug(fuzzy_inputs)
                 score = result.get("weapon_score", 0.0)
+                if weapon_is_melee:
+                    score += melee_bias
                 all_scores[str(weapon.id)] = score
 
                 if score > best_score:
