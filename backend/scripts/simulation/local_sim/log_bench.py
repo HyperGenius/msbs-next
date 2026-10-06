@@ -278,7 +278,8 @@ def _json_bytes(value: Any) -> int:
 def gzip_size(data: bytes, chunk_size: int = STREAM_CHUNK_SIZE) -> int:
     """GZipMiddleware がストリーミングで返すときの圧縮後のサイズ.
 
-    GZipMiddleware はチャンクごとに `Z_SYNC_FLUSH` する。一度に圧縮した値とは少し違う。
+    GZipMiddleware はチャンクごとに `Z_SYNC_FLUSH` する（Starlette 0.50 はしない）。
+    一度に圧縮した値とは少し違う。
     """
     compressor = zlib.compressobj(GZIP_LEVEL, zlib.DEFLATED, 16 + zlib.MAX_WBITS)
     size = 0
