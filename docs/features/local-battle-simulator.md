@@ -3,7 +3,7 @@
 ## 概要
 
 本番の参加機体を使って、バトルをローカルで実行する開発用のツール。
-Epic #608 で作る。このドキュメントは Sub-Issue 1〜4（Issue #609〜#612）の範囲を書く。
+Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609〜#613）の範囲を書く。
 
 * 戦闘処理は本番バッチと同じモジュール（`app/services/battle_execution.py`）を使う
 * `fetch` で本番DBから参加機体・NPC・エースと戦域条件を読み、手元の JSON（ロスター）に保存する
@@ -11,6 +11,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜4（Issue #609�
 * `run` は同じロスター・同じシードなら同じログを再現する。1回の `run` を1世代として保存し、直近5世代を残す
 * 本番DBには書き込まない。SELECT 権限だけのロールと `default_transaction_read_only` の2つで防ぐ
 * 保存した結果は、開発環境の `/dev/sim` で本番の履歴詳細と同じ画面で再生できる
+* `report` / `compare` で世代の勝率・戦闘時間・行動分布などを集計し、2つの世代を比べられる。`/dev/sim` でも比べられ、再生中に AI の判断（ファジィスコア）を確かめられる
 
 ### 今後の予定（Epic #608）
 
@@ -20,7 +21,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜4（Issue #609�
 | 2 | Read Only 接続と参加機体の取得 `fetch`（Issue #610、実装済み。本ドキュメントの「[fetch: 参加機体の取得](#fetch-参加機体の取得)」） |
 | 3 | ロスターからの実行と世代管理 `run`（Issue #611、実装済み。本ドキュメントの「[run: ロスターからの実行](#run-ロスターからの実行)」「[世代管理](#世代管理-list--pin--unpin)」） |
 | 4 | 開発用バトルビューア `/dev/sim`（Issue #612、実装済み。本ドキュメントの「[/dev/sim: 開発用バトルビューア](#devsim-開発用バトルビューア)」） |
-| 5 | 世代間の比較とバランス分析表示（Issue #613） |
+| 5 | 世代間の比較とバランス分析表示（Issue #613、実装済み。本ドキュメントの「[report / compare: 世代の集計と比較](#report--compare-世代の集計と比較)」「[世代の比較とAIの判断の表示](#devsim-世代の比較とaiの判断の表示)」） |
 | 6 | エースパイロットの参加必須指定（Issue #614） |
 
 ---
@@ -277,6 +278,7 @@ battle_logs/local_sim/
   generations/
     20261005-213000_<label>/       # 1世代 = 1回の run
       manifest.json                # 実行条件・再現情報・勝敗サマリー・ピン留め状態
+      report.json                  # 集計値（report / compare・/dev/sim の比較画面が読む）
       roster.json                  # 実行時のロスターのコピー（ファイルをそのままコピー）
       battle_001.json              # 1戦分
       battle_002.json
@@ -369,6 +371,114 @@ python -m scripts.simulation.local_sim unpin 20261005-2130
 
 ---
 
+## report / compare: 世代の集計と比較
+
+```bash
+cd backend
+python -m scripts.simulation.local_sim report before
+python -m scripts.simulation.local_sim compare before after
+python -m scripts.simulation.local_sim compare 20261005-2130 after --format json
+```
+
+| サブコマンド | 内容 |
+|---|---|
+| `report <世代>` | 世代の全戦闘を集計して表示し、世代ディレクトリの `report.json` に保存する（作り直す） |
+| `compare <世代A> <世代B>` | 2つの世代の集計値を並べ、差（B − A）を表示する。`report.json` が無いか古い形式の世代は、集計して保存してから比べる |
+
+* 世代の指定は `pin` と同じ（世代ID・その前方一致・ラベル）
+* `--format json` で集計値を JSON で出す（`compare` は `{"a": …, "b": …}`）
+* DB には接続しない（`run` と同じく `forbid_database()` を呼ぶ）
+* `run` は保存時に `report.json` も書く。`report` が要るのは、この機能より前に作った世代か、集計の形式（`REPORT_SCHEMA_VERSION`）が変わったときだけ
+
+### 集計する項目
+
+実装は `backend/scripts/simulation/local_sim/analysis.py`（`GenerationAnalyzer`）。1戦ずつ積算し、戦闘を全部メモリに持たない。
+
+| 項目 | 内容 |
+|---|---|
+| 勝敗 | 判定する機体の勝ち・負けの数と勝率 |
+| 打ち切り | 最大ステップ数で打ち切った戦闘の数と割合 |
+| 戦闘時間 | 経過時間（秒）の平均・最短・最長 |
+| 判定する機体の撃墜数 | 合計と1戦あたり |
+| 行動分布 | 全ユニットの `ATTACK`・`MOVE`・`USE_SKILL`・`RETREAT`・`MISS`・`DAMAGE`・`DESTROYED` の回数と割合 |
+| 戦略遷移 | `STRATEGY_CHANGED` の `前 → 後` ごとの回数 |
+| 武器の使用回数 | `ATTACK` の武器名ごとの回数（`report.json` だけに入れる） |
+| 機体ごとの撃墜数 / 被撃墜数 | 機体 ID ごとの合計。撃墜した機体は `battle_digest.compute_unit_kills()` と同じく、`DESTROYED` の直前にある同じ対象への `ATTACK` / `MELEE_COMBO` の機体とする |
+| 警告 | 下記の異常検出 |
+
+`compare` は戦闘数が違っても比べられるよう、回数を1戦あたりか割合で並べる。
+機体は ID で対応させる。片方の世代にしかいない機体（ロスターが違うとき）は `-` になる。
+実行条件（ロスター・判定する機体・シード・最大ステップ数・コミット・ファジィルールのハッシュ・戦域）も並べ、違う項目に `≠` を付ける。
+
+### 異常検出
+
+`run_simulation.py bench` と同じ `sim_bench.balance_warnings()` で、同じ閾値（`backend/app/engine/constants.py` の `BALANCE_WARN_*`）を使う。
+
+| 条件 | 閾値 | ローカルシミュレータでの読み替え |
+|---|---|---|
+| 引き分け率が高い | `BALANCE_WARN_DRAW_RATE` | 打ち切り率。bench の引き分けは最大ステップ到達のため、打ち切りを同じ扱いにする |
+| 一方の勝率が高い | `BALANCE_WARN_WIN_RATE` | 判定する機体の勝率と、負けた割合（「相手側」の勝率）の両方を見る |
+| 平均戦闘時間が長い | `BALANCE_WARN_AVG_DURATION` | そのまま |
+
+### 出力例（compare）
+
+```text
+=== 世代比較 ===
+  A: 20261005-222241_before (3 戦)
+  B: 20261005-222250_after (3 戦)
+
+条件（≠ は A と B で違う項目）:
+                  A                                    B
+  ロスター        run_test                             run_test
+  seed            611                                  900                                  ≠
+  ...
+
+集計値:
+                                      A        B  差 (B-A)
+  勝率                             0.0%    33.3%   +33.3pt
+  打ち切り率                       0.0%    33.3%   +33.3pt
+  平均戦闘時間                    78.1s   171.4s    +93.3s
+  撃墜数/戦                        0.33     0.67     +0.33
+  行動: ATTACK                     1.2%     0.7%    -0.6pt
+  ...
+
+機体ごとの撃墜数 / 被撃墜率（* は判定する機体。片方にしかいない機体は -）:
+  機体                          撃墜/戦 A     B     差  被撃墜率 A       B       差
+  *Zaku II                           0.33  0.67  +0.33      100.0%   66.7%  -33.3pt
+   Qubeley (Haman Karn)              2.67  1.00  -1.67        0.0%   33.3%  +33.3pt
+
+⚠️  [A] 相手側 の勝率が高すぎます (100.0% > 80%): バランスが偏っている可能性があります
+⚠️  [B] 打ち切り率が高すぎます (33.3% > 20%): 戦闘が長期化しすぎている可能性があります
+```
+
+### report.json
+
+スキーマは `analysis.py` の Pydantic モデル（`GenerationReport`）。`/dev/sim` の比較画面はこのファイルを読む。
+
+| 項目 | 内容 |
+|---|---|
+| `schema_version` | `REPORT_SCHEMA_VERSION`。集計の項目や計算を変えたら上げる。`compare` と `/dev/sim` は違う値のファイルを使わない |
+| `battles` / `wins` / `losses` / `timeouts` | 戦闘数・勝ち・負け・打ち切り |
+| `elapsed_time` | `{avg, min, max}`（秒） |
+| `player_kills` | 判定する機体の撃墜数の合計 |
+| `action_counts` / `strategy_transitions` / `weapon_usage` | 行動・戦略遷移・武器ごとの回数 |
+| `units[]` | `unit_id`・`name`・`pilot_name`・`is_player`（判定する機体か）・`battles`・`kills`・`deaths`。ロスターの順で、判定する機体が先頭 |
+| `warnings` | 警告文 |
+
+### 集計を CLI で行う理由
+
+`/dev/sim` の比較画面は、Route Handler で `battle_NNN.json` を集計せず、CLI が書いた `report.json` を読む。
+
+* 集計の実装を Python の1か所に保つ。TypeScript に同じ集計を書くと、CLI と画面の値がずれうる
+* 1世代は数十〜数百MB になる。比較のたびに全戦闘を読み直さずに済む
+
+### 検証（report / compare）
+
+* `tests/unit/test_local_sim_analysis.py`: 撃墜した機体の判定、集計値、bench と同じ警告、`run` が保存する `report.json` と読み直した集計の一致、古い `report.json` の作り直し、テキスト表示
+* SQLite のテストDBで作ったロスターで `run --rounds 3` を2回（シード違い）実行し、`report`・`compare` の出力を確認した
+
+---
+
 ## /dev/sim: 開発用バトルビューア
 
 `run` で保存した世代を、本番の履歴詳細と同じ部品でブラウザ再生する。開発環境（`npm run dev`）専用。
@@ -412,9 +522,12 @@ npm run dev
 | `GET /api/dev/sim/generations` | 読み込み元の絶対パスと、全世代の `manifest.json`（新しい順） |
 | `GET /api/dev/sim/generations/{世代ID}/battles/{戦闘番号}` | `battle_NNN.json` のログ以外の項目と、ログの件数（`log_count`） |
 | `GET /api/dev/sim/generations/{世代ID}/battles/{戦闘番号}/logs` | ログの NDJSON（本番の `/api/battles/{id}/logs` と同じ形式） |
+| `GET /api/dev/sim/generations/{世代ID}/battles/{戦闘番号}/decisions?unit={機体ID}` | 1機の AI の判断ログ（`fuzzy_scores` か `strategy_mode` を持つログ）。項目は `timestamp`・`action_type`・`target_id`・`message`・`strategy_mode`・`fuzzy_scores` |
+| `GET /api/dev/sim/generations/{世代ID}/report` | 世代の `report.json`。無ければ 404 |
 
 * 一覧は `manifest.json` だけで作る。`battle_NNN.json`（1戦で数MB〜十数MB）はバトルを選んだときにだけ読む
-* ログからは表示に使わない `fuzzy_scores` を除いて返す。転送量が約1/4減る（7.5MB のファイルで 5.75MB）。ファイルはそのまま
+* `logs` は表示に使わない `fuzzy_scores` を除いて返す。転送量が約1/4減る（7.5MB のファイルで 5.75MB）。ファイルはそのまま
+* `fuzzy_scores` は `decisions` で、選んだ1機の分だけ返す（4機・約860ステップの戦闘で、1機あたり約600件・約0.5MB）
 * 世代ID は CLI のラベルと同じく、英数字で始まり英数字と `_.-` だけのものに限る（`..` と書き込み中の `.tmp-` を弾く）
 * 戦闘のファイル名は `manifest.json` の `battles[].file` から引き、`battle_<数字>.json` の形に限る
 * シンボリックリンクを辿った先が読み込み元の外なら読まない
@@ -432,7 +545,7 @@ npm run dev
 1戦が十数MBになる問題（Issue #612 のコメント）は、保存形式を変えずにビューア側で対応した（案 A）。
 
 * 一覧は `manifest.json` だけで作り、バトルは選んだときに1戦ずつ読む
-* `fuzzy_scores` は Route Handler で除く
+* `fuzzy_scores` は `logs` から除き、デバッグ表示では1機分だけ `decisions` で返す
 * 値が null の項目を省く案（B）と gzip の案（C）は採らなかった。ディスクの使用量は、世代管理（直近5世代）と不要な世代のピン留めを外す運用で抑える
 
 ### 検証（/dev/sim）
@@ -440,3 +553,37 @@ npm run dev
 * `frontend/tests/unit/localSimStore.test.ts`: 世代の並び順・一時ディレクトリの除外・パスの検証・シンボリックリンク・`fuzzy_scores` の除去・NDJSON・開発環境の判定
 * `run --rounds 3` で作った世代（1戦 7〜10MB）を `npm run dev` で開き、世代一覧・バトル一覧・再生・チャプター・戦果サマリーが表示されることを確認した
 * `npm run build && npm run start` で `/dev/sim` と `/api/dev/sim/...` が 404 になることを確認した。`middleware.ts` を外した状態でも、ページと Route Handler 自身が 404 を返すことを確認した
+
+---
+
+## /dev/sim: 世代の比較とAIの判断の表示
+
+### 世代の比較
+
+上部の「世代の比較」タブで、2つの世代の集計値を並べる。
+
+* A（比べる元）と B（比べる先）を選ぶ。既定は1つ前の世代（A）と最新の世代（B）
+* 選んだ世代は URL（`/dev/sim?view=compare&a=<世代ID>&b=<世代ID>`）に入る
+* 表は CLI の `compare` と同じ項目（実行条件・集計値・機体ごとの撃墜数 / 被撃墜率・警告）。違う実行条件は黄色で示す
+* 集計値は各世代の `report.json` を読む。無いか古い形式の世代には、`local_sim report <世代ID>` の実行を案内する
+* 表の値と差は `frontend/src/utils/localSimAnalysis.ts` で作る。書式は CLI の `compare`（`analysis.py`）に揃える
+
+### AI の判断（デバッグ）
+
+再生画面のターンコントローラーの下に、選んだ機体の AI の判断を表示する。再生位置に合わせて更新する。
+
+| 表示 | 元のログ | 内容 |
+|---|---|---|
+| 行動の判断 | 再生位置以前で最後の `AI_DECISION` | `strategy_mode`、選んだ行動（メッセージの `[行動] を選択`）、`fuzzy_scores`（出力変数ごとの集合の活性化度。例: `action` の `ATTACK`・`MOVE` …）を横棒で表示する。メッセージ（ファジィ推論の入力値）も出す |
+| ターゲット選択 | 再生位置以前で最後の、`fuzzy_scores` を持つ `TARGET_SELECTION` | 候補ごとの優先度スコア（`all_scores`）と、選んだ候補の入力値（`inputs`） |
+
+* 機体は判定する機体（★）が既定。セレクトで切り替える
+* `fuzzy_scores` の中身は `docs/features/fuzzy-engine.md` を参照
+* 再生位置の判断は二分探索で引く（`lastAtOrBefore()`）
+* `BattleReplayPanel` に、再生位置を受け取って描画する `renderTimelinePanel` を追加した。履歴詳細（`BattleDetailModal`）は渡さないため、表示は変わらない
+
+### 検証（比較・AI の判断）
+
+* `frontend/tests/unit/localSimAnalysis.test.ts`: 比較表の値と差、機体の対応付け、実行条件の違い、再生位置の判断の引き方、選んだ行動の取り出し
+* `frontend/tests/unit/localSimStore.test.ts`: `report.json` の読み込み、判断ログの抽出
+* `run --rounds 3` で作った2世代を `npm run dev` で開き、比較画面、`report.json` が無い世代への案内、再生位置と機体の切り替えで AI の判断が変わることを確認した

@@ -497,32 +497,61 @@ class BenchRunner:
 
     def _compute_warnings(self, summary: SimulationSummary) -> None:
         """異常検出: 閾値を超えた場合に警告を追加する."""
-        if summary.rounds == 0:
-            return
+        summary.warnings.extend(
+            balance_warnings(
+                rounds=summary.rounds,
+                draw_count=summary.draw_count,
+                win_counts={
+                    team_id: count
+                    for team_id, count in summary.win_counts.items()
+                    if team_id != "DRAW"
+                },
+                avg_duration=summary.avg_duration,
+            )
+        )
 
-        draw_rate = summary.draw_rate
-        if draw_rate > BALANCE_WARN_DRAW_RATE:
-            summary.warnings.append(
-                f"引き分け率が高すぎます ({draw_rate:.1%} > {BALANCE_WARN_DRAW_RATE:.0%}): "
-                "戦闘が長期化しすぎている可能性があります"
+
+def balance_warnings(
+    rounds: int,
+    draw_count: int,
+    win_counts: dict[str, int],
+    avg_duration: float,
+    draw_label: str = "引き分け",
+) -> list[str]:
+    """引き分け率・勝率の偏り・平均戦闘時間を `BALANCE_WARN_*` と比べ、超えた項目の警告を返す.
+
+    Args:
+        rounds: 戦闘数。0 なら警告しない
+        draw_count: 決着しなかった戦闘の数
+        win_counts: 勝った側の名前ごとの勝利数。引き分けは含めない
+        avg_duration: 平均戦闘時間（秒）
+        draw_label: 警告文で決着しなかった戦闘を呼ぶ名前
+    """
+    warnings: list[str] = []
+    if rounds == 0:
+        return warnings
+
+    draw_rate = draw_count / rounds
+    if draw_rate > BALANCE_WARN_DRAW_RATE:
+        warnings.append(
+            f"{draw_label}率が高すぎます ({draw_rate:.1%} > {BALANCE_WARN_DRAW_RATE:.0%}): "
+            "戦闘が長期化しすぎている可能性があります"
+        )
+
+    for side, count in win_counts.items():
+        win_rate = count / rounds
+        if win_rate > BALANCE_WARN_WIN_RATE:
+            warnings.append(
+                f"{side} の勝率が高すぎます ({win_rate:.1%} > {BALANCE_WARN_WIN_RATE:.0%}): "
+                "バランスが偏っている可能性があります"
             )
 
-        for team_id, count in summary.win_counts.items():
-            if team_id == "DRAW":
-                continue
-            win_rate = count / summary.rounds
-            if win_rate > BALANCE_WARN_WIN_RATE:
-                summary.warnings.append(
-                    f"{team_id} の勝率が高すぎます ({win_rate:.1%} > {BALANCE_WARN_WIN_RATE:.0%}): "
-                    "バランスが偏っている可能性があります"
-                )
-
-        avg_duration = summary.avg_duration
-        if avg_duration > BALANCE_WARN_AVG_DURATION:
-            summary.warnings.append(
-                f"平均戦闘時間が長すぎます ({avg_duration:.1f}s > {BALANCE_WARN_AVG_DURATION:.0f}s): "
-                "ステップ数が多すぎる可能性があります"
-            )
+    if avg_duration > BALANCE_WARN_AVG_DURATION:
+        warnings.append(
+            f"平均戦闘時間が長すぎます ({avg_duration:.1f}s > {BALANCE_WARN_AVG_DURATION:.0f}s): "
+            "ステップ数が多すぎる可能性があります"
+        )
+    return warnings
 
 
 def run_bench_command(args: Any) -> None:

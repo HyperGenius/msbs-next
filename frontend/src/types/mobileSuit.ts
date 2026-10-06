@@ -51,6 +51,8 @@ export interface MobileSuit {
     npc_pilot_level?: number;
     /** NPC フラグ（スナップショットから） */
     is_npc?: boolean;
+    /** パイロット名（NPC・エースのスナップショットから） */
+    pilot_name?: string | null;
     /** HP ランク (S〜E) - APIから付与される */
     hp_rank?: string;
     /** 装甲ランク (S〜E) - APIから付与される */

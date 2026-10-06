@@ -10,7 +10,9 @@ import {
   logsToNdjsonStream,
   parseBattleIndex,
   readBattle,
+  readDecisionLogs,
   readManifest,
+  readReport,
 } from "@/app/api/dev/sim/_lib/localSimStore";
 import type { BattleLog } from "@/types/battle";
 
@@ -158,6 +160,61 @@ describe("readBattle", () => {
 
   it("世代が無ければ null を返す", async () => {
     expect(await readBattle(root, "20261001-000000_missing", 1)).toBeNull();
+  });
+});
+
+describe("readDecisionLogs", () => {
+  it("指定した機体の、fuzzy_scores か strategy_mode を持つログだけを返す", async () => {
+    const dir = await writeGeneration("20261001-000000_x", "2026-10-01T00:00:00Z", [
+      { index: 1, file: "battle_001.json" },
+    ]);
+    const logs: BattleLog[] = [
+      { ...log(0), action_type: "TARGET_SELECTION", target_id: "b" },
+      { ...log(0.1), fuzzy_scores: undefined },
+      { ...log(0.2), action_type: "MOVE", fuzzy_scores: undefined, strategy_mode: "DEFENSIVE" },
+      { ...log(0.3), actor_id: "b" },
+    ];
+    await fs.writeFile(path.join(dir, "battle_001.json"), JSON.stringify({ index: 1, logs }));
+
+    const decisions = await readDecisionLogs(root, "20261001-000000_x", 1, "a");
+    expect(decisions).toEqual([
+      {
+        timestamp: 0,
+        action_type: "TARGET_SELECTION",
+        target_id: "b",
+        message: "t=0",
+        strategy_mode: null,
+        fuzzy_scores: { attack: 0.5 },
+      },
+      {
+        timestamp: 0.2,
+        action_type: "MOVE",
+        target_id: null,
+        message: "t=0.2",
+        strategy_mode: "DEFENSIVE",
+        fuzzy_scores: null,
+      },
+    ]);
+  });
+
+  it("世代か戦闘が無ければ null を返す", async () => {
+    expect(await readDecisionLogs(root, "20261001-000000_missing", 1, "a")).toBeNull();
+  });
+});
+
+describe("readReport", () => {
+  it("世代の report.json を返す", async () => {
+    const dir = await writeGeneration("20261001-000000_x", "2026-10-01T00:00:00Z");
+    await fs.writeFile(path.join(dir, "report.json"), JSON.stringify({ schema_version: 1, battles: 3 }));
+
+    expect(await readReport(root, "20261001-000000_x")).toEqual({ schema_version: 1, battles: 3 });
+  });
+
+  it("report.json が無いときと、不正な世代ID では null を返す", async () => {
+    await writeGeneration("20261001-000000_x", "2026-10-01T00:00:00Z");
+
+    expect(await readReport(root, "20261001-000000_x")).toBeNull();
+    expect(await readReport(root, "..")).toBeNull();
   });
 });
 

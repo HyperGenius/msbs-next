@@ -2,10 +2,17 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import type { BattleLog, LocalSimBattle, LocalSimManifest } from "@/types/battle";
+import type {
+  BattleLog,
+  LocalSimBattle,
+  LocalSimDecisionLog,
+  LocalSimManifest,
+  LocalSimReport,
+} from "@/types/battle";
 
 const GENERATIONS_DIR = "generations";
 const MANIFEST_FILE = "manifest.json";
+const REPORT_FILE = "report.json";
 // generations.py の ROSTER_NAME_PATTERN と同じ。英数字で始めるため、`.tmp-` の書き込み中の世代と `..` を弾く。
 const GENERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const BATTLE_FILE_PATTERN = /^battle_\d+\.json$/;
@@ -107,29 +114,68 @@ export async function listGenerations(root: string): Promise<LocalSimManifest[]>
     );
 }
 
+/** 世代の `report.json`（CLI の集計値）を読む。世代か集計値が無いときは null を返す。 */
+export async function readReport(root: string, generationId: string): Promise<LocalSimReport | null> {
+  if (!isValidGenerationId(generationId)) return null;
+  const file = await resolveInside(root, GENERATIONS_DIR, generationId, REPORT_FILE);
+  if (!file) return null;
+  return JSON.parse(await fs.readFile(file, "utf-8")) as LocalSimReport;
+}
+
 /**
- * 1戦分を読み、表示に使う項目とログに分けて返す。
+ * 1戦分の `battle_NNN.json` をそのまま読む。デバッグ項目も残る。
  * ファイル名は `manifest.json` の一覧から引く。世代か戦闘が無いときは null を返す。
  */
-export async function readBattle(
+async function readBattleFile(
   root: string,
   generationId: string,
   index: number
-): Promise<{ battle: LocalSimBattle; logs: BattleLog[] } | null> {
+): Promise<(Omit<LocalSimBattle, "log_count"> & { logs: BattleLog[] }) | null> {
   const manifest = await readManifest(root, generationId);
   const summary = manifest?.battles.find((b) => b.index === index);
   if (!summary || !BATTLE_FILE_PATTERN.test(summary.file)) return null;
   const file = await resolveInside(root, GENERATIONS_DIR, generationId, summary.file);
   if (!file) return null;
+  return JSON.parse(await fs.readFile(file, "utf-8"));
+}
 
-  const { logs, ...rest } = JSON.parse(await fs.readFile(file, "utf-8")) as Omit<
-    LocalSimBattle,
-    "log_count"
-  > & { logs: BattleLog[] };
+/** 1戦分を読み、表示に使う項目とログに分けて返す。ログからはデバッグ項目を除く。 */
+export async function readBattle(
+  root: string,
+  generationId: string,
+  index: number
+): Promise<{ battle: LocalSimBattle; logs: BattleLog[] } | null> {
+  const record = await readBattleFile(root, generationId, index);
+  if (!record) return null;
+  const { logs, ...rest } = record;
   for (const log of logs) {
     for (const field of DEBUG_LOG_FIELDS) delete log[field];
   }
   return { battle: { ...rest, log_count: logs.length }, logs };
+}
+
+/**
+ * 1機の AI の判断ログ（`fuzzy_scores` か `strategy_mode` を持つログ）を時刻順に返す。
+ * 世代か戦闘が無いときは null を返す。
+ */
+export async function readDecisionLogs(
+  root: string,
+  generationId: string,
+  index: number,
+  unitId: string
+): Promise<LocalSimDecisionLog[] | null> {
+  const record = await readBattleFile(root, generationId, index);
+  if (!record) return null;
+  return record.logs
+    .filter((log) => log.actor_id === unitId && (log.fuzzy_scores != null || log.strategy_mode != null))
+    .map((log) => ({
+      timestamp: log.timestamp,
+      action_type: log.action_type,
+      target_id: log.target_id ?? null,
+      message: log.message,
+      strategy_mode: log.strategy_mode ?? null,
+      fuzzy_scores: log.fuzzy_scores ?? null,
+    }));
 }
 
 /** ログを本番の `/api/battles/{id}/logs` と同じ NDJSON で少しずつ送るストリームにする。 */

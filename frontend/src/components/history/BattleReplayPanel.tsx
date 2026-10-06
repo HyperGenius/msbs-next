@@ -1,7 +1,7 @@
 /* frontend/src/components/history/BattleReplayPanel.tsx */
 "use client";
 
-import { useMemo, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import { BattleLog, BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 import ChapterTrack from "@/components/BattleViewer/ui/ChapterTrack";
@@ -17,6 +17,8 @@ interface BattleReplayPanelProps {
   logsLoading: boolean;
   /** 全件のパースが終わるまで true */
   logsStreaming: boolean;
+  /** 再生位置に合わせて表示する追加のパネル。ターンコントローラーの下に置く */
+  renderTimelinePanel?: (currentTimestamp: number) => ReactNode;
 }
 
 /**
@@ -28,6 +30,7 @@ export default function BattleReplayPanel({
   logs,
   logsLoading,
   logsStreaming,
+  renderTimelinePanel,
 }: BattleReplayPanelProps) {
   const [currentTimestamp, setCurrentTimestamp] = useState(0);
   // チャプタークリック由来のシークを明示するトークン。増分の度に BattleScene 側でカメラの
@@ -104,6 +107,7 @@ export default function BattleReplayPanel({
                 isStreaming={logsStreaming}
                 onTimestampChange={setCurrentTimestamp}
               />
+              {renderTimelinePanel?.(currentTimestamp)}
             </>
           )
         ) : (

@@ -3,6 +3,24 @@
 バトルエンジンのファジィルールや戦略モードのバランス調整を効率化するための CLI ツール群です。
 `backend/scripts/run_simulation.py` のサブコマンドとして実装されています。
 
+## ローカルバトルシミュレータ（`local_sim`）との関係
+
+`backend/scripts/simulation/local_sim` の `report` / `compare`（[local-battle-simulator.md](local-battle-simulator.md#report--compare-世代の集計と比較)）と、
+本ドキュメントの `run_simulation.py` の `bench` / `compare` / `report` は、別のツールとして残す（Issue #613 で決定）。
+
+| | `run_simulation.py`（ミッション戦） | `local_sim`（ルーム戦） |
+|---|---|---|
+| 機体 | DB の先頭の機体と、ミッションの `enemy_config` から組み立てた敵 | 本番の参加機体・NPC・エース（`fetch` のロスター） |
+| 戦闘処理 | `BattleSimulator` を直接回す | 本番バッチと同じ `app/services/battle_execution.py` |
+| DB | 実行のたびに `NEON_DATABASE_URL` を読む | `fetch` の1回だけ（Read Only）。`run` 以降は接続しない |
+| 比べるもの | 同じ戦闘の中で、2つの戦略モード（A/B テスト） | エンジン・ファジィルールの変更前後（2つの世代） |
+| 再現性 | シードを固定しない | シードで同じログを再現する |
+
+* エンジン・ファジィルールの変更が本番の機体構成でどう効くかは、`local_sim` で確かめる。`run_simulation.py` は戦略モードの A/B を手早く比べる用途に残す
+* 集計は共有する。行動分布・戦略遷移・武器の使用回数は `sim_report.ReportGenerator.add_result()`、警告は `sim_bench.balance_warnings()`（同じ `BALANCE_WARN_*`）
+* `local_sim` は引き分けが無い（勝敗は判定する機体のチームが生き残ったか）。最大ステップ数での打ち切りを、bench の引き分け（最大ステップ到達）と同じ閾値で警告する
+* 新しい集計項目は `local_sim` の `analysis.py` に足す。`run_simulation.py` 側には足さない
+
 ## サブコマンド一覧
 
 | サブコマンド | 概要 |
@@ -202,15 +220,17 @@ python scripts/run_simulation.py report \
 ```
 backend/scripts/
   run_simulation.py  # エントリーポイント（サブコマンドを振り分け）
-  sim_bench.py       # bench サブコマンドの実処理（BenchRunner / SimulationSummary）
+  sim_bench.py       # bench サブコマンドの実処理（BenchRunner / SimulationSummary / balance_warnings）
   sim_compare.py     # compare サブコマンドの実処理（CompareRunner / ComparisonSummary）
   sim_report.py      # report サブコマンドの実処理（ReportGenerator / Report）
+  local_sim/analysis.py  # local_sim の report / compare。ReportGenerator と balance_warnings を使う
 
 backend/app/engine/
   constants.py       # BALANCE_WARN_DRAW_RATE / BALANCE_WARN_WIN_RATE / BALANCE_WARN_AVG_DURATION
 
 backend/tests/unit/
   test_sim_bench.py  # bench / compare / report のユニットテスト
+  test_local_sim_analysis.py  # local_sim の report / compare のユニットテスト
 ```
 
 ## 警告しきい値の変更

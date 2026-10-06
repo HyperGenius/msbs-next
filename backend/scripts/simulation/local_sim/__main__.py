@@ -4,10 +4,13 @@ backend/ で実行する:
     python -m scripts.simulation.local_sim fetch --pilot <パイロットID> --npc 7
     python -m scripts.simulation.local_sim run --roster <ロスター名> --rounds 20
     python -m scripts.simulation.local_sim list
+    python -m scripts.simulation.local_sim report <世代>
+    python -m scripts.simulation.local_sim compare <世代A> <世代B>
     python -m scripts.simulation.local_sim check-readonly
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -20,6 +23,7 @@ from scripts.simulation.local_sim.generations import (  # noqa: E402
     GENERATIONS_DIR,
     KEEP_UNPINNED_GENERATIONS,
     Manifest,
+    find_generation,
     list_generations,
     set_pinned,
 )
@@ -159,6 +163,53 @@ def _cmd_unpin(args: argparse.Namespace) -> int:
         f"ピン留めを外しました: {path.name}"
         f"（次の run で、新しい {KEEP_UNPINNED_GENERATIONS} 世代に入らなければ削除します）"
     )
+    return 0
+
+
+def _cmd_report(args: argparse.Namespace) -> int:
+    from scripts.simulation.local_sim.run import forbid_database
+
+    # 集計は sim_bench 経由で app を import する。DB は使わない。
+    forbid_database()
+    from scripts.simulation.local_sim.analysis import (
+        build_report,
+        format_report,
+        write_report,
+    )
+
+    path, manifest = find_generation(args.generation)
+    report = build_report(path, manifest)
+    write_report(path, report)
+    if args.format == "json":
+        print(report.model_dump_json(indent=2))
+    else:
+        print(format_report(manifest, report), end="")
+    return 0
+
+
+def _cmd_compare(args: argparse.Namespace) -> int:
+    from scripts.simulation.local_sim.run import forbid_database
+
+    forbid_database()
+    from scripts.simulation.local_sim.analysis import format_comparison, load_report
+
+    path_a, manifest_a = find_generation(args.generation_a)
+    path_b, manifest_b = find_generation(args.generation_b)
+    report_a = load_report(path_a, manifest_a)
+    report_b = load_report(path_b, manifest_b)
+    if args.format == "json":
+        print(
+            json.dumps(
+                {
+                    "a": report_a.model_dump(mode="json"),
+                    "b": report_b.model_dump(mode="json"),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        print(format_comparison((manifest_a, report_a), (manifest_b, report_b)), end="")
     return 0
 
 
@@ -305,6 +356,35 @@ def build_parser() -> argparse.ArgumentParser:
         pin = sub.add_parser(name, help=help_text)
         pin.add_argument("generation", help="世代ID（前方一致可）、またはラベル")
         pin.set_defaults(func=func)
+
+    report = sub.add_parser(
+        "report",
+        help="世代の勝敗・戦闘時間・行動分布・機体ごとの撃墜数を集計する",
+        description=(
+            "世代の battle_NNN.json を集計して表示し、世代ディレクトリの report.json に保存する。"
+            " 警告の基準は run_simulation.py bench と同じ（BALANCE_WARN_*）。"
+        ),
+    )
+    report.add_argument("generation", help="世代ID（前方一致可）、またはラベル")
+    report.add_argument(
+        "--format", choices=["text", "json"], default="text", help="出力形式"
+    )
+    report.set_defaults(func=_cmd_report)
+
+    compare = sub.add_parser(
+        "compare",
+        help="2つの世代の集計値を並べて差（B - A）を表示する",
+        description=(
+            "report.json が無い・古い世代は集計して保存してから比べる。"
+            " 戦闘数が違っても比べられるよう、回数は1戦あたりか割合で並べる。"
+        ),
+    )
+    compare.add_argument("generation_a", help="比べる元の世代（A）")
+    compare.add_argument("generation_b", help="比べる先の世代（B）")
+    compare.add_argument(
+        "--format", choices=["text", "json"], default="text", help="出力形式"
+    )
+    compare.set_defaults(func=_cmd_compare)
 
     check = sub.add_parser(
         "check-readonly",
