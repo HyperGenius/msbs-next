@@ -346,6 +346,7 @@ python scripts/simulation/engagement_bench.py diff \
 | キー | 内容 | 開始距離 | 既定の `tactics.range`（A×B） |
 |---|---|---|---|
 | `melee_duel` | ガンダム［ビームサーベル＋ビームライフル］ vs グフ［ヒートロッド＋ザクマシンガン］ | 300m | BALANCED×BALANCED、MELEE×MELEE |
+| `melee_only_duel` | ガンダム［ビームサーベル］ vs グフ［ヒートロッド］。射撃に逃げられないため、鍔迫り合いの頻度の上限を見る（Issue #600） | 300m | BALANCED×BALANCED、MELEE×MELEE |
 | `ranged_gundam_zaku` | ガンダム［ビームライフル］ vs ザクII［ザクマシンガン］ | 1000m | BALANCED×BALANCED、RANGED×RANGED |
 | `ranged_gelgoog_gundam` | ゲルググ［ビームライフル］ vs ガンダム［ビームライフル］ | 1000m | BALANCED×BALANCED、RANGED×RANGED |
 | `melee_vs_ranged` | グフ［ヒートロッド＋ザクマシンガン］ vs ガンダム［ビームライフル］ | 1000m | BALANCED×BALANCED、MELEE×RANGED |
@@ -363,6 +364,7 @@ python scripts/simulation/engagement_bench.py diff \
 | 最適比 格闘/射撃 p50 | 攻撃時の距離 ÷ 使用武器の `optimal_range` の中央値。格闘武器は `weapon_type == "MELEE"` または `is_melee` |
 | 格闘ミス最長 | 同じユニットの格闘 MISS が、そのユニットの命中を挟まずに続いた最長の時間と回数（射撃の MISS では途切れない） |
 | 持ち替え/分 | `WEAPON_SWITCH_START` の 1 機・1 分あたりの回数 |
+| 鍔迫り合い/分 (格闘比) | `MELEE_CLASH` の両機あわせた 1 分あたりの回数と、格闘の攻撃（命中判定した格闘 + 鍔迫り合い 1 回につき 2 回）のうち鍔迫り合いになった割合（Issue #600） |
 | セクタ F/FS/RS/R % | 攻撃セクタ FRONT / FRONT_SIDE / REAR_SIDE / REAR の割合 |
 | 戦闘時間 p50 / 時間切れ / 勝率 | 戦闘時間の中央値、最大ステップまで両機が生存した割合、A・B の勝率（時間切れは引き分け） |
 

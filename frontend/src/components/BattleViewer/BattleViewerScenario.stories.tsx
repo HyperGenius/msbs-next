@@ -8,6 +8,7 @@ import { Obstacle } from "@/types/battle";
 import {
     BattleScenario,
     buildEnShortageScenario,
+    buildMeleeClashScenario,
     buildSkirmishObstacles,
     buildSkirmishScenario,
 } from "./__stories__/battleScenarioFixtures";
@@ -83,6 +84,11 @@ export const Skirmish: Story = {};
 /** ENゲージの追従・20%未満での赤色表示・EN不足イベントでの2回点滅（Issue #534） */
 export const EnShortage: Story = {
     args: { buildScenario: buildEnShortageScenario },
+};
+
+/** 正面からの斬り合いで鍔迫り合いになり、押し離された後に射撃へ切り替える。チャプターにも出る。 */
+export const MeleeClash: Story = {
+    args: { buildScenario: buildMeleeClashScenario },
 };
 
 /** 森林の戦域。障害物は木立として描く。LOS を ON にすると遮断中の木立が赤くなる。 */

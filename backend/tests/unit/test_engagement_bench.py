@@ -106,6 +106,7 @@ def test_summarize_rates() -> None:
             weapon_switches=4,
             longest_melee_miss_sec=5.0,
             longest_melee_miss_count=3,
+            melee_clashes=1,
         ),
         eb.BattleMetrics(
             seed=2,
@@ -119,6 +120,7 @@ def test_summarize_rates() -> None:
             weapon_switches=0,
             longest_melee_miss_sec=0.0,
             longest_melee_miss_count=0,
+            melee_clashes=0,
         ),
     ]
     summary = eb.summarize(battles)
@@ -129,6 +131,9 @@ def test_summarize_rates() -> None:
     assert summary["a_win_rate"] == 0.5
     # 4 回 / 2 分 / 2 機。
     assert summary["weapon_switches_per_min"] == 1.0
+    # 鍔迫り合い 1 回 / 2 分。格闘 1 回と、鍔迫り合いの格闘 2 回のうち 2 回。
+    assert summary["melee_clashes_per_min"] == 0.5
+    assert abs(summary["melee_clash_rate"] - 2 / 3) < 1e-9
     assert summary["longest_melee_miss_seed"] == 1
     assert summary["ranged_optimal_ratio"]["p50"] is None
 

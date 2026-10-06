@@ -2803,3 +2803,98 @@ Issue #599（Epic #594「交戦距離の制御と膠着の解消」の Sub-Issue
 
 * `backend/tests/unit/test_engagement_disengage.py`: 交戦記録の開始・継続・リセット、攻撃による更新、膠着度・優勢度の計算、ファジィ推論の DISENGAGE 選択（膠着・劣勢で選び、優勢では選ばない）、DISENGAGE の最低継続時間と終了条件・RETREAT の優先・再使用までの時間、射撃優先と持ち替え、射撃武器の無い機体の回り込み、後退の向き、撃たない膠着
 * `frontend/tests/unit/battleChapters.test.ts` / `battleSnapshot.test.ts` / `logFormatter.test.ts`: 仕切り直しのチャプター・機体上の表示・ログの配色
+
+## 33. 鍔迫り合い（正面同士の同時格闘）
+
+Issue #600（Epic #594 Sub-Issue 6）。正面同士で両機がほぼ同時に格闘したとき、通常の命中判定をせず「鍔迫り合い」として両機を押し離す。
+斬り合いの後に間合いが生まれ、射撃への切り替えや仕切り直し（32 章）につながる。
+
+### 33.1 発生条件（`MeleeClashMixin._try_melee_clash()`、`backend/app/engine/melee_clash.py`）
+
+行動フェーズは各ユニットを順に処理するため、同時攻撃は「先に行動した側」が検出する。
+`CombatMixin._process_attack()` が格闘武器のリソースチェックを通した直後、命中判定の前に次をすべて確かめる。
+
+| 条件 | 内容 |
+|---|---|
+| 自機の武器 | 格闘武器（`weapon_type == "MELEE"` または `is_melee`） |
+| 相手のターゲット | 相手のステップ内のターゲット（`_select_target_fuzzy()` のキャッシュ）が自機 |
+| 相手の格闘 | 相手が `MELEE_CLASH_WINDOW_SEC`（0.3 秒）以内に自機へ格闘を出す（`_pending_melee_weapon()`）。行動フェーズの武器の選び方に合わせ、ENGAGE_MELEE（`MELEE_BOOST_ARRIVAL_RANGE` 以内）は先頭の格闘武器、ATTACK / HIT_AND_AWAY は手持ちの武器（`active_weapon_id`）で判定する。持ち替え中・撃破済み・撤退済み・射程外は除く |
+| 向き | 互いの攻撃セクタ（`calculate_attack_sector()`）がどちらも FRONT |
+| 再発までの時間 | どちらの機体も、前回の鍔迫り合いから `MELEE_CLASH_COOLDOWN_SEC`（8 秒）以上たっている |
+| 確率 | 上をすべて満たしたとき `MELEE_CLASH_CHANCE`（30%）で発生する。毎回起きると単調になるため |
+
+* 先に行動した側が両機の格闘をまとめて解決するので、「先に動いた側の攻撃で相手が撃破され、相手の攻撃が消える」という処理順の偏りが起きない
+* 相手の攻撃が同じステップで先に通常どおり解決された場合、相手の格闘は再使用待ちに入っているため、後から行動する側は鍔迫り合いにしない
+* 乱数（`random`）は条件がすべてそろったときだけ引く。条件を満たさない戦闘（射撃機同士など）の乱数列は変わらない
+* 再発までの時間は、鍔迫り合いで両機の格闘の再使用待ちがそろい、次の格闘も「同時」になって続けて起きやすいために入れた（入れないと格闘専用機同士の ASSAULT で 9 回/分になった）
+
+### 33.2 効果（`_resolve_melee_clash()`）
+
+* 両機の格闘は攻撃したものとして再使用待ちに入る（`_consume_attack_resources()`）。ダメージ・格闘コンボ・格闘命中後の再配置（`POST_MELEE_DISTANCE`）は無い
+* 押し離す間隔を `MELEE_CLASH_SEPARATION_MIN`〜`MELEE_CLASH_SEPARATION_MAX`（80〜120m）から一様に選び、押す力の比で両機に分ける（`push_shares()`）。押す力の弱い側が大きく飛ばされる。1 機の受け持ちは `MELEE_CLASH_PUSH_SHARE_MAX`（70%）まで
+  * 押す力（`_clash_power()`）= 武器の威力 × 機体の格闘適性（`melee_aptitude`）×（1 + パイロットの MEL × `MELEE_CLASH_MEL_WEIGHT`）
+* 両機の速度（`velocity_vec`）を 0 にする。突進の速度が残ると押し離しを打ち消すため
+* 交戦記録（32.2）には、両機が互いに 1 回ずつ外した攻撃として残す（`_record_attack_exchange()` をダメージ 0 で 2 回）。攻撃回数と最後の命中からの攻撃回数が増え、膠着度（32.3）が上がる
+
+### 33.3 押し離しの移動（慣性モデル）
+
+押し離しは瞬間移動ではなく、機体自身の速度とは別の速度（`unit_resources[unit_id]["knockback"]`、`Knockback`）として持つ。
+
+* `start_knockback()`: `MELEE_CLASH_KNOCKBACK_SEC`（0.8 秒）で速度が 0 になり、合計で受け持ちの距離だけ進む初速と減速度を決める
+* `MovementMixin._apply_inertia()` が機体自身の速度による移動に、`_advance_knockback()` の移動量を足す。1 ステップの移動量は速度の平均で求めるので、合計は受け持ちの距離に一致する
+* マップの外へ出る分は境界で止める。`_boundary_repulsion()` では押し戻せない速さのため
+* 押し離されている間に ENGAGE_MELEE の格闘が通っても、`POST_MELEE_DISTANCE` への再配置はしない（`_process_engage_melee()`）。再配置で押し離しを打ち消さないため
+
+### 33.4 ログ・セリフ・BattleViewer
+
+**`MELEE_CLASH` ログ**（`BattleLog.action_type`）: 鍔迫り合いを解決した側（先に行動した側）を `actor_id` にして 1 件記録する。
+
+| フィールド | 内容 |
+|---|---|
+| `target_id` | 相手 |
+| `weapon_name` / `weapon_id` | 自機の格闘武器 |
+| `damage` | 0 |
+| `message` | 例: 「[アムロ]のガンダムの[Beam Saber]とグフの[Heat Rod]が鍔迫り合い！ グフが押し負けて弾き飛ばされる」。受け持ちの差が 1.2 倍以内なら「両機が弾かれて間合いが開く」 |
+| `chatter` | 性格ごとのセリフ（`BATTLE_CHATTER[...]["clash"]`、例: 「押し切ってやる！」）。他のセリフと同じく 30% の確率で付く |
+| `details` | `target_weapon_name` / `target_weapon_id`（相手の格闘武器）、`actor_push_m` / `target_push_m`（各機が押し離される距離） |
+
+**BattleViewer**（`battle-viewer-feature.md` 参照）: 射線は出さず、両機の武器名と、両機の中間に火花と「鍔迫り合い！」を出す。自機が絡む鍔迫り合いはチャプタートラックと HUD ログにも出す。
+
+### 33.5 定数（`backend/app/engine/constants.py`）
+
+値はすべて暫定で、調整は総合バランス調整（#587）で行う。
+
+| 定数 | 値 | 内容 |
+|---|---|---|
+| `MELEE_CLASH_WINDOW_SEC` | 0.3s | 相手の格闘がこの時間以内に出せるなら同時の攻撃とみなす |
+| `MELEE_CLASH_CHANCE` | 0.3 | 条件がそろったときに鍔迫り合いになる確率 |
+| `MELEE_CLASH_COOLDOWN_SEC` | 8s | 鍔迫り合いの後、両機が次の鍔迫り合いを起こさない時間 |
+| `MELEE_CLASH_SEPARATION_MIN` / `MELEE_CLASH_SEPARATION_MAX` | 80m / 120m | 押し離しで広がる両機の間隔 |
+| `MELEE_CLASH_KNOCKBACK_SEC` | 0.8s | 押し離しの速度が 0 になるまでの時間 |
+| `MELEE_CLASH_PUSH_SHARE_MAX` | 0.7 | 押し負けた側が受け持つ間隔の割合の上限 |
+| `MELEE_CLASH_MEL_WEIGHT` | 0.05 | 押す力に掛ける、MEL 1 あたりの増分 |
+
+### 33.6 計測結果
+
+`engagement_bench.py`（各 30 試行、シード 595〜624、`tactics.range` は BALANCED×BALANCED）。変更前は鍔迫り合いを無効にした同じコード。
+「鍔迫り合い/分」は両機あわせた回数、「格闘比」は格闘の攻撃（命中判定した格闘 + 鍔迫り合い 1 回につき 2 回）のうち鍔迫り合いになった割合。
+
+| シナリオ | 戦略 | 鍔迫り合い/分 | 格闘比 | 1 戦あたり | 戦闘時間 p50 | 150m 未満 | A 勝率 |
+|---|---|---|---|---|---|---|---|
+| 格闘専用機同士（ガンダム[サーベル] vs グフ[ヒートロッド]） | AGGRESSIVE | 2.7 | 6% | 1.0 回 | 19s → 22s | 83% → 75% | 100% → 100% |
+| | DEFENSIVE | 1.6 | 4% | 0.6 回 | 21s → 21s | 82% → 78% | 100% → 100% |
+| | SNIPER | 1.9 | 5% | 0.7 回 | 20s → 22s | 79% → 68% | 93% → 100% |
+| | ASSAULT | 4.6 | 10% | 1.7 回 | 16s → 21s | 86% → 80% | 100% → 100% |
+| 格闘機同士（ガンダム[サーベル+ライフル] vs グフ[ヒートロッド+MG]） | ASSAULT | 0.1 | 1% | 0.0 回 | 23s → 23s | 40% → 39% | 100% → 100% |
+
+* 格闘機同士（射撃武器あり）は、AGGRESSIVE・DEFENSIVE・SNIPER で 1 回も起きなかった。#598・#599 の後は、グフがほぼザクマシンガンを構えて撃ち合うため、両機が同時に格闘を出す場面が少ない
+* 格闘専用機同士でも 1 戦あたり 0.6〜1.7 回で、格闘の 4〜10% にとどまる。多すぎないと判断した
+* 確率と再発までの時間は、確率 0.3 / 0.5 × 時間 5 / 8 / 10 秒で比べた。確率 0.5・時間なしでは ASSAULT で 9.1 回/分・戦闘時間 p50 16s → 28s になった
+* 射撃武器だけの機体が絡むシナリオ（`ranged_*`、`melee_vs_ranged`、`melee_only_vs_ranged`）は、相手が格闘を出さないため乱数列も含めて変わらない
+* `tactics.range` の MELEE×MELEE は BALANCED×BALANCED と同じ結果になった（`tactics.range` の反映は Sub-Issue 7）
+
+### 33.7 テスト
+
+* `backend/tests/unit/test_melee_clash.py`: 発生条件（正面同士・時間差の範囲内／再使用待ち・移動中・持ち替え中・背後・ターゲット違い・射撃武器では起きない・確率に外れたら通常の命中判定・再発までの時間）、効果（ダメージなし・両機の再使用待ち・ログ・交戦記録）、押し離しの向きと距離（反対向き・弱い側が大きく飛ぶ・割合の上限・合計の移動量）、慣性モデルでの移動（少しずつ動く・マップ境界で止まる・ENGAGE_MELEE で再配置しない・シミュレーションを進めると間隔が開く）
+* `backend/tests/unit/test_engagement_bench.py`: 鍔迫り合いの回数と格闘比の集計
+* `frontend/tests/unit/battleHitEffects.test.ts` / `battleChapters.test.ts` / `logFormatter.test.ts`: 鍔迫り合いの演出・HUD ログ・チャプター・ログの配色

@@ -123,6 +123,23 @@ describe("computeBattleChapters", () => {
     expect(computeBattleChapters(logs, PLAYER, [enemy])).toHaveLength(0);
   });
 
+  it("自機が絡む鍔迫り合いをCLASHチャプターとして抽出する", () => {
+    const logs = [
+      makeLog({ action_type: "MELEE_CLASH", target_id: enemy.id }),
+      makeLog({ action_type: "MELEE_CLASH", actor_id: enemy.id, target_id: PLAYER.id }),
+    ];
+    const chapters = computeBattleChapters(logs, PLAYER, [enemy]);
+    expect(chapters.map((c) => [c.kind, c.label])).toEqual([
+      ["CLASH", "Zaku IIと鍔迫り合い"],
+      ["CLASH", "Zaku IIと鍔迫り合い"],
+    ]);
+  });
+
+  it("自機が絡まない鍔迫り合いはチャプターにならない", () => {
+    const logs = [makeLog({ actor_id: enemy.id, action_type: "MELEE_CLASH", target_id: "ally-001" })];
+    expect(computeBattleChapters(logs, PLAYER, [enemy])).toHaveLength(0);
+  });
+
   it("複数種のチャプターをログの時系列順のまま返す", () => {
     const logs = [
       makeLog({ timestamp: 1, action_type: "DETECTION", target_id: enemy.id }),

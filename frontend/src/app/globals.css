@@ -231,6 +231,19 @@ a:not(.no-min-size),
   100% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
 }
 
+/* 鍔迫り合いの火花。線を中心から外へ伸ばしながら消す。角度は --bv-spark-angle で渡す */
+@keyframes bv-clash-spark {
+  0%   { transform: rotate(var(--bv-spark-angle)) translateX(4px) scaleX(0.3); opacity: 1; }
+  100% { transform: rotate(var(--bv-spark-angle)) translateX(30px) scaleX(1); opacity: 0; }
+}
+
+@keyframes bv-clash-text {
+  0%   { transform: translate(-50%, 0) scale(1.6); opacity: 0; }
+  12%  { transform: translate(-50%, 0) scale(1); opacity: 1; }
+  75%  { transform: translate(-50%, -6px) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -12px) scale(1); opacity: 0; }
+}
+
 /* BattleViewer のミノフスキー粒子のもや。タイルの継ぎ目が見えないよう、往復で漂わせる。 */
 @keyframes bv-minovsky-drift {
   from { transform: translate(-32px, -16px); }

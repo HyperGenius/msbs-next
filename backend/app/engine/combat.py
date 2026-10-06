@@ -542,8 +542,8 @@ class CombatMixin:
         """攻撃処理を実行する.
 
         Returns:
-            命中判定まで進んだ場合 True。武器が無い場合と、射撃弧・LOS・
-            リソース不足で攻撃しなかった場合は False。
+            命中判定まで進んだ場合と、鍔迫り合いになった場合 True。武器が無い場合と、
+            射撃弧・LOS・リソース不足で攻撃しなかった場合は False。
         """
         if weapon is None:
             weapon = actor.get_active_weapon()
@@ -574,19 +574,16 @@ class CombatMixin:
             self._log_attack_wait(actor, weapon, weapon_state, failure_reason, snapshot)
             return False
 
+        if self._try_melee_clash(actor, target, weapon, distance):  # type: ignore[attr-defined]
+            return True
+
         # 命中率計算
         hit_chance, distance_from_optimal, attack_sector = self._calculate_hit_chance(
             actor, target, weapon, distance
         )
 
         # スキルボーナスを個別に計算（スキル発動判定のため）
-        skill_bonus = 0.0
-        if actor.side == "PLAYER":
-            accuracy_skill_level = self.player_skills.get("accuracy_up", 0)  # type: ignore[attr-defined]
-            skill_bonus += accuracy_skill_level * 2.0
-        if target.side == "PLAYER":
-            evasion_skill_level = self.player_skills.get("evasion_up", 0)  # type: ignore[attr-defined]
-            skill_bonus -= evasion_skill_level * 2.0
+        skill_bonus = self._skill_hit_bonus(actor, target)
 
         # ダイスロール（ロール値を保持してスキル発動判定に使用）
         roll = random.uniform(0, 100)
@@ -654,6 +651,17 @@ class CombatMixin:
             actor, target, hp_before - max(0, target.current_hp)
         )
         return True
+
+    def _skill_hit_bonus(self, actor: MobileSuit, target: MobileSuit) -> float:
+        """命中率に入っているスキルの補正 (%) を返す. スキルが判定を変えたかの判定に使う."""
+        skill_bonus = 0.0
+        if actor.side == "PLAYER":
+            accuracy_skill_level = self.player_skills.get("accuracy_up", 0)  # type: ignore[attr-defined]
+            skill_bonus += accuracy_skill_level * 2.0
+        if target.side == "PLAYER":
+            evasion_skill_level = self.player_skills.get("evasion_up", 0)  # type: ignore[attr-defined]
+            skill_bonus -= evasion_skill_level * 2.0
+        return skill_bonus
 
     def _record_attack_exchange(
         self, actor: MobileSuit, target: MobileSuit, damage: int
