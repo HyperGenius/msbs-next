@@ -8,6 +8,7 @@ DB を使わず、`data/master/` の機体・武器の JSON から戦闘を組�
 Usage:
     python scripts/simulation/engagement_bench.py run --output results/before.json
     python scripts/simulation/engagement_bench.py run --scenarios melee_duel --rounds 4
+    python scripts/simulation/engagement_bench.py run --ranges MELEE,RANGED --pilot mel=20
     python scripts/simulation/engagement_bench.py diff results/before.json results/after.json
 """
 
@@ -48,7 +49,7 @@ _CLOSE_RANGE = 150.0
 _STRATEGIES: tuple[str, ...] = ("AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT")
 _SECTORS: tuple[str, ...] = ("FRONT", "FRONT_SIDE", "REAR_SIDE", "REAR")
 # 両機の能力差がパイロットから生じないよう、PLAYER 側も NPC と同じ値にそろえる。
-_PILOT_STATS = PilotStats(sht=1, mel=1, intel=1, ref=1, tou=1, luk=1)
+_DEFAULT_PILOT = "sht=1,mel=1,intel=1,ref=1,tou=1,luk=1"
 _UNIT_A_ID = uuid.UUID(int=1)
 _UNIT_B_ID = uuid.UUID(int=2)
 
@@ -187,6 +188,7 @@ class BattleMetrics:
     longest_melee_miss_sec: float
     longest_melee_miss_count: int
     melee_clashes: int
+    disengages: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -302,13 +304,33 @@ def _longest_melee_miss(records: list[AttackRecord]) -> tuple[float, int]:
     return best_sec, best_count
 
 
+def parse_pilot(value: str) -> PilotStats:
+    """`mel=20,ref=5` の形式からパイロット能力を作る. 書かない能力は 0."""
+    fields: dict[str, int] = {}
+    for item in filter(None, (v.strip() for v in value.split(","))):
+        key, _, number = item.partition("=")
+        if (
+            key not in PilotStats.__dataclass_fields__
+            or not number.lstrip("-").isdigit()
+        ):
+            raise ValueError(f"パイロット能力の指定が不正: {item}")
+        fields[key] = int(number)
+    return PilotStats(**fields)
+
+
 def run_battle(
-    scenario_key: str, condition: Condition, seed: int, max_steps: int
+    scenario_key: str,
+    condition: Condition,
+    seed: int,
+    max_steps: int,
+    pilot: PilotStats | None = None,
 ) -> BattleMetrics:
     """1 戦して計測値を返す.
 
     seed が奇数のときは B を PLAYER 側にする。行動順の偏りを打ち消すため。
+    `pilot` は両機に同じ値を使う。
     """
+    pilot = pilot or parse_pilot(_DEFAULT_PILOT)
     scenario = SCENARIOS[scenario_key]
     _seed_all(seed)
     half = scenario.start_distance / 2.0
@@ -333,8 +355,8 @@ def run_battle(
     sim = BattleSimulator(
         player,
         [enemy],
-        player_pilot_stats=_PILOT_STATS,
-        npc_pilot_stats={str(enemy.id): _PILOT_STATS},
+        player_pilot_stats=pilot,
+        npc_pilot_stats={str(enemy.id): pilot},
     )
     records: list[AttackRecord] = []
     _record_attacks(sim, records)
@@ -344,6 +366,7 @@ def run_battle(
     record_cursor = 0
     weapon_switches = 0
     melee_clashes = 0
+    disengages = 0
     steps = 0
     while not sim.is_finished and steps < max_steps:
         sim.step(_DT)
@@ -359,6 +382,7 @@ def run_battle(
             1 for log in new_logs if log.action_type == "WEAPON_SWITCH_START"
         )
         melee_clashes += sum(1 for log in new_logs if log.action_type == "MELEE_CLASH")
+        disengages += sum(1 for log in new_logs if log.action_type == "DISENGAGE")
         if records and unit_a.current_hp > 0 and unit_b.current_hp > 0:
             distances.append(
                 float(
@@ -387,6 +411,7 @@ def run_battle(
         longest_melee_miss_sec=miss_sec,
         longest_melee_miss_count=miss_count,
         melee_clashes=melee_clashes,
+        disengages=disengages,
     )
 
 
@@ -457,6 +482,12 @@ def summarize(battles: list[BattleMetrics]) -> dict[str, Any]:
             else 0.0
         ),
         "melee_clash_rate": _clash_rate(battles),
+        # 両機の合計を 1 機あたりに直す。
+        "disengages_per_min": (
+            sum(b.disengages for b in battles) / total_minutes / 2.0
+            if total_minutes
+            else 0.0
+        ),
         "sector_rates": {
             s: (sector_total[s] / attack_total if attack_total else 0.0)
             for s in _SECTORS
@@ -506,10 +537,10 @@ def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
     )
     print(
         "| 条件 | 攻撃数 | 距離 p10/p50/p90 | <50m | <150m | 最適比 格闘/射撃 p50 "
-        "| 格闘ミス最長 | 持ち替え/分 | 鍔迫り合い/分 (格闘比) | セクタ F/FS/RS/R % "
-        "| 戦闘時間 p50 | 時間切れ | A 勝率 | B 勝率 |"
+        "| 格闘ミス最長 | 持ち替え/分 | 鍔迫り合い/分 (格闘比) | 仕切り直し/分 "
+        "| セクタ F/FS/RS/R % | 戦闘時間 p50 | 時間切れ | A 勝率 | B 勝率 |"
     )
-    print("|---" * 14 + "|")
+    print("|---" * 15 + "|")
     for key, r in results.items():
         print(
             f"| {key} | {r['attacks']} | {_distance_cell(r['distance'])} "
@@ -521,6 +552,7 @@ def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
             f"| {r['weapon_switches_per_min']:.1f} "
             f"| {r.get('melee_clashes_per_min', 0.0):.1f}"
             f" ({_fmt(r.get('melee_clash_rate'), '.0%')}) "
+            f"| {r.get('disengages_per_min', 0.0):.1f} "
             f"| {_sector_cell(r['sector_rates'])} "
             f"| {r['duration']['p50']:.0f}s "
             f"| {r['timeout_rate']:.0%} "
@@ -538,6 +570,7 @@ _DIFF_METRICS: tuple[tuple[str, Any, str], ...] = (
     ("格闘ミス最長(s)", lambda r: r["longest_melee_miss_sec"], ".1f"),
     ("持ち替え/分", lambda r: r["weapon_switches_per_min"], ".1f"),
     ("鍔迫り合い/分", lambda r: r.get("melee_clashes_per_min"), ".1f"),
+    ("仕切り直し/分", lambda r: r.get("disengages_per_min"), ".1f"),
     ("FRONT", lambda r: r["sector_rates"]["FRONT"], ".0%"),
     ("戦闘時間 p50", lambda r: r["duration"]["p50"], ".0f"),
     ("時間切れ", lambda r: r["timeout_rate"], ".0%"),
@@ -610,6 +643,10 @@ def cmd_run(args: argparse.Namespace) -> None:
         sys.exit(f"不明なシナリオ: {unknown}（候補: {list(SCENARIOS)}）")
     strategies = _split(args.strategies) or list(_STRATEGIES)
     ranges = _split(args.ranges)
+    try:
+        pilot = parse_pilot(args.pilot)
+    except (TypeError, ValueError) as e:
+        sys.exit(str(e))
 
     jobs = {
         (key, cond): [args.seed + i for i in range(args.rounds)]
@@ -619,7 +656,10 @@ def cmd_run(args: argparse.Namespace) -> None:
     results: dict[str, dict[str, dict]] = {}
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         futures = {
-            job: [pool.submit(run_battle, *job, seed, args.max_steps) for seed in seeds]
+            job: [
+                pool.submit(run_battle, *job, seed, args.max_steps, pilot)
+                for seed in seeds
+            ]
             for job, seeds in jobs.items()
         }
         for (key, cond), fs in futures.items():
@@ -637,6 +677,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "seed": args.seed,
                 "rounds": args.rounds,
                 "max_steps": args.max_steps,
+                "pilot": asdict(pilot),
                 "scenarios": {
                     k: {
                         **asdict(SCENARIOS[k]),
@@ -661,6 +702,11 @@ def cmd_diff(args: argparse.Namespace) -> None:
         before["meta"]["rounds"] != after["meta"]["rounds"]
     ):
         print("⚠️  seed または rounds が異なります。差は乱数の違いを含みます。")
+    if before["meta"].get("pilot") != after["meta"].get("pilot"):
+        print(
+            f"パイロット能力: {before['meta'].get('pilot')} → "
+            f"{after['meta'].get('pilot')}"
+        )
     print_diff(before, after)
 
 
@@ -686,6 +732,11 @@ def main() -> None:
         "--ranges",
         help="両機に同じ tactics.range を設定する（カンマ区切り）。"
         "既定はシナリオごとの組",
+    )
+    run.add_argument(
+        "--pilot",
+        default=_DEFAULT_PILOT,
+        help=f"両機のパイロット能力（例: mel=20,ref=5）。既定は {_DEFAULT_PILOT}",
     )
     run.add_argument("--output", help="結果 JSON の保存先")
     run.set_defaults(func=cmd_run)
