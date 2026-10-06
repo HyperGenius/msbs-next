@@ -194,6 +194,38 @@ export function meleeComboLog(params: {
     };
 }
 
+/** message と details は backend/app/engine/melee_clash.py の `_log_melee_clash` に合わせる。 */
+export function meleeClashLog(params: {
+    timestamp: number;
+    actor: MobileSuit;
+    target: MobileSuit;
+    actorPos: Vector3;
+    actorWeapon: Weapon;
+    targetWeapon: Weapon;
+    actorPush: number;
+    targetPush: number;
+}): BattleLog {
+    const { timestamp, actor, target, actorPos, actorWeapon, targetWeapon, actorPush, targetPush } = params;
+    let outcome = " 両機が弾かれて間合いが開く";
+    if (actorPush > targetPush * 1.2) outcome = ` ${actor.name}が押し負けて弾き飛ばされる`;
+    else if (targetPush > actorPush * 1.2) outcome = ` ${target.name}が押し負けて弾き飛ばされる`;
+    return {
+        ...baseLog(timestamp, actor, actorPos),
+        action_type: "MELEE_CLASH",
+        target_id: target.id,
+        damage: 0,
+        message: `${actor.name}の[${actorWeapon.name}]と${target.name}の[${targetWeapon.name}]が鍔迫り合い！${outcome}`,
+        weapon_name: actorWeapon.name,
+        weapon_id: actorWeapon.id,
+        details: {
+            target_weapon_name: targetWeapon.name,
+            target_weapon_id: targetWeapon.id,
+            actor_push_m: actorPush,
+            target_push_m: targetPush,
+        },
+    };
+}
+
 // EN 関連ログの message / details は backend の action_handler.py / movement.py / combat.py に合わせる（Issue #533）
 export function boostStartLog(timestamp: number, actor: MobileSuit, pos: Vector3, en: number): BattleLog {
     return {
@@ -234,7 +266,7 @@ export function destroyedLog(timestamp: number, unit: MobileSuit, pos: Vector3):
 // backend/app/engine/constants.py の COMBO_DAMAGE_MULTIPLIER と揃える。
 const COMBO_DAMAGE_MULTIPLIER = 1.5;
 
-export type EffectKind = "HIT" | "CRITICAL" | "MISS" | "MELEE_COMBO" | "RAPID_FIRE";
+export type EffectKind = "HIT" | "CRITICAL" | "MISS" | "MELEE_COMBO" | "RAPID_FIRE" | "MELEE_CLASH";
 
 /** RAPID_FIRE で同時刻に出す命中ログの数。数字が縦に積まれることを確認するため。 */
 const RAPID_FIRE_HITS = 3;
@@ -326,6 +358,21 @@ export function buildEffectScenario(options: EffectScenarioOptions): EffectScena
                     weapon,
                     comboCount,
                     totalDamage: Math.floor(damage * COMBO_DAMAGE_MULTIPLIER) * comboCount,
+                }),
+            );
+            break;
+        case "MELEE_CLASH":
+            logs.push(
+                meleeClashLog({
+                    timestamp: t,
+                    actor,
+                    target,
+                    actorPos,
+                    actorWeapon: weapon,
+                    // 両機の武器名が出ることを確かめるため、相手は別の格闘武器にする
+                    targetWeapon: weaponKey === "HEAT_HAWK" ? WEAPONS.BEAM_SABER : WEAPONS.HEAT_HAWK,
+                    actorPush: 45,
+                    targetPush: 55,
                 }),
             );
             break;

@@ -55,6 +55,14 @@ export function computeAttackEvents(
 
         if (log.action_type === "MISS") {
             attacks.push({ ...base, impact: "miss", damage: 0 });
+        } else if (log.action_type === "MELEE_CLASH") {
+            const targetWeaponName = log.details?.target_weapon_name;
+            attacks.push({
+                ...base,
+                impact: "clash",
+                damage: 0,
+                targetWeaponName: typeof targetWeaponName === "string" ? targetWeaponName : undefined,
+            });
         } else if (log.action_type === "MELEE_COMBO" && log.damage && log.damage > 0) {
             attacks.push({ ...base, impact: "combo", damage: log.damage, comboCount: log.combo_count ?? 1 });
         } else if (log.action_type === "ATTACK" && log.damage && log.damage > 0) {
@@ -69,6 +77,22 @@ export function computeAttackEvents(
     return attacks;
 }
 
+/** 1 タイムスタンプ分のログから、攻撃アクション中のユニット ID を集める。 */
+export function computeAttackingUnitIds(timestampLogs: BattleLog[]): Set<string> {
+    const ids = new Set<string>();
+    for (const log of timestampLogs) {
+        if ((log.action_type === "ATTACK" || log.action_type === "MELEE_COMBO") && log.actor_id) {
+            ids.add(log.actor_id);
+        }
+        // 鍔迫り合いは両機が同時に斬りかかっている
+        if (log.action_type === "MELEE_CLASH") {
+            if (log.actor_id) ids.add(log.actor_id);
+            if (log.target_id) ids.add(log.target_id);
+        }
+    }
+    return ids;
+}
+
 /**
  * @param timestampLogs 現在タイムスタンプ分にフィルタ済みのログ（呼び出し元で計算し、他コンポーネントと共有する。Issue #467）
  */
@@ -79,12 +103,7 @@ export function useBattleEvents(
     return useMemo(() => {
         const attacks = computeAttackEvents(timestampLogs, beamWeaponIds);
 
-        const attackingUnitIds = new Set<string>();
-        for (const log of timestampLogs) {
-            if ((log.action_type === "ATTACK" || log.action_type === "MELEE_COMBO") && log.actor_id) {
-                attackingUnitIds.add(log.actor_id);
-            }
-        }
+        const attackingUnitIds = computeAttackingUnitIds(timestampLogs);
 
         const criticalTargetIds = new Set(
             attacks.filter((a) => a.impact === "critical").map((a) => a.targetId),

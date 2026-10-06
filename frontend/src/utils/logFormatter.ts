@@ -108,6 +108,8 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
 
   const isDisengageMessage = log.action_type === "DISENGAGE";
 
+  const isClashMessage = log.action_type === "MELEE_CLASH";
+
   const isAttributeMessage =
     msg.includes("BEAM") ||
     msg.includes("PHYSICAL") ||
@@ -137,6 +139,13 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
       borderStyle: "border-amber-500",
       bgStyle: "",
       textStyle: "text-amber-400 font-semibold",
+    };
+  }
+  if (isClashMessage) {
+    return {
+      borderStyle: "border-orange-400",
+      bgStyle: "",
+      textStyle: "text-orange-300 font-bold",
     };
   }
   if (isDisengageMessage) {

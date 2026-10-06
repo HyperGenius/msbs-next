@@ -8,12 +8,12 @@ import { isCriticalLog } from "./useBattleEvents";
 export interface HudLogLine {
     key: string;
     text: string;
-    tone: "dealt" | "taken" | "miss";
+    tone: "dealt" | "taken" | "miss" | "clash";
 }
 
 function isHudAttackLog(log: BattleLog): boolean {
     if (!log.actor_id || !log.target_id) return false;
-    if (log.action_type === "MISS") return true;
+    if (log.action_type === "MISS" || log.action_type === "MELEE_CLASH") return true;
     return (log.action_type === "ATTACK" || log.action_type === "MELEE_COMBO") && !!log.damage && log.damage > 0;
 }
 
@@ -41,6 +41,7 @@ export function recentAttackLogRange(
 
 function resultText(log: BattleLog): string {
     if (log.action_type === "MISS") return "MISS";
+    if (log.action_type === "MELEE_CLASH") return "鍔迫り合い";
     if (log.action_type === "MELEE_COMBO") return `-${log.damage} (${log.combo_count ?? 1}HIT COMBO)`;
     return isCriticalLog(log) ? `-${log.damage} CRITICAL` : `-${log.damage}`;
 }
@@ -58,6 +59,9 @@ export function formatHudLogLine(
     const targetName = log.target_id ? names.get(log.target_id) : undefined;
     if (!actorName || !targetName) return null;
 
+    if (log.action_type === "MELEE_CLASH") {
+        return { text: `${actorName} ⚔ ${targetName}  ${resultText(log)}`, tone: "clash" };
+    }
     const parts = [`${actorName} ▶ ${targetName}`, log.weapon_name, resultText(log)].filter(Boolean);
     const tone = log.action_type === "MISS" ? "miss" : log.target_id === playerId ? "taken" : "dealt";
     return { text: parts.join("  "), tone };

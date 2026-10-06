@@ -518,3 +518,21 @@ DISENGAGE_REENTRY_FLANK_OFFSET: float = 100.0
 DISENGAGE_REENTRY_FLANK_COEFF: float = 2.0
 # 撃たない膠着とみなした後、撤退先の無い RETREAT を攻撃に変える時間 (s)。
 IDLE_STALEMATE_ATTACK_SEC: float = 5.0
+
+# 鍔迫り合いの定数。値はすべて暫定で、調整は総合バランス調整で行う。
+# 相手の格闘がこの時間 (s) 以内に出せるなら、同時の攻撃とみなす。
+MELEE_CLASH_WINDOW_SEC: float = 0.3
+# 条件がそろったときに鍔迫り合いになる確率。毎回起きると単調になるため。
+MELEE_CLASH_CHANCE: float = 0.3
+# 鍔迫り合いの後、両機ともこの時間 (s) は次の鍔迫り合いを起こさない。
+# 両機の格闘の再使用待ちがそろい、続けて起きやすくなるため。
+MELEE_CLASH_COOLDOWN_SEC: float = 8.0
+# 押し離しで広がる両機の間隔 (m)。この範囲から一様に選ぶ。
+MELEE_CLASH_SEPARATION_MIN: float = 80.0
+MELEE_CLASH_SEPARATION_MAX: float = 120.0
+# 押し離しの速度が 0 になるまでの時間 (s)。
+MELEE_CLASH_KNOCKBACK_SEC: float = 0.8
+# 押し負けた側が受け持つ間隔の割合の上限。
+MELEE_CLASH_PUSH_SHARE_MAX: float = 0.7
+# 押す力に掛ける、パイロットの MEL 1 あたりの増分。
+MELEE_CLASH_MEL_WEIGHT: float = 0.05

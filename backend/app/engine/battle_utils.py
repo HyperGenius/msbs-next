@@ -89,7 +89,7 @@ class BattleUtilsMixin:
 
         Args:
             unit: ユニット
-            chatter_type: セリフの種類 (attack/hit/destroyed/miss/disengage)
+            chatter_type: セリフの種類 (attack/hit/destroyed/miss/disengage/clash)
 
         Returns:
             str | None: セリフ。NPCでない場合や確率で発言しない場合はNone

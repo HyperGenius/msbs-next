@@ -9,6 +9,7 @@ import {
     detectionLog,
     enShortageWaitLog,
     makeMobileSuit,
+    meleeClashLog,
     meleeComboLog,
     missLog,
     moveLog,
@@ -196,6 +197,76 @@ export function buildEnShortageScenario(): BattleScenario {
     ].sort((a, b) => a.timestamp - b.timestamp);
 
     return { logs, player, enemies: [zaku] };
+}
+
+/**
+ * 自機と格闘機の斬り合い（鍔迫り合いを含む）。
+ * 正面から突っ込んだ 2 機が鍔迫り合いで押し離され、自機がライフルに切り替えて仕留める。
+ * 押し離しは backend と同じく、0.8 秒で減速しながら離れる動きにする。
+ */
+export function buildMeleeClashScenario(): BattleScenario {
+    const playerPath: Keyframe[] = [
+        [0, { x: 2100, y: 0, z: 2500 }],
+        [2.0, { x: 2440, y: 0, z: 2500 }],
+        [2.4, { x: 2410, y: 0, z: 2500 }],
+        [2.8, { x: 2400, y: 0, z: 2500 }],
+        [6.0, { x: 2400, y: 0, z: 2560 }],
+    ];
+    const gelgoogPath: Keyframe[] = [
+        [0, { x: 2900, y: 0, z: 2500 }],
+        [2.0, { x: 2560, y: 0, z: 2500 }],
+        [2.4, { x: 2601, y: 0, z: 2500 }],
+        [2.8, { x: 2615, y: 0, z: 2500 }],
+        [5.0, { x: 2560, y: 0, z: 2480 }],
+    ];
+
+    const player = makeMobileSuit({
+        id: PLAYER_ID,
+        name: "ガンダム",
+        side: "PLAYER",
+        position: playerPath[0][1],
+        weapons: [WEAPONS.BEAM_SABER, WEAPONS.BEAM_RIFLE],
+    });
+    const gelgoog = makeMobileSuit({
+        id: "story-enemy-gelgoog",
+        name: "ゲルググ (NPC)",
+        side: "ENEMY",
+        position: gelgoogPath[0][1],
+        weapons: [WEAPONS.HEAT_HAWK, WEAPONS.MACHINE_GUN],
+        max_hp: 900,
+        is_npc: true,
+    });
+
+    const pp = (t: number) => positionAt(playerPath, t);
+    const gp = (t: number) => positionAt(gelgoogPath, t);
+    const { BEAM_RIFLE, BEAM_SABER, HEAT_HAWK, MACHINE_GUN } = WEAPONS;
+
+    const events: BattleLog[] = [
+        detectionLog(0, player, gelgoog, pp(0)),
+        missLog({ timestamp: 1.0, actor: gelgoog, target: player, actorPos: gp(1.0), weapon: MACHINE_GUN }),
+        meleeClashLog({
+            timestamp: 2.0,
+            actor: player,
+            target: gelgoog,
+            actorPos: pp(2.0),
+            actorWeapon: BEAM_SABER,
+            targetWeapon: HEAT_HAWK,
+            actorPush: 40,
+            targetPush: 55,
+        }),
+        attackHitLog({ timestamp: 3.5, actor: player, target: gelgoog, actorPos: pp(3.5), weapon: BEAM_RIFLE, damage: 300 }),
+        missLog({ timestamp: 4.0, actor: gelgoog, target: player, actorPos: gp(4.0), weapon: MACHINE_GUN }),
+        attackHitLog({ timestamp: 5.0, actor: player, target: gelgoog, actorPos: pp(5.0), weapon: BEAM_RIFLE, damage: 600, isCrit: true }),
+        destroyedLog(5.0, gelgoog, gp(5.0)),
+    ];
+
+    const logs = [
+        ...moveLogs(player, playerPath, 6.0),
+        ...moveLogs(gelgoog, gelgoogPath, 5.0),
+        ...events,
+    ].sort((a, b) => a.timestamp - b.timestamp);
+
+    return { logs, player, enemies: [gelgoog] };
 }
 
 /** 障害物を 1 つ作る。高さはバックエンドの自動生成と同じく半径の 1.5 倍にする。 */

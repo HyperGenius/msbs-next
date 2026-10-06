@@ -19,7 +19,12 @@ export const EFFECT_TIMING = {
     comboExtraDelayMs: 200,
     weaponLabelMs: 900,
     damageNumberMs: 850,
+    /** 鍔迫り合いの文字は数字より長く出す。読む量が多いため。 */
+    clashTextMs: 1200,
 } as const;
+
+/** 鍔迫り合いの中間地点に出す文字。 */
+export const CLASH_TEXT = "鍔迫り合い！";
 
 const MAX_TRACERS = 20;
 const MAX_WEAPON_LABELS = 8;
@@ -126,6 +131,25 @@ function impactColor(attack: AttackEvent, playerId: string): string {
     return attack.targetId === playerId ? HIT_EFFECT_COLORS.taken : HIT_EFFECT_COLORS.dealt;
 }
 
+/** 着弾演出を出しておく時間（ms）。 */
+export function impactDurationMs(kind: ImpactKind): number {
+    return kind === "clash" ? EFFECT_TIMING.clashTextMs : EFFECT_TIMING.damageNumberMs;
+}
+
+function midpoint(a: Vec3, b: Vec3): Vec3 {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
+}
+
+/** 武器名ラベルを追加する。同じ武器の連射はラベルを積まず、出し直して表示時間を延ばす。 */
+function withWeaponLabel(
+    labels: WeaponLabelState[],
+    label: Omit<WeaponLabelState, "slot">,
+): WeaponLabelState[] {
+    const others = labels.filter((l) => !(l.attackerId === label.attackerId && l.weaponName === label.weaponName));
+    const slot = lowestFreeSlot(others.filter((l) => l.attackerId === label.attackerId).map((l) => l.slot));
+    return [...others, { ...label, slot }];
+}
+
 function countEffects(effects: AttackEffects): number {
     return effects.tracers.length + effects.labels.length + effects.impacts.length;
 }
@@ -135,7 +159,7 @@ export function pruneExpiredEffects(effects: AttackEffects, now: number): Attack
     return {
         tracers: effects.tracers.filter((t) => t.startAt + t.durationMs > now),
         labels: effects.labels.filter((l) => l.startAt + EFFECT_TIMING.weaponLabelMs > now),
-        impacts: effects.impacts.filter((i) => i.startAt + EFFECT_TIMING.damageNumberMs > now),
+        impacts: effects.impacts.filter((i) => i.startAt + impactDurationMs(i.kind) > now),
     };
 }
 
@@ -168,6 +192,39 @@ export function spawnAttackEffects(params: {
             attack.tracerKind === "BEAM" ? HIT_EFFECT_COLORS.tracerBeam : HIT_EFFECT_COLORS.tracerBullet;
         let impactDelay: number;
 
+        if (attack.impact === "clash") {
+            // 鍔迫り合いは射線を出さない。両機の武器名と、両機の中間の火花・文字を出す
+            const sides = [
+                { unitId: attack.attackerId, weaponName: attack.weaponName, position: from },
+                { unitId: attack.targetId, weaponName: attack.targetWeaponName, position: to },
+            ];
+            for (const side of sides) {
+                if (!side.position || !side.weaponName) continue;
+                labels = withWeaponLabel(labels, {
+                    id: nextId(),
+                    attackerId: side.unitId,
+                    weaponName: side.weaponName,
+                    color: HIT_EFFECT_COLORS.flashRing,
+                    position: side.position,
+                    startAt: now,
+                });
+            }
+            if (from && to) {
+                impacts.push({
+                    id: nextId(),
+                    targetId: attack.targetId,
+                    kind: "clash",
+                    position: midpoint(from, to),
+                    text: CLASH_TEXT,
+                    color: HIT_EFFECT_COLORS.flashRing,
+                    startAt: now,
+                    delayMs: 0,
+                    slot: 0,
+                });
+            }
+            continue;
+        }
+
         if (attack.impact === "combo") {
             // 追撃は直前の格闘 ATTACK と同じ射線上で起きるため、射線と武器名を重ねて出さない
             impactDelay =
@@ -191,21 +248,13 @@ export function spawnAttackEffects(params: {
             }
 
             if (from && attack.weaponName) {
-                // 同じ武器の連射はラベルを積まず、出し直して表示時間を延ばす
-                labels = labels.filter(
-                    (l) => !(l.attackerId === attack.attackerId && l.weaponName === attack.weaponName),
-                );
-                const slot = lowestFreeSlot(
-                    labels.filter((l) => l.attackerId === attack.attackerId).map((l) => l.slot),
-                );
-                labels.push({
+                labels = withWeaponLabel(labels, {
                     id: nextId(),
                     attackerId: attack.attackerId,
                     weaponName: attack.weaponName,
                     color: tracerColor,
                     position: from,
                     startAt: now,
-                    slot,
                 });
             }
         }
@@ -218,6 +267,7 @@ export function spawnAttackEffects(params: {
                 .filter(
                     (i) =>
                         i.targetId === attack.targetId &&
+                        i.kind !== "clash" &&
                         i.startAt < startAt + EFFECT_TIMING.damageNumberMs &&
                         startAt < i.startAt + EFFECT_TIMING.damageNumberMs,
                 )

@@ -82,6 +82,7 @@ _GUNDAM_MELEE = Loadout(
 )
 _GOUF_MELEE = Loadout("グフ[ヒートロッド+MG]", "gouf", ("heat_rod", "zaku_mg"))
 _GUNDAM_SABER = Loadout("ガンダム[サーベル]", "gundam", ("beam_saber",))
+_GOUF_ROD = Loadout("グフ[ヒートロッド]", "gouf", ("heat_rod",))
 _GUNDAM_RANGED = Loadout("ガンダム[ライフル]", "gundam", ("beam_rifle",))
 _ZAKU_RANGED = Loadout("ザクII[MG]", "zaku_ii", ("zaku_mg",))
 _GELGOOG_RANGED = Loadout("ゲルググ[ライフル]", "gelgoog", ("beam_rifle_gelgoog",))
@@ -94,6 +95,15 @@ SCENARIOS: dict[str, Scenario] = {
             "格闘機同士",
             _GUNDAM_MELEE,
             _GOUF_MELEE,
+            300.0,
+            (("BALANCED", "BALANCED"), ("MELEE", "MELEE")),
+        ),
+        # 射撃に逃げられない格闘専用機同士で、鍔迫り合いの頻度の上限を見る。
+        Scenario(
+            "melee_only_duel",
+            "格闘専用機同士",
+            _GUNDAM_SABER,
+            _GOUF_ROD,
             300.0,
             (("BALANCED", "BALANCED"), ("MELEE", "MELEE")),
         ),
@@ -176,6 +186,7 @@ class BattleMetrics:
     weapon_switches: int
     longest_melee_miss_sec: float
     longest_melee_miss_count: int
+    melee_clashes: int
 
 
 # ---------------------------------------------------------------------------
@@ -332,6 +343,7 @@ def run_battle(
     log_cursor = 0
     record_cursor = 0
     weapon_switches = 0
+    melee_clashes = 0
     steps = 0
     while not sim.is_finished and steps < max_steps:
         sim.step(_DT)
@@ -346,6 +358,7 @@ def run_battle(
         weapon_switches += sum(
             1 for log in new_logs if log.action_type == "WEAPON_SWITCH_START"
         )
+        melee_clashes += sum(1 for log in new_logs if log.action_type == "MELEE_CLASH")
         if records and unit_a.current_hp > 0 and unit_b.current_hp > 0:
             distances.append(
                 float(
@@ -373,12 +386,20 @@ def run_battle(
         weapon_switches=weapon_switches,
         longest_melee_miss_sec=miss_sec,
         longest_melee_miss_count=miss_count,
+        melee_clashes=melee_clashes,
     )
 
 
 # ---------------------------------------------------------------------------
 # 集計
 # ---------------------------------------------------------------------------
+
+
+def _clash_rate(battles: list[BattleMetrics]) -> float | None:
+    """格闘の攻撃のうち、鍔迫り合いになった割合を返す. 格闘が無ければ None."""
+    clash_attacks = 2 * sum(b.melee_clashes for b in battles)
+    melee_attacks = sum(len(b.melee_ratios) for b in battles) + clash_attacks
+    return clash_attacks / melee_attacks if melee_attacks else None
 
 
 def _percentiles(values: list[float]) -> dict[str, float | None]:
@@ -429,6 +450,13 @@ def summarize(battles: list[BattleMetrics]) -> dict[str, Any]:
             else 0.0
         ),
         "attacks": attack_total,
+        # 鍔迫り合いは両機の格闘 2 回分を、命中判定の代わりに消費する。
+        "melee_clashes_per_min": (
+            sum(b.melee_clashes for b in battles) / total_minutes
+            if total_minutes
+            else 0.0
+        ),
+        "melee_clash_rate": _clash_rate(battles),
         "sector_rates": {
             s: (sector_total[s] / attack_total if attack_total else 0.0)
             for s in _SECTORS
@@ -478,10 +506,10 @@ def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
     )
     print(
         "| 条件 | 攻撃数 | 距離 p10/p50/p90 | <50m | <150m | 最適比 格闘/射撃 p50 "
-        "| 格闘ミス最長 | 持ち替え/分 | セクタ F/FS/RS/R % "
+        "| 格闘ミス最長 | 持ち替え/分 | 鍔迫り合い/分 (格闘比) | セクタ F/FS/RS/R % "
         "| 戦闘時間 p50 | 時間切れ | A 勝率 | B 勝率 |"
     )
-    print("|---" * 13 + "|")
+    print("|---" * 14 + "|")
     for key, r in results.items():
         print(
             f"| {key} | {r['attacks']} | {_distance_cell(r['distance'])} "
@@ -491,6 +519,8 @@ def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
             f"/{_fmt(r['ranged_optimal_ratio']['p50'], '.2f')} "
             f"| {r['longest_melee_miss_sec']:.1f}s ({r['longest_melee_miss_count']}回) "
             f"| {r['weapon_switches_per_min']:.1f} "
+            f"| {r.get('melee_clashes_per_min', 0.0):.1f}"
+            f" ({_fmt(r.get('melee_clash_rate'), '.0%')}) "
             f"| {_sector_cell(r['sector_rates'])} "
             f"| {r['duration']['p50']:.0f}s "
             f"| {r['timeout_rate']:.0%} "
@@ -507,6 +537,7 @@ _DIFF_METRICS: tuple[tuple[str, Any, str], ...] = (
     ("最適比 射撃", lambda r: r["ranged_optimal_ratio"]["p50"], ".2f"),
     ("格闘ミス最長(s)", lambda r: r["longest_melee_miss_sec"], ".1f"),
     ("持ち替え/分", lambda r: r["weapon_switches_per_min"], ".1f"),
+    ("鍔迫り合い/分", lambda r: r.get("melee_clashes_per_min"), ".1f"),
     ("FRONT", lambda r: r["sector_rates"]["FRONT"], ".0%"),
     ("戦闘時間 p50", lambda r: r["duration"]["p50"], ".0f"),
     ("時間切れ", lambda r: r["timeout_rate"], ".0%"),

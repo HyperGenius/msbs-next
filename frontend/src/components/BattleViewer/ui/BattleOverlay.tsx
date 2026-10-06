@@ -60,6 +60,7 @@ const HUD_LOG_TONE_COLOR: Record<HudLogLine["tone"], string | undefined> = {
     dealt: undefined,
     taken: HIT_EFFECT_COLORS.taken,
     miss: HIT_EFFECT_COLORS.miss,
+    clash: HIT_EFFECT_COLORS.dealt,
 };
 
 interface BattleOverlayProps {
