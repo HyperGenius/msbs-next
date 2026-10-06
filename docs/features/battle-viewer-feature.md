@@ -1013,6 +1013,7 @@ BattleDetailModal
 | `DESTROYED_ENEMY` / `DESTROYED_SELF` | `action_type === "DESTROYED"`、`actor_id` が敵機体/自機 |
 | `DETECTION` | `action_type === "DETECTION"` かつ自機が `actor_id` |
 | `DISENGAGE` | `action_type === "DISENGAGE"` かつ自機が `actor_id`（Issue #599。ラベルは「{相手}から仕切り直し」） |
+| `CLASH` | `action_type === "MELEE_CLASH"` かつ自機が `actor_id`/`target_id` のいずれか（Issue #600。ラベルは「{相手}と鍔迫り合い」、アイコンは ⚡） |
 
 表示文言は `message` の自由文ではなく、`weapon_name`/`damage`/`combo_count`/`action_type` 等の構造化フィールドから
 組み立てる（`computeBattleChapters()`、`frontend/src/components/BattleViewer/hooks/useBattleChapters.ts`）。
@@ -1029,6 +1030,23 @@ BattleDetailModal
 | ログ一覧（`formatBattleLog()`、`utils/logFormatter.ts`） | 太字の紫（`border-purple-500` / `text-purple-400 font-semibold`） |
 | 3D シーン（`MobileSuitMesh.tsx`） | DISENGAGE の後 1.5 秒、機体の上に「↩ 仕切り直し」を出す。弾切れ・クールダウンと同じ状態表示（`WarningType` の `disengage`）で、`getBattleSnapshot()` が判定する。色は既存パレットのビーム射線の色（`#6fe6ff`） |
 | チャプタートラック | 自機の仕切り直しだけを出す（上表） |
+
+### 鍔迫り合い（MELEE_CLASH）の表示（Issue #600）
+
+バックエンドが記録する `MELEE_CLASH` ログ（`battle-engine-feature.md` 33.4 節）を、次の場所で表示する。
+ログ 1 件に両機の武器（`weapon_name` と `details.target_weapon_name`）が入っている。
+
+| 場所 | 表示 |
+|---|---|
+| 3D シーン（`useAttackEffectQueue.ts` / `ImpactMarker.tsx`） | 射線は出さない。両機の上に武器名ラベルを出し、両機の中間に火花（放射する線 10 本と輪）と「鍔迫り合い！」を出す。文字は武器名ラベルと重ならないよう火花の下に置き、ダメージ数字より長い `EFFECT_TIMING.clashTextMs` だけ残す。片方の位置が分からないときは中間の演出を出さない |
+| 機体の反動（`useBattleEvents.ts` の `computeAttackingUnitIds()`） | 両機とも攻撃中として扱う |
+| HUD ログ（`useHudAttackLog.ts`） | `ガンダム ⚔ ザクII  鍔迫り合い`（tone は `clash`） |
+| ログ一覧（`formatBattleLog()`） | 太字の橙（`border-orange-400` / `text-orange-300 font-bold`） |
+| チャプタートラック | 自機が絡む鍔迫り合い（上表） |
+
+* 演出データは `AttackEvent` の `impact: "clash"`（`ImpactKind`）で表す。`targetWeaponName` に相手の武器名を入れる
+* 色は既存パレット（`HIT_EFFECT_COLORS`）の着弾フラッシュの黄（`flashRing`、`#ffd84a`）と白（`flashCore`）を使う
+* 火花と文字のアニメーションは `globals.css` の `bv-clash-spark` / `bv-clash-text`
 
 ### 敵機HPパネルの複数機対応（`BattleOverlay.tsx`）
 
@@ -1093,6 +1111,8 @@ npm run storybook   # http://localhost:6006 → BattleViewer/Effects, BattleView
 |---|---|
 | `BattleViewer/Effects/*` | 自機 1 機・敵 1 機で演出を 1 件だけ発生させ、繰り返し再生する。Controls で演出種別・攻撃側・武器・距離・ダメージ・コンボ数・環境・自動リプレイ間隔を変更できる。`RapidFire` は同時刻に 3 発命中させ、数字の段積みを確認する（Issue #531） |
 | `BattleViewer/Scenario/Skirmish` | 自機 1 機・敵 2 機の約 8 秒のバトル。`BattleDetailModal` と同じく `ChapterTrack` / `TurnController` 付きで通し再生・チャプタージャンプできる |
+| `BattleViewer/Effects/MeleeClash` | 鍔迫り合いの演出 1 件（Issue #600）。相手は別の格闘武器を持ち、両機の武器名が出ることを確認できる |
+| `BattleViewer/Scenario/MeleeClash` | 正面からの斬り合いで鍔迫り合いになり、押し離された後に射撃へ切り替えて撃破する約 6 秒のバトル（Issue #600）。押し離しは backend と同じく 0.8 秒で減速しながら離れる |
 
 ### ファイル
 
