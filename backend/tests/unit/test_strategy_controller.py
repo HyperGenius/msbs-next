@@ -132,6 +132,22 @@ def test_apply_does_not_update_destroyed_units() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_strategy_controllers_follow_unit_order() -> None:
+    """チームの戦略コントローラがユニットの順に並ぶこと.
+
+    STRATEGY_CHANGED のログはこの順に出る。PYTHONHASHSEED で順序が変わらないようにする。
+    """
+    team_ids = [f"team-{i:02d}" for i in range(20)][::-1]
+    units = [
+        _make_unit(f"Unit {i}", team_id, position=Vector3(x=i * 100.0, y=0, z=0))
+        for i, team_id in enumerate(team_ids)
+    ]
+
+    sim = BattleSimulator(units[0], units[1:])
+
+    assert list(sim._strategy_controllers) == team_ids
+
+
 def test_team_metrics_calculated_correctly() -> None:
     """TeamMetrics の alive_ratio / avg_hp_ratio / min_hp_ratio が正しく算出されること."""
     player = _make_unit("Player", "TEAM_P", hp=100, position=Vector3(x=0, y=0, z=0))

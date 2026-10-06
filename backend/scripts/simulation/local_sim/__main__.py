@@ -6,10 +6,13 @@ backend/ で実行する:
     python -m scripts.simulation.local_sim list
     python -m scripts.simulation.local_sim report <世代>
     python -m scripts.simulation.local_sim compare <世代A> <世代B>
+    python -m scripts.simulation.local_sim log-bench --roster <ロスター名>
+    python -m scripts.simulation.local_sim log-compare <計測A> <計測B>
     python -m scripts.simulation.local_sim check-readonly
 """
 
 import argparse
+import contextlib
 import json
 import sys
 from pathlib import Path
@@ -213,6 +216,67 @@ def _cmd_compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_log_bench(args: argparse.Namespace) -> int:
+    roster = load_roster(args.roster)
+
+    from scripts.simulation.local_sim.run import forbid_database
+
+    forbid_database()
+    from scripts.simulation.local_sim.log_bench import (
+        LogBenchOptions,
+        ParseBenchError,
+        format_log_bench,
+        run_log_bench,
+    )
+
+    options = LogBenchOptions(
+        label=args.label,
+        formats=args.formats.split(",") if args.formats else None,
+        parse=not args.no_parse,
+        ndjson_dir=Path(args.keep_ndjson) if args.keep_ndjson else None,
+    )
+    # 省略した引数は LogBenchOptions の既定値にする。
+    for name, value in (
+        ("units", args.units),
+        ("seed", args.seed),
+        ("max_steps", args.steps),
+        ("parse_runs", args.runs),
+    ):
+        if value is not None:
+            setattr(options, name, value)
+    print(f"ロスター {roster.name} でログを計測します", file=sys.stderr)
+    try:
+        # エンジンの警告が --format json の出力に混ざらないよう、stderr に出す。
+        with contextlib.redirect_stdout(sys.stderr):
+            path, result = run_log_bench(
+                roster, options, progress=lambda m: print(m, file=sys.stderr)
+            )
+    except ParseBenchError as exc:
+        print(f"エラー: {exc}", file=sys.stderr)
+        return 1
+    if args.format == "json":
+        print(result.model_dump_json(indent=2))
+    else:
+        print(format_log_bench(result), end="")
+    print(f"保存しました: {path}", file=sys.stderr)
+    return 0
+
+
+def _cmd_log_compare(args: argparse.Namespace) -> int:
+    from scripts.simulation.local_sim.run import forbid_database
+
+    forbid_database()
+    from scripts.simulation.local_sim.log_bench import (
+        find_log_bench,
+        format_log_comparison,
+    )
+
+    a = find_log_bench(args.bench_a)
+    b = find_log_bench(args.bench_b)
+    print(format_log_comparison(a, b), end="")
+    return 0
+
+
 def _cmd_check_readonly(_args: argparse.Namespace) -> int:
     engine = _connect_readonly()
     print("transaction_read_only = on を確認しました")
@@ -385,6 +449,90 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", choices=["text", "json"], default="text", help="出力形式"
     )
     compare.set_defaults(func=_cmd_compare)
+
+    log_bench = sub.add_parser(
+        "log-bench",
+        help="ロスターの機体で1戦を回し、ログのサイズとパースの負荷を形式ごとに測る",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "全機を個人戦にし、足りない分はロスターの機体を複製して --units 機にする。"
+            " 同じロスター・同じ seed なら行数とサイズは同じになる。"
+        ),
+        epilog="""
+保存先: battle_logs/local_sim/log_bench/<日時>_<ラベル>.json
+パースの計測には node が要る。無ければパースの計測を省く。
+
+使用例:
+  python -m scripts.simulation.local_sim log-bench --roster bench50 --label before
+  python -m scripts.simulation.local_sim log-bench --roster small5 --units 50 --formats stored
+""",
+    )
+    log_bench.add_argument(
+        "--roster",
+        required=True,
+        help="ロスター名、またはロスターの JSON ファイルのパス",
+    )
+    log_bench.add_argument(
+        "--units",
+        type=int,
+        default=None,
+        metavar="N",
+        help="戦闘に出す機体数。省略すると本番の定員。足りない分はロスターの機体を複製する",
+    )
+    log_bench.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="戦闘のシード。省略すると固定の既定値（log_bench.DEFAULT_SEED）",
+    )
+    log_bench.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="最大ステップ数。省略すると本番バッチの既定値",
+    )
+    log_bench.add_argument(
+        "--label",
+        default=None,
+        help="計測結果の名前。省略するとロスター名",
+    )
+    log_bench.add_argument(
+        "--formats",
+        default=None,
+        metavar="NAME[,NAME]",
+        help="測る形式（stored / draft / draft_no_message）。省略すると全部",
+    )
+    log_bench.add_argument(
+        "--runs",
+        type=int,
+        default=None,
+        metavar="N",
+        help="パースを測る回数。中央値を使う",
+    )
+    log_bench.add_argument(
+        "--no-parse", action="store_true", help="Node でのパースの計測を省く"
+    )
+    log_bench.add_argument(
+        "--keep-ndjson",
+        default=None,
+        metavar="DIR",
+        help="形式ごとの NDJSON をこのディレクトリに残す（ブラウザで確かめるとき用）",
+    )
+    log_bench.add_argument(
+        "--format", choices=["text", "json"], default="text", help="出力形式"
+    )
+    log_bench.set_defaults(func=_cmd_log_bench)
+
+    log_compare = sub.add_parser(
+        "log-compare",
+        help="2つのログの計測結果を形式ごとに並べ、B / A を表示する",
+    )
+    log_compare.add_argument(
+        "bench_a", help="比べる元（ファイルのパス・ID・その前方一致・ラベル）"
+    )
+    log_compare.add_argument("bench_b", help="比べる先")
+    log_compare.set_defaults(func=_cmd_log_compare)
 
     check = sub.add_parser(
         "check-readonly",
