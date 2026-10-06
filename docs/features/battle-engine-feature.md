@@ -264,7 +264,8 @@ MSの機動戦をリアルに再現するため、各ユニットは以下の物
 |---|---|
 | 基準武器 | `_get_reference_weapon()` が返す武器（移動判断の基準武器） |
 | 目標距離 | `optimal_range × 戦略モード倍率`。許容幅の外側の端が射程を超えないよう `range / (1 + 許容幅の割合)` で上限を設ける |
-| 戦略モード倍率 | `ENGAGEMENT_RANGE_STRATEGY_MULTIPLIERS`（SNIPER `1.2`、ASSAULT `0.8`、その他 `1.0`）。`tactics.range` の反映は Sub-Issue 7 で行う |
+| 戦略モード倍率 | `ENGAGEMENT_RANGE_STRATEGY_MULTIPLIERS`（SNIPER `1.2`、ASSAULT `0.8`、その他 `1.0`） |
+| `tactics.range` | 戦略モード倍率を掛けた後に補正する。FLEE の射撃武器は射程の上限を目標にする。基準武器の選び方も変わる（34 章） |
 | 許容幅 | 目標距離 × `ENGAGEMENT_RANGE_TOLERANCE_RATIO(0.2)` |
 | 格闘武器の下限 | `MELEE_ENGAGEMENT_RANGE_MIN(20m)` |
 | 間合いを持たない場合 | 武器が無い、または弾切れ・EN 不足で使えない場合は `None`。従来どおり一定の力で近づく。再使用待ちだけで使えない武器は基準として扱う |
@@ -2722,7 +2723,7 @@ Issue #599（Epic #594「交戦距離の制御と膠着の解消」の Sub-Issue
   - 移動の基準武器（`_get_reference_weapon()`）は、射撃武器が再使用待ちの間も射撃武器のままにする。格闘武器を基準にすると、撃つたびに格闘の間合いへ詰めてしまうため
 - 射撃武器を持たない機体は、この期間にターゲットの側面（胴体の向きに対して自機に近い側、`DISENGAGE_REENTRY_FLANK_OFFSET` 先）へ引き寄せられて再突入する（`_reentry_flank_attraction()`）
 
-### 32.6 撃たない膠着（撤退先の無い RETREAT）
+### 32.6 撃たない膠着（撤退先の無い RETREAT と MOVE）
 
 #598 の後、射撃機同士の 1 対 1 で新しい膠着が見つかった（Issue コメント）。
 両機の HP が下がり、DEFENSIVE の `def_rule_002`（HP LOW → RETREAT）で両機とも RETREAT を選ぶ。
@@ -2735,6 +2736,9 @@ Issue #599（Epic #594「交戦距離の制御と膠着の解消」の Sub-Issue
 - それ以外は従来どおり MOVE
 
 撤退ポイントが無い戦場での RETREAT 自体の見直しは、逃走度（#623）・逃走モード（#624）で扱う。
+
+#601 で、同じ判定を MOVE にも使うようにした。FLEE（34 章）で射程ぎりぎりを保つと、DEFENSIVE のファジィ規則は 400m 以上を FAR とみなして MOVE を選ぶ。
+両機とも撃たずに周回し、ゲルググ vs ガンダム（DEFENSIVE・FLEE×FLEE）が全戦時間切れになったため。
 
 ### 32.7 ログ・セリフ・BattleViewer
 
@@ -2898,3 +2902,122 @@ Issue #600（Epic #594 Sub-Issue 6）。正面同士で両機がほぼ同時に�
 * `backend/tests/unit/test_melee_clash.py`: 発生条件（正面同士・時間差の範囲内／再使用待ち・移動中・持ち替え中・背後・ターゲット違い・射撃武器では起きない・確率に外れたら通常の命中判定・再発までの時間）、効果（ダメージなし・両機の再使用待ち・ログ・交戦記録）、押し離しの向きと距離（反対向き・弱い側が大きく飛ぶ・割合の上限・合計の移動量）、慣性モデルでの移動（少しずつ動く・マップ境界で止まる・ENGAGE_MELEE で再配置しない・シミュレーションを進めると間隔が開く）
 * `backend/tests/unit/test_engagement_bench.py`: 鍔迫り合いの回数と格闘比の集計
 * `frontend/tests/unit/battleHitEffects.test.ts` / `battleChapters.test.ts` / `logFormatter.test.ts`: 鍔迫り合いの演出・HUD ログ・チャプター・ログの配色
+
+## 34. 戦術設定（tactics.range）とパイロット能力の反映
+
+Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.range` と、パイロットの MEL / INT / REF を、間合い・膠着への粘り・離脱判断に反映する。
+以前の `tactics.range` は保存時のチェック（`validate_tactics()`）でしか使われず、バトルエンジンは参照していなかった。
+
+補正値の計算は、エンジンの状態に依存しない `backend/app/engine/engagement_style.py` にまとめた。
+`tactics.range` が未設定・許容値外の機体は BALANCED として扱う（`tactics_range()`）。
+
+### 34.1 `tactics.range` ごとの挙動
+
+| 設定 | 目標交戦距離（2.3.4） | 間合いの基準武器 | 膠着への粘り | 格闘突入（ENGAGE_MELEE） | 仕切り直しの後の射撃優先 |
+|---|---|---|---|---|---|
+| MELEE | 変えない | 格闘武器 | ×1.5（粘る） | そのまま | ×0.4（すぐ再突入する） |
+| RANGED | 変えない | 射撃武器 | ×0.6（粘らない） | ATTACK にする | ×1.6（射撃を続ける） |
+| BALANCED | 変えない | 武器選択の結果（従来どおり） | ×1.0 | そのまま | ×1.0 |
+| FLEE | 射撃武器は射程の上限 | 射撃武器 | ×0.6（粘らない） | ATTACK にする | ×2.0（距離を取り続ける） |
+
+* **戦略モードとの優先関係**: 目標交戦距離は、戦略モードの倍率（`ENGAGEMENT_RANGE_STRATEGY_MULTIPLIERS`）を掛けた後に `tactics.range` で補正する。FLEE の射撃武器は、倍率によらず `range / (1 + 許容幅の割合)`（許容幅の外側の端が射程に一致する距離）を目標にする。格闘武器の目標距離は変えない
+* **間合いの基準武器**（`MovementMixin._preferred_reference_weapon()`）: 武器選択（`_select_weapon_fuzzy()`）の結果が設定と合わないとき、合う種類の武器に選び直す。再使用待ちの武器も候補に含める（撃つたびに基準が入れ替わり、間合いが揺れるため）。候補が複数あれば射程の長いものを使う。仕切り直しの後の射撃優先中（32.5）は、設定によらず射撃武器を基準にする
+  * MELEE は遠くでも格闘の間合いへ詰め、途中は射撃武器で撃つ
+  * RANGED は近づかれても射撃の間合いを保つため、ばねの力で離れる
+* **膠着への粘り**: 膠着度（32.3）が最大になる攻撃回数と経過時間（`STALEMATE_FULL_ATTACKS` / `STALEMATE_FULL_ELAPSED_SEC`）に倍率を掛ける（`stalemate()` の `patience`）。粘らない設定は、劣勢でなくても早めに仕切り直す
+* **格闘突入**: RANGED / FLEE は、ファジィ推論が ENGAGE_MELEE を選んでも ATTACK にする（`AiDecisionMixin._keeps_range()`）
+* **武器選択**: 格闘武器のスコア（0〜1）に `TACTICS_MELEE_WEAPON_SCORE_BIAS`（MELEE +0.1、RANGED −0.1、FLEE −0.2）を足す。持ち替えポリシー BALANCED の判断にも、足した後のスコアを使う
+* **仕切り直しの後**: 射撃武器を優先する時間（`DISENGAGE_RANGED_PREFERENCE_SEC`）に倍率を掛ける。射撃武器の無い機体が側面から再突入する期間（32.5）も同じ長さになる
+
+**装備と矛盾する設定**: 使える武器に合わせる。
+
+| 設定 | 装備 | 挙動 |
+|---|---|---|
+| MELEE | 射撃武器だけ | 格闘武器の候補が無いため、射撃武器の間合いで戦う |
+| RANGED / FLEE | 格闘武器だけ | 射撃武器の候補が無いため格闘武器を基準にし、ENGAGE_MELEE もそのまま選ぶ。膠着への粘りと射撃優先の倍率だけが効く |
+
+**NPC**: `build_npc_tactics()`（`backend/app/core/npc_data.py`）が性格ごとに range を設定している（AGGRESSIVE → MELEE、CAUTIOUS → BALANCED、その他 → RANGED）。そのため NPC の挙動も変わる。
+
+### 34.2 パイロット能力
+
+影響は小さめから始める。1 あたりの増分に上限を設ける。
+
+| 能力 | 効果 | 1 あたり | 上限 |
+|---|---|---|---|
+| MEL（格闘技巧） | 膠着への粘りの倍率を上げる（`stalemate_patience()`） | +2% | +40% |
+| INT | 劣勢（優勢度が負）を大きく見積もる。離脱判断の入力 `dominance` に掛ける（`perceived_dominance()`）。優勢と互角は変えない | +2% | +40%（−1 で止める） |
+| REF | 仕切り直しの最長時間（`DISENGAGE_MAX_SEC`）を短くする（`disengage_max_sec()`） | −1% | −30% |
+| REF | 仕切り直し中の旋回速度（`max_turn_rate`）を上げる（`disengage_turn_multiplier()`） | +2% | +30% |
+
+* INT による見積もりは、行動判断の入力・`AI_DECISION` ログ・`DISENGAGE` ログの `dominance` に出る。交戦記録の値は変えない
+* REF による持ち替え時間の短縮は、既存の `calculate_weapon_switch_lock_sec()` のまま
+
+### 34.3 定数（`backend/app/engine/constants.py`）
+
+値はすべて暫定で、調整は総合バランス調整（#587）で行う。表に無い設定は補正しない（倍率 1.0、加算 0）。
+
+| 定数 | 値 | 内容 |
+|---|---|---|
+| `TACTICS_STALEMATE_PATIENCE` | MELEE 1.5 / RANGED 0.6 / FLEE 0.6 | 膠着とみなすまでの攻撃回数と経過時間に掛ける倍率 |
+| `TACTICS_RANGED_PREFERENCE_MULTIPLIERS` | MELEE 0.4 / RANGED 1.6 / FLEE 2.0 | 仕切り直しの後に射撃武器を優先する時間に掛ける倍率 |
+| `TACTICS_MELEE_WEAPON_SCORE_BIAS` | MELEE +0.1 / RANGED −0.1 / FLEE −0.2 | 武器選択で格闘武器のスコアに足す値 |
+| `PILOT_MEL_PATIENCE_PER_POINT` / `PILOT_MEL_PATIENCE_MAX` | 0.02 / 0.4 | MEL による粘りの増分と上限 |
+| `PILOT_INT_CAUTION_PER_POINT` / `PILOT_INT_CAUTION_MAX` | 0.02 / 0.4 | INT による劣勢の見積もりの増分と上限 |
+| `PILOT_REF_DISENGAGE_TURN_PER_POINT` / `PILOT_REF_DISENGAGE_TURN_MAX` | 0.02 / 0.3 | REF による仕切り直し中の旋回速度の増分と上限 |
+| `PILOT_REF_DISENGAGE_SEC_REDUCTION_PER_POINT` / `PILOT_REF_DISENGAGE_SEC_REDUCTION_MAX` | 0.01 / 0.3 | REF による仕切り直しの最長時間の短縮率と上限 |
+
+### 34.4 ガレージの表示
+
+* `frontend/src/app/garage/components/TacticsSelector.tsx`: 選択肢の名前を挙動に合わせ（RANGED「射撃距離維持」、FLEE「射程限界から射撃」）、選んだ設定の説明を補足文に出す
+* `frontend/src/components/Social/PlayerProfileModal.tsx`: 戦術の表記を同じ名前にそろえた（近接突撃 / 射撃距離維持 / バランス / 射程限界）
+
+### 34.5 計測結果
+
+`engagement_bench.py`（シード 595〜）。`--ranges` で両機に同じ設定を与え、`--pilot` でパイロット能力を変えた。「仕切り直し/分」は 1 機あたりの DISENGAGE の回数（今回追加した指標）。
+
+**`tactics.range` ごとの差**（各 10 試行、パイロット能力はすべて 1。値は「変更前（main）→ 変更後」。変更前は設定によらず同じ値）
+
+| シナリオ | 戦略 | 設定 | 距離 p50 | 150m 未満 | 仕切り直し/分 | 戦闘時間 p50 |
+|---|---|---|---|---|---|---|
+| 格闘機同士（ガンダム[サーベル+ライフル] vs グフ[ヒートロッド+MG]） | AGGRESSIVE | BALANCED | 171m → 187m | 42% → 38% | 3.1 → 3.7 | 18s → 25s |
+| | | MELEE | 171m → 105m | 42% → 72% | 3.1 → 3.1 | 18s → 17s |
+| | | RANGED | 171m → 318m | 42% → 0% | 3.1 → 0.0 | 18s → 11s |
+| | | FLEE | 171m → 380m | 42% → 0% | 3.1 → 0.0 | 18s → 13s |
+| | DEFENSIVE | BALANCED | 213m → 212m | 31% → 30% | 4.7 → 4.3 | 23s → 22s |
+| | | MELEE | 213m → 106m | 31% → 70% | 4.7 → 2.6 | 23s → 14s |
+| | | RANGED | 213m → 313m | 31% → 0% | 4.7 → 0.0 | 23s → 10s |
+| | | FLEE | 213m → 380m | 31% → 0% | 4.7 → 0.0 | 23s → 13s |
+| 格闘専用機同士（ガンダム[サーベル] vs グフ[ヒートロッド]） | AGGRESSIVE | BALANCED | 109m → 109m | 74% → 75% | 4.6 → 3.9 | 27s → 21s |
+| | | MELEE | 109m → 108m | 74% → 74% | 4.6 → 2.9 | 27s → 24s |
+| | | RANGED | 109m → 108m | 74% → 76% | 4.6 → 5.7 | 27s → 23s |
+| | ASSAULT | MELEE | 93m → 96m | 81% → 81% | 4.2 → 3.4 | 22s → 18s |
+| | | RANGED | 93m → 95m | 81% → 83% | 4.2 → 6.8 | 22s → 24s |
+| ゲルググ vs ガンダム（射撃機同士） | DEFENSIVE | FLEE | 397m → 481m | 0% → 0% | 0.0 → 0.0 | 50s → 62s（時間切れ 0% → 0%） |
+
+* 射撃武器を持つ格闘機同士では、設定どおりに間合いが分かれた（MELEE 約 100m、BALANCED 約 200m、RANGED 約 300m、FLEE は射程の上限の約 380m）。MELEE は粘るため仕切り直しが減り、RANGED / FLEE は格闘の間合いに入らないため仕切り直しが 0 になった
+* 格闘専用機同士は、使える武器が格闘だけなので間合いは変わらない（装備と矛盾する設定）。粘りの差だけが仕切り直しの頻度に出た（MELEE で減り、RANGED / FLEE で増える）
+* FLEE を入れた最初の実装では、ゲルググ vs ガンダムの DEFENSIVE・FLEE×FLEE が 10 戦すべて 1 発も撃たずに時間切れになった。32.6 の撃たない膠着の判定を MOVE にも使うようにして、時間切れは 0% になった
+* グフ（MELEE）vs ガンダム[ライフル] は距離 p50 310m のまま変わらない。両機の速度が同じ（80）で、ガンダムが射撃の間合いを保とうと下がるため追いつけない（2.3.4「遅い格闘機は速い射撃機に引き撃ちされる」）。格闘機の接近手段は総合バランス調整（#587）で扱う
+* BALANCED の値も変わったのは、パイロット能力 1 による補正（MEL・INT・REF がそれぞれ 2% 前後）と撃たない膠着の判定の変更で、乱数の消費順が変わったため
+* 射撃機同士（ガンダム vs ザクII）の BALANCED / MELEE / RANGED は全指標が変わらない。射撃武器しか持たず、間合いの基準武器が変わらないため
+
+**パイロット能力ごとの差**（各 20 試行、`--ranges BALANCED,MELEE`。基準は全能力 0、比べる能力だけ 20）
+
+| シナリオ | 戦略・設定 | 仕切り直し/分（全能力 0） | MEL 20 | INT 20 | REF 20 |
+|---|---|---|---|---|---|
+| 格闘機同士 | AGGRESSIVE・BALANCED | 3.2 | 3.1 | 4.0 | 2.9 |
+| | AGGRESSIVE・MELEE | 3.4 | 1.9 | 4.0 | 2.9 |
+| | DEFENSIVE・MELEE | 3.6 | 2.2 | 3.7 | 3.6 |
+| | ASSAULT・MELEE | 2.8 | 1.5 | 3.4 | 2.5 |
+| 格闘専用機同士 | AGGRESSIVE・BALANCED | 3.5 | 2.4 | 5.9 | 3.9 |
+| | DEFENSIVE・BALANCED | 4.6 | 3.8 | 5.6 | 5.6 |
+| | ASSAULT・BALANCED | 3.9 | 2.9 | 4.9 | 4.6 |
+
+* 両シナリオ・4 戦略・2 設定の 16 条件すべてで、MEL 20 は仕切り直しが減り、INT 20 は増えた（または同じ）
+* REF は仕切り直しを始める判断には使わない。仕切り直しの長さと旋回の速さに効くため、頻度の増減はそろわない
+* MEL は格闘の攻撃力、INT はクリティカル率と回避率、REF はイニシアチブにも効く。戦闘時間の差にはこれらの効果も含まれる
+
+### 34.6 テスト
+
+* `backend/tests/unit/test_tactics_range_engagement.py`: 補正値の計算（粘り・劣勢の見積もり・仕切り直しの時間と旋回・未設定の扱い）、膠着度・優勢度への反映（設定・MEL・INT）、目標交戦距離（FLEE）と間合いの基準武器（MELEE は遠くでも格闘、RANGED / FLEE は近くても射撃、RANGED は近づかれたら離れる）、格闘武器のスコア補正、格闘突入の制約、仕切り直しの後の射撃優先の長さ、REF による仕切り直しの短縮と旋回、装備と矛盾する設定、全設定と装備の組での戦闘、NPC（AGGRESSIVE）の戦術
+* `backend/tests/unit/test_engagement_disengage.py`: 撃たない膠着で MOVE を攻撃にする
