@@ -189,6 +189,8 @@ class BattleMetrics:
     longest_melee_miss_count: int
     melee_clashes: int
     disengages: int = 0
+    # 最初の格闘攻撃の時刻 (s)。格闘しなかった戦闘では None。
+    first_melee_time: float | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +414,7 @@ def run_battle(
         longest_melee_miss_count=miss_count,
         melee_clashes=melee_clashes,
         disengages=disengages,
+        first_melee_time=next((r.time for r in records if r.is_melee), None),
     )
 
 
@@ -464,6 +467,10 @@ def summarize(battles: list[BattleMetrics]) -> dict[str, Any]:
             sum(d < _CLOSE_RANGE for d in distances) / len(distances)
             if distances
             else None
+        ),
+        # 格闘機が相手に追いつくまでの時間の目安。格闘しなかった戦闘は除く。
+        "first_melee_time": _percentiles(
+            [b.first_melee_time for b in battles if b.first_melee_time is not None]
         ),
         "longest_melee_miss_sec": longest.longest_melee_miss_sec,
         "longest_melee_miss_count": longest.longest_melee_miss_count,
@@ -529,6 +536,11 @@ def _sector_cell(rates: dict[str, float]) -> str:
     return "/".join(f"{rates[s] * 100:.0f}" for s in _SECTORS)
 
 
+def _first_melee_cell(r: dict) -> str:
+    first = r.get("first_melee_time", {}).get("p50")
+    return "-" if first is None else f"{first:.1f}s"
+
+
 def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
     """1 シナリオの結果を Markdown の表で出力する."""
     print(
@@ -537,10 +549,10 @@ def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
     )
     print(
         "| 条件 | 攻撃数 | 距離 p10/p50/p90 | <50m | <150m | 最適比 格闘/射撃 p50 "
-        "| 格闘ミス最長 | 持ち替え/分 | 鍔迫り合い/分 (格闘比) | 仕切り直し/分 "
+        "| 初格闘 p50 | 格闘ミス最長 | 持ち替え/分 | 鍔迫り合い/分 (格闘比) | 仕切り直し/分 "
         "| セクタ F/FS/RS/R % | 戦闘時間 p50 | 時間切れ | A 勝率 | B 勝率 |"
     )
-    print("|---" * 15 + "|")
+    print("|---" * 16 + "|")
     for key, r in results.items():
         print(
             f"| {key} | {r['attacks']} | {_distance_cell(r['distance'])} "
@@ -548,6 +560,7 @@ def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
             f"| {_fmt(r['under_close_range_rate'], '.0%')} "
             f"| {_fmt(r['melee_optimal_ratio']['p50'], '.2f')}"
             f"/{_fmt(r['ranged_optimal_ratio']['p50'], '.2f')} "
+            f"| {_first_melee_cell(r)} "
             f"| {r['longest_melee_miss_sec']:.1f}s ({r['longest_melee_miss_count']}回) "
             f"| {r['weapon_switches_per_min']:.1f} "
             f"| {r.get('melee_clashes_per_min', 0.0):.1f}"
@@ -567,6 +580,7 @@ _DIFF_METRICS: tuple[tuple[str, Any, str], ...] = (
     ("<150m", lambda r: r["under_close_range_rate"], ".0%"),
     ("最適比 格闘", lambda r: r["melee_optimal_ratio"]["p50"], ".2f"),
     ("最適比 射撃", lambda r: r["ranged_optimal_ratio"]["p50"], ".2f"),
+    ("初格闘 p50(s)", lambda r: r.get("first_melee_time", {}).get("p50"), ".1f"),
     ("格闘ミス最長(s)", lambda r: r["longest_melee_miss_sec"], ".1f"),
     ("持ち替え/分", lambda r: r["weapon_switches_per_min"], ".1f"),
     ("鍔迫り合い/分", lambda r: r.get("melee_clashes_per_min"), ".1f"),
