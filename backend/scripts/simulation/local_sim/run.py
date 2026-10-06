@@ -173,7 +173,7 @@ def run_one_battle(
 
 
 @contextmanager
-def _roster_battle_state(roster: Roster) -> Iterator[None]:
+def roster_battle_state(roster: Roster) -> Iterator[None]:
     """ロスターのエースを渡す。抜けるときに、エースの参照と numpy の乱数を元に戻す.
 
     どちらもプロセス全体の状態のため、例外で抜けても必ず戻す。
@@ -220,7 +220,7 @@ def run_generation(
         writer.write_roster(roster_path)
         battles: list[BattleSummary] = []
         analyzer = GenerationAnalyzer()
-        with _roster_battle_state(roster):
+        with roster_battle_state(roster):
             for index in range(1, options.rounds + 1):
                 record = run_one_battle(
                     roster,
