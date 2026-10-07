@@ -419,6 +419,17 @@ def test_disengage_starts_with_log_boost_and_record_reset() -> None:
     assert logs[0].details["reason"] == "STALEMATE"
 
 
+def test_disengage_does_not_boost_while_backpedaling() -> None:
+    """敵を向いたまま下がっている最中に仕切り直しを始めても、ブーストしないこと."""
+    sim, player, enemy = _setup()
+    resources = sim.unit_resources[str(player.id)]
+    resources["body_heading_deg"] = 0.0
+    resources["movement_heading_deg"] = 180.0
+
+    assert _start_disengage(sim, player, enemy) == "DISENGAGE"
+    assert resources["is_boosting"] is False
+
+
 def test_disengage_target_distance_uses_ranged_engagement_range() -> None:
     """射撃武器があれば目標交戦距離を上限・下限に収め、無ければ下限にすること."""
     sim, player, _ = _setup()

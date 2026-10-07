@@ -7,6 +7,7 @@ import numpy as np
 
 from app.engine.battle_utils import is_melee_weapon
 from app.engine.constants import MELEE_BOOST_ARRIVAL_RANGE, POST_MELEE_DISTANCE
+from app.engine.facing import is_unit_backpedaling
 from app.models.models import BattleLog, MobileSuit, Vector3, Weapon
 
 if TYPE_CHECKING:
@@ -241,7 +242,11 @@ class ActionHandlerMixin:
         is_boosting = resources.get("is_boosting", False)
         cooldown_remaining = resources.get("boost_cooldown_remaining", 0.0)
 
-        if not is_boosting and cooldown_remaining <= 0.0:
+        if (
+            not is_boosting
+            and cooldown_remaining <= 0.0
+            and not is_unit_backpedaling(resources)
+        ):
             self._start_boost(actor)  # type: ignore[attr-defined]
 
         # ブーストキャンセル判定

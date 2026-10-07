@@ -33,6 +33,7 @@ from app.engine.engagement_style import (
     stalemate_patience,
     tactics_range,
 )
+from app.engine.facing import is_unit_backpedaling
 from app.models.models import BattleLog, MobileSuit, Vector3
 
 if TYPE_CHECKING:
@@ -431,6 +432,7 @@ class AiDecisionMixin:
             not resources.get("is_boosting", False)
             and resources.get("boost_cooldown_remaining", 0.0) <= 0.0
             and resources.get("current_en", 0.0) > boost_en_cost
+            and not is_unit_backpedaling(resources)
         ):
             self._start_boost(unit)  # type: ignore[attr-defined]
 
