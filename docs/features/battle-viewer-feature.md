@@ -277,6 +277,7 @@ interface UnitSnapshot {
 | `frontend/src/components/BattleViewer/scene/TracerMesh.tsx` | 射線（ビーム／実弾）描画（Issue #531） |
 | `frontend/src/components/BattleViewer/scene/WeaponLabel.tsx` | 発射側の武器名ラベル（Issue #531） |
 | `frontend/src/components/BattleViewer/scene/ImpactMarker.tsx` | 着弾フラッシュとダメージ数字（Issue #531） |
+| `frontend/src/components/BattleViewer/scene/DisengageIcon.tsx` | 自機の仕切り直しのアイコン（Issue #646） |
 | `frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts` | 状態スナップショット管理 |
 | `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts` | 現在タイムスタンプの攻撃演出データ生成 |
 | `frontend/src/components/BattleViewer/hooks/useAttackEffectQueue.ts` | 攻撃演出のスポーン・タイミング・段積み（Issue #531） |
@@ -555,12 +556,21 @@ BattleOverlay
 
 ### 7. HUD ログ行（`BattleOverlay` / `useHudAttackLog`）
 
-- 左下に直近 3 行を `ガンダム ▶ ザクII (NPC)  ビームライフル  -150` の形式で出す。
+- 左下に `ガンダム ▶ ザクII (NPC)  ビームライフル  -150` の形式で、直近 5 行（`HUD_LOG_LINES`）を出す。
   結果は `-150` / `-350 CRITICAL` / `-750 (2HIT COMBO)` / `MISS`。
 - 色は被ダメージ `#ff5a4e`、MISS `#9aa0a6`、それ以外は HUD 本文と同じグレー。最新行以外は半透明にする。
 - 自機と索敵済みの敵が絡むログだけを出す（未索敵の敵の名前を出さない）。
 - 全ログから攻撃ログ（`ATTACK` / `MELEE_COMBO` でダメージ > 0、または `MISS`）を 1 回だけ抜き出し、
   再生中は二分探索で現在時刻以前の末尾を探す。
+- 行の選び方（`selectHudLogLines()`、Issue #646）: 末尾から過去へ向かって、名前の分かる行を集める。
+  5 件たまるか、リプレイ時刻で 3 秒（`HUD_LOG_MAX_AGE_SECONDS`）以上前のログに着いたら止める。
+  - 3 秒の間はフェードさせない。3 秒経った行は消え、攻撃が止むと HUD ログは空になる（枠も消える）。
+  - リプレイ時刻で数えるので、一時停止中は行が消えない。シークしても表示が合う。
+  - 名前の分からない行は件数に数えない。以前は直近 12 件（`limit * 4`）を取ってから名前で絞っていたため、
+    未索敵の機体同士の交戦が多い戦闘（部屋の定員は初期値で 50 機）で、名前の分からないログ 12 件に表示中の行が
+    押し出されて一瞬で消えていた（17.8 秒に出た行が 18.0 秒に消えた）。
+  - 計測（engagement_bench の 6 シナリオ × 6 戦）: 1 対 1 のイベント頻度は毎秒 1.4〜1.6 件で、
+    直近 3 秒に入る件数は中央値 5〜6 件。行の表示時間の中央値は 1.7 秒から 2.8 秒に延びた。
 - `formatBattleLog()`（`utils/logFormatter.ts`）との共通化は見送った。`formatBattleLog()` は backend の
   message 文字列を加工する関数で、HUD ログは `actor_id` / `target_id` / `weapon_name` / `damage` から組み立てるため。
 
@@ -814,6 +824,7 @@ function CameraInitializer({ px, py, pz, controlsRef }) {
 | `frontend/src/components/BattleViewer/scene/TracerMesh.tsx` | 射線（ビーム／実弾）描画（Issue #531） |
 | `frontend/src/components/BattleViewer/scene/WeaponLabel.tsx` | 発射側の武器名ラベル（Issue #531） |
 | `frontend/src/components/BattleViewer/scene/ImpactMarker.tsx` | 着弾フラッシュとダメージ数字（Issue #531） |
+| `frontend/src/components/BattleViewer/scene/DisengageIcon.tsx` | 自機の仕切り直しのアイコン（Issue #646） |
 | `frontend/src/components/BattleViewer/hooks/useBattleSnapshot.ts` | 状態スナップショット管理 |
 | `frontend/src/components/BattleViewer/hooks/useBattleEvents.ts` | 現在タイムスタンプの攻撃演出データ生成 |
 | `frontend/src/components/BattleViewer/hooks/useAttackEffectQueue.ts` | 攻撃演出のスポーン・タイミング・段積み（Issue #531） |
@@ -1028,8 +1039,22 @@ BattleDetailModal
 | 場所 | 表示 |
 |---|---|
 | ログ一覧（`formatBattleLog()`、`utils/logFormatter.ts`） | 太字の紫（`border-purple-500` / `text-purple-400 font-semibold`） |
-| 3D シーン（`MobileSuitMesh.tsx`） | DISENGAGE の後 1.5 秒、機体の上に「↩ 仕切り直し」を出す。弾切れ・クールダウンと同じ状態表示（`WarningType` の `disengage`）で、`getBattleSnapshot()` が判定する。色は既存パレットのビーム射線の色（`#6fe6ff`） |
+| 3D シーン（`DisengageIcon.tsx`） | 自機の DISENGAGE の時刻を通過したとき、自機の右上に `↩` だけを出す（Issue #646）。下表を参照 |
 | チャプタートラック | 自機の仕切り直しだけを出す（上表） |
+
+3D シーンのアイコンの仕様（Issue #646）。何が起きたかはチャプターの「{相手}から仕切り直し」で読めるので、3D シーンは合図だけにする。
+
+| 項目 | 仕様 |
+|---|---|
+| 対象 | 自機のみ。敵機の仕切り直しは出さない |
+| レイヤー | スクリーン投影（drei の `Html`、`transform` なし）。カメラを回しても・ズームしても、アイコンの大きさとオフセットは画面上で一定 |
+| アンカー | 自機の位置から右上へ `ICON_OFFSET_X_PX` / `ICON_OFFSET_Y_PX` だけずらす。被弾時のダメージ数字（`ImpactMarker.tsx`）より機体寄りに置く |
+| 寿命 | 実時間で `EFFECT_TIMING.disengageIconMs`（150ms）。CSS アニメーション `bv-disengage-icon` の `animationend` で消す |
+| 表示内容 | `↩` のみ。色は既存パレットのビーム射線の色（`#6fe6ff`） |
+
+* 寿命を実時間で数えるのは、リプレイが 0.1 秒刻みで進むため。`getBattleSnapshot()` の時刻判定で 0.15 秒にすると、画面には 2 コマ（約 200ms）出てしまう。
+* `index.tsx` が現在時刻のログ（`timestampLogs`）に自機の DISENGAGE があるかを `hasDisengageLog()` で調べ、その時刻を `BattleScene` の `playerDisengagedAt` に渡す。次のコマで `null` に戻るが、アイコンは寿命が尽きるまで出し続ける。
+* 以前の「↩ 仕切り直し」の状態表示（`WarningType` の `disengage`、Issue #599）は削除した。
 
 ### 鍔迫り合い（MELEE_CLASH）の表示（Issue #600）
 

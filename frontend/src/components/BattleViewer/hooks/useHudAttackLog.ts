@@ -22,13 +22,9 @@ export function extractHudAttackLogs(logs: BattleLog[]): BattleLog[] {
     return logs.filter(isHudAttackLog).sort((a, b) => a.timestamp - b.timestamp);
 }
 
-/** 時刻順の攻撃ログのうち、currentTimestamp 以前の直近 limit 件の範囲 [start, end) を返す。 */
-export function recentAttackLogRange(
-    attackLogs: BattleLog[],
-    currentTimestamp: number,
-    limit: number,
-): [number, number] {
-    // 再生中は毎 tick 呼ばれるため、二分探索で currentTimestamp 以前の末尾を探す
+/** 時刻順の攻撃ログのうち、currentTimestamp より後にある最初のログの位置を返す。 */
+export function attackLogEnd(attackLogs: BattleLog[], currentTimestamp: number): number {
+    // 再生中は毎 tick 呼ばれるため、二分探索で探す
     let lo = 0;
     let hi = attackLogs.length;
     while (lo < hi) {
@@ -36,7 +32,7 @@ export function recentAttackLogRange(
         if (attackLogs[mid].timestamp <= currentTimestamp + 1e-9) lo = mid + 1;
         else hi = mid;
     }
-    return [Math.max(0, lo - limit), lo];
+    return lo;
 }
 
 function resultText(log: BattleLog): string {
@@ -67,6 +63,30 @@ export function formatHudLogLine(
     return { text: parts.join("  "), tone };
 }
 
+/**
+ * HUD に出す行を選ぶ。名前の分かる行のうち、新しい順に最大 limit 件を古い順で返す。
+ * currentTimestamp から maxAgeSeconds 以上前の行は出さない。
+ */
+export function selectHudLogLines(params: {
+    attackLogs: BattleLog[];
+    currentTimestamp: number;
+    names: ReadonlyMap<string, string>;
+    playerId: string;
+    limit: number;
+    maxAgeSeconds: number;
+}): HudLogLine[] {
+    const { attackLogs, currentTimestamp, names, playerId, limit, maxAgeSeconds } = params;
+    const lines: HudLogLine[] = [];
+    // 名前の分からない行は件数に数えない。数えると、未索敵の機体同士の交戦が多い戦闘で表示中の行が押し出される
+    for (let i = attackLogEnd(attackLogs, currentTimestamp) - 1; i >= 0 && lines.length < limit; i--) {
+        if (currentTimestamp - attackLogs[i].timestamp >= maxAgeSeconds) break;
+        const line = formatHudLogLine(attackLogs[i], names, playerId);
+        // key は attackLogs 上の位置にする。再生が進んでも既存の行を再マウントしない
+        if (line) lines.push({ ...line, key: `hud-${i}` });
+    }
+    return lines.reverse();
+}
+
 /** HUD に出す直近の攻撃ログ行を返す。 */
 export function useHudAttackLog({
     logs,
@@ -74,24 +94,20 @@ export function useHudAttackLog({
     names,
     playerId,
     limit,
+    maxAgeSeconds,
 }: {
     logs: BattleLog[];
     currentTimestamp: number;
     names: ReadonlyMap<string, string>;
     playerId: string;
     limit: number;
+    /** リプレイ時刻で数える。一時停止中は行が消えない。 */
+    maxAgeSeconds: number;
 }): HudLogLine[] {
     const attackLogs = useMemo(() => extractHudAttackLogs(logs), [logs]);
 
-    return useMemo(() => {
-        // 名前の分からないログを除いた後でも limit 行を埋められるよう、多めに取ってから絞る
-        const [start, end] = recentAttackLogRange(attackLogs, currentTimestamp, limit * 4);
-        const lines: HudLogLine[] = [];
-        for (let i = start; i < end; i++) {
-            const line = formatHudLogLine(attackLogs[i], names, playerId);
-            // key は attackLogs 上の位置にする。再生が進んでも既存の行を再マウントしない
-            if (line) lines.push({ ...line, key: `hud-${i}` });
-        }
-        return lines.slice(-limit);
-    }, [attackLogs, currentTimestamp, names, playerId, limit]);
+    return useMemo(
+        () => selectHudLogLines({ attackLogs, currentTimestamp, names, playerId, limit, maxAgeSeconds }),
+        [attackLogs, currentTimestamp, names, playerId, limit, maxAgeSeconds],
+    );
 }

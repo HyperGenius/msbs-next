@@ -226,6 +226,17 @@ export function meleeClashLog(params: {
     };
 }
 
+/** message と details は backend/app/engine/ai_decision.py の DISENGAGE ログに合わせる。 */
+export function disengageLog(timestamp: number, actor: MobileSuit, target: MobileSuit, pos: Vector3): BattleLog {
+    return {
+        ...baseLog(timestamp, actor, pos),
+        action_type: "DISENGAGE",
+        target_id: target.id,
+        message: `${actor.name}は${target.name}との攻防を互角と見て距離を取り、仕切り直す`,
+        details: { reason: "STALEMATE", stalemate: 0.62, dominance: 0.0, target_distance: 120.0 },
+    };
+}
+
 // EN 関連ログの message / details は backend の action_handler.py / movement.py / combat.py に合わせる（Issue #533）
 export function boostStartLog(timestamp: number, actor: MobileSuit, pos: Vector3, en: number): BattleLog {
     return {
@@ -266,7 +277,7 @@ export function destroyedLog(timestamp: number, unit: MobileSuit, pos: Vector3):
 // backend/app/engine/constants.py の COMBO_DAMAGE_MULTIPLIER と揃える。
 const COMBO_DAMAGE_MULTIPLIER = 1.5;
 
-export type EffectKind = "HIT" | "CRITICAL" | "MISS" | "MELEE_COMBO" | "RAPID_FIRE" | "MELEE_CLASH";
+export type EffectKind = "HIT" | "CRITICAL" | "MISS" | "MELEE_COMBO" | "RAPID_FIRE" | "MELEE_CLASH" | "DISENGAGE";
 
 /** RAPID_FIRE で同時刻に出す命中ログの数。数字が縦に積まれることを確認するため。 */
 const RAPID_FIRE_HITS = 3;
@@ -375,6 +386,10 @@ export function buildEffectScenario(options: EffectScenarioOptions): EffectScena
                     targetPush: 55,
                 }),
             );
+            break;
+        case "DISENGAGE":
+            // attacker の側が仕切り直す。ENEMY のときは何も出ないことを確かめる
+            logs.push(disengageLog(t, actor, target, actorPos));
             break;
     }
 

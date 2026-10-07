@@ -54,7 +54,8 @@ function useEnShortageBlink(
 /** 敵HPパネルに表示する敵機の最大数。超過分は「…他N機」で省略する（Issue #521） */
 const MAX_VISIBLE_ENEMIES = 2;
 const SELF_ATTACK_ACTION_TYPES = new Set(["ATTACK", "MELEE_COMBO", "MISS"]);
-const HUD_LOG_LINES = 3;
+const HUD_LOG_LINES = 5;
+const HUD_LOG_MAX_AGE_SECONDS = 3;
 // dealt は色を付けず、HUD 本文と同じ明るいグレー（text-gray-200）で出す
 const HUD_LOG_TONE_COLOR: Record<HudLogLine["tone"], string | undefined> = {
     dealt: undefined,
@@ -148,6 +149,7 @@ export function BattleOverlay({
         names: unitNames,
         playerId: player.id,
         limit: HUD_LOG_LINES,
+        maxAgeSeconds: HUD_LOG_MAX_AGE_SECONDS,
     });
 
     return (

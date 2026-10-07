@@ -14,6 +14,7 @@ import { ForestGroves } from "./ForestGroves";
 import { TracerMesh } from "./TracerMesh";
 import { WeaponLabel } from "./WeaponLabel";
 import { ImpactMarker } from "./ImpactMarker";
+import { DisengageIcon } from "./DisengageIcon";
 import { AttackEvent, WarningType } from "../types";
 import { useAttackEffectQueue } from "../hooks/useAttackEffectQueue";
 import { Obstacle } from "@/types/battle";
@@ -146,6 +147,8 @@ interface BattleSceneProps {
     attackingUnitIds?: Set<string>;
     /** 現在の再生タイムスタンプ（攻撃演出のスポーン検出用） */
     currentTimestamp: number;
+    /** 自機が仕切り直した時刻。現在時刻に自機の DISENGAGE が無いときは null。 */
+    playerDisengagedAt: number | null;
     /** チャプタージャンプ時のみ増分されるトークン。カメラターゲットの再センタリングをトリガーする（Issue #524） */
     recenterToken?: number;
 }
@@ -241,6 +244,7 @@ export function BattleScene({
     losResults,
     attackingUnitIds,
     currentTimestamp,
+    playerDisengagedAt,
     recenterToken,
 }: BattleSceneProps) {
     // フィールド中心・全体をカバーするグリッドの位置とフェード距離を算出（Issue #436）
@@ -366,6 +370,7 @@ export function BattleScene({
                 isFlashing={criticalTargetIds.has(String(player.id))}
                 isSelf={true}
             />
+            <DisengageIcon position={playerState.pos} triggeredAt={playerDisengagedAt} />
 
             {/* Enemies */}
             {enemyStates.map(({ enemy, state }) => (
