@@ -11,8 +11,9 @@ import {
 } from "@/components/BattleViewer/hooks/useAttackEffectQueue";
 import {
   extractHudAttackLogs,
+  attackLogEnd,
   formatHudLogLine,
-  recentAttackLogRange,
+  selectHudLogLines,
 } from "@/components/BattleViewer/hooks/useHudAttackLog";
 import { AttackEvent } from "@/components/BattleViewer/types";
 import { HIT_EFFECT_COLORS } from "@/components/BattleViewer/utils";
@@ -284,7 +285,7 @@ describe("HUD ログ", () => {
     expect(formatHudLogLine(makeLog({ actor_id: "hidden" }), names, PLAYER_ID)).toBeNull();
   });
 
-  it("現在時刻以前の直近ログの範囲を返す", () => {
+  it("攻撃ログを時刻順に並べ、現在時刻より後の最初の位置を返す", () => {
     const attackLogs = extractHudAttackLogs([
       makeLog({ timestamp: 3 }),
       makeLog({ timestamp: 1 }),
@@ -293,8 +294,44 @@ describe("HUD ログ", () => {
       makeLog({ timestamp: 2.5, action_type: "MOVE" }),
     ]);
     expect(attackLogs.map((l) => l.timestamp)).toEqual([1, 2, 3, 4]);
-    expect(recentAttackLogRange(attackLogs, 3, 2)).toEqual([1, 3]);
-    expect(recentAttackLogRange(attackLogs, 0.5, 2)).toEqual([0, 0]);
+    expect(attackLogEnd(attackLogs, 3)).toBe(3);
+    expect(attackLogEnd(attackLogs, 0.5)).toBe(0);
+  });
+
+  describe("selectHudLogLines", () => {
+    const select = (attackLogs: BattleLog[], currentTimestamp: number) =>
+      selectHudLogLines({ attackLogs, currentTimestamp, names, playerId: PLAYER_ID, limit: 5, maxAgeSeconds: 3 });
+
+    it("名前の分かる行を新しい順に最大 limit 件選び、古い順で返す", () => {
+      const attackLogs = extractHudAttackLogs(
+        [1, 1.2, 1.4, 1.6, 1.8, 2.0].map((timestamp) => makeLog({ timestamp, damage: timestamp * 10 })),
+      );
+      const lines = select(attackLogs, 2.0);
+      expect(lines.map((l) => l.key)).toEqual(["hud-1", "hud-2", "hud-3", "hud-4", "hud-5"]);
+      expect(lines[4].text.endsWith("-20")).toBe(true);
+    });
+
+    it("リプレイ時刻で 3 秒以上前の行は出さない", () => {
+      const attackLogs = extractHudAttackLogs([makeLog({ timestamp: 1 }), makeLog({ timestamp: 2 })]);
+      expect(select(attackLogs, 3.9).map((l) => l.key)).toEqual(["hud-0", "hud-1"]);
+      expect(select(attackLogs, 4.0).map((l) => l.key)).toEqual(["hud-1"]);
+      expect(select(attackLogs, 5.0)).toEqual([]);
+    });
+
+    it("名前の分からない機体のログが何件続いても、名前の分かる行を押し出さない", () => {
+      const hidden = Array.from({ length: 30 }, (_, i) =>
+        makeLog({ timestamp: 17.9 + (i % 2) * 0.1, actor_id: "hidden-a", target_id: "hidden-b" }),
+      );
+      const attackLogs = extractHudAttackLogs([makeLog({ timestamp: 17.8, action_type: "MISS" }), ...hidden]);
+      const lines = select(attackLogs, 18.0);
+      expect(lines).toHaveLength(1);
+      expect(lines[0].text).toBe("ガンダム ▶ ザクII  ビームライフル  MISS");
+    });
+
+    it("現在時刻より後のログは出さない", () => {
+      const attackLogs = extractHudAttackLogs([makeLog({ timestamp: 1 }), makeLog({ timestamp: 2 })]);
+      expect(select(attackLogs, 1.5).map((l) => l.key)).toEqual(["hud-0"]);
+    });
   });
 });
 
