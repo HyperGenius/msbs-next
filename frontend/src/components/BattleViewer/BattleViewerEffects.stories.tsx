@@ -53,7 +53,7 @@ const meta: Meta<EffectStoryArgs> = {
         replayIntervalMs: 2500,
     },
     argTypes: {
-        effect: { control: "select", options: ["HIT", "CRITICAL", "MISS", "MELEE_COMBO", "RAPID_FIRE", "MELEE_CLASH"] },
+        effect: { control: "select", options: ["HIT", "CRITICAL", "MISS", "MELEE_COMBO", "RAPID_FIRE", "MELEE_CLASH", "DISENGAGE"] },
         attacker: { control: "inline-radio", options: ["PLAYER", "ENEMY"] },
         weapon: { control: "select", options: Object.keys(WEAPONS) },
         distance: { control: { type: "range", min: 50, max: 1500, step: 50 } },
@@ -105,4 +105,9 @@ export const Underwater: Story = {
 /** 鍔迫り合い。射線は出さず、両機の武器名と、両機の中間に火花と「鍔迫り合い！」を出す。 */
 export const MeleeClash: Story = {
     args: { effect: "MELEE_CLASH", weapon: "BEAM_SABER", distance: 100 },
+};
+
+/** 自機の仕切り直し。自機の右上に `↩` が一瞬だけ出る。attacker を ENEMY にすると何も出ない。 */
+export const Disengage: Story = {
+    args: { effect: "DISENGAGE", distance: 120, replayIntervalMs: 1500 },
 };

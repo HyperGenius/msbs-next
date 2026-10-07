@@ -5,7 +5,7 @@
 import { useMemo, useRef, useState } from "react";
 import { BattleLog, MobileSuit, Obstacle } from "@/types/battle";
 import { getBattleSnapshot, getDetectedUnits, SnapshotCache } from "./hooks/useBattleSnapshot";
-import { useBattleEvents } from "./hooks/useBattleEvents";
+import { hasDisengageLog, useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
 import { MinovskyHaze } from "./ui/MinovskyHaze";
@@ -102,6 +102,9 @@ export default function BattleViewer({
 
     const { attacks, attackingUnitIds, criticalTargetIds } = useBattleEvents(timestampLogs, beamWeaponIds);
 
+    // 仕切り直しのアイコンは自機だけに出す
+    const playerDisengagedAt = hasDisengageLog(timestampLogs, player.id) ? currentTimestamp : null;
+
     // LOS 計算（currentTimestamp 変更時のみ再計算、showLos が OFF のときはスキップ）
     const losResults = useMemo(() => {
         if (!showLos) return undefined;
@@ -140,6 +143,7 @@ export default function BattleViewer({
                 losResults={losResults}
                 attackingUnitIds={attackingUnitIds}
                 currentTimestamp={currentTimestamp}
+                playerDisengagedAt={playerDisengagedAt}
                 recenterToken={recenterToken}
             />
 

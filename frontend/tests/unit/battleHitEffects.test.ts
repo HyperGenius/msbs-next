@@ -1,6 +1,6 @@
 /* frontend/tests/unit/battleHitEffects.test.ts */
 import { describe, it, expect } from "vitest";
-import { computeAttackEvents, computeAttackingUnitIds } from "@/components/BattleViewer/hooks/useBattleEvents";
+import { computeAttackEvents, computeAttackingUnitIds, hasDisengageLog } from "@/components/BattleViewer/hooks/useBattleEvents";
 import {
   CLASH_TEXT,
   EFFECT_TIMING,
@@ -295,5 +295,15 @@ describe("HUD ログ", () => {
     expect(attackLogs.map((l) => l.timestamp)).toEqual([1, 2, 3, 4]);
     expect(recentAttackLogRange(attackLogs, 3, 2)).toEqual([1, 3]);
     expect(recentAttackLogRange(attackLogs, 0.5, 2)).toEqual([0, 0]);
+  });
+});
+
+describe("hasDisengageLog", () => {
+  const disengage = makeLog({ action_type: "DISENGAGE", target_id: ENEMY_ID, damage: undefined });
+
+  it("指定した機体の DISENGAGE だけを拾う", () => {
+    expect(hasDisengageLog([disengage], PLAYER_ID)).toBe(true);
+    expect(hasDisengageLog([{ ...disengage, actor_id: ENEMY_ID }], PLAYER_ID)).toBe(false);
+    expect(hasDisengageLog([makeLog()], PLAYER_ID)).toBe(false);
   });
 });

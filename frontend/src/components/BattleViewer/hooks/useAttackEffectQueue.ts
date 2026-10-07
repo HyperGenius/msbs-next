@@ -21,6 +21,8 @@ export const EFFECT_TIMING = {
     damageNumberMs: 850,
     /** 鍔迫り合いの文字は数字より長く出す。読む量が多いため。 */
     clashTextMs: 1200,
+    /** 自機の仕切り直しのアイコン。何が起きたかはチャプターで読めるので、合図だけ出す。 */
+    disengageIconMs: 150,
 } as const;
 
 /** 鍔迫り合いの中間地点に出す文字。 */

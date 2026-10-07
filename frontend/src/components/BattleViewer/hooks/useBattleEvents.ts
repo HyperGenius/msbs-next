@@ -93,6 +93,11 @@ export function computeAttackingUnitIds(timestampLogs: BattleLog[]): Set<string>
     return ids;
 }
 
+/** 1 タイムスタンプ分のログに、unitId の DISENGAGE があるかを返す。 */
+export function hasDisengageLog(timestampLogs: BattleLog[], unitId: string): boolean {
+    return timestampLogs.some((log) => log.action_type === "DISENGAGE" && log.actor_id === unitId);
+}
+
 /**
  * @param timestampLogs 現在タイムスタンプ分にフィルタ済みのログ（呼び出し元で計算し、他コンポーネントと共有する。Issue #467）
  */
