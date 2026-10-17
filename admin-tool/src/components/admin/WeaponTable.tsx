@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { MasterWeapon } from "@/types/admin";
 import { BlueprintFilter, matchesBlueprintFilter } from "@/lib/blueprint";
+import { getWeaponWarnings } from "@/lib/weaponWarnings";
 import { BlueprintBadge, BlueprintFilterSelect } from "./BlueprintSettingsFields";
 
 interface WeaponTableProps {
@@ -147,6 +148,19 @@ export default function WeaponTable({
                   <td className={`${tdClass} font-bold ${isSelected ? "text-[#ffb000]" : ""}`}>
                     <div>{w.name}</div>
                     <div className="text-xs text-[#00ff41]/40 font-normal">{w.id}</div>
+                    {getWeaponWarnings(w.weapon).length > 0 && (
+                      <div className="mt-1 flex gap-1">
+                        {getWeaponWarnings(w.weapon).map((warning) => (
+                          <span
+                            key={warning.code}
+                            title={warning.detail}
+                            className="px-1.5 py-0.5 text-xs font-bold bg-red-900/40 text-red-300 border border-red-700/40"
+                          >
+                            ⚠ {warning.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className={tdClass}>{w.price.toLocaleString()} C</td>
                   <td className={tdClass}>

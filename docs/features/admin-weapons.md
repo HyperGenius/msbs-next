@@ -169,6 +169,7 @@ cd admin-tool && npm run dev   # http://localhost:3100
 | 機能 | 説明 |
 |------|------|
 | **武器一覧テーブル** | 名前・価格・設計図（標準配備／要設計図）・換金額・武器種別（BEAM/PHYSICAL）・近接フラグ・威力・射程・命中率・要求ビームジェネレータLvを表示。ソート・フィルタ対応。設計図の種別で絞り込める（Issue #554） |
+| **設定漏れの警告バッジ** | 一覧の武器名の下に、リソース消費の設定漏れを示す赤いバッジを表示する。実弾武器（BEAM 以外）で `max_ammo` が未設定または 0 なら「弾数未設定」、ビーム武器で `en_cost` が未設定または 0 なら「EN消費なし」。backend は `max_ammo` が未設定・0 の武器を弾数無制限として扱うため、設定漏れだと弾切れにならない。近接武器（`weapon_type` が MELEE、または `is_melee`）は弾薬・ENを消費しないので対象外。判定は `src/lib/weaponWarnings.ts`（Issue #653） |
 | **詳細編集フォーム** | 全パラメータ（`power`, `range`, `accuracy`, `type`, `weapon_type`, `optimal_range`, `decay_rate`, `is_melee`, `max_ammo`, `en_cost`, `cooldown_sec`, `fire_arc_deg`, `required_beam_generator_lv`）を編集。`required_beam_generator_lv` は `type` が `BEAM` の武器のみ意味を持つため、`PHYSICAL` 選択時は入力欄を無効化し値を0にリセットする（Issue #399） |
 | **設計図設定** | 編集フォームの「設計図」欄で標準配備フラグと重複時の換金額を編集する。換金額の空欄は、新規作成では初期値（価格の20%）、編集では変更なしとして送る（Issue #554） |
 | **必要な技術Lv** | 「設計図」欄の「必要な技術Lv」で、技術（技術マスターから選択）とLv（1〜最大Lv）の行を追加・削除する。標準配備なら判定しない（Issue #569、`admin-technologies.md`） |
@@ -245,6 +246,7 @@ cd admin-tool && npx vitest run tests/unit/weaponEditFormValidation.test.ts
 - エントリー ID・名前・価格のバリデーション
 - weapon スペック（power・range・accuracy・type・weapon_type・is_melee・required_beam_generator_lv など）のバリデーション
 - 設計図設定のバリデーション・初期値・絞り込み（`tests/unit/blueprintSettings.test.ts`、Issue #554）
+- 設定漏れ警告の判定（`tests/unit/weaponWarnings.test.ts`、Issue #653）
 
 テストで weapon スペックの一部を差し替えるヘルパー `withWeapon` は、引数の型をスキーマの型（`Partial<WeaponFormValues["weapon"]>`）にしている。テストデータから推論した型にすると、`weapon_type: "MELEE"` や `max_ammo: 8` を渡すテストが型エラーになる。vitest は型チェックをしないため、型エラーは `npx tsc --noEmit -p .` で確認する（Issue #557）。
 
