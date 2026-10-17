@@ -252,6 +252,10 @@ def test_log_bench_is_reproducible_with_same_seed(
     assert stored.lines > 0
     assert stored.gzip_bytes < stored.raw_bytes
     assert a.formats["draft"].raw_bytes < stored.raw_bytes
+    replay = a.formats["replay"]
+    assert replay.raw_bytes < a.formats["draft_no_message"].raw_bytes
+    assert replay.actions[log_bench.NO_ACTION_LABEL].lines == 1
+    assert "AI_DECISION" not in replay.actions
     assert all(m.parse is None for m in a.formats.values())
 
     assert find_log_bench(str(path_a), bench_dir=tmp_path) == a
@@ -269,8 +273,8 @@ def test_log_bench_is_reproducible_with_same_seed(
 
 def test_log_bench_rejects_unknown_format(roster_path: Path, tmp_path: Path) -> None:
     """無い形式を指定すると、戦闘を回す前にエラーにすること."""
-    with pytest.raises(ValueError, match="replay"):
-        _bench(roster_path, tmp_path, formats=["stored", "replay"])
+    with pytest.raises(ValueError, match="unknown"):
+        _bench(roster_path, tmp_path, formats=["stored", "unknown"])
     assert not tmp_path.joinpath("20261006-210000_run_test.json").exists()
 
 

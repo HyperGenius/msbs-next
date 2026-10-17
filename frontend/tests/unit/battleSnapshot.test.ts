@@ -35,6 +35,27 @@ function moveLog(timestamp: number): BattleLog {
     };
 }
 
+describe("getBattleSnapshot: 向き", () => {
+    /** heading を指定した MOVE ログ。null は旧形式のログの「向きの無い行」 */
+    function headingLog(timestamp: number, heading: number | null): BattleLog {
+        return { ...moveLog(timestamp), heading } as unknown as BattleLog;
+    }
+
+    it("heading が null の行で向きを上書きしない", () => {
+        const logs = [headingLog(1.0, 90), headingLog(2.0, null), headingLog(3.0, 120)];
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 2.0).heading).toBeCloseTo(90 + 30 * 0.5);
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 3.0).heading).toBeCloseTo(120);
+    });
+
+    it("heading の無い行と null の行で同じ向きになる", () => {
+        const withNull = [headingLog(1.0, 90), headingLog(2.0, null)];
+        const withoutKey = [headingLog(1.0, 90), moveLog(2.0)];
+        expect(getBattleSnapshot("unit-1", baseMs, withNull, 2.5).heading).toBe(
+            getBattleSnapshot("unit-1", baseMs, withoutKey, 2.5).heading
+        );
+    });
+});
+
 describe("getBattleSnapshot: velocity外挿のdt上限", () => {
     it("直近のvelocity_snapshotからの経過時間が短い場合は外挿する", () => {
         const logs = [moveLog(10.0)];

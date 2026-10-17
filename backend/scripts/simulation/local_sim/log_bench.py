@@ -24,6 +24,7 @@ from pydantic_core import to_jsonable_python
 
 from app.engine.battle_utils import strip_debug_fields
 from app.engine.constants import FUZZY_RULES_DIR
+from app.engine.replay_log import to_replay_logs
 from app.models.models import BattleLog
 from app.services.battle_execution import (
     DEFAULT_MAX_STEPS,
@@ -189,12 +190,14 @@ def draft_no_message_format(logs: list[BattleLog]) -> list[dict[str, Any]]:
     return _draft_format(logs, drop_messages=True)
 
 
-# 配信用の形式（replay）を足すと、同じ戦闘で並べて測れる。
 LOG_FORMATS: dict[str, LogConverter] = {
     "stored": stored_format,
     "draft": draft_format,
     "draft_no_message": draft_no_message_format,
+    "replay": to_replay_logs,
 }
+# action_type を持たない行（配信用の形式のヘッダー行）を数える名前。
+NO_ACTION_LABEL = "(ヘッダー)"
 
 
 # --- 計測 ---
@@ -296,7 +299,9 @@ def measure_lines(lines: list[dict[str, Any]]) -> FormatMetrics:
     fields: dict[str, list[int]] = {}
     for line in lines:
         line_bytes = _json_bytes(line) + 1
-        action = actions.setdefault(str(line.get("action_type")), [0, 0])
+        action = actions.setdefault(
+            str(line.get("action_type", NO_ACTION_LABEL)), [0, 0]
+        )
         action[0] += 1
         action[1] += line_bytes
         for key, value in line.items():

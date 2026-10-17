@@ -152,7 +152,8 @@ export function getBattleSnapshot(
         }
 
         // 向き更新（自ユニットのログに heading フィールドがあれば取得）
-        if (log.actor_id === targetId && log.heading !== undefined) {
+        // 旧形式のログは向きの無い行に null を持つ。null で上書きすると向き矢印が 0 度を指す
+        if (log.actor_id === targetId && typeof log.heading === "number") {
             entry.heading = log.heading;
             entry.prevHeadingTs = log.timestamp;
         }
@@ -207,7 +208,7 @@ export function getBattleSnapshot(
     if (heading !== undefined && entry.prevHeadingTs !== undefined) {
         for (let i = entry.nextIndex; i < logs.length; i++) {
             const log = logs[i];
-            if (log.actor_id === targetId && log.heading !== undefined) {
+            if (log.actor_id === targetId && typeof log.heading === "number") {
                 const t = (currentTimestamp - entry.prevHeadingTs) / (log.timestamp - entry.prevHeadingTs);
                 heading = lerpAngle(heading, log.heading, Math.max(0, Math.min(1, t)));
                 break;

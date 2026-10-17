@@ -3,6 +3,7 @@
 ## 概要
 
 バトルの生ログ（`BattleLog[]`）のデータモデルとバックエンド配信（NDJSONストリーミング・GCSオフロード）の仕様を定義する。
+プレイヤーに配信する軽量な形式は「[配信用ログ（replay）](#配信用ログreplayissue-634)」を参照。
 
 **フロントエンドのテキストログ表示（`BattleLogViewer`）はIssue #521で廃止した。** ユーザー向けフィードバックは
 バトルビューア（3Dリプレイ）側の「チャプタートラック」「戦果サマリー」に統一されている。詳細は
@@ -47,6 +48,99 @@ BattleViewer の EN ゲージ表示のため、EN 残量を `BattleLog.details` 
 大多数のログにもキーが付き、ログサイズとダウンロード時間が増える。既存の `details` は EN 消費ログ
 以外では `null` のままなので、サイズ増加は EN 消費ログの分だけで済む。
 NPC エース同士の1vs1（20戦）の実測では、ログ1件あたりの平均サイズは 744.6 → 746.2 byte（+0.2%）だった。
+
+---
+
+## 配信用ログ（replay）（Issue #634）
+
+Epic #631 で、プレイヤーに配信するログを描画に必要な項目だけの形式にする。エンジンのログ（`simulator.logs`）は変えず、
+保存時に `app/engine/replay_log.py` の `to_replay_logs()` で変換する。変換は DB・GCS に触れない純粋関数で、
+同じ入力なら同じ出力になる。
+
+**Issue #634 の時点では書き込み経路を変えていない。** バッチ・ソロミッションは今も旧形式（`strip_debug_fields()` の出力）を
+保存・配信している。フロントが両方の形式を読めるようにする（Issue #635）→ バックエンドの書き込みを切り替える（Issue #636）の順にデプロイする。
+
+### 形式とバージョン
+
+ログ全体は JSON の行の並び。NDJSON でも JSON の配列でも、並びは同じにする。
+
+| 行 | 内容 |
+|---|---|
+| 先頭の1行 | ヘッダー `{"replay_version": 1}`（`ReplayLogHeader`）。ログが0件でも出す |
+| 2行目以降 | ログの1行（`ReplayLogEntry`） |
+
+* 旧形式の行は `replay_version` を持たない。先頭行に `replay_version` があれば配信用ログ、無ければ旧形式と判定する
+* バージョン（`REPLAY_LOG_VERSION`）は、項目の意味や省き方を変えたら上げる。フロントの `REPLAY_LOG_VERSION`（`frontend/src/types/battleCore.ts`）も同じ値にする
+* 型は `ReplayLogHeader` / `ReplayBattleLog`（`frontend/src/types/battleCore.ts`）
+
+### 行の選び方
+
+| action_type | 扱い |
+|---|---|
+| `AI_DECISION` | 除く。ビューアで使っていない（`/dev/sim` の AI の判断は、ローカルの `battle_NNN.json` から読む） |
+| `TARGET_SELECTION` | 機体ごとに、相手（`target_id`）が前の行と変わった行だけ残す。最初の行と、相手が null に変わった行も残す。ビューアは相手の追跡にこの行を使う |
+| それ以外 | すべて残す |
+
+### 項目
+
+値が無い項目は null にせず、キーごと省く。ビューアは省いた項目（`undefined`）を、旧形式の null と同じに扱う。
+
+| 項目 | 持つ行 | 備考 |
+|---|---|---|
+| `timestamp` | 全行 | 小数2桁に丸める。ステップ幅（0.1秒）の誤差（`4.799999999999999` など）が消える |
+| `actor_id` / `action_type` | 全行 | |
+| `target_id` / `damage` | 値があるとき | |
+| `message` | MOVE・WAIT・TARGET_SELECTION 以外 | 3つの行は、プレイヤー向けの画面で文を表示していない。表示するときは構造化された項目から文を作る |
+| `position_snapshot` | 全行 | 小数1桁（0.1m）に丸める |
+| `velocity_snapshot` | 値があるとき | 小数1桁（0.1m/s）に丸める。`DESTROYED` の行には無い（旧形式と同じ。フロントの補間はこの前提で動いている） |
+| `heading` | 値があるとき | 小数1桁（0.1度）に丸める |
+| `weapon_id` / `weapon_name` / `target_max_hp` | 値があるとき | |
+| `is_crit` | true のときだけ | |
+| `skill_activated` / `combo_count` / `combo_message` / `chatter` | 値があるとき | |
+| `details` | 値があるとき | 中身は変えない（EN 残量 `en`、`reason_code`、鍔迫り合いの `target_weapon_name` など） |
+
+丸めた結果が -0.0 のときは 0.0 にする。
+
+旧形式から省いた項目:
+
+| 項目 | 理由 |
+|---|---|
+| `fuzzy_scores` / `minovsky_hit_multiplier` | デバッグ用。旧形式でも保存時に消している |
+| `strategy_mode` / `team_id` | 解析用。ビューアで使っていない。チームの戦略の変化は `STRATEGY_CHANGED` の `details` に残る |
+| `attack_sector` | ビューアで使っていない |
+| `hit_part` / `weapon_slot_role` | 被弾部位の集計にしか使っていない。集計は書き込み時に `BattleResult` に保存する（Issue #633） |
+
+### サイズ
+
+50機・177秒の個人戦（`local_sim log-bench` の既定の条件）で、旧形式の 12.3万行・展開後 91MB・gzip 6.5MB が、
+4.9万行・展開後 11.6MB・gzip 0.96MB になる。パース 71ms・ヒープ 16MB（M1 Mac の Node）。Epic #631 の目標値
+（gzip 1.2MB・展開後 20MB・パース 100ms・ヒープ 25MB）をすべて満たす。計測の詳細は
+`docs/features/local-battle-simulator.md` の「計測結果（Issue #634 時点）」。
+
+### 旧形式と表示が一致することの確かめ方
+
+`frontend/tests/unit/replayLogParity.test.ts` で、同じ戦闘の旧形式と配信用ログから、ビューアの表示状態が一致することを確かめる。
+戦闘のログはローカルシミュレータの `replay-fixture` で作り、`backend/tests/fixtures/replay_log_parity.json.gz` に置く
+（`docs/features/local-battle-simulator.md` の「replay-fixture」）。
+
+| 比べるもの | 比べ方 |
+|---|---|
+| 各機体の `getBattleSnapshot()`（現在と1ステップ前） | HP・EN・弾数・警告・ターゲットは一致。位置は 0.15m、向きは 0.1度まで（丸めの分） |
+| `getDetectedUnits()` | 全機体の視点で一致 |
+| `computeAttackEvents()` / `computeAttackingUnitIds()` / `hasDisengageLog()` | 時刻ごとに一致 |
+| `computeBattleChapters()` | 全機体の視点で一致。`id`（ログの位置から作る）を除き、時刻は小数2桁に丸めて比べる |
+| `selectHudLogLines()` / EN 不足の時刻 | 全機体の視点・時刻ごとに一致 |
+
+このテストで、旧形式の読み方の不具合が2つ見つかり、直した。
+
+* 旧形式は向きの無い行に `heading: null` を持つ。`getBattleSnapshot()` が null で向きを上書きし、自機の向き矢印が 0度を指していた。数値の `heading` だけを使うようにした
+* `selectHudLogLines()` が、ちょうど3秒前の行を時刻の誤差（`51.00000000000001` など）で出していた。誤差を許して判定するようにした
+
+### ビューアで読むときの注意（Issue #635 向け）
+
+* `message` の無い行がある。`DevSimulationPanel`（`formatBattleLog()`）は全行の `message` を読むため、そのままでは配信用ログを表示できない
+* `hit_part` / `weapon_slot_role` が無い。`usePartHitSummary` のようにログから集計するフォールバックは、配信用ログでは空になる。配信用ログの結果には集計が保存されている前提で、保存した集計を使う
+* `TARGET_SELECTION` の行が減っても、`getBattleSnapshot()` のターゲットの追跡は変わらない（上のテストで確かめている）
 
 ---
 
