@@ -41,6 +41,26 @@ export interface BattleLog {
     details?: Record<string, unknown> | null;
 }
 
+/** 配信用ログ（replay）のバージョン。backend/app/engine/replay_log.py の REPLAY_LOG_VERSION と同じ値 */
+export const REPLAY_LOG_VERSION = 1;
+
+/** 配信用ログの先頭行。旧形式のログには無い */
+export interface ReplayLogHeader {
+    replay_version: number;
+}
+
+/**
+ * 配信用ログの1行（先頭行の後に続く）。
+ * 値の無い項目はキーごと省かれる。MOVE・WAIT・TARGET_SELECTION の行は message を持たない。
+ * AI_DECISION の行は無く、TARGET_SELECTION は機体ごとに相手が変わった行だけがある。
+ */
+export type ReplayBattleLog = Omit<
+    BattleLog,
+    "message" | "fuzzy_scores" | "strategy_mode" | "attack_sector" | "hit_part" | "weapon_slot_role"
+> & {
+    message?: string;
+};
+
 /** 部位別の被弾/命中1件分の集計（回数・合計ダメージ） */
 export interface PartHitStat {
     hits: number;
