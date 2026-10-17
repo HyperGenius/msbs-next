@@ -39,6 +39,7 @@ jobs:
               - '.github/workflows/frontend-ci.yaml'
               # フロントの集計テストがバックエンドと同じデータを読む
               - 'backend/tests/fixtures/result_summary_parity.json'
+              - 'backend/tests/fixtures/replay_log_parity.json.gz'
             admin_tool:
               - 'admin-tool/**'
               - '.github/workflows/frontend-ci.yaml'
