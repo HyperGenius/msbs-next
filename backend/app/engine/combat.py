@@ -385,7 +385,16 @@ class CombatMixin:
     def _calculate_hit_chance(
         self, actor: MobileSuit, target: MobileSuit, weapon: Weapon, distance: float
     ) -> tuple[float, float, str]:
+        """攻撃の命中判定に使う命中率を計算する. 計算は `_estimate_hit_chance()`."""
+        return self._estimate_hit_chance(actor, target, weapon, distance)
+
+    def _estimate_hit_chance(
+        self, actor: MobileSuit, target: MobileSuit, weapon: Weapon, distance: float
+    ) -> tuple[float, float, str]:
         """命中率を計算する.
+
+        乱数を引かず、ログも出さない。攻撃以外の見積もりにはこちらを使う。
+        攻撃の計測が `_calculate_hit_chance()` の呼び出しを数えるため。
 
         距離補正乗数を適用する（Phase C — 近接戦闘システム）。
         射撃武器にはミノフスキー濃度と環境タイプによる倍率も掛ける。

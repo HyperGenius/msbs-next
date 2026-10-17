@@ -3062,3 +3062,78 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 
 * `backend/tests/unit/test_tactics_range_engagement.py`: 補正値の計算（粘り・劣勢の見積もり・仕切り直しの時間と旋回・未設定の扱い）、膠着度・優勢度への反映（設定・MEL・INT）、目標交戦距離（FLEE）と間合いの基準武器（MELEE は遠くでも格闘、RANGED / FLEE は近くても射撃、RANGED は近づかれたら離れる）、格闘武器のスコア補正、格闘突入の制約、仕切り直しの後の射撃優先の長さ、REF による仕切り直しの短縮と旋回、装備と矛盾する設定、全設定と装備の組での戦闘、NPC（AGGRESSIVE）の戦術
 * `backend/tests/unit/test_engagement_disengage.py`: 撃たない膠着で MOVE を攻撃にする
+
+## 35. 逃走度（Epic #621 Sub-Issue 2）
+
+機体が「逃げるべき度合い」を毎ステップ計算し、`unit_resources` とログに残す。この段階では行動を変えない。逃走度を使った行動は #624 で行う。
+
+### 35.1 計算式（`backend/app/engine/flee.py`）
+
+逃走度は 0〜1 で、攻撃手段の有無と戦力差から決める。
+
+1. 攻撃手段（`means`）: 再使用待ちを除いて使える武器が無いと 1。弾切れの武器と、`FLEE_EN_WAIT_SEC` 以内に EN が足りない武器は使えない。EN の回復を待てば撃てる武器があれば、`待ち時間 ÷ FLEE_EN_WAIT_SEC` にする。格闘武器は常に使える
+2. 期待 DPS: `威力 × 見込み命中率 ÷ 再使用待ち時間`。見込み命中率は、武器の最適距離で撃つ前提で `_estimate_hit_chance()` が返す値
+3. 脅威の敵: 索敵済みで、使える武器の射程 + `FLEE_THREAT_REACH_MARGIN` に自機が入る敵。索敵できていない敵は数えない
+4. 戦力比: `自機が脅威の敵をすべて倒す時間 ÷ 脅威の敵が自機を倒す時間`
+   * 自機が倒す時間は、敵ごとの `残り HP ÷ 自機の最良の期待 DPS` の合計
+   * 自機が倒される時間は、`自機の残り HP ÷ 脅威の敵の最良の期待 DPS の合計`
+5. 戦力差（`power`）: 比の対数を、`FLEE_POWER_RATIO_LOW` で 0、`FLEE_POWER_RATIO_HIGH` で 1 に直す。対数にするのは、2 倍不利と 1/2 倍有利を対称に扱うため
+6. 逃走度: 攻撃手段が無ければ 1。あれば `max(means, min(1, power × 戦略モードの重み))`
+
+`_calculate_attack_power()` の脅威度（武器威力の最大値 ÷ 自機の最大 HP）は、命中率・連射・残り HP を見ないため、逃走度では使わない。
+
+### 35.2 戦略モードとヒステリシス
+
+戦力差の重みは `FLEE_POWER_WEIGHTS` で戦略モードごとに決める（DEFENSIVE 1.3、RETREAT 1.5 は逃げやすく、ASSAULT 0.75、AGGRESSIVE 0.8 は逃げにくい）。パイロット能力の反映は #601 と合わせて検討する。
+
+`FLEE_ENTER_THRESHOLD`（0.7）以上で逃走に入り、`FLEE_EXIT_THRESHOLD`（0.4）未満で抜ける。`next_flee_state()` が判定し、結果を `unit_resources[unit_id]["fleeing"]` に置く。#624 まで、この値は読まれない。
+
+### 35.3 記録
+
+* `unit_resources[unit_id]["flee"]`: `FleeAssessment`（逃走度、攻撃手段、戦力差、戦力比、脅威の敵の数、双方が倒すまでの見込み時間）
+* `AI_DECISION` ログの `details`: `flee_score` / `flee_means` / `flee_power` / `flee_ratio` / `flee_threat_count`
+* 計算は乱数を引かず、ログも出さない。命中率は `_estimate_hit_chance()` を使う。`engagement_bench.py` が `_calculate_hit_chance()` を攻撃の記録に使うため、逃走度の計算がそちらを呼ぶと記録がずれる
+
+### 35.4 定数（`backend/app/engine/constants.py`）
+
+すべて暫定値で、調整は総合バランス調整（#587）で行う。
+
+| 定数 | 値 | 意味 |
+|---|---|---|
+| `FLEE_EN_WAIT_SEC` | 10.0 | EN の回復を待てる時間の上限 (s) |
+| `FLEE_MIN_COOLDOWN_SEC` | 0.1 | 再使用待ちが 0 の武器の発射間隔の下限 (s) |
+| `FLEE_THREAT_REACH_MARGIN` | 300.0 | 射程外の敵も脅威に数える余裕 (m) |
+| `FLEE_POWER_RATIO_LOW` / `HIGH` | 1.0 / 4.0 | 戦力差が 0 / 1 になる戦力比 |
+| `FLEE_POWER_WEIGHTS` | 上記 | 戦略モードごとの戦力差の重み |
+| `FLEE_ENTER_THRESHOLD` / `EXIT_THRESHOLD` | 0.7 / 0.4 | 逃走に入る / 抜けるしきい値 |
+
+### 35.5 計測結果
+
+`engagement_bench.py run --rounds 6`（seed 595、全 8 シナリオ・条件 48 件）。実装前の結果と、勝敗・戦闘時間・攻撃数がすべて一致した（戦闘結果は変わらない）。表と JSON に「逃走度 p50/p90」と「逃走度 ≥入る %」（逃走に入るしきい値以上だったステップの割合）が加わった。
+
+各シナリオの BALANCED×BALANCED の分布:
+
+| シナリオ | 戦略 | p50 | p90 | 入る以上 |
+|---|---|---|---|---|
+| 格闘機同士 | AGGRESSIVE | 0.00 | 0.80 | 50% |
+| | DEFENSIVE | 0.00 | 1.00 | 50% |
+| | ASSAULT | 0.00 | 0.75 | 50% |
+| 格闘専用機同士 | AGGRESSIVE | 0.00 | 0.80 | 38% |
+| | DEFENSIVE | 0.00 | 1.00 | 50% |
+| | ASSAULT | 0.00 | 0.75 | 23% |
+| 射撃機同士（ガンダム vs ザクII） | AGGRESSIVE | 0.00 | 0.80 | 49% |
+| | DEFENSIVE | 0.00 | 1.00 | 49% |
+| 射撃機同士（ゲルググ vs ガンダム） | AGGRESSIVE | 0.00 | 0.48 | 6% |
+| | DEFENSIVE | 0.00 | 1.00 | 16% |
+| | ASSAULT | 0.00 | 0.45 | 5% |
+| 格闘機 vs 射撃機 | AGGRESSIVE | 0.00 | 0.80 | 49% |
+| 格闘専用機 vs 射撃機 | DEFENSIVE | 0.00 | 1.00 | 49% |
+
+* p50 は全シナリオで 0。優勢側と互角の機体は逃走度が 0 になる
+* 「入る以上」が約 50% のシナリオは、片方が戦力比 4 以上で劣るため、劣る側が戦闘中ずっとしきい値を超えている。性能差の大きい組（ガンダムとグフ・ザクII）で起きる
+* 性能が近いゲルググ vs ガンダムは 5〜16% で、しきい値を超えるのは劣勢が深まった終盤に限られる
+* 戦力比の上限 4.0 は、性能差の大きい組で飽和する。#624 で行動を変える前に、組み合わせごとの飽和の度合いを見て上限としきい値を決める
+
+### 35.6 テスト
+
+* `backend/tests/unit/test_flee_score.py`: 純粋関数（期待 DPS、使えるまでの待ち時間、攻撃手段、戦力差、ヒステリシス）、武器が使えないと最大、戦力差が大きいほど高い、敵の数、索敵できていない敵と射程外の敵を数えない、戦略モードで重みが変わる、乱数・ログを触らない、`AI_DECISION` の `details`、行動が変わらないこと
