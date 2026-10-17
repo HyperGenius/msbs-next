@@ -8,6 +8,7 @@ backend/ で実行する:
     python -m scripts.simulation.local_sim compare <世代A> <世代B>
     python -m scripts.simulation.local_sim log-bench --roster <ロスター名>
     python -m scripts.simulation.local_sim log-compare <計測A> <計測B>
+    python -m scripts.simulation.local_sim replay-fixture --roster <ロスター名>
     python -m scripts.simulation.local_sim check-readonly
 """
 
@@ -259,6 +260,34 @@ def _cmd_log_bench(args: argparse.Namespace) -> int:
     else:
         print(format_log_bench(result), end="")
     print(f"保存しました: {path}", file=sys.stderr)
+    return 0
+
+
+def _cmd_replay_fixture(args: argparse.Namespace) -> int:
+    roster = load_roster(args.roster)
+
+    from scripts.simulation.local_sim.run import forbid_database
+
+    forbid_database()
+    from scripts.simulation.local_sim.replay_fixture import (
+        REPLAY_FIXTURE_PATH,
+        build_replay_fixture,
+        write_replay_fixture,
+    )
+
+    kwargs = {
+        name: value
+        for name, value in (("seed", args.seed), ("max_steps", args.steps))
+        if value is not None
+    }
+    fixture = build_replay_fixture(roster, **kwargs)
+    path = Path(args.out) if args.out else REPLAY_FIXTURE_PATH
+    size = write_replay_fixture(fixture, path)
+    print(
+        f"  {fixture.elapsed_time:.1f} 秒・旧形式 {len(fixture.stored_logs)} 行"
+        f"・配信用 {len(fixture.replay_logs)} 行 / {size / 1000:.1f} KB"
+    )
+    print(f"保存しました: {path}")
     return 0
 
 
@@ -533,6 +562,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     log_compare.add_argument("bench_b", help="比べる先")
     log_compare.set_defaults(func=_cmd_log_compare)
+
+    replay_fixture = sub.add_parser(
+        "replay-fixture",
+        help="旧形式と配信用ログの一致テストに使う戦闘のログを作る",
+        description=(
+            "ロスターの機体で1戦を回し、旧形式と配信用ログを機体の情報と一緒に書く。"
+            " 既定の保存先はフロントとバックエンドのテストが読むファイル。"
+        ),
+    )
+    replay_fixture.add_argument(
+        "--roster",
+        required=True,
+        help="ロスター名、またはロスターの JSON ファイルのパス",
+    )
+    replay_fixture.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="戦闘のシード。既定は replay_fixture.DEFAULT_FIXTURE_SEED",
+    )
+    replay_fixture.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="最大ステップ数。既定は replay_fixture.DEFAULT_FIXTURE_STEPS",
+    )
+    replay_fixture.add_argument(
+        "--out",
+        default=None,
+        help="保存先。既定は backend/tests/fixtures/replay_log_parity.json.gz",
+    )
+    replay_fixture.set_defaults(func=_cmd_replay_fixture)
 
     check = sub.add_parser(
         "check-readonly",
