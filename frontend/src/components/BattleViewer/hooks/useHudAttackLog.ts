@@ -79,7 +79,8 @@ export function selectHudLogLines(params: {
     const lines: HudLogLine[] = [];
     // 名前の分からない行は件数に数えない。数えると、未索敵の機体同士の交戦が多い戦闘で表示中の行が押し出される
     for (let i = attackLogEnd(attackLogs, currentTimestamp) - 1; i >= 0 && lines.length < limit; i--) {
-        if (currentTimestamp - attackLogs[i].timestamp >= maxAgeSeconds) break;
+        // 時刻の誤差で、ちょうど maxAgeSeconds 前の行が出たり消えたりしないようにする
+        if (currentTimestamp - attackLogs[i].timestamp >= maxAgeSeconds - 1e-9) break;
         const line = formatHudLogLine(attackLogs[i], names, playerId);
         // key は attackLogs 上の位置にする。再生が進んでも既存の行を再マウントしない
         if (line) lines.push({ ...line, key: `hud-${i}` });

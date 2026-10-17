@@ -318,6 +318,12 @@ describe("HUD ログ", () => {
       expect(select(attackLogs, 5.0)).toEqual([]);
     });
 
+    it("時刻の誤差があっても、ちょうど 3 秒前の行は出さない", () => {
+      // エンジンの時刻は 0.1 秒の足し算で、51.00000000000001 のような誤差を持つ
+      const attackLogs = extractHudAttackLogs([makeLog({ timestamp: 51.00000000000001 }), makeLog({ timestamp: 52 })]);
+      expect(select(attackLogs, 54).map((l) => l.key)).toEqual(["hud-1"]);
+    });
+
     it("名前の分からない機体のログが何件続いても、名前の分かる行を押し出さない", () => {
       const hidden = Array.from({ length: 30 }, (_, i) =>
         makeLog({ timestamp: 17.9 + (i % 2) * 0.1, actor_id: "hidden-a", target_id: "hidden-b" }),
