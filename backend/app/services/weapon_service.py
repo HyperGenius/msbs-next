@@ -78,7 +78,7 @@ class WeaponService:
         行が存在しうる（`None` も空 `{}` と同等に扱う）。
 
         Args:
-            base_snapshot: 購入時の Weapon スペックスナップショット
+            base_snapshot: 武器マスターに追従する Weapon スペック
             custom_stats: 強化・改造による差分（PlayerWeapon.custom_stats）。None可
 
         Returns:

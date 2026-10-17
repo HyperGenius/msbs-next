@@ -1946,7 +1946,10 @@ class PlayerWeapon(SQLModel, table=True):
     base_snapshot: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON),
-        description="購入時の Weapon スペックスナップショット",
+        description=(
+            "Weapon スペック。購入時に作り、武器マスターの変更時は "
+            "scripts/maintenance/sync_weapon_master.py でマスターの値に追従させる"
+        ),
     )
     custom_stats: dict = Field(
         default_factory=dict,
