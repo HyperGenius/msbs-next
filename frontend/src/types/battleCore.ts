@@ -55,6 +55,21 @@ export interface PartHitSummary {
     dealt: Record<string, PartHitStat>;
 }
 
+/** 自機の武器1つ分の命中数と試行数。バックエンドが保存した形 */
+export interface WeaponAccuracyRecord {
+    weapon_name: string;
+    hits: number;
+    attempts: number;
+}
+
+/** 索敵の集計 */
+export interface DetectionSummary {
+    /** 自機が索敵に成功した敵機数（重複なし） */
+    captured: number;
+    /** `enemies_info` の件数 */
+    total: number;
+}
+
 /** バトルで得た戦利品。kind が BLUEPRINT なら設計図 */
 export interface BlueprintLootItem {
     kind: "BLUEPRINT";
@@ -160,6 +175,10 @@ export interface BattleResult {
     digest_text?: string | null;
     /** 部位別の被弾/命中集計（Issue #504）。マイグレーション前の既存レコードは null */
     part_hit_summary?: PartHitSummary | null;
+    /** 武器ごとの命中数と試行数（試行数の多い順）。保存を始める前の結果は null */
+    weapon_accuracy_summary?: WeaponAccuracyRecord[] | null;
+    /** 索敵の集計。保存を始める前の結果は null */
+    detection_summary?: DetectionSummary | null;
     /** 戦利品の一覧。ドロップなしは空配列、導入前のバトルは null */
     loot?: LootItem[] | null;
 }

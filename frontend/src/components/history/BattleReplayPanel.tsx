@@ -57,6 +57,13 @@ export default function BattleReplayPanel({
     ? logs[logs.length - 1].timestamp
     : 0;
 
+  // 集計が全て保存済みなら、サマリーはログの到着を待たずに出せる。
+  const hasSavedSummaries = !!(
+    battle.part_hit_summary &&
+    battle.weapon_accuracy_summary &&
+    battle.detection_summary
+  );
+
   const hasReplayData = !!(
     battle.player_info &&
     battle.enemies_info &&
@@ -122,7 +129,7 @@ export default function BattleReplayPanel({
       {/* 下部スクロール: 戦果サマリー（タブ切り替えなしの常時表示、Issue #521）。初回データ到着後は、
           残りが裏で読み込み中でも到着済みの分から表示する（全件到着まで待たせない、Issue #494） */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
-        {logsLoading ? (
+        {logsLoading && !hasSavedSummaries ? (
           <div className="flex items-center justify-center p-4">
             <p className="text-gray-400 text-sm">ログを読み込み中...</p>
           </div>

@@ -108,6 +108,9 @@ export function localSimBattleToResult(
     environment_name: battle.environment_name,
     viewer_preset: battle.viewer_preset,
     kills: battle.kills,
+    part_hit_summary: battle.part_hit_summary,
+    weapon_accuracy_summary: battle.weapon_accuracy_summary,
+    detection_summary: battle.detection_summary,
     created_at: manifest.created_at,
   };
 }

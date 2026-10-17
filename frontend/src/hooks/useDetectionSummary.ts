@@ -1,16 +1,11 @@
 /* frontend/src/hooks/useDetectionSummary.ts */
 import { useMemo } from "react";
-import { BattleLog, MobileSuit } from "@/types/battle";
+import { BattleLog, BattleResult, DetectionSummary, MobileSuit } from "@/types/battle";
 
-/** 索敵状況サマリー（Issue #521） */
-export interface DetectionSummary {
-  /** 自機が索敵に成功した敵機数（重複なし） */
-  captured: number;
-  /** バトルに参加した敵機の総数 */
-  total: number;
-}
-
-/** ログから自機が索敵に成功した敵機数を集計する */
+/**
+ * ログから自機が索敵に成功した敵機数を集計する。
+ * `backend/app/engine/result_summary.py` の `compute_detection_summary()` と同じ結果を返す。
+ */
 export function computeDetectionSummary(
   playerId: string | null,
   logs: BattleLog[],
@@ -29,11 +24,20 @@ export function computeDetectionSummary(
   return { captured: capturedIds.size, total };
 }
 
-/** バトル結果の索敵状況（捕捉した敵機数/総数）を取得する（Issue #521） */
+/**
+ * バトル結果の索敵状況（捕捉した敵機数/総数）を取得する（Issue #521）。
+ * 保存済みの `battle.detection_summary` を優先する。
+ * 無い場合（保存を始める前の結果）はログから計算する。
+ */
 export function useDetectionSummary(
+  battle: BattleResult,
   logs: BattleLog[],
   playerId: string | null,
   enemies: MobileSuit[]
 ): DetectionSummary {
-  return useMemo(() => computeDetectionSummary(playerId, logs, enemies), [logs, playerId, enemies]);
+  const saved = battle.detection_summary;
+  return useMemo(
+    () => saved ?? computeDetectionSummary(playerId, logs, enemies),
+    [saved, logs, playerId, enemies]
+  );
 }

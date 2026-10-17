@@ -38,12 +38,12 @@ interface BattleSummaryPanelProps {
  * バトルヒストリー詳細モーダルの戦果サマリー（Issue #521）。
  * タブ切り替えは行わず常時表示する。ここは「自身のカスタマイズの妥当性を判断する」ための
  * 分析用途なので、チャプタートラック/3D演出とは異なり実数値をそのまま表示する。
+ * 集計は保存済みの値を優先する。無い項目だけ `logs` から計算する。
  */
 export default function BattleSummaryPanel({ battle, logs, playerId, enemies }: BattleSummaryPanelProps) {
   const partHitSummary = usePartHitSummary(battle, logs, playerId);
-  const equippedWeaponNames = battle.player_info?.weapons?.map((w) => w.name) ?? [];
-  const weaponAccuracy = useWeaponAccuracySummary(logs, playerId, equippedWeaponNames);
-  const detection = useDetectionSummary(logs, playerId, enemies);
+  const weaponAccuracy = useWeaponAccuracySummary(battle, logs, playerId);
+  const detection = useDetectionSummary(battle, logs, playerId, enemies);
 
   return (
     <div className="pt-3">
