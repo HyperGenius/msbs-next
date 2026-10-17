@@ -1103,6 +1103,43 @@ BattleDetailModal
 - 撃墜数・被攻撃回数は `BattleResult.kills`/`attacks_received_count`（Issue #415 の戦闘ダイジェスト、書き込み時に
   1回だけ計算済みの非正規化カラム）をそのまま表示し、ログからの再計算はしない
 
+### 戦果サマリーの書き込み時集計（Issue #633）
+
+被弾部位・武器ごとの命中率・索敵の集計は、`BattleResult` の生成時に1回だけ計算して保存する。
+結果画面はログのダウンロードを待たずにサマリーを表示する（モバイル・低速回線向け）。
+配信用ログから集計にしか使わない項目を削る準備でもある（Epic #631）。
+
+#### 保存する項目
+
+| カラム（`battle_results`） | 形 | 集計関数 |
+|---|---|---|
+| `part_hit_summary` | `{"taken": {部位: {"hits", "damage"}}, "dealt": {スロット: {"hits", "damage"}}}` | `compute_part_hit_summary()`（Issue #504 で保存済み） |
+| `weapon_accuracy_summary` | `[{"weapon_name", "hits", "attempts"}, ...]`（試行数の多い順。同数は装備順・ログに出た順） | `compute_weapon_accuracy_summary()` |
+| `detection_summary` | `{"captured": 捕捉した敵機数, "total": enemies_info の件数}` | `compute_detection_summary()` |
+
+* 3つとも nullable の JSON 列。既存の行はバックフィルしない（マイグレーション `n8b9c0d1e2f3`）
+* 集計は `backend/app/engine/result_summary.py` の `compute_result_summary_fields(player, logs, enemy_count)` にまとめた。
+  DB を使わないため、ローカルシミュレータ（`scripts/simulation/local_sim/run.py`）からも呼ぶ
+* 本番の2つの生成箇所（`main.py` の `simulate_battle`・`run_batch.py` の `_save_battle_results`）は
+  `compute_battle_digest_fields(..., enemy_count=...)` 経由で呼ぶ。`enemy_count` は `enemies_info` の件数を渡す
+* `BattleResultSummary` に載せるため、`GET /api/battles`・`/api/battles/unread`・`/api/battles/{battle_id}` が返す
+* 命中率（`hits / attempts`）は保存せず、表示時に計算する
+
+#### フロントエンドの表示
+
+* `usePartHitSummary`・`useWeaponAccuracySummary`・`useDetectionSummary` は、`battle` の保存値を優先する。
+  保存値が無い項目だけ、ロード済みの `logs` から計算する（既存の結果の表示は変わらない）
+* `BattleReplayPanel` は3つとも保存済みなら、ログの読み込み中でも `BattleSummaryPanel` を表示する。
+  1つでも無ければ、従来どおりログの到着を待つ
+* 表示内容は変えていない
+
+#### バックエンドとフロントの集計の一致
+
+`backend/tests/fixtures/result_summary_parity.json` に、ログと期待値をまとめた。
+`backend/tests/unit/test_result_summary.py` と `frontend/tests/unit/resultSummaryParity.test.ts` が同じファイルを読み、
+同じ期待値になることを確かめる。どちらかの集計を変えるときは、このファイルも更新する。
+フロントの CI は、このファイルの変更でも動く（`.github/workflows/frontend-ci.yaml` の paths-filter）。
+
 ### 削除・整理したもの
 
 - `frontend/src/components/history/BattleLogViewer.tsx`

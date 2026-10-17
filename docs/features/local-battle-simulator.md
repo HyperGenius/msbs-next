@@ -343,6 +343,7 @@ battle_logs/local_sim/
 | `player_info` | エントリー時点の判定する機体（本番と同じく戦闘前の状態） |
 | `enemies_info` | 判定する機体以外の全ユニット（戦闘後の状態） |
 | `obstacles_info` / `map_bounds` | 障害物と、戦闘終了時のフィールド範囲 |
+| `part_hit_summary` / `weapon_accuracy_summary` / `detection_summary` | 結果画面の戦果サマリー。本番の `BattleResult` と同じ `compute_result_summary_fields()` で集計する。項目を足す前（Issue #633 より前）の世代では null |
 | `logs` | `BattleLog` の一覧。`strip_debug_fields()` を通さず、`fuzzy_scores` などのデバッグ項目を残す |
 
 1戦のサイズはログの行数に比例する。5機・約1300ステップの戦闘で約1.5万行・約14MB だった
@@ -516,6 +517,8 @@ npm run dev
 
 どちらも `useNdjsonBattleLogs()` でログを段階的に読む。全件が届く前から再生でき、続きの読み込み中は表示が出る。
 `battle_NNN.json` に無い項目（被攻撃回数・戦利品・ダイジェストなど本番のバッチで作る項目）は「—」か非表示になる。
+戦果サマリーの集計（被弾部位・命中率・索敵）は `battle_NNN.json` の保存値を使い、本番と同じくログの到着前に表示する。
+保存値が無い古い世代では、ログから計算する。
 
 ### Route Handler
 
