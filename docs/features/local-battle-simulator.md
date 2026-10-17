@@ -13,6 +13,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609�
 * 保存した結果は、開発環境の `/dev/sim` で本番の履歴詳細と同じ画面で再生できる
 * `report` / `compare` で世代の勝率・戦闘時間・行動分布などを集計し、2つの世代を比べられる。`/dev/sim` でも比べられ、再生中に AI の判断（ファジィスコア）を確かめられる
 * `log-bench` / `log-compare` で、シード固定の50機の戦闘のログのサイズと端末の負荷を、保存形式ごとに測って比べられる（Epic #631 の計測基準。Issue #632）
+* `replay-fixture` で、旧形式と配信用ログの一致テストに使う戦闘のログを作れる（Issue #634）
 
 ### 今後の予定（Epic #608）
 
@@ -648,8 +649,8 @@ python -m scripts.simulation.local_sim log-compare before after
 | `stored` | 本番が保存・配信している形式。`strip_debug_fields()` の出力 |
 | `draft` | 目標値を決めるための試算。`AI_DECISION` を除く。`TARGET_SELECTION` は機体ごとに相手が変わった行だけ残す。null の項目を省き、小数を1桁に丸める |
 | `draft_no_message` | `draft` から、MOVE・WAIT・TARGET_SELECTION の `message` も省く |
+| `replay` | 配信用ログ（Issue #634）。`app/engine/replay_log.py` の `to_replay_logs()` の出力。先頭のヘッダー行も1行として数え、`action_type` ごとの行数では `(ヘッダー)` と表示する。スキーマは `docs/features/battle-log-feature.md` の「配信用ログ（replay）」 |
 
-配信用の形式（Issue #634）は、変換関数を `LOG_FORMATS` に足すと同じ戦闘で並べて測れる。
 `draft` はビューアで再生できることを確かめていない。サイズの見積もりだけに使う。
 
 ### 計測する項目
@@ -702,4 +703,46 @@ M1 Mac・Node 20.19.6。ロスターは本番DBを使わず、テスト用の SQ
 
 * `draft` はどちらのロスターでも全項目を満たす。ただし gzip 後のサイズの余裕は小さい（1.12〜1.16MB）。本番のロスターで戦闘が長いと超えうる
 * `draft_no_message`（gzip 0.95MB）なら余裕がある。`message` を省くかは Issue #634 で決める
+
+### 計測結果（Issue #634 時点）
+
+配信用ログ（`replay`）の計測。M1 Mac・Node 20.19.6。ロスターは Issue #632 と同じ作り方（テスト用の SQLite でマスターから作った生成 NPC 47・エース 3）。
+ロスターを作り直し、Issue #632 の後にエンジンの変更も入ったため、Issue #632 の時点とは別の戦闘になった。`stored` も同じ戦闘で測り直した。
+
+| 戦闘 | 形式 | 行数 | 展開後 | gzip | Slow 4G | パース | ×4 | ヒープ |
+|---|---|---|---|---|---|---|---|---|
+| 177.4秒 | `stored` | 122,501 | 91.1MB | 6.54MB | 31.2秒 | 345ms | 1.38秒 | 73.5MB |
+| | `draft` | 49,365 | 16.6MB | 1.19MB | 5.7秒 | 77ms | 0.31秒 | 21.7MB |
+| | `draft_no_message` | 49,365 | 12.5MB | 1.00MB | 4.8秒 | 74ms | 0.30秒 | 16.7MB |
+| | `replay` | 49,366 | 11.6MB | 0.96MB | 4.6秒 | 71ms | 0.28秒 | 16.3MB |
+
+* `replay` は目標値（gzip 1.2MB・展開後 20MB・パース 100ms・ヒープ 25MB）をすべて満たす
+* この戦闘では `draft`（message を残す試算）の gzip が 1.19MB で、目標値ぎりぎりになった。配信用ログでは MOVE・WAIT・TARGET_SELECTION の `message` を省いた
+* `replay` が `draft_no_message` より小さいのは、`is_crit: false` と、描画に使わない項目（`strategy_mode` など）を省いたため
+
+---
+
+## replay-fixture: 旧形式と配信用ログの一致テストのログ
+
+Issue #634 で作った。同じ戦闘の旧形式（`strip_debug_fields()` の出力）と配信用ログ（`to_replay_logs()` の出力）を、
+機体の情報（`player_info` / `enemies_info`、`run` の `battle_NNN.json` と同じ組み立て）と一緒に、gzip した JSON に書く。
+
+```bash
+cd backend
+python -m scripts.simulation.local_sim replay-fixture --roster replay6
+```
+
+| オプション | 説明 |
+|---|---|
+| `--roster <名前>` | ロスター名、またはロスターの JSON ファイルのパス（必須） |
+| `--seed N` | 戦闘のシード。既定は `replay_fixture.DEFAULT_FIXTURE_SEED`（639） |
+| `--steps N` | 最大ステップ数。既定は `replay_fixture.DEFAULT_FIXTURE_STEPS`（600 = 60秒）。リポジトリに置くファイルを数百KBに収めるため |
+| `--out <パス>` | 保存先。既定は `backend/tests/fixtures/replay_log_parity.json.gz` |
+
+* 次の2つのテストがこのファイルを読む
+  * `frontend/tests/unit/replayLogParity.test.ts`: 旧形式と配信用ログから、ビューアの表示状態が一致することを確かめる
+  * `backend/tests/unit/test_replay_log.py`: ファイルの配信用ログが、今の `to_replay_logs()` の出力と一致することを確かめる。変換を変えたらこのテストが落ちるので、フィクスチャを作り直す
+* 同じロスター・同じシードなら、同じバイト列になる（gzip のヘッダーの時刻を 0 にしている）
+* DB には接続しない（`run` と同じく `forbid_database()` を呼ぶ）
+* 今のフィクスチャは、テスト用の SQLite でマスターから作った6機のロスター（生成 NPC 4・エース 2、戦域 `solomon`）で作った。撃破・クリティカル・EN の記録・相手の切り替えを含む。格闘（`MELEE_COMBO`・`MELEE_CLASH`）・ブースト・仕切り直しは含まない。これらの行は丸めと null の省略だけを受けるため、変換のルールは `test_replay_log.py` で確かめている
 
