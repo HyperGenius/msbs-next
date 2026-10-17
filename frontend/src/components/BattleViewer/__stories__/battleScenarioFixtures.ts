@@ -269,6 +269,62 @@ export function buildMeleeClashScenario(): BattleScenario {
     return { logs, player, enemies: [gelgoog] };
 }
 
+/**
+ * 自機が撃破されるバトル。撃破は 5.0 秒で、その後も敵機は 10.0 秒まで動き続ける。
+ * 撃破の通知と、猶予秒数を過ぎた先を見せないことの確認に使う。
+ */
+export function buildPlayerDestroyedScenario(): BattleScenario {
+    const playerPath: Keyframe[] = [
+        [0, { x: 2200, y: 0, z: 2500 }],
+        [5.0, { x: 2400, y: 0, z: 2500 }],
+    ];
+    const zakuPath: Keyframe[] = [
+        [0, { x: 2800, y: 0, z: 2500 }],
+        [5.0, { x: 2550, y: 0, z: 2500 }],
+        [10.0, { x: 2450, y: 0, z: 2560 }],
+    ];
+
+    const player = makeMobileSuit({
+        id: PLAYER_ID,
+        name: "ガンダム",
+        side: "PLAYER",
+        position: playerPath[0][1],
+        max_hp: 300,
+        weapons: [WEAPONS.BEAM_RIFLE, WEAPONS.BEAM_SABER],
+    });
+    const zaku = makeMobileSuit({
+        id: "story-enemy-zaku",
+        name: "ザクII (NPC)",
+        side: "ENEMY",
+        position: zakuPath[0][1],
+        weapons: [WEAPONS.MACHINE_GUN, WEAPONS.HEAT_HAWK],
+        is_npc: true,
+    });
+
+    const pp = (t: number) => positionAt(playerPath, t);
+    const zp = (t: number) => positionAt(zakuPath, t);
+    const { BEAM_RIFLE, MACHINE_GUN } = WEAPONS;
+
+    const events: BattleLog[] = [
+        detectionLog(0, player, zaku, pp(0)),
+        attackHitLog({ timestamp: 1.0, actor: player, target: zaku, actorPos: pp(1.0), weapon: BEAM_RIFLE, damage: 120 }),
+        attackHitLog({ timestamp: 2.0, actor: zaku, target: player, actorPos: zp(2.0), weapon: MACHINE_GUN, damage: 90 }),
+        attackHitLog({ timestamp: 3.0, actor: zaku, target: player, actorPos: zp(3.0), weapon: MACHINE_GUN, damage: 90 }),
+        attackHitLog({ timestamp: 4.0, actor: player, target: zaku, actorPos: pp(4.0), weapon: BEAM_RIFLE, damage: 120 }),
+        attackHitLog({ timestamp: 5.0, actor: zaku, target: player, actorPos: zp(5.0), weapon: MACHINE_GUN, damage: 120 }),
+        destroyedLog(5.0, player, pp(5.0)),
+        missLog({ timestamp: 7.0, actor: zaku, target: player, actorPos: zp(7.0), weapon: MACHINE_GUN }),
+    ];
+
+    const logs = [
+        ...moveLogs(player, playerPath, 5.0),
+        ...moveLogs(zaku, zakuPath, 10.0),
+        ...events,
+    ].sort((a, b) => a.timestamp - b.timestamp);
+
+    return { logs, player, enemies: [zaku] };
+}
+
 /** 障害物を 1 つ作る。高さはバックエンドの自動生成と同じく半径の 1.5 倍にする。 */
 function obstacle(id: string, x: number, z: number, radius: number): Obstacle {
     return { obstacle_id: id, position: { x, y: 0, z }, radius, height: radius * 1.5 };

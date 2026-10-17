@@ -5,10 +5,12 @@ import ChapterTrack from "./ui/ChapterTrack";
 import { useBattleChapters } from "./hooks/useBattleChapters";
 import TurnController from "@/components/history/TurnController";
 import { Obstacle } from "@/types/battle";
+import { findPlayerDestroyedAt, getPlaybackLimit } from "./utils/playerDestruction";
 import {
     BattleScenario,
     buildEnShortageScenario,
     buildMeleeClashScenario,
+    buildPlayerDestroyedScenario,
     buildSkirmishObstacles,
     buildSkirmishScenario,
 } from "./__stories__/battleScenarioFixtures";
@@ -28,7 +30,8 @@ function ScenarioStory({ environment, theaterName, minovskyDensity, buildScenari
     const [currentTimestamp, setCurrentTimestamp] = useState(0);
     const [recenterToken, setRecenterToken] = useState(0);
     const chapters = useBattleChapters(logs, player, enemies);
-    const maxTimestamp = logs[logs.length - 1].timestamp;
+    const maxTimestamp = getPlaybackLimit(logs[logs.length - 1].timestamp, findPlayerDestroyedAt(logs, player.id));
+    const visibleChapters = useMemo(() => chapters.filter((c) => c.timestamp <= maxTimestamp), [chapters, maxTimestamp]);
 
     const handleChapterSeek = (timestamp: number) => {
         setCurrentTimestamp(timestamp);
@@ -48,7 +51,7 @@ function ScenarioStory({ environment, theaterName, minovskyDensity, buildScenari
                 minovskyDensity={minovskyDensity}
                 recenterToken={recenterToken}
             />
-            <ChapterTrack chapters={chapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
+            <ChapterTrack chapters={visibleChapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
             <TurnController
                 currentTimestamp={currentTimestamp}
                 maxTimestamp={maxTimestamp}
@@ -89,6 +92,14 @@ export const EnShortage: Story = {
 /** 正面からの斬り合いで鍔迫り合いになり、押し離された後に射撃へ切り替える。チャプターにも出る。 */
 export const MeleeClash: Story = {
     args: { buildScenario: buildMeleeClashScenario },
+};
+
+/**
+ * 自機が 5.0 秒で撃破される。撃破の時刻から「自機が撃破されました」を表示し、
+ * 猶予秒数（3 秒）を過ぎた 8.0 秒より先は再生もシークもできない。
+ */
+export const PlayerDestroyed: Story = {
+    args: { buildScenario: buildPlayerDestroyedScenario },
 };
 
 /** 森林の戦域。障害物は木立として描く。LOS を ON にすると遮断中の木立が赤くなる。 */

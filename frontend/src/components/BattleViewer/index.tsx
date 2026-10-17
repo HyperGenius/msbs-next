@@ -9,8 +9,10 @@ import { hasDisengageLog, useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
 import { MinovskyHaze } from "./ui/MinovskyHaze";
+import { PlayerDestroyedBanner } from "./ui/PlayerDestroyedBanner";
 import { getEnvironmentColor, SIMULATION_STEP_S, toSupportedEnvironment } from "./utils";
 import { hasLos } from "./utils/losUtils";
+import { findPlayerDestroyedAt, getPlaybackLimit } from "./utils/playerDestruction";
 
 interface BattleViewerProps {
     logs: BattleLog[];
@@ -35,12 +37,17 @@ export default function BattleViewer({
     enemies,
     obstacles,
     mapBounds,
-    currentTimestamp,
+    currentTimestamp: requestedTimestamp,
     environment = "SPACE",
     theaterName,
     minovskyDensity,
     recenterToken,
 }: BattleViewerProps) {
+    // 呼び出し側が上限を超えた時刻を渡しても、撃破後の描画には進ませない
+    const playerDestroyedAt = useMemo(() => findPlayerDestroyedAt(logs, player.id), [logs, player.id]);
+    const currentTimestamp = Math.min(requestedTimestamp, getPlaybackLimit(Infinity, playerDestroyedAt));
+    const isPlayerDestroyed = playerDestroyedAt !== null && currentTimestamp >= playerDestroyedAt;
+
     // LOS 表示のトグルステート（デフォルト: OFF）
     const [showLos, setShowLos] = useState(false);
 
@@ -148,6 +155,8 @@ export default function BattleViewer({
             />
 
             <MinovskyHaze density={minovskyDensity} />
+
+            {isPlayerDestroyed && <PlayerDestroyedBanner />}
 
             <BattleOverlay
                 player={player}

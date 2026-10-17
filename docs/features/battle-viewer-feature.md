@@ -1140,6 +1140,17 @@ BattleDetailModal
 同じ期待値になることを確かめる。どちらかの集計を変えるときは、このファイルも更新する。
 フロントの CI は、このファイルの変更でも動く（`.github/workflows/frontend-ci.yaml` の paths-filter）。
 
+### 自機撃破後の閲覧制限（Issue #651）
+
+自機が撃破された後の敵の動きは意図的に見せない。ホームの再生と履歴リプレイの両方で、撃破後は閲覧できない。
+
+- 自機の最初の `DESTROYED` ログの時刻（`findPlayerDestroyedAt`）に、猶予秒数（`PLAYER_DESTROYED_GRACE_S` = 3秒）を足した時刻を再生・シークの上限にする（`getPlaybackLimit`、`BattleViewer/utils/playerDestruction.ts`）。猶予は撃破演出を見せ切るためのもの。
+- 上限は `TurnController` の `maxTimestamp` として渡す。再生はそこで止まり、スライダーもそれより先へ動かせない。履歴リプレイでは上限より後のチャプターを `ChapterTrack` に出さない。
+- `BattleViewer` 自身も、渡された `currentTimestamp` を上限で丸める。呼び出し側が上限を渡し忘れても、撃破後は描画しない。
+- 撃破時刻に達すると、`PlayerDestroyedBanner` で「自機が撃破されました」を中央に表示する。
+- 撃破のないバトルは従来どおりログ末尾まで再生できる。ログのストリーミング中でも、撃破を見つけた時点で続きのログを待たずに上限が確定する。
+- Storybook の `BattleViewer/Scenario` の `PlayerDestroyed` で確認できる（撃破は5.0秒、上限は8.0秒）。
+
 ### 削除・整理したもの
 
 - `frontend/src/components/history/BattleLogViewer.tsx`
