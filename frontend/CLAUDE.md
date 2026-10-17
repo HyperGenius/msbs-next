@@ -83,7 +83,7 @@ social     → (なし)
 blueprint  → shop
 admin      → weapon
 theater    → (なし)
-localSim   → geometry, mobileSuit
+localSim   → geometry, mobileSuit, battleCore
 ```
 
 ---

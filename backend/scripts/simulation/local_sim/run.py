@@ -17,6 +17,7 @@ from pathlib import Path
 from app.core.gamedata import use_static_ace_pilots
 from app.engine.constants import FUZZY_RULES_DIR
 from app.engine.environment import EnvironmentProfile
+from app.engine.result_summary import compute_result_summary_fields
 from app.engine.rng import seed_numpy_rngs
 from app.models.models import BattleField
 from app.services.battle_execution import (
@@ -151,6 +152,7 @@ def run_one_battle(
 
     # 本番と同じく、player_info はエントリー時点、enemies_info は戦闘後の状態にする。
     entry_unit = snapshot_to_mobile_suit(copy.deepcopy(player_snapshot))
+    unit_fields = build_unit_view_fields(entry_unit, [player_unit, *enemy_units])
     labels = roster.conditions
     return BattleRecord(
         index=index,
@@ -167,8 +169,11 @@ def run_one_battle(
         viewer_preset=labels.viewer_preset,
         minovsky_density=conditions.minovsky_density,
         logs=[log.model_dump(mode="json") for log in simulator.logs],
-        **build_unit_view_fields(entry_unit, [player_unit, *enemy_units]),
+        **unit_fields,
         **build_battlefield_view_fields(simulator),
+        **compute_result_summary_fields(
+            player_unit, simulator.logs, len(unit_fields["enemies_info"])
+        ),
     )
 
 

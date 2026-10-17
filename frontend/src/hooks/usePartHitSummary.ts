@@ -10,7 +10,7 @@ const HIT_ACTION_TYPES = new Set(["ATTACK", "MELEE_COMBO"]);
  * 集計方法は `backend/app/engine/part_hit_summary.py` の
  * `compute_part_hit_summary()` と同一のロジックに揃えている。
  */
-function computeFromLogs(playerId: string | null, logs: BattleLog[]): PartHitSummary {
+export function computePartHitSummary(playerId: string | null, logs: BattleLog[]): PartHitSummary {
   const taken: Record<string, PartHitStat> = {};
   const dealt: Record<string, PartHitStat> = {};
   if (!playerId) return { taken, dealt };
@@ -49,6 +49,6 @@ export function usePartHitSummary(
 ): PartHitSummary {
   return useMemo(() => {
     if (battle.part_hit_summary) return battle.part_hit_summary;
-    return computeFromLogs(playerId, logs);
+    return computePartHitSummary(playerId, logs);
   }, [battle.part_hit_summary, logs, playerId]);
 }

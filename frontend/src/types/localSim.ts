@@ -1,4 +1,5 @@
 /* frontend/src/types/localSim.ts */
+import { DetectionSummary, PartHitSummary, WeaponAccuracyRecord } from "./battleCore";
 import { Obstacle } from "./geometry";
 import { MobileSuit } from "./mobileSuit";
 
@@ -72,6 +73,10 @@ export interface LocalSimBattle {
     enemies_info: MobileSuit[];
     obstacles_info: Obstacle[];
     map_bounds: [number, number];
+    /** 結果画面の戦果サマリー。項目を足す前に保存した世代では無い */
+    part_hit_summary?: PartHitSummary | null;
+    weapon_accuracy_summary?: WeaponAccuracyRecord[] | null;
+    detection_summary?: DetectionSummary | null;
     log_count: number;
 }
 

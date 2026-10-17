@@ -130,6 +130,10 @@ class BattleRecord(BaseModel):
     )
     obstacles_info: list[dict[str, Any]]
     map_bounds: list[float]
+    # 結果画面の戦果サマリー。項目を足す前に保存した世代では null。
+    part_hit_summary: dict[str, Any] | None = None
+    weapon_accuracy_summary: list[dict[str, Any]] | None = None
+    detection_summary: dict[str, Any] | None = None
     logs: list[dict[str, Any]] = Field(
         description="BattleLog の一覧。fuzzy_scores などのデバッグ項目を残す"
     )
