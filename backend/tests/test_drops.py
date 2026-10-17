@@ -520,6 +520,24 @@ def test_simulate_records_loot(solo_client, session: Session) -> None:  # type: 
     assert detail["loot"] == loot
 
 
+def test_simulate_saves_result_summaries(solo_client, session: Session) -> None:  # type: ignore[no-untyped-def]
+    """ソロミッションの結果に戦果サマリーが保存され、結果取得 API で返ること."""
+    response = solo_client.post(f"/api/battle/simulate?mission_id={MISSION_ID}")
+    assert response.status_code == 200
+
+    result = session.exec(
+        select(BattleResult).where(BattleResult.user_id == USER_ID)
+    ).one()
+    assert result.part_hit_summary is not None
+    assert result.weapon_accuracy_summary is not None
+    assert result.detection_summary is not None
+    assert result.detection_summary["total"] == len(result.enemies_info or [])
+
+    detail = solo_client.get(f"/api/battles/{result.id}").json()
+    assert detail["weapon_accuracy_summary"] == result.weapon_accuracy_summary
+    assert detail["detection_summary"] == result.detection_summary
+
+
 def test_simulate_without_table_records_empty_loot(
     solo_client, session: Session
 ) -> None:  # type: ignore[no-untyped-def]

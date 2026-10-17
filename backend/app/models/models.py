@@ -1263,6 +1263,16 @@ class BattleResult(SQLModel, table=True):
         sa_column=Column(JSON, nullable=True),
         description="部位別の被弾/命中集計（taken: 被弾部位別, dealt: 使用武器スロット別）",
     )
+    weapon_accuracy_summary: list[dict] | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="自機の武器ごとの命中数・試行数（weapon_name, hits, attempts）。試行数の多い順",
+    )
+    detection_summary: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="自機が索敵に成功した敵機の数（captured）と敵機の総数（total）",
+    )
 
     loot: list[dict] | None = Field(
         default=None,
@@ -1313,6 +1323,8 @@ class BattleResultSummary(SQLModel):
     digest_tag: str | None = None
     digest_text: str | None = None
     part_hit_summary: dict | None = None
+    weapon_accuracy_summary: list[dict] | None = None
+    detection_summary: dict | None = None
     loot: list[LootItemDetail] | None = None
 
 

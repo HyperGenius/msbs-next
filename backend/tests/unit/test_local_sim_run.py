@@ -139,6 +139,11 @@ def test_run_saves_generation_files(
     # strip_debug_fields() を通さないため、デバッグ項目が残る。
     assert battle.logs
     assert all("fuzzy_scores" in log for log in battle.logs)
+    # 結果画面の戦果サマリーは本番の BattleResult と同じ項目を持つ。
+    assert battle.part_hit_summary is not None
+    assert battle.weapon_accuracy_summary is not None
+    assert battle.detection_summary is not None
+    assert battle.detection_summary["total"] == 3
 
 
 def test_same_seed_reproduces_same_logs(

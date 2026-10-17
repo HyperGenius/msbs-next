@@ -412,6 +412,10 @@ def test_save_battle_results_sets_digest_fields(in_memory_session):
     assert result.min_hp_percent == 10
     assert result.player_survived is True
     assert result.pilot_ms_name == "Digest Gundam"
+    # 結果画面の戦果サマリーもバッチ経由で保存される。
+    assert result.part_hit_summary == {"taken": {}, "dealt": {}}
+    assert result.weapon_accuracy_summary is not None
+    assert result.detection_summary == {"captured": 0, "total": 0}
 
 
 def test_save_battle_results_kills_are_per_unit_not_team_wide(in_memory_session):

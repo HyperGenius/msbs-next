@@ -256,6 +256,7 @@ def _save_battle_results(
             win_loss=individual_win_loss,
             steps_used=steps_used,
             max_steps=_MAX_SIMULATION_STEPS,
+            enemy_count=len(unit_fields["enemies_info"]),
         )
 
         battle_result = BattleResult(

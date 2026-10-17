@@ -70,6 +70,7 @@ def test_compute_battle_digest_fields_returns_battle_result_ready_dict():
         win_loss="WIN",
         steps_used=10,
         max_steps=50,
+        enemy_count=2,
     )
 
     assert set(fields.keys()) == {
@@ -84,12 +85,15 @@ def test_compute_battle_digest_fields_returns_battle_result_ready_dict():
         "digest_tag",
         "digest_text",
         "part_hit_summary",
+        "weapon_accuracy_summary",
+        "detection_summary",
     }
     assert fields["player_survived"] is True
     assert fields["min_hp_percent"] == 100
     assert fields["damage_severity"] == "無傷"
     assert fields["pilot_ms_name"] == "Gelgoog"
     assert fields["digest_text"] is not None
+    assert fields["detection_summary"] == {"captured": 0, "total": 2}
 
     # BattleResult に問題なく展開できること
     result = BattleResult(user_id=None, win_loss="WIN", **fields)

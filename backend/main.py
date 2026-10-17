@@ -414,6 +414,7 @@ async def simulate_battle(
         win_loss=win_loss,
         steps_used=steps_used,
         max_steps=max_steps,
+        enemy_count=len(enemies),
     )
 
     # player_info/enemies_info/ms_snapshot にはバトル後の最終位置ではなくスポーン位置を

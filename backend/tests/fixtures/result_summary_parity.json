@@ -1,0 +1,319 @@
+{
+  "_comment": "backend/app/engine/result_summary.py とフロントの集計フックが同じ結果を返すことを確かめる共通データ。両方のテストが読む。",
+  "player_info": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "name": "Gelgoog",
+    "weapons": [
+      {
+        "id": "w1",
+        "name": "ビームライフル",
+        "power": 100,
+        "range": 500,
+        "accuracy": 80
+      },
+      {
+        "id": "w2",
+        "name": "ビームサーベル",
+        "power": 100,
+        "range": 500,
+        "accuracy": 80
+      },
+      {
+        "id": "w3",
+        "name": "シールドミサイル",
+        "power": 100,
+        "range": 500,
+        "accuracy": 80
+      }
+    ]
+  },
+  "enemies_info": [
+    {
+      "id": "00000000-0000-4000-8000-000000000011"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000013"
+    }
+  ],
+  "logs": [
+    {
+      "timestamp": 1.0,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "DETECTION",
+      "target_id": "00000000-0000-4000-8000-000000000011",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "timestamp": 1.0,
+      "actor_id": "00000000-0000-4000-8000-000000000013",
+      "action_type": "DETECTION",
+      "target_id": "00000000-0000-4000-8000-000000000001",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "timestamp": 1.5,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "MOVE",
+      "target_id": null,
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "timestamp": 2.0,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "ATTACK",
+      "target_id": "00000000-0000-4000-8000-000000000011",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "weapon_name": "ビームライフル",
+      "damage": 120,
+      "weapon_slot_role": "RIGHT_ARM",
+      "hit_part": "TORSO"
+    },
+    {
+      "timestamp": 2.5,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "MISS",
+      "target_id": "00000000-0000-4000-8000-000000000011",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "weapon_name": "ビームライフル"
+    },
+    {
+      "timestamp": 3.0,
+      "actor_id": "00000000-0000-4000-8000-000000000011",
+      "action_type": "ATTACK",
+      "target_id": "00000000-0000-4000-8000-000000000001",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "weapon_name": "マシンガン",
+      "damage": 30,
+      "hit_part": "TORSO",
+      "weapon_slot_role": "RIGHT_ARM"
+    },
+    {
+      "timestamp": 3.0,
+      "actor_id": "00000000-0000-4000-8000-000000000011",
+      "action_type": "MISS",
+      "target_id": "00000000-0000-4000-8000-000000000001",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "weapon_name": "マシンガン"
+    },
+    {
+      "timestamp": 3.5,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "DETECTION",
+      "target_id": "00000000-0000-4000-8000-000000000011",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "timestamp": 3.5,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "DETECTION",
+      "target_id": "00000000-0000-4000-8000-000000000012",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "timestamp": 4.0,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "MISS",
+      "target_id": "00000000-0000-4000-8000-000000000012",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "weapon_name": "ビームライフル"
+    },
+    {
+      "timestamp": 4.5,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "MELEE_COMBO",
+      "target_id": "00000000-0000-4000-8000-000000000012",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "weapon_name": "ビームサーベル",
+      "damage": 200,
+      "weapon_slot_role": "LEFT_ARM",
+      "hit_part": "HEAD"
+    },
+    {
+      "timestamp": 5.0,
+      "actor_id": "00000000-0000-4000-8000-000000000012",
+      "action_type": "ATTACK",
+      "target_id": "00000000-0000-4000-8000-000000000001",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "damage": 40,
+      "hit_part": "TORSO"
+    },
+    {
+      "timestamp": 5.5,
+      "actor_id": "00000000-0000-4000-8000-000000000012",
+      "action_type": "MELEE_COMBO",
+      "target_id": "00000000-0000-4000-8000-000000000001",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "hit_part": "HEAD"
+    },
+    {
+      "timestamp": 6.0,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "ATTACK",
+      "target_id": "00000000-0000-4000-8000-000000000012",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "damage": 50
+    },
+    {
+      "timestamp": 6.5,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "MISS",
+      "target_id": "00000000-0000-4000-8000-000000000013",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    },
+    {
+      "timestamp": 7.0,
+      "actor_id": "00000000-0000-4000-8000-000000000001",
+      "action_type": "ATTACK",
+      "target_id": "00000000-0000-4000-8000-000000000013",
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "weapon_name": "ビームサーベル",
+      "damage": 90,
+      "weapon_slot_role": "LEFT_ARM"
+    },
+    {
+      "timestamp": 7.5,
+      "actor_id": "00000000-0000-4000-8000-000000000013",
+      "action_type": "DESTROYED",
+      "target_id": null,
+      "message": "test",
+      "position_snapshot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  ],
+  "expected": {
+    "part_hit_summary": {
+      "taken": {
+        "TORSO": {
+          "hits": 2,
+          "damage": 70
+        },
+        "HEAD": {
+          "hits": 1,
+          "damage": 0
+        }
+      },
+      "dealt": {
+        "RIGHT_ARM": {
+          "hits": 1,
+          "damage": 120
+        },
+        "LEFT_ARM": {
+          "hits": 2,
+          "damage": 290
+        }
+      }
+    },
+    "weapon_accuracy_summary": [
+      {
+        "weapon_name": "ビームライフル",
+        "hits": 1,
+        "attempts": 3
+      },
+      {
+        "weapon_name": "ビームサーベル",
+        "hits": 2,
+        "attempts": 2
+      },
+      {
+        "weapon_name": "格闘",
+        "hits": 1,
+        "attempts": 2
+      },
+      {
+        "weapon_name": "シールドミサイル",
+        "hits": 0,
+        "attempts": 0
+      }
+    ],
+    "detection_summary": {
+      "captured": 2,
+      "total": 3
+    }
+  }
+}
