@@ -1147,7 +1147,8 @@ BattleDetailModal
 - 自機の最初の `DESTROYED` ログの時刻（`findPlayerDestroyedAt`）に、猶予秒数（`PLAYER_DESTROYED_GRACE_S` = 3秒）を足した時刻を再生・シークの上限にする（`getPlaybackLimit`、`BattleViewer/utils/playerDestruction.ts`）。猶予は撃破演出を見せ切るためのもの。
 - 上限は `TurnController` の `maxTimestamp` として渡す。再生はそこで止まり、スライダーもそれより先へ動かせない。履歴リプレイでは上限より後のチャプターを `ChapterTrack` に出さない。
 - `BattleViewer` 自身も、渡された `currentTimestamp` を上限で丸める。呼び出し側が上限を渡し忘れても、撃破後は描画しない。
-- 撃破時刻に達すると、`PlayerDestroyedBanner` が中央にウィンドウを開いて「撃破されました」を表示し、2秒後に「撤退します」へ切り替える。
+- 撃破時刻に達すると、自機の機体を消して `DestroyedExplosion`（`scene/`）で爆発を1回再生し、画面を少し暗くする。
+- 爆発が終わる頃（`EXPLOSION_DURATION_MS`）に `PlayerDestroyedBanner` がウィンドウを開き、「撃破されました」を表示する。2秒後に「戦闘終了」と獲得EXP・獲得クレジットへ切り替える。獲得量は `BattleViewer` の `rewards` で渡し、無いときは「戦闘終了」だけを出す（ホームは `rewards`、履歴リプレイは `battle.exp_gained` / `credits_gained`）。
 - 撃破のないバトルは従来どおりログ末尾まで再生できる。ログのストリーミング中でも、撃破を見つけた時点で続きのログを待たずに上限が確定する。
 - Storybook の `BattleViewer/Scenario` の `PlayerDestroyed` で確認できる（撃破は5.0秒、上限は8.0秒）。
 

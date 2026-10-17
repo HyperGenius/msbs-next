@@ -9,7 +9,7 @@ import { hasDisengageLog, useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
 import { MinovskyHaze } from "./ui/MinovskyHaze";
-import { PlayerDestroyedBanner } from "./ui/PlayerDestroyedBanner";
+import { PlayerDestroyedBanner, PlayerDestroyedRewards } from "./ui/PlayerDestroyedBanner";
 import { getEnvironmentColor, SIMULATION_STEP_S, toSupportedEnvironment } from "./utils";
 import { hasLos } from "./utils/losUtils";
 import { findPlayerDestroyedAt, getPlaybackLimit } from "./utils/playerDestruction";
@@ -29,6 +29,8 @@ interface BattleViewerProps {
     minovskyDensity?: number | null;
     /** チャプタージャンプ時のみ増分されるトークン。カメラターゲットの再センタリングをトリガーする（Issue #524） */
     recenterToken?: number;
+    /** 自機撃破の表示に出す獲得量。無いときは表示しない。 */
+    rewards?: PlayerDestroyedRewards | null;
 }
 
 export default function BattleViewer({
@@ -42,6 +44,7 @@ export default function BattleViewer({
     theaterName,
     minovskyDensity,
     recenterToken,
+    rewards,
 }: BattleViewerProps) {
     // 呼び出し側が上限を超えた時刻を渡しても、撃破後の描画には進ませない
     const playerDestroyedAt = useMemo(() => findPlayerDestroyedAt(logs, player.id), [logs, player.id]);
@@ -152,11 +155,18 @@ export default function BattleViewer({
                 currentTimestamp={currentTimestamp}
                 playerDisengagedAt={playerDisengagedAt}
                 recenterToken={recenterToken}
+                isPlayerDestroyed={isPlayerDestroyed}
             />
 
             <MinovskyHaze density={minovskyDensity} />
 
-            {isPlayerDestroyed && <PlayerDestroyedBanner />}
+            {/* 撃破後は画面を少し暗くして、バトルが終わったことを示す */}
+            <div
+                className={`absolute inset-0 bg-black/40 pointer-events-none transition-opacity duration-700 ${
+                    isPlayerDestroyed ? "opacity-100" : "opacity-0"
+                }`}
+            />
+            {isPlayerDestroyed && <PlayerDestroyedBanner rewards={rewards} />}
 
             <BattleOverlay
                 player={player}

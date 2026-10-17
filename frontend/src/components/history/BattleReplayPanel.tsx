@@ -105,6 +105,11 @@ export default function BattleReplayPanel({
                 theaterName={battle.theater_name}
                 minovskyDensity={battle.minovsky_density}
                 recenterToken={recenterToken}
+                rewards={
+                  battle.exp_gained != null && battle.credits_gained != null
+                    ? { exp: battle.exp_gained, credits: battle.credits_gained }
+                    : null
+                }
               />
               {/* ログを裏で読み込み中でも再生をブロックしない。読み込み継続中であることだけ
                   控えめに示す（全件到着まで待たされないUX、Issue #494） */}

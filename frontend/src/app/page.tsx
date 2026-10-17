@@ -203,6 +203,7 @@ export default function Home() {
               mapBounds={mapBounds}
               currentTimestamp={currentTimestamp}
               environment={currentEnvironment}
+              rewards={rewards ? { exp: rewards.exp_gained, credits: rewards.credits_gained } : null}
             />
             <TurnController
               currentTimestamp={currentTimestamp}

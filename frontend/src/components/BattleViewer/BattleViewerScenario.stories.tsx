@@ -19,12 +19,13 @@ interface ScenarioStoryArgs {
     environment: string;
     theaterName?: string | null;
     minovskyDensity?: number | null;
+    rewards?: { exp: number; credits: number } | null;
     buildScenario: () => BattleScenario;
     buildObstacles?: () => Obstacle[];
 }
 
 /** BattleDetailModal と同じ部品構成で、複数の演出を含むバトルを通し再生する。 */
-function ScenarioStory({ environment, theaterName, minovskyDensity, buildScenario, buildObstacles }: ScenarioStoryArgs) {
+function ScenarioStory({ environment, theaterName, minovskyDensity, rewards, buildScenario, buildObstacles }: ScenarioStoryArgs) {
     const { logs, player, enemies } = useMemo(() => buildScenario(), [buildScenario]);
     const obstacles = useMemo(() => buildObstacles?.(), [buildObstacles]);
     const [currentTimestamp, setCurrentTimestamp] = useState(0);
@@ -50,6 +51,7 @@ function ScenarioStory({ environment, theaterName, minovskyDensity, buildScenari
                 theaterName={theaterName}
                 minovskyDensity={minovskyDensity}
                 recenterToken={recenterToken}
+                rewards={rewards}
             />
             <ChapterTrack chapters={visibleChapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
             <TurnController
@@ -95,11 +97,12 @@ export const MeleeClash: Story = {
 };
 
 /**
- * 自機が 5.0 秒で撃破される。撃破の時刻から「撃破されました」を表示し、2 秒後に「撤退します」へ切り替える。
+ * 自機が 5.0 秒で撃破される。撃破の時刻に爆発して機体が消え、画面が暗くなる。
+ * 爆発の後にウィンドウが開いて「撃破されました」を出し、2 秒後に「戦闘終了」と獲得量へ切り替える。
  * 猶予秒数（3 秒）を過ぎた 8.0 秒より先は再生もシークもできない。
  */
 export const PlayerDestroyed: Story = {
-    args: { buildScenario: buildPlayerDestroyedScenario },
+    args: { buildScenario: buildPlayerDestroyedScenario, rewards: { exp: 320, credits: 1500 } },
 };
 
 /** 森林の戦域。障害物は木立として描く。LOS を ON にすると遮断中の木立が赤くなる。 */
