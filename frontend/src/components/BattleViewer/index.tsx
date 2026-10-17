@@ -9,8 +9,10 @@ import { hasDisengageLog, useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
 import { BattleOverlay } from "./ui/BattleOverlay";
 import { MinovskyHaze } from "./ui/MinovskyHaze";
+import { PlayerDestroyedBanner, PlayerDestroyedRewards } from "./ui/PlayerDestroyedBanner";
 import { getEnvironmentColor, SIMULATION_STEP_S, toSupportedEnvironment } from "./utils";
 import { hasLos } from "./utils/losUtils";
+import { findPlayerDestroyedAt, getPlaybackLimit } from "./utils/playerDestruction";
 
 interface BattleViewerProps {
     logs: BattleLog[];
@@ -27,6 +29,8 @@ interface BattleViewerProps {
     minovskyDensity?: number | null;
     /** チャプタージャンプ時のみ増分されるトークン。カメラターゲットの再センタリングをトリガーする（Issue #524） */
     recenterToken?: number;
+    /** 自機撃破の表示に出す獲得量。無いときは表示しない。 */
+    rewards?: PlayerDestroyedRewards | null;
 }
 
 export default function BattleViewer({
@@ -35,12 +39,18 @@ export default function BattleViewer({
     enemies,
     obstacles,
     mapBounds,
-    currentTimestamp,
+    currentTimestamp: requestedTimestamp,
     environment = "SPACE",
     theaterName,
     minovskyDensity,
     recenterToken,
+    rewards,
 }: BattleViewerProps) {
+    // 呼び出し側が上限を超えた時刻を渡しても、撃破後の描画には進ませない
+    const playerDestroyedAt = useMemo(() => findPlayerDestroyedAt(logs, player.id), [logs, player.id]);
+    const currentTimestamp = Math.min(requestedTimestamp, getPlaybackLimit(Infinity, playerDestroyedAt));
+    const isPlayerDestroyed = playerDestroyedAt !== null && currentTimestamp >= playerDestroyedAt;
+
     // LOS 表示のトグルステート（デフォルト: OFF）
     const [showLos, setShowLos] = useState(false);
 
@@ -145,9 +155,18 @@ export default function BattleViewer({
                 currentTimestamp={currentTimestamp}
                 playerDisengagedAt={playerDisengagedAt}
                 recenterToken={recenterToken}
+                isPlayerDestroyed={isPlayerDestroyed}
             />
 
             <MinovskyHaze density={minovskyDensity} />
+
+            {/* 撃破後は画面を少し暗くして、バトルが終わったことを示す */}
+            <div
+                className={`absolute inset-0 bg-black/40 pointer-events-none transition-opacity duration-700 ${
+                    isPlayerDestroyed ? "opacity-100" : "opacity-0"
+                }`}
+            />
+            {isPlayerDestroyed && <PlayerDestroyedBanner rewards={rewards} />}
 
             <BattleOverlay
                 player={player}

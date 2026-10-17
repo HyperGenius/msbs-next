@@ -213,6 +213,30 @@ a:not(.no-min-size),
   100% { opacity: 0; }
 }
 
+/* 撃破表示のウィンドウ。横線から縦に開く */
+@keyframes bv-window-open {
+  0%   { transform: scale(1, 0.05); opacity: 0; }
+  60%  { transform: scale(1, 1.05); opacity: 1; }
+  100% { transform: scale(1, 1); opacity: 1; }
+}
+
+/* 自機撃破の爆発。閃光 → 衝撃波のリング → 破片の順に広がり、最後は消える */
+@keyframes bv-explosion-core {
+  0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 1; }
+  35%  { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+  100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+
+@keyframes bv-explosion-ring {
+  0%   { transform: translate(-50%, -50%) scale(0.1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+@keyframes bv-explosion-debris {
+  0%   { transform: rotate(var(--bv-debris-angle)) translateX(6px) scaleX(0.3); opacity: 1; }
+  100% { transform: rotate(var(--bv-debris-angle)) translateX(var(--bv-debris-distance)) scaleX(1); opacity: 0; }
+}
+
 @keyframes bv-number-rise {
   from { transform: translateY(0); }
   to   { transform: translateY(-20px); }

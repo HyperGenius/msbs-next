@@ -5,10 +5,12 @@ import ChapterTrack from "./ui/ChapterTrack";
 import { useBattleChapters } from "./hooks/useBattleChapters";
 import TurnController from "@/components/history/TurnController";
 import { Obstacle } from "@/types/battle";
+import { findPlayerDestroyedAt, getPlaybackLimit } from "./utils/playerDestruction";
 import {
     BattleScenario,
     buildEnShortageScenario,
     buildMeleeClashScenario,
+    buildPlayerDestroyedScenario,
     buildSkirmishObstacles,
     buildSkirmishScenario,
 } from "./__stories__/battleScenarioFixtures";
@@ -17,18 +19,20 @@ interface ScenarioStoryArgs {
     environment: string;
     theaterName?: string | null;
     minovskyDensity?: number | null;
+    rewards?: { exp: number; credits: number } | null;
     buildScenario: () => BattleScenario;
     buildObstacles?: () => Obstacle[];
 }
 
 /** BattleDetailModal と同じ部品構成で、複数の演出を含むバトルを通し再生する。 */
-function ScenarioStory({ environment, theaterName, minovskyDensity, buildScenario, buildObstacles }: ScenarioStoryArgs) {
+function ScenarioStory({ environment, theaterName, minovskyDensity, rewards, buildScenario, buildObstacles }: ScenarioStoryArgs) {
     const { logs, player, enemies } = useMemo(() => buildScenario(), [buildScenario]);
     const obstacles = useMemo(() => buildObstacles?.(), [buildObstacles]);
     const [currentTimestamp, setCurrentTimestamp] = useState(0);
     const [recenterToken, setRecenterToken] = useState(0);
     const chapters = useBattleChapters(logs, player, enemies);
-    const maxTimestamp = logs[logs.length - 1].timestamp;
+    const maxTimestamp = getPlaybackLimit(logs[logs.length - 1].timestamp, findPlayerDestroyedAt(logs, player.id));
+    const visibleChapters = useMemo(() => chapters.filter((c) => c.timestamp <= maxTimestamp), [chapters, maxTimestamp]);
 
     const handleChapterSeek = (timestamp: number) => {
         setCurrentTimestamp(timestamp);
@@ -47,8 +51,9 @@ function ScenarioStory({ environment, theaterName, minovskyDensity, buildScenari
                 theaterName={theaterName}
                 minovskyDensity={minovskyDensity}
                 recenterToken={recenterToken}
+                rewards={rewards}
             />
-            <ChapterTrack chapters={chapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
+            <ChapterTrack chapters={visibleChapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
             <TurnController
                 currentTimestamp={currentTimestamp}
                 maxTimestamp={maxTimestamp}
@@ -89,6 +94,15 @@ export const EnShortage: Story = {
 /** 正面からの斬り合いで鍔迫り合いになり、押し離された後に射撃へ切り替える。チャプターにも出る。 */
 export const MeleeClash: Story = {
     args: { buildScenario: buildMeleeClashScenario },
+};
+
+/**
+ * 自機が 5.0 秒で撃破される。撃破の時刻に爆発して機体が消え、画面が暗くなる。
+ * 爆発の後にウィンドウが開いて「撃破されました」を出し、2 秒後に「戦闘終了」と獲得量へ切り替える。
+ * 猶予秒数（3 秒）を過ぎた 8.0 秒より先は再生もシークもできない。
+ */
+export const PlayerDestroyed: Story = {
+    args: { buildScenario: buildPlayerDestroyedScenario, rewards: { exp: 320, credits: 1500 } },
 };
 
 /** 森林の戦域。障害物は木立として描く。LOS を ON にすると遮断中の木立が赤くなる。 */

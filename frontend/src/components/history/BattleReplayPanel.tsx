@@ -6,6 +6,7 @@ import { BattleLog, BattleResult, MobileSuit } from "@/types/battle";
 import BattleViewer from "@/components/BattleViewer";
 import ChapterTrack from "@/components/BattleViewer/ui/ChapterTrack";
 import { useBattleChapters } from "@/components/BattleViewer/hooks/useBattleChapters";
+import { findPlayerDestroyedAt, getPlaybackLimit } from "@/components/BattleViewer/utils/playerDestruction";
 import TurnController from "./TurnController";
 import BattleSummaryPanel from "./BattleSummaryPanel";
 import { getViewerEnvironment } from "@/utils/theater";
@@ -53,9 +54,16 @@ export default function BattleReplayPanel({
     enemies
   );
 
-  const maxTimestamp = logs.length
-    ? logs[logs.length - 1].timestamp
-    : 0;
+  const playerDestroyedAt = useMemo(
+    () => (playerId ? findPlayerDestroyedAt(logs, playerId) : null),
+    [logs, playerId]
+  );
+  const logEndTimestamp = logs.length ? logs[logs.length - 1].timestamp : 0;
+  const maxTimestamp = getPlaybackLimit(logEndTimestamp, playerDestroyedAt);
+  const visibleChapters = useMemo(
+    () => chapters.filter((c) => c.timestamp <= maxTimestamp),
+    [chapters, maxTimestamp]
+  );
 
   // 集計が全て保存済みなら、サマリーはログの到着を待たずに出せる。
   const hasSavedSummaries = !!(
@@ -97,6 +105,11 @@ export default function BattleReplayPanel({
                 theaterName={battle.theater_name}
                 minovskyDensity={battle.minovsky_density}
                 recenterToken={recenterToken}
+                rewards={
+                  battle.exp_gained != null && battle.credits_gained != null
+                    ? { exp: battle.exp_gained, credits: battle.credits_gained }
+                    : null
+                }
               />
               {/* ログを裏で読み込み中でも再生をブロックしない。読み込み継続中であることだけ
                   控えめに示す（全件到着まで待たされないUX、Issue #494） */}
@@ -107,11 +120,12 @@ export default function BattleReplayPanel({
                 </div>
               )}
               {/* チャプタートラック: 3Dビューア直下に常駐し、有意なイベントのみクリックでジャンプする（Issue #521） */}
-              <ChapterTrack chapters={chapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
+              <ChapterTrack chapters={visibleChapters} currentTimestamp={currentTimestamp} onSeek={handleChapterSeek} />
               <TurnController
                 currentTimestamp={currentTimestamp}
                 maxTimestamp={maxTimestamp}
-                isStreaming={logsStreaming}
+                // 撃破で打ち切る場合は、続きのログを待たない
+                isStreaming={logsStreaming && playerDestroyedAt === null}
                 onTimestampChange={setCurrentTimestamp}
               />
               {renderTimelinePanel?.(currentTimestamp)}
