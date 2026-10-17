@@ -16,6 +16,7 @@ from app.engine.constants import (
     DISENGAGE_DISTANCE_MIN,
     DISENGAGE_MAX_SEC,
     DISENGAGE_RANGED_PREFERENCE_SEC,
+    FLEE_THREAT_REACH_MARGIN,
     IDLE_STALEMATE_ATTACK_SEC,
     IDLE_STALEMATE_SEC,
 )
@@ -34,6 +35,13 @@ from app.engine.engagement_style import (
     tactics_range,
 )
 from app.engine.facing import is_unit_backpedaling
+from app.engine.flee import (
+    FleeAssessment,
+    assess_flee,
+    attack_wait_sec,
+    expected_dps,
+    next_flee_state,
+)
 from app.models.models import BattleLog, MobileSuit, Vector3
 
 if TYPE_CHECKING:
@@ -502,6 +510,70 @@ class AiDecisionMixin:
         resources["idle_stalemate_until"] = now + IDLE_STALEMATE_ATTACK_SEC
         return True
 
+    def _best_weapon_dps(
+        self,
+        actor: MobileSuit,
+        target: MobileSuit,
+        waits: dict[str, float | None],
+    ) -> float:
+        """使える武器のうち、最適距離で撃ったときの期待 DPS の最大値を返す."""
+        best = 0.0
+        for weapon in actor.weapons:
+            if waits[weapon.id] is None:
+                continue
+            hit, _, _ = self._estimate_hit_chance(  # type: ignore[attr-defined]
+                actor, target, weapon, float(weapon.optimal_range)
+            )
+            best = max(best, expected_dps(weapon, hit))
+        return best
+
+    def _weapon_waits(self, unit: MobileSuit) -> dict[str, float | None]:
+        """武器ごとに、再使用待ちを除いた使えるまでの秒数を返す. 使えなければ None."""
+        resources = self.unit_resources[str(unit.id)]  # type: ignore[attr-defined]
+        states = resources["weapon_states"]
+        return {
+            w.id: attack_wait_sec(
+                w,
+                states.get(w.id, {}).get("current_ammo", w.max_ammo),
+                float(resources.get("current_en", 0.0)),
+                float(unit.en_recovery),
+            )
+            for w in unit.weapons
+        }
+
+    def _compute_flee_score(
+        self, unit: MobileSuit, detected_enemies: list[MobileSuit]
+    ) -> FleeAssessment:
+        """索敵済みの敵から、自機の逃走度を計算する. 行動は変えない."""
+        pos_unit = unit.position.to_numpy()
+        my_waits = self._weapon_waits(unit)
+        my_dps_by_enemy: list[tuple[float, float]] = []
+        enemy_dps: list[float] = []
+        for enemy in detected_enemies:
+            distance = float(np.linalg.norm(enemy.position.to_numpy() - pos_unit))
+            enemy_waits = self._weapon_waits(enemy)
+            reaches = any(
+                enemy_waits[w.id] is not None
+                and distance <= w.range + FLEE_THREAT_REACH_MARGIN
+                for w in enemy.weapons
+            )
+            if not reaches:
+                continue
+            enemy_dps.append(self._best_weapon_dps(enemy, unit, enemy_waits))
+            my_dps_by_enemy.append(
+                (
+                    float(enemy.current_hp),
+                    self._best_weapon_dps(unit, enemy, my_waits),
+                )
+            )
+        return assess_flee(
+            strategy_mode=self._resolve_strategy_mode(unit),  # type: ignore[attr-defined]
+            my_hp=float(unit.current_hp),
+            waits=my_waits.values(),
+            my_dps_by_enemy=my_dps_by_enemy,
+            enemy_dps=enemy_dps,
+        )
+
     def _ai_decision_phase(self, unit: MobileSuit) -> None:
         """中階層ファジィ推論フェーズ: 各ユニットの行動を決定する.
 
@@ -631,6 +703,14 @@ class AiDecisionMixin:
         # 決定した行動を保存
         self.unit_resources[unit_id]["current_action"] = action  # type: ignore[attr-defined]
 
+        # 逃走度は計測のためだけに計算し、行動の決定には使わない。
+        flee = self._compute_flee_score(unit, detected_enemies)
+        resources = self.unit_resources[unit_id]  # type: ignore[attr-defined]
+        resources["flee"] = flee
+        resources["fleeing"] = next_flee_state(
+            bool(resources.get("fleeing", False)), flee.score
+        )
+
         # ファジィ推論結果をログに記録
         ranged_ammo_ratio = phase_c_inputs["ranged_ammo_ratio"]
         los_blocked = phase_c_inputs["los_blocked"]
@@ -653,6 +733,7 @@ class AiDecisionMixin:
                 position_snapshot=unit.position,
                 fuzzy_scores=fuzzy_scores,
                 strategy_mode=strategy_mode,
+                details=flee.to_details(),
             )
         )
 

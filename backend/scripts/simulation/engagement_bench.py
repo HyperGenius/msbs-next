@@ -22,7 +22,7 @@ import subprocess
 import sys
 import uuid
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -37,7 +37,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from app.engine import combat  # noqa: E402
 from app.engine.calculator import PilotStats  # noqa: E402
-from app.engine.constants import MELEE_RANGE  # noqa: E402
+from app.engine.constants import FLEE_ENTER_THRESHOLD, MELEE_RANGE  # noqa: E402
 from app.engine.simulation import BattleSimulator  # noqa: E402
 from app.models.models import MobileSuit, Vector3, Weapon  # noqa: E402
 
@@ -191,6 +191,8 @@ class BattleMetrics:
     disengages: int = 0
     # 最初の格闘攻撃の時刻 (s)。格闘しなかった戦闘では None。
     first_melee_time: float | None = None
+    # 両機の逃走度。行動の決定には使わない計測値で、1 ステップ 1 機につき 1 件。
+    flee_scores: list[float] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +366,7 @@ def run_battle(
     _record_attacks(sim, records)
 
     distances: list[float] = []
+    flee_scores: list[float] = []
     log_cursor = 0
     record_cursor = 0
     weapon_switches = 0
@@ -385,6 +388,10 @@ def run_battle(
         )
         melee_clashes += sum(1 for log in new_logs if log.action_type == "MELEE_CLASH")
         disengages += sum(1 for log in new_logs if log.action_type == "DISENGAGE")
+        for unit in (unit_a, unit_b):
+            flee = sim.unit_resources[str(unit.id)].get("flee")
+            if flee is not None and unit.current_hp > 0:
+                flee_scores.append(flee.score)
         if records and unit_a.current_hp > 0 and unit_b.current_hp > 0:
             distances.append(
                 float(
@@ -415,6 +422,7 @@ def run_battle(
         melee_clashes=melee_clashes,
         disengages=disengages,
         first_melee_time=next((r.time for r in records if r.is_melee), None),
+        flee_scores=flee_scores,
     )
 
 
@@ -448,6 +456,7 @@ def summarize(battles: list[BattleMetrics]) -> dict[str, Any]:
     durations = [b.duration for b in battles]
     total_minutes = sum(durations) / 60.0
     rounds = len(battles)
+    flee_scores = [x for b in battles for x in b.flee_scores]
     longest = max(battles, key=lambda b: (b.longest_melee_miss_sec, b.seed))
     return {
         "rounds": rounds,
@@ -471,6 +480,13 @@ def summarize(battles: list[BattleMetrics]) -> dict[str, Any]:
         # 格闘機が相手に追いつくまでの時間の目安。格闘しなかった戦闘は除く。
         "first_melee_time": _percentiles(
             [b.first_melee_time for b in battles if b.first_melee_time is not None]
+        ),
+        "flee_score": _percentiles(flee_scores),
+        # 逃走に入るしきい値以上だったステップの割合。
+        "flee_over_enter_rate": (
+            sum(x >= FLEE_ENTER_THRESHOLD for x in flee_scores) / len(flee_scores)
+            if flee_scores
+            else None
         ),
         "longest_melee_miss_sec": longest.longest_melee_miss_sec,
         "longest_melee_miss_count": longest.longest_melee_miss_count,
@@ -550,9 +566,10 @@ def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
     print(
         "| 条件 | 攻撃数 | 距離 p10/p50/p90 | <50m | <150m | 最適比 格闘/射撃 p50 "
         "| 初格闘 p50 | 格闘ミス最長 | 持ち替え/分 | 鍔迫り合い/分 (格闘比) | 仕切り直し/分 "
-        "| セクタ F/FS/RS/R % | 戦闘時間 p50 | 時間切れ | A 勝率 | B 勝率 |"
+        "| セクタ F/FS/RS/R % | 逃走度 p50/p90 | 逃走度 ≥入る % | 戦闘時間 p50 | 時間切れ "
+        "| A 勝率 | B 勝率 |"
     )
-    print("|---" * 16 + "|")
+    print("|---" * 18 + "|")
     for key, r in results.items():
         print(
             f"| {key} | {r['attacks']} | {_distance_cell(r['distance'])} "
@@ -567,6 +584,9 @@ def print_scenario_table(scenario: Scenario, results: dict[str, dict]) -> None:
             f" ({_fmt(r.get('melee_clash_rate'), '.0%')}) "
             f"| {r.get('disengages_per_min', 0.0):.1f} "
             f"| {_sector_cell(r['sector_rates'])} "
+            f"| {_fmt(r.get('flee_score', {}).get('p50'), '.2f')}"
+            f"/{_fmt(r.get('flee_score', {}).get('p90'), '.2f')} "
+            f"| {_fmt(r.get('flee_over_enter_rate'), '.0%')} "
             f"| {r['duration']['p50']:.0f}s "
             f"| {r['timeout_rate']:.0%} "
             f"| {r['a_win_rate']:.0%} | {r['b_win_rate']:.0%} |"
@@ -586,6 +606,7 @@ _DIFF_METRICS: tuple[tuple[str, Any, str], ...] = (
     ("鍔迫り合い/分", lambda r: r.get("melee_clashes_per_min"), ".1f"),
     ("仕切り直し/分", lambda r: r.get("disengages_per_min"), ".1f"),
     ("FRONT", lambda r: r["sector_rates"]["FRONT"], ".0%"),
+    ("逃走度 p90", lambda r: r.get("flee_score", {}).get("p90"), ".2f"),
     ("戦闘時間 p50", lambda r: r["duration"]["p50"], ".0f"),
     ("時間切れ", lambda r: r["timeout_rate"], ".0%"),
     ("A 勝率", lambda r: r["a_win_rate"], ".0%"),

@@ -577,3 +577,25 @@ MELEE_CLASH_KNOCKBACK_SEC: float = 0.8
 MELEE_CLASH_PUSH_SHARE_MAX: float = 0.7
 # 押す力に掛ける、パイロットの MEL 1 あたりの増分。
 MELEE_CLASH_MEL_WEIGHT: float = 0.05
+
+# 逃走度の定数。値はすべて暫定で、調整は総合バランス調整で行う。
+# 弾薬があり、この時間 (s) 以内に EN が足りる武器があれば、攻撃手段があるとみなす。
+FLEE_EN_WAIT_SEC: float = 10.0
+# 再使用待ち時間が 0 の武器の DPS を求めるときの、発射間隔の下限 (s)。
+FLEE_MIN_COOLDOWN_SEC: float = 0.1
+# 敵の最適距離で射撃できる前提で見込み命中率を求めるため、射程外の敵も脅威に数える余裕 (m)。
+FLEE_THREAT_REACH_MARGIN: float = 300.0
+# 戦力比（自機が倒す時間 ÷ 倒される時間）が下限以下なら 0、上限以上なら 1 とする。
+FLEE_POWER_RATIO_LOW: float = 1.0
+FLEE_POWER_RATIO_HIGH: float = 4.0
+# 戦略モードごとの戦力差の重み。載っていないモードは 1.0 とする。
+FLEE_POWER_WEIGHTS: dict[str, float] = {
+    "AGGRESSIVE": 0.8,
+    "DEFENSIVE": 1.3,
+    "SNIPER": 1.0,
+    "ASSAULT": 0.75,
+    "RETREAT": 1.5,
+}
+# 逃走度がこの値以上で逃走に入り、この値未満で逃走を抜ける。
+FLEE_ENTER_THRESHOLD: float = 0.7
+FLEE_EXIT_THRESHOLD: float = 0.4
