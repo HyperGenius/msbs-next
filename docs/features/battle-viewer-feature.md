@@ -425,6 +425,13 @@ LOS を遮っている木立の強調表示は `ObstacleMesh` に合わせる。
 1. **バックエンド**: `BattleSimulator.map_bounds`（`tuple[float, float]`、`(0.0, side_len)`）を `BattleResult.map_bounds`（`list[float] | None`、DB, `battle_results.map_bounds` カラム）と `/api/battle/simulate` の `BattleResponse.map_bounds`（`tuple[float, float] | None`）の両方に含める。`BattleResult` の生成箇所は2箇所ある（`backend/main.py` / `backend/scripts/run_batch.py`）ため、障害物情報と同様に両方に設定が必要。マイグレーション前の既存レコードは `null`（バックフィルなし、既存カラムと同じ方針）
 2. **フロントエンド**: `BattleScene.tsx` が `mapBounds` prop（`[number, number] | null | undefined`）を受け取り、フィールド中心 `(min+max)/2 * POSITION_SCALE` を `<Grid position>` に設定。`fadeDistance` もフィールドの一辺長（`(max-min) * POSITION_SCALE`）に応じて動的に拡大する（最低値100は維持）。`mapBounds` が未取得（`null`/`undefined`、マイグレーション前の履歴データ等）の場合は `DEFAULT_MAP_BOUNDS = [0, 5000]`（`backend/app/engine/constants.py` の `MAP_BOUNDS` デフォルトと同値）にフォールバックする
 
+### グリッドがカメラ周囲で途切れる問題の修正（Issue #652）
+
+drei の `Grid` は `fadeFrom` のデフォルトが `1` で、フェードの起点が**カメラ位置**になる。`fadeDistance` がカメラ周囲の半径として働くため、カメラが自機から離れる（約87、最大150）と、フィールド内でもグリッドが画面の途中で薄くなって消えていた（FOREST・SPACE の両方で発生）。
+
+- `<Grid fadeFrom={0}>` を指定し、フェードの起点をグリッド位置（フィールド中心）に固定する
+- `fadeDistance` は `max(100, fieldSpan * 1.5)` とし、フィールドの外周・角でも線が残るようにする
+
 ### データフロー
 
 ```
