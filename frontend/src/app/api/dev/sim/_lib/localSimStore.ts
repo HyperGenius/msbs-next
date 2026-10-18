@@ -172,7 +172,7 @@ export async function readDecisionLogs(
       timestamp: log.timestamp,
       action_type: log.action_type,
       target_id: log.target_id ?? null,
-      message: log.message,
+      message: log.message ?? "",
       strategy_mode: log.strategy_mode ?? null,
       fuzzy_scores: log.fuzzy_scores ?? null,
     }));

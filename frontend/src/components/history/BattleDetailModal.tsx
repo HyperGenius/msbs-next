@@ -20,7 +20,12 @@ export default function BattleDetailModal({
   // バトルログを遅延ロード（リプレイ用）。全件ダウンロード完了を待たず、
   // 届いた分から段階的に反映する（Issue #494）。isLoadingは初回データ到達まで、
   // isStreamingは全件パース完了までtrueになる
-  const { logs: fetchedLogs, isLoading: logsLoading, isStreaming: logsStreaming } = useBattleLogs(battle.id);
+  const {
+    logs: fetchedLogs,
+    isLoading: logsLoading,
+    isStreaming: logsStreaming,
+    isError: logsError,
+  } = useBattleLogs(battle.id);
 
   return (
     <div
@@ -37,6 +42,7 @@ export default function BattleDetailModal({
           logs={fetchedLogs ?? []}
           logsLoading={logsLoading}
           logsStreaming={logsStreaming}
+          logsError={logsError}
         />
       </div>
     </div>

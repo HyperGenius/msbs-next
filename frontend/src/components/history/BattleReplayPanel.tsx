@@ -10,6 +10,7 @@ import { findPlayerDestroyedAt, getPlaybackLimit } from "@/components/BattleView
 import TurnController from "./TurnController";
 import BattleSummaryPanel from "./BattleSummaryPanel";
 import { getViewerEnvironment } from "@/utils/theater";
+import { UnsupportedReplayVersionError } from "@/utils/replayLog";
 
 interface BattleReplayPanelProps {
   battle: BattleResult;
@@ -18,6 +19,8 @@ interface BattleReplayPanelProps {
   logsLoading: boolean;
   /** 全件のパースが終わるまで true */
   logsStreaming: boolean;
+  /** ログの取得・読み込みに失敗したときのエラー */
+  logsError?: Error;
   /** 再生位置に合わせて表示する追加のパネル。ターンコントローラーの下に置く */
   renderTimelinePanel?: (currentTimestamp: number) => ReactNode;
 }
@@ -31,6 +34,7 @@ export default function BattleReplayPanel({
   logs,
   logsLoading,
   logsStreaming,
+  logsError,
   renderTimelinePanel,
 }: BattleReplayPanelProps) {
   const [currentTimestamp, setCurrentTimestamp] = useState(0);
@@ -84,7 +88,15 @@ export default function BattleReplayPanel({
       {/* 上部固定: 3D Replay Viewer + ターンコントローラー */}
       <div className="flex-none p-4 border-b border-gray-700">
         {hasReplayData ? (
-          logsLoading ? (
+          logsError && logs.length === 0 ? (
+            <div className="p-3 bg-yellow-900/20 border border-yellow-700 rounded" role="alert">
+              <p className="text-yellow-400 text-sm">
+                {logsError instanceof UnsupportedReplayVersionError
+                  ? "⚠ このリプレイは新しい形式のため再生できません。ページを再読み込みしてください"
+                  : "⚠ リプレイのログを読み込めませんでした"}
+              </p>
+            </div>
+          ) : logsLoading ? (
             // ログ読み込み完了前にBattleViewerをマウントすると、
             // 実ログ未確定の仮位置でカメラが初期配置されてしまい、
             // ログ読み込み完了後の再描画で自機が視界外に外れる不具合があった（Issue #425）。

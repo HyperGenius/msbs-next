@@ -1,5 +1,6 @@
 /* frontend/src/utils/logFormatter.ts */
 import { BattleLog } from "@/types/battle";
+import { EN_SHORTAGE_REASON_CODES } from "@/components/BattleViewer/utils";
 
 /**
  * UI 表示に特化したログ表現
@@ -82,11 +83,36 @@ function abstractDamage(
 }
 
 /**
+ * ログの文を返す。
+ * 配信用ログは MOVE・WAIT・TARGET_SELECTION の `message` を省く。その行は構造化された項目から文を作る。
+ * 作った文は機体名を含まない。表示する側が行の先頭に機体名を出す。
+ *
+ * @param names 機体 ID から機体名への対応。TARGET_SELECTION の相手の名前に使う
+ */
+export function describeBattleLog(log: BattleLog, names?: ReadonlyMap<string, string>): string {
+  if (typeof log.message === "string") return log.message;
+  switch (log.action_type) {
+    case "MOVE":
+      return "移動中";
+    case "WAIT": {
+      const reasonCode = log.details?.reason_code;
+      const isEnShortage = typeof reasonCode === "string" && EN_SHORTAGE_REASON_CODES.has(reasonCode);
+      return isEnShortage ? "ENが枯渇し、待機中" : "攻撃できず待機中";
+    }
+    case "TARGET_SELECTION": {
+      const targetName = log.target_id ? (names?.get(log.target_id) ?? log.target_id) : "不明な機体";
+      return `${targetName}をターゲットに選択`;
+    }
+    default:
+      return "";
+  }
+}
+
+/**
  * ログの内容に応じた基本スタイル（Tailwind クラス）を返す。
  * 現在ターンのハイライトはコンポーネント側で付与する。
  */
-function getLogStyle(log: BattleLog): DisplayLog["style"] {
-  const msg = log.message;
+function getLogStyle(log: BattleLog, msg: string): DisplayLog["style"] {
 
   const isSkillActivated = log.skill_activated === true;
 
@@ -196,14 +222,16 @@ function getLogStyle(log: BattleLog): DisplayLog["style"] {
  * @param log         変換対象のバトルログ
  * @param isProduction `true` のとき本番向け抽象化（距離・命中率・ダメージ）を適用する
  * @param _playerId   プレイヤー機体 ID（呼び出し元のシグネチャ統一のために受け取るが未使用）
+ * @param names       機体 ID から機体名への対応。`describeBattleLog()` に渡す
  */
 export function formatBattleLog(
   log: BattleLog,
   isProduction: boolean,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _playerId: string
+  _playerId: string,
+  names?: ReadonlyMap<string, string>
 ): DisplayLog {
-  let message = log.message;
+  const baseMessage = describeBattleLog(log, names);
+  let message = baseMessage;
 
   if (isProduction) {
     message = abstractDistance(message);
@@ -218,6 +246,6 @@ export function formatBattleLog(
     target_id: log.target_id,
     message,
     skill_activated: log.skill_activated,
-    style: getLogStyle(log),
+    style: getLogStyle(log, baseMessage),
   };
 }

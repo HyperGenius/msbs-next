@@ -1,7 +1,8 @@
-import useSWR, { mutate as globalMutate } from "swr";
+import useSWR, { mutate as globalMutate, SWRConfig, SWRConfiguration } from "swr";
 import { useAuth } from "@clerk/nextjs";
 import { Mission, BattleResult, BattleLog } from "@/types/battle";
 import { API_BASE_URL, getAuthToken, fetcher, useAuthFetcher, authKey } from "./auth";
+import { consumeReplayLogHeader, UnsupportedReplayVersionError } from "@/utils/replayLog";
 
 /**
  * 逐次パース結果をUIへ反映する間隔（行数）。
@@ -104,6 +105,11 @@ export function useBattleDetail(battleId: string | null) {
  * `onProgress` を渡すと、`PROGRESSIVE_UPDATE_BATCH_SIZE` 行パースするたびに
  * その時点までの配列（コピー）を通知する。全件パース完了を待たずに呼び出し元
  * （UI）へ段階的に反映するための仕組み（Issue #494）。
+ * 一度でも通知したときは、読み終えた時点で全件を通知する。
+ *
+ * 配信用ログと旧形式のどちらも読める。先頭行が配信用ログのヘッダーなら、その行は返さない。
+ *
+ * @throws UnsupportedReplayVersionError 配信用ログのバージョンにビューアが対応していないとき
  */
 export async function fetchBattleLogsNdjson(
   url: string,
@@ -118,14 +124,29 @@ export async function fetchBattleLogsNdjson(
 
   const logs: BattleLog[] = [];
   let sinceLastProgress = 0;
+  let hasNotified = false;
+  let isFirstLine = true;
 
   const pushLog = (line: string) => {
-    logs.push(JSON.parse(line));
+    const entry = JSON.parse(line);
+    if (isFirstLine) {
+      isFirstLine = false;
+      if (consumeReplayLogHeader(entry)) return;
+    }
+    logs.push(entry);
     sinceLastProgress++;
     if (onProgress && sinceLastProgress >= PROGRESSIVE_UPDATE_BATCH_SIZE) {
       sinceLastProgress = 0;
+      hasNotified = true;
       onProgress([...logs]);
     }
+  };
+
+  // SWR は取得中に mutate したキーの取得結果を捨てる。
+  // 途中で通知していたら、最後のバッチに満たない末尾の行も通知しないと反映されない。
+  const finish = (): BattleLog[] => {
+    if (onProgress && hasNotified && sinceLastProgress > 0) onProgress(logs);
+    return logs;
   };
 
   // ReadableStreamが使えない環境（一部のテスト用Response実装等）向けのフォールバック
@@ -136,7 +157,7 @@ export async function fetchBattleLogsNdjson(
         pushLog(line);
       }
     }
-    return logs;
+    return finish();
   }
 
   const reader = res.body.getReader();
@@ -171,8 +192,20 @@ export async function fetchBattleLogsNdjson(
     pushLog(buffer);
   }
 
-  return logs;
+  return finish();
 }
+
+/** SWR の既定の方法で取り直す。未対応のバージョンは取り直しても読めないため、巨大なログを取りにいかない。 */
+const retryUnlessUnsupportedVersion: NonNullable<SWRConfiguration<BattleLog[]>["onErrorRetry"]> = (
+  error,
+  key,
+  config,
+  revalidate,
+  opts
+) => {
+  if (error instanceof UnsupportedReplayVersionError) return;
+  SWRConfig.defaultValue.onErrorRetry(error, key, config as typeof SWRConfig.defaultValue, revalidate, opts);
+};
 
 /**
  * バトルリプレイ用ログを取得するSWRフック。battleResultIdがnullの場合はフェッチしない。
@@ -192,7 +225,7 @@ export function useBattleLogs(battleResultId: string | null) {
  * 返す値は `useBattleLogs` と同じ。
  */
 export function useNdjsonBattleLogs(url: string | null) {
-  const { data, error, isLoading, isValidating } = useSWR<BattleLog[]>(
+  const { data, error, isValidating } = useSWR<BattleLog[]>(
     url,
     (fetchUrl: string) =>
       fetchBattleLogsNdjson(fetchUrl, (partialLogs) => {
@@ -209,12 +242,18 @@ export function useNdjsonBattleLogs(url: string | null) {
     // バトルログは不変データのため、フォーカス復帰・再接続時の自動再検証は不要。
     // 有効にしていると、ストリーミング完了後にタブ切り替え等で巨大ログの再取得が
     // 走ってしまう
-    { revalidateOnFocus: false, revalidateOnReconnect: false }
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      onErrorRetry: retryUnlessUnsupportedVersion,
+    }
   );
 
   return {
     logs: data,
-    isLoading,
+    // SWR の isLoading は取得が終わるまで true のまま変わらない。途中で mutate した分が届いても戻らない。
+    // 最初のバッチで再生を始めるため、データの有無で決める。
+    isLoading: data === undefined && isValidating,
     isStreaming: isValidating,
     isError: error,
   };
