@@ -118,6 +118,21 @@ def _seed_master_data(session: Session) -> None:
 
 
 @pytest.fixture(autouse=True)
+def block_gcs_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    """テストから実際のGCSへ接続しないようにする.
+
+    ローカルに認証情報があると、`storage.Client()` は本物のバケットへ書きにいく。
+    GCSを使うテストは、`_client` を自分でモックに差し替える。
+    """
+    from app.services import battle_log_storage_service
+
+    def _blocked_client() -> None:
+        raise RuntimeError("GCS is not available in tests")
+
+    monkeypatch.setattr(battle_log_storage_service, "_client", _blocked_client)
+
+
+@pytest.fixture(autouse=True)
 def setup_master_data_db() -> Generator[None, None, None]:
     """全テストの前に全DBテーブルをクリアし、マスターデータを再投入する.
 

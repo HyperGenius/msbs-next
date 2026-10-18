@@ -3,7 +3,7 @@ import os
 import random
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 
@@ -21,11 +21,11 @@ from sqlmodel import Session, desc, select
 from app.core.auth import get_current_user, get_current_user_optional
 from app.db import get_session
 from app.engine.battle_digest import compute_unit_kills
-from app.engine.battle_utils import serialize_obstacles, strip_debug_fields
+from app.engine.battle_utils import serialize_obstacles
+from app.engine.replay_log import to_replay_logs
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleField,
-    BattleLog,
     BattleLogRecord,
     BattleResult,
     BattleResultSummary,
@@ -54,6 +54,7 @@ from app.routers import (
 from app.services.battle_digest_service import compute_battle_digest_fields
 from app.services.battle_log_storage_service import (
     offload_battle_log_to_gcs,
+    save_analysis_log,
     stream_battle_log_chunks,
 )
 from app.services.drop_service import DropScope, DropService
@@ -133,7 +134,8 @@ class BattleResponse(BaseModel):
     """戦闘結果レスポンス."""
 
     winner_id: str | None
-    logs: list[BattleLog]
+    # 配信用ログ（先頭はヘッダー行）。BattleLog として検証すると、省いたキーが null で戻る。
+    logs: list[dict[str, Any]]
     player_info: MobileSuit
     enemies_info: list[MobileSuit]
     obstacles_info: list[dict] | None = None
@@ -393,10 +395,10 @@ async def simulate_battle(
         )
 
     # 8. バトルログをDBに保存（battle_logsテーブル）
-    stripped_logs = strip_debug_fields(sim.logs)
+    replay_logs = to_replay_logs(sim.logs)
     battle_log_record = BattleLogRecord(
         mission_id=mission_id,
-        logs=stripped_logs,
+        logs=replay_logs,
         created_at=datetime.now(UTC),
     )
     session.add(battle_log_record)
@@ -458,12 +460,14 @@ async def simulate_battle(
     #     （gcs_pathがNULLのままNeonのlogsへフォールバックする）、バックフィルジョブが
     #     後から再試行する。
     background_tasks.add_task(
-        offload_battle_log_to_gcs, battle_log_record.id, stripped_logs
+        offload_battle_log_to_gcs, battle_log_record.id, replay_logs
     )
+    # 12. 解析用ログ（デバッグ項目付き）をCloud Storageへ保存する。失敗しても結果は残る。
+    background_tasks.add_task(save_analysis_log, battle_log_record.id, sim.logs)
 
     return BattleResponse(
         winner_id=winner_id,
-        logs=sim.logs,
+        logs=replay_logs,
         player_info=player,
         enemies_info=enemies,
         obstacles_info=obstacles_data,
@@ -581,7 +585,9 @@ async def _ndjson_lines(entries: list[dict]) -> AsyncIterator[bytes]:
         200: {
             "content": {"application/x-ndjson": {}},
             "description": (
-                "NDJSON形式のバトルログ（1行1エントリ、各行はBattleLog相当のJSON）"
+                "NDJSON形式のバトルログ（1行1エントリ）。先頭行が"
+                ' `{"replay_version": ...}` なら配信用ログ、無ければ旧形式'
+                "（各行はBattleLog相当のJSON）"
             ),
         }
     },
@@ -599,8 +605,9 @@ async def get_battle_logs(
     レスポンスサイズに比例したメモリを消費するため、NDJSON（`application/x-ndjson`,
     1行1エントリのJSON）でチャンク単位に逐次送出する（Issue #488）。
 
-    保存時点で既にBattleLog相当のJSON互換dictとして検証済みのため、ここでは
-    オブジェクト化を挟まずそのままNDJSON化して返す。
+    保存時点で既にJSON互換dictとして確定しているため、ここでは
+    オブジェクト化を挟まずそのままNDJSON化して返す。保存した形式（配信用ログか
+    旧形式か）は変換せずにそのまま返す。フロントが先頭行で形式を判定する。
 
     注意: 実体は `application/x-ndjson`（改行区切りJSON）であり、単一のJSON配列
     ではない。`response_model=list[BattleLog]` を付けるとOpenAPI上
