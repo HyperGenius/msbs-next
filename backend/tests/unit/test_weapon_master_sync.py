@@ -133,6 +133,25 @@ def test_apply_updates_all_copies(
     assert bazooka["max_ammo"] == 8
 
 
+def test_apply_keeps_weapon_power_bonus(
+    session: Session, setup_data: tuple[MobileSuit, PlayerWeapon]
+) -> None:
+    """機体強化の加算値は、初期装備・購入した武器の両スロットに残る."""
+    ms, _ = setup_data
+    ms.weapon_power_bonus = 4
+    session.add(ms)
+    session.commit()
+    _update_master(session, max_ammo=8)
+
+    sync_weapon_master(session, [WEAPON_ID])
+    session.commit()
+    session.refresh(ms)
+
+    initial, purchased = ms.weapons
+    assert initial["power"] == 184
+    assert purchased["power"] == 194
+
+
 def test_second_run_has_no_changes(
     session: Session, setup_data: tuple[MobileSuit, PlayerWeapon]
 ) -> None:

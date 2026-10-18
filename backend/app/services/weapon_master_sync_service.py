@@ -30,6 +30,7 @@ from app.models.models import (
     PlayerWeapon,
     WeaponSpecBase,
 )
+from app.services.engineering_service import EngineeringService
 from app.services.weapon_service import WeaponService
 
 TARGET_BASE_SNAPSHOT = "player_weapons.base_snapshot"
@@ -199,6 +200,13 @@ def _sync_base_snapshots(
     return resync_ms_ids
 
 
+def _with_power_bonus(master: dict, ms: MobileSuit) -> dict:
+    power = EngineeringService.add_weapon_power_bonus(
+        master["power"], ms.weapon_power_bonus or 0
+    )
+    return {**master, "power": power}
+
+
 def _sync_initial_slots(
     session: Session,
     masters: dict[str, dict],
@@ -207,7 +215,8 @@ def _sync_initial_slots(
 ) -> None:
     """player_weapons の行が無いスロット（初期装備）をマスターの値で上書きする.
 
-    初期装備は改造できないものとして扱い、power もマスターの値にする。
+    初期装備は改造できないものとして扱う。power はマスターの値に、
+    機体強化の加算値（weapon_power_bonus）を足した値にする。
     """
     purchased_slots = {
         (pw.equipped_ms_id, pw.equipped_slot)
@@ -228,7 +237,7 @@ def _sync_initial_slots(
             ):
                 new_weapons.append(raw)
                 continue
-            diffs = _diff(weapon, masters[weapon_id], fields)
+            diffs = _diff(weapon, _with_power_bonus(masters[weapon_id], ms), fields)
             if not diffs:
                 new_weapons.append(raw)
                 continue

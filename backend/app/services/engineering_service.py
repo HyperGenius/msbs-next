@@ -21,12 +21,11 @@ class _FloatStatConfig(NamedTuple):
 class EngineeringService:
     """Service for upgrading mobile suit stats using Credits.
 
-    NOTE (Issue #404): ``weapon_power`` はここでは「機体側のパイロット/システム補正」
-    として扱う。装備中の全武器の ``MobileSuit.weapons[*].power`` に一律加算する現行
-    実装のままとし、武器インスタンス単位の改造（``PlayerWeapon.custom_stats``、
-    ``WeaponService.apply_effective_spec``）とは意図的に別軸として維持する（方針(b)）。
-    武器を外す・付け替えると本強化の投資は失われる既知の制約があるため、UIでは
-    「機体強化」と「武器改造」を別物として提示すること。
+    ``weapon_power`` は機体側の補正である。武器インスタンス単位の改造
+    （``PlayerWeapon.custom_stats``）とは別軸で扱う（Issue #404 の方針(b)）。
+    加算値は ``MobileSuit.weapon_power_bonus`` に持つ。``MobileSuit.weapons`` を
+    書き直す処理は、この値を ``add_weapon_power_bonus`` で足し直す。
+    そのため武器を付け替えても加算は残る。
     """
 
     # Upgrade cost multipliers
@@ -261,28 +260,34 @@ class EngineeringService:
         else:
             ms.current_hp = ms.max_hp
 
+    @classmethod
+    def add_weapon_power_bonus(cls, power: int, bonus: int) -> int:
+        """武器の威力に機体強化の加算値を足した値を返す.
+
+        足した結果は MAX_WEAPON_POWER_CAP で止める。元の威力が上限以上なら、
+        元の威力のまま返す。
+        """
+        if power >= cls.MAX_WEAPON_POWER_CAP:
+            return power
+        return int(min(power + bonus, cls.MAX_WEAPON_POWER_CAP))
+
     def _apply_weapon_power_upgrade(self, ms: MobileSuit) -> None:
         """Apply weapon power upgrade to all weapons.
 
         Args:
             ms: Mobile suit to upgrade
         """
+        ms.weapon_power_bonus += self.WEAPON_POWER_INCREASE
         weapons = list(ms.weapons)
         updated_weapons = []
         for weapon in weapons:
             if isinstance(weapon, dict):
-                weapon["power"] = int(
-                    min(
-                        weapon["power"] + self.WEAPON_POWER_INCREASE,
-                        self.MAX_WEAPON_POWER_CAP,
-                    )
+                weapon["power"] = self.add_weapon_power_bonus(
+                    weapon["power"], self.WEAPON_POWER_INCREASE
                 )
             else:
-                weapon.power = int(
-                    min(
-                        weapon.power + self.WEAPON_POWER_INCREASE,
-                        self.MAX_WEAPON_POWER_CAP,
-                    )
+                weapon.power = self.add_weapon_power_bonus(
+                    weapon.power, self.WEAPON_POWER_INCREASE
                 )
             updated_weapons.append(weapon)
         ms.weapons = updated_weapons  # Reassign to trigger SQLAlchemy change detection

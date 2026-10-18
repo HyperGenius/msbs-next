@@ -25,6 +25,7 @@ from app.models.models import (
     resolve_weapon_slot_count,
 )
 from app.services.blueprint_service import BlueprintService, purchase_denial_message
+from app.services.engineering_service import EngineeringService
 from app.services.technology_service import TechnologyService
 
 
@@ -93,6 +94,22 @@ class WeaponService:
         return Weapon(**merged)
 
     @staticmethod
+    def build_slot_weapon(
+        mobile_suit: MobileSuit, player_weapon: PlayerWeapon
+    ) -> Weapon:
+        """MobileSuit.weapons のスロットに書く武器スペックを作る.
+
+        実効スペックに、機体強化の加算値（weapon_power_bonus）を足す。
+        """
+        weapon = WeaponService.apply_effective_spec(
+            player_weapon.base_snapshot, player_weapon.custom_stats
+        )
+        weapon.power = EngineeringService.add_weapon_power_bonus(
+            weapon.power, mobile_suit.weapon_power_bonus or 0
+        )
+        return weapon
+
+    @staticmethod
     def resync_mobile_suit_weapons(session: Session, mobile_suit: MobileSuit) -> None:
         """装備中の全 PlayerWeapon の実効スペックで MobileSuit.weapons を再同期する.
 
@@ -116,8 +133,8 @@ class WeaponService:
         for pw in equipped_weapons:
             if pw.equipped_slot is None or pw.equipped_slot >= len(new_weapons):
                 continue
-            new_weapons[pw.equipped_slot] = WeaponService.apply_effective_spec(
-                pw.base_snapshot, pw.custom_stats
+            new_weapons[pw.equipped_slot] = WeaponService.build_slot_weapon(
+                mobile_suit, pw
             )
         mobile_suit.weapons = new_weapons
 
@@ -331,10 +348,7 @@ class WeaponService:
         session.add(player_weapon)
 
         # 後方互換性のため MobileSuit.weapons も更新する
-        # （base_snapshot + custom_stats をマージした実効スペックを書き込む）
-        weapon_obj = WeaponService.apply_effective_spec(
-            player_weapon.base_snapshot, player_weapon.custom_stats
-        )
+        weapon_obj = WeaponService.build_slot_weapon(mobile_suit, player_weapon)
         new_weapons = list(mobile_suit.weapons or [])
         if slot_index >= len(new_weapons):
             new_weapons.append(weapon_obj)
