@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   getBattleSnapshot,
   getDetectedUnits,
@@ -15,6 +15,7 @@ import {
   computeAttackEvents,
   computeAttackingUnitIds,
   hasDisengageLog,
+  isCriticalLog,
 } from "@/components/BattleViewer/hooks/useBattleEvents";
 import { extractHudAttackLogs, selectHudLogLines } from "@/components/BattleViewer/hooks/useHudAttackLog";
 import { SIMULATION_STEP_S } from "@/components/BattleViewer/utils";
@@ -25,6 +26,9 @@ import {
   ReplayBattleLog,
   ReplayLogHeader,
 } from "@/types/battle";
+import { fetchBattleLogsNdjson } from "@/services/battle";
+import { describeBattleLog } from "@/utils/logFormatter";
+import { toViewerLogs } from "@/utils/replayLog";
 
 // バックエンドの replay-fixture で作る。tests/unit/test_replay_log.py も同じファイルを読む。
 const FIXTURE_PATH = fileURLToPath(
@@ -40,9 +44,9 @@ interface ReplayFixture {
 
 const fixture: ReplayFixture = JSON.parse(gunzipSync(readFileSync(FIXTURE_PATH)).toString("utf-8"));
 const [header, ...replayEntries] = fixture.replay_logs;
-const stored = fixture.stored_logs;
-// ビューアの部品は BattleLog を受け取る。配信用ログで省いた message は、これらの部品が読まない行のものだけ
-const replay = replayEntries as unknown as BattleLog[];
+// 本番と同じく、読み込み（ヘッダー行の判定）を通したログを比べる
+const stored = toViewerLogs(fixture.stored_logs);
+const replay = toViewerLogs(fixture.replay_logs);
 const units = [fixture.player_info, ...fixture.enemies_info];
 
 // 座標・速度の丸め（0.1m・0.1m/s）と、外挿の上限 1 秒から決めた誤差の上限
@@ -111,6 +115,38 @@ describe("配信用ログのフィクスチャ", () => {
   });
 });
 
+describe("配信用ログの読み込み", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** ログを `/api/battles/{id}/logs` と同じ NDJSON にして、取得経路で読む */
+  async function fetchAsNdjson(entries: readonly unknown[]): Promise<BattleLog[]> {
+    const text = entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(text)));
+    return fetchBattleLogsNdjson("http://example.com/logs");
+  }
+
+  it("NDJSON で読んでも、ヘッダー行を除いた配信用ログの行と一致する", async () => {
+    expect(replay).toEqual(replayEntries);
+    expect(await fetchAsNdjson(fixture.replay_logs)).toEqual(replay);
+  });
+
+  it("旧形式は NDJSON で読んでもそのまま返る", async () => {
+    expect(await fetchAsNdjson(fixture.stored_logs)).toEqual(stored);
+  });
+
+  it("message の無い行は MOVE・WAIT・TARGET_SELECTION だけで、表示用の文を作れる", () => {
+    const withoutMessage = replay.filter((log) => log.message === undefined);
+    expect(withoutMessage.length).toBeGreaterThan(0);
+    for (const action of new Set(withoutMessage.map((log) => log.action_type))) {
+      expect(["MOVE", "WAIT", "TARGET_SELECTION"]).toContain(action);
+    }
+    const names = new Map(units.map((u) => [u.id, u.name]));
+    expect(withoutMessage.every((log) => describeBattleLog(log, names).length > 0)).toBe(true);
+  });
+});
+
 describe("旧形式と配信用ログでビューアの表示状態が一致する", () => {
   const timestamps = replayTimestamps(stored);
 
@@ -155,6 +191,7 @@ describe("旧形式と配信用ログでビューアの表示状態が一致す�
       const attacks = computeAttackEvents(a, beamWeaponIds);
       attackCount += attacks.length;
       expect(computeAttackEvents(b, beamWeaponIds), `@ ${t}`).toEqual(attacks);
+      expect(b.filter(isCriticalLog).length, `@ ${t}`).toBe(a.filter(isCriticalLog).length);
       expect(computeAttackingUnitIds(b), `@ ${t}`).toEqual(computeAttackingUnitIds(a));
       for (const unit of units) {
         expect(hasDisengageLog(b, unit.id), `${unit.id} @ ${t}`).toBe(hasDisengageLog(a, unit.id));

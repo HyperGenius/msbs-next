@@ -8,7 +8,8 @@ export interface BattleLog {
     action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT" | "MELEE_COMBO" | "BOOST_START" | "BOOST_END" | "DISENGAGE" | "MELEE_CLASH";
     target_id?: string;
     damage?: number;
-    message: string;
+    /** 配信用ログの MOVE・WAIT・TARGET_SELECTION の行には無い。表示するときは `describeBattleLog()` で作る */
+    message?: string;
     position_snapshot: Vector3;
     chatter?: string;
     weapon_name?: string;
@@ -56,10 +57,8 @@ export interface ReplayLogHeader {
  */
 export type ReplayBattleLog = Omit<
     BattleLog,
-    "message" | "fuzzy_scores" | "strategy_mode" | "attack_sector" | "hit_part" | "weapon_slot_role"
-> & {
-    message?: string;
-};
+    "fuzzy_scores" | "strategy_mode" | "attack_sector" | "hit_part" | "weapon_slot_role"
+>;
 
 /** 部位別の被弾/命中1件分の集計（回数・合計ダメージ） */
 export interface PartHitStat {

@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { BattleLog, BattleRewards, LootItem, Mission, MobileSuit } from "@/types/battle";
 import { Obstacle } from "@/types/geometry";
+import { toViewerLogs, UnsupportedReplayVersionError } from "@/utils/replayLog";
 
 interface ModalResult {
   winLoss: "WIN" | "LOSE" | "DRAW";
@@ -119,8 +120,9 @@ export function useBattleSimulation({
       }
 
       const data = await res.json();
+      const battleLogs = toViewerLogs(data.logs);
 
-      setLogs(data.logs);
+      setLogs(battleLogs);
       setWinner(data.winner_id);
 
       if (
@@ -146,12 +148,14 @@ export function useBattleSimulation({
       }
 
       const lastTimestamp =
-        data.logs.length > 0 ? data.logs[data.logs.length - 1].timestamp : 0;
+        battleLogs.length > 0 ? battleLogs[battleLogs.length - 1].timestamp : 0;
       setMaxTimestamp(lastTimestamp);
     } catch (error) {
       console.error("Error fetching battle logs:", error);
       alert(
-        "通信エラーが発生しました。Backendが起動しているか確認してください。"
+        error instanceof UnsupportedReplayVersionError
+          ? "このバージョンのバトルログには対応していません。ページを再読み込みしてください。"
+          : "通信エラーが発生しました。Backendが起動しているか確認してください。"
       );
     } finally {
       setIsLoading(false);
