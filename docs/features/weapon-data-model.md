@@ -21,7 +21,7 @@ player_weapons (プレイヤー武器インスタンス)
 ├── id: UUID
 ├── user_id: str                ← 所有者
 ├── master_weapon_id: str       ← master_weapons への論理FK
-├── base_snapshot: JSON         ← 購入時の Weapon スペックスナップショット
+├── base_snapshot: JSON         ← 武器マスターに追従する Weapon スペック（購入時に作り、マスター変更時に同期スクリプトで更新）
 ├── custom_stats: JSON          ← 強化・改造による差分（本Issueでスキーマ定義）
 ├── equipped_ms_id / equipped_slot ← 装備状態の正
 └── acquired_at: datetime
@@ -126,6 +126,28 @@ return Weapon(**merged)
 - 武器改造UI（Garage/Engineering画面への統合、コスト・プレビュー表示）
 - `docs/features/garage-weapon-inventory.md` の所持武器一覧に改造状態（`custom_stats` 由来の差分）を表示する拡張
 - 改造の種類・コスト体系をマスターデータ化するかどうかの検討（現状は対象外）
+
+---
+
+## 武器マスターの変更をコピー先へ同期する（Issue #656）
+
+武器スペックは参照ではなくコピーで持たれている。武器マスター（`master_weapons`）を変えても、次のコピーは自動では変わらない。`backend/scripts/maintenance/sync_weapon_master.py` で同期する（使い方は `backend/scripts/maintenance/README.md`）。
+
+| 同期先 | いつ書かれるか | 同期のしかた |
+|---|---|---|
+| `player_weapons.base_snapshot` | 武器の購入時 | マスターの値で上書きする。`custom_stats`（改造差分・部位配分の上書き）は触らない |
+| `mobile_suits.weapons` の購入した武器のスロット | 装備時の dual-write、`resync_mobile_suit_weapons` | `base_snapshot` を直したあと、`resync_mobile_suit_weapons` で作り直す |
+| `mobile_suits.weapons` の初期装備のスロット（`player_weapons` の行が無い） | 機体の購入・スターター機体・NPC 機体の作成時に、機体マスターの `specs.weapons` をコピー | `power` を含めてマスターの値で上書きする。初期装備は改造できないものとして扱う |
+| `master_mobile_suits.specs.weapons` | 機体マスターの登録・編集時 | マスターの値で上書きする。これから作られる機体のコピー元になる |
+
+- `base_snapshot` は「購入時のスペック」ではなく「武器マスターに追従するスペック」として扱う。
+- 同期するのは `WeaponSpecBase` のスペックフィールドと `name`。`id` と `master_weapon_id` は対応付けのキーなので変えない。スロットは `master_weapon_id`、無ければ `id` で武器マスターと対応付ける。
+- 機体マスターの武器は既定値のキーを省いて保存されているため、キーが無いフィールドは既定値として比べる。差分のあるキーだけを書き足す。
+- エースパイロット（`ace_pilots.mobile_suit.weapons`）は武器マスターとの対応付けが保証されないため更新しない。差分の件数だけを表示する。
+- エントリー済みの `battle_entries.mobile_suit_snapshot` はエントリー時点のスナップショットなので対象外。次のエントリーから反映される。
+- 初期装備のスロットに機体強化（`weapon_power`）で加算した威力は、同期で消える。購入した武器のスロットでも resync で消えている（#657）。
+
+実装は `app/services/weapon_master_sync_service.py` の `sync_weapon_master`。commit せずに変更を session に積むので、スクリプトは結果を表示してから commit か rollback を選ぶ。autoflush を止めているので、読み取りのみの実行では DB に書き込まない。
 
 ---
 
