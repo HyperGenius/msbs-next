@@ -3,7 +3,8 @@
 ## 概要
 
 バトルの生ログ（`BattleLog[]`）のデータモデルとバックエンド配信（NDJSONストリーミング・GCSオフロード）の仕様を定義する。
-プレイヤーに配信する軽量な形式は「[配信用ログ（replay）](#配信用ログreplayissue-634)」を参照。
+プレイヤーに配信する軽量な形式は「[配信用ログ（replay）](#配信用ログreplayissue-634)」、
+デバッグ情報付きで残す形式は「[解析用ログ（analysis）](#解析用ログanalysisissue-636)」を参照。
 
 **フロントエンドのテキストログ表示（`BattleLogViewer`）はIssue #521で廃止した。** ユーザー向けフィードバックは
 バトルビューア（3Dリプレイ）側の「チャプタートラック」「戦果サマリー」に統一されている。詳細は
@@ -43,8 +44,8 @@ BattleViewer の EN ゲージ表示のため、EN 残量を `BattleLog.details` 
 
 ### `BattleLog` に専用フィールドを追加しない理由
 
-保存時の `strip_debug_fields()` は `model_dump()` をそのまま使うため、`None` のフィールドも
-全ログに `null` として保存される。専用フィールド（例: `en_after`）を追加すると、EN を消費しない
+旧形式の保存（`strip_debug_fields()`）は `model_dump()` をそのまま使うため、`None` のフィールドも
+全ログに `null` として保存される（配信用ログは null を省くが、解析用ログは null を残す）。専用フィールド（例: `en_after`）を追加すると、EN を消費しない
 大多数のログにもキーが付き、ログサイズとダウンロード時間が増える。既存の `details` は EN 消費ログ
 以外では `null` のままなので、サイズ増加は EN 消費ログの分だけで済む。
 NPC エース同士の1vs1（20戦）の実測では、ログ1件あたりの平均サイズは 744.6 → 746.2 byte（+0.2%）だった。
@@ -57,8 +58,12 @@ Epic #631 で、プレイヤーに配信するログを描画に必要な項目�
 保存時に `app/engine/replay_log.py` の `to_replay_logs()` で変換する。変換は DB・GCS に触れない純粋関数で、
 同じ入力なら同じ出力になる。
 
-**Issue #634 の時点では書き込み経路を変えていない。** バッチ・ソロミッションは今も旧形式（`strip_debug_fields()` の出力）を
-保存・配信している。フロントが両方の形式を読めるようにする（Issue #635）→ バックエンドの書き込みを切り替える（Issue #636）の順にデプロイする。
+Issue #636 で書き込み経路を切り替えた。バッチ（`scripts/run_batch.py` の `_save_battle_results()`）と
+ソロミッション（`main.py` の `simulate_battle`）は、どちらも `to_replay_logs()` の出力を `battle_logs.logs` に保存する。
+ソロミッションのレスポンス（`BattleResponse.logs`）も同じ配信用ログで、先頭はヘッダー行になる。`fuzzy_scores` は含まない。
+
+* 既存の戦闘（旧形式）は変換せず、そのまま配信する。本番DBの一括変換はしない。フロントが先頭行で形式を判定する
+* デプロイの順序: フロントが両方の形式を読めるようにする（Issue #635）→ バックエンドの書き込みを切り替える（Issue #636）
 
 ### 形式とバージョン
 
@@ -141,6 +146,45 @@ Epic #631 で、プレイヤーに配信するログを描画に必要な項目�
 * `message` の無い行がある。`DevSimulationPanel`（`formatBattleLog()`）は全行の `message` を読むため、そのままでは配信用ログを表示できない
 * `hit_part` / `weapon_slot_role` が無い。`usePartHitSummary` のようにログから集計するフォールバックは、配信用ログでは空になる。配信用ログの結果には集計が保存されている前提で、保存した集計を使う
 * `TARGET_SELECTION` の行が減っても、`getBattleSnapshot()` のターゲットの追跡は変わらない（上のテストで確かめている）
+* ソロミッションのレスポンス（`POST /api/battle/simulate` の `logs`）も、先頭がヘッダー行の配信用ログになる。`useBattleSimulation` は `logs` をそのまま使っているため、NDJSON と同じくヘッダー行を取り除いて読む
+
+---
+
+## 解析用ログ（analysis）（Issue #636）
+
+エンジンの出力（`simulator.logs`）を、項目を削らずに GCS に保存する。`fuzzy_scores`・`minovsky_hit_multiplier`・
+`AI_DECISION` の行・null の項目もすべて残す。ブラウザには配信しない。開発者がツールで取得する（Issue #637）。
+
+| 項目 | 内容 |
+|---|---|
+| 保存先 | 配信用ログと同じバケット（`BATTLE_LOG_GCS_BUCKET`）の `analysis-logs/{battle_log_id}.ndjson.gz` |
+| 形式 | 1行1件の NDJSON（`BattleLog.model_dump_json()`）を gzip したもの。`Content-Type: application/gzip`、`Content-Encoding` は付けない |
+| パスの決め方 | `battle_logs.id` から決める（`analysis_object_path_for()`）。DB にはパスを持たない |
+| 保存期間 | 30日。バケットのライフサイクルルール（`infra/cloud-run/modules/cloud-run/battle_log_storage.tf`）が `analysis-logs/` の接頭辞で削除する |
+| サイズ | 上の「サイズ」と同じ50機・177秒の個人戦で、12.3万行・gzip 約10.3MB。圧縮レベル 6 で約1.4秒（9 は 10.1MB・約2.3秒。M1 Mac） |
+
+### 保存のタイミングと失敗時の扱い
+
+`app/services/battle_log_storage_service.py` の `save_analysis_log()` で保存する。失敗しても例外を投げず、戦闘結果の保存は止めない。
+元のログはメモリにしか無いため、配信用ログのオフロードと違って後から再試行できない。失敗はログに残すだけにする。
+
+| 経路 | タイミング |
+|---|---|
+| ソロミッション（`main.py` の `simulate_battle`） | `BackgroundTasks` でレスポンスの送出後。配信用ログのオフロードとは別のタスク |
+| バッチ（`scripts/run_batch.py` の `_save_battle_results()`） | `session.commit()` の後。アップロード中にトランザクションを開いたままにしないため |
+
+書き込みは `blob.open("wb")` に `gzip.GzipFile` を重ねたストリーミングで、ログを dict の一覧にしない。
+ピークメモリは配信用ログのアップロードと同じく、チャンク（`_STREAM_CHUNK_SIZE`）の分で済む。
+
+### 取得のしかた
+
+```bash
+# battle_results.battle_log_id から決まるパスを取得する
+gcloud storage cp gs://<バケット>/analysis-logs/<battle_log_id>.ndjson.gz .
+gunzip -c <battle_log_id>.ndjson.gz | head
+```
+
+Cloud Run のサービスアカウントには `objectViewer` と `objectCreator` だけを付けている。削除はライフサイクルルールが行う。
 
 ---
 
@@ -153,9 +197,9 @@ Epic #631 で、プレイヤーに配信するログを描画に必要な項目�
 ### レスポンス生成はDBの検証済みdictをそのまま返す（Pydanticオブジェクト化しない）
 
 `backend/main.py` の `get_battle_logs` は、DBから取得した `list[dict]` を `BattleLog(**entry)` で
-Pydanticオブジェクト化しない。保存時点で `strip_debug_fields`（`app/engine/battle_utils.py`）により
-既にBattleLog相当のJSON互換dictとして確定しているため、配信時に再度オブジェクト化・再バリデーション
-する意味がない。
+Pydanticオブジェクト化しない。保存時点で（配信用ログは `to_replay_logs()`、旧形式は `strip_debug_fields()` により）
+既にJSON互換dictとして確定しているため、配信時に再度オブジェクト化・再バリデーション
+する意味がない。保存した形式（配信用ログか旧形式か）は変換せず、そのまま返す。
 
 `room_size=50/100` 規模のバトルはログが10万件を超えることがあり、
 「DBのdict → `BattleLog`オブジェクト → `response_model`再バリデーション → JSON」という

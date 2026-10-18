@@ -21,7 +21,7 @@ from sqlmodel import Session, select
 
 from app.db import engine
 from app.engine.battle_digest import compute_unit_kills
-from app.engine.battle_utils import strip_debug_fields
+from app.engine.replay_log import to_replay_logs
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleEntry,
@@ -42,6 +42,7 @@ from app.services.battle_execution import (
     run_battle,
     snapshot_to_mobile_suit,
 )
+from app.services.battle_log_storage_service import save_analysis_log
 from app.services.battle_room_service import BattleRoomService
 from app.services.drop_service import DropScope, DropService
 from app.services.matching_service import MatchingService
@@ -165,7 +166,7 @@ def _save_battle_results(
     # 非同期オフロード（新規作成分・失敗再試行分の両方を兼ねる）に任せる。
     battle_log_record = BattleLogRecord(
         room_id=room.id,
-        logs=strip_debug_fields(simulator.logs),
+        logs=to_replay_logs(simulator.logs),
     )
     session.add(battle_log_record)
     session.flush()
@@ -308,6 +309,9 @@ def _save_battle_results(
     room.status = "COMPLETED"
     session.add(room)
     session.commit()
+
+    # コミットの後に保存する。アップロード中にトランザクションを開いたままにしないため。
+    save_analysis_log(battle_log_record.id, simulator.logs)
 
 
 def _process_room(session: Session, room: BattleRoom) -> None:

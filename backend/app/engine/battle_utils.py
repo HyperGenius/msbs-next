@@ -54,7 +54,7 @@ def en_log_details(current_en: float) -> dict[str, int]:
     return {"en": round(current_en)}
 
 
-# バトルログ保存時に除去するデバッグ専用フィールドのセット
+# 旧形式のログから除くデバッグ専用フィールドのセット
 _BATTLE_LOG_DEBUG_FIELDS: frozenset[str] = frozenset(
     {"fuzzy_scores", "minovsky_hit_multiplier"}
 )
@@ -63,8 +63,9 @@ _BATTLE_LOG_DEBUG_FIELDS: frozenset[str] = frozenset(
 def strip_debug_fields(logs: list[BattleLog]) -> list[dict[str, Any]]:
     """バトルログからデバッグ用フィールドを除去した dict リストを返す.
 
-    DBへの保存前に呼び出すことで、不要なストレージ消費を削減する。
-    APIレスポンス（BattleResponse.logs）には影響しない。
+    旧形式（`replay_version` の無い形式）のログになる。新しい戦闘の保存・配信は
+    `app/engine/replay_log.py` の `to_replay_logs()` の形式を使う。
+    旧形式との比較（サイズの計測・表示の一致の確認）に使う。
 
     Args:
         logs: 除去対象のバトルログリスト

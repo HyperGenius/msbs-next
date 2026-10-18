@@ -21,18 +21,29 @@ GCSオブジェクトはプレーンテキストのNDJSON（`Content-Type: appli
 行うため、GCS側でContent-Encodingメタデータを管理する必要がない
 （設定を怠ると「配信できているのにブラウザ側で解凍されない」事故になるため、
 そもそもその経路自体をなくした）。
+
+解析用ログ（エンジンの出力をデバッグ項目ごと残したもの）は、ブラウザに配信しない。
+開発者がツールで取得するため、gzip したファイルとして `analysis-logs/` に保存する。
 """
 
+import gzip
 import json
 import logging
 import os
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterable, Iterator
+
+from app.models.models import BattleLog
 
 logger = logging.getLogger(__name__)
 
 _BUCKET_ENV_VAR = "BATTLE_LOG_GCS_BUCKET"
 _OBJECT_PREFIX = "battle-logs"
+# 解析用ログの置き場所。バケットのライフサイクルルールがこの接頭辞で削除する。
+# 変えるときは infra の battle_log_storage.tf も合わせて変える。
+_ANALYSIS_OBJECT_PREFIX = "analysis-logs"
+# gzip の既定の 9 と比べ、サイズはほぼ同じで時間は約6割になる（50機の戦闘で計測）。
+_ANALYSIS_GZIP_LEVEL = 6
 
 # GCSからの読み出し・書き込みを1回のI/Oで扱うチャンクサイズ。ブラウザへの配信は
 # StreamingResponseがこの単位でチャンク送出する。
@@ -49,6 +60,11 @@ def _bucket_name() -> str:
 def object_path_for(battle_log_id: uuid.UUID) -> str:
     """バトルログIDからGCSオブジェクトパス（バケット内相対パス）を算出する."""
     return f"{_OBJECT_PREFIX}/{battle_log_id}.ndjson"
+
+
+def analysis_object_path_for(battle_log_id: uuid.UUID) -> str:
+    """バトルログIDから解析用ログのGCSオブジェクトパスを算出する."""
+    return f"{_ANALYSIS_OBJECT_PREFIX}/{battle_log_id}.ndjson.gz"
 
 
 def _client():  # type: ignore[no-untyped-def]
@@ -92,25 +108,72 @@ def upload_battle_log(battle_log_id: uuid.UUID, logs: list[dict]) -> str:
     path = object_path_for(battle_log_id)
     bucket = _client().bucket(_bucket_name())
     blob = bucket.blob(path)
+    lines = (json.dumps(entry, ensure_ascii=False) + "\n" for entry in logs)
     with blob.open("w", content_type="application/x-ndjson") as f:
-        buffer_parts: list[str] = []
-        buffer_size = 0
-        for entry in logs:
-            line = json.dumps(entry, ensure_ascii=False) + "\n"
-            buffer_parts.append(line)
-            # _STREAM_CHUNK_SIZEは読み出し側でバイト数として使われているため、
-            # ここも`len(line)`（文字数）ではなくUTF-8エンコード後のバイト数で
-            # 揃える。ensure_ascii=Falseだとマルチバイト文字（日本語ログ等）で
-            # 文字数とバイト数が乖離し、チャンク境界が意図より大きくなるため
-            # （Copilotレビュー指摘）。
-            buffer_size += len(line.encode("utf-8"))
-            if buffer_size >= _STREAM_CHUNK_SIZE:
-                f.write("".join(buffer_parts))
-                buffer_parts = []
-                buffer_size = 0
-        if buffer_parts:
-            f.write("".join(buffer_parts))
+        for chunk in _chunked_lines(lines):
+            f.write(chunk)
     return path
+
+
+def _chunked_lines(lines: Iterable[str]) -> Iterator[str]:
+    """行を、UTF-8 で `_STREAM_CHUNK_SIZE` バイト程度ずつにまとめて返す."""
+    buffer_parts: list[str] = []
+    buffer_size = 0
+    for line in lines:
+        buffer_parts.append(line)
+        # _STREAM_CHUNK_SIZEは読み出し側でバイト数として使われているため、
+        # 文字数ではなくUTF-8エンコード後のバイト数で揃える。ensure_ascii=Falseだと
+        # マルチバイト文字（日本語ログ等）で文字数とバイト数が乖離するため。
+        buffer_size += len(line.encode("utf-8"))
+        if buffer_size >= _STREAM_CHUNK_SIZE:
+            yield "".join(buffer_parts)
+            buffer_parts = []
+            buffer_size = 0
+    if buffer_parts:
+        yield "".join(buffer_parts)
+
+
+def upload_analysis_log(battle_log_id: uuid.UUID, logs: Iterable[BattleLog]) -> str:
+    """エンジンのログを、項目を削らずに gzip した NDJSON でGCSへアップロードする.
+
+    `fuzzy_scores` などのデバッグ項目も残す。ブラウザには配信しないため、
+    Content-Encoding は付けずに `application/gzip` として保存する。
+    行を dict の一覧にせず1行ずつ書き、ピークメモリを抑える。
+
+    Returns:
+        アップロード先のGCSオブジェクトパス（バケット内相対パス）。
+    """
+    path = analysis_object_path_for(battle_log_id)
+    # storage.Client() は認証情報を探しにいく。バケット未設定なら先に止める。
+    bucket_name = _bucket_name()
+    blob = _client().bucket(bucket_name).blob(path)
+    lines = (log.model_dump_json() + "\n" for log in logs)
+    with (
+        blob.open("wb", content_type="application/gzip") as raw,
+        gzip.GzipFile(
+            fileobj=raw, mode="wb", compresslevel=_ANALYSIS_GZIP_LEVEL, mtime=0
+        ) as f,
+    ):
+        for chunk in _chunked_lines(lines):
+            f.write(chunk.encode("utf-8"))
+    return path
+
+
+def save_analysis_log(battle_log_id: uuid.UUID, logs: Iterable[BattleLog]) -> bool:
+    """解析用ログをGCSへ保存する。失敗しても例外を投げない.
+
+    解析用ログは戦闘結果の保存に必要ないため、失敗はログに残すだけにする。
+    元のログはメモリにしか無く、後から再試行できない。
+
+    Returns:
+        保存できた場合True。
+    """
+    try:
+        upload_analysis_log(battle_log_id, logs)
+    except Exception:
+        logger.exception("Failed to upload analysis log %s to GCS", battle_log_id)
+        return False
+    return True
 
 
 def upload_ndjson_text(battle_log_id: uuid.UUID, ndjson_text: str) -> str:
