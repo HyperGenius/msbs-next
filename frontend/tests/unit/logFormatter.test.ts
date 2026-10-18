@@ -1,6 +1,6 @@
 /* frontend/tests/unit/logFormatter.test.ts */
 import { describe, it, expect } from "vitest";
-import { formatBattleLog } from "@/utils/logFormatter";
+import { describeBattleLog, formatBattleLog } from "@/utils/logFormatter";
 import { BattleLog } from "@/types/battle";
 
 const PLAYER_ID = "player-001";
@@ -686,5 +686,63 @@ describe("formatBattleLog – 鍔迫り合い", () => {
     const result = formatBattleLog(log, true, PLAYER_ID);
     expect(result.style.borderStyle).toBe("border-orange-400");
     expect(result.style.textStyle).toBe("text-orange-300 font-bold");
+  });
+});
+
+// ─────────────────────────────────────────────
+// 配信用ログ — message を省いた行
+// ─────────────────────────────────────────────
+describe("describeBattleLog – message の無い行", () => {
+  const ENEMY_ID = "enemy-001";
+  const names = new Map([
+    [PLAYER_ID, "Gundam"],
+    [ENEMY_ID, "Zaku"],
+  ]);
+
+  /** 配信用ログの行と同じく message キーを持たないログを作る */
+  function makeReplayLog(overrides: Partial<BattleLog>): BattleLog {
+    const log = makeLog(overrides);
+    delete log.message;
+    return log;
+  }
+
+  it("message があればそのまま返す", () => {
+    expect(describeBattleLog(makeLog({ message: "攻撃した" }), names)).toBe("攻撃した");
+  });
+
+  it("MOVE は移動中と書く", () => {
+    expect(describeBattleLog(makeReplayLog({ action_type: "MOVE" }), names)).toBe("移動中");
+  });
+
+  it("TARGET_SELECTION は相手の機体名を書く", () => {
+    const log = makeReplayLog({ action_type: "TARGET_SELECTION", target_id: ENEMY_ID });
+    expect(describeBattleLog(log, names)).toBe("Zakuをターゲットに選択");
+  });
+
+  it("TARGET_SELECTION の相手の名前が分からなければ ID を書く", () => {
+    const log = makeReplayLog({ action_type: "TARGET_SELECTION", target_id: ENEMY_ID });
+    expect(describeBattleLog(log)).toBe(`${ENEMY_ID}をターゲットに選択`);
+  });
+
+  it("WAIT は EN 不足の理由コードがあれば EN の枯渇を書く", () => {
+    const log = makeReplayLog({ action_type: "WAIT", details: { reason_code: "EN_SHORTAGE" } });
+    expect(describeBattleLog(log, names)).toBe("ENが枯渇し、待機中");
+  });
+
+  it("WAIT は理由コードが無ければ待機とだけ書く", () => {
+    expect(describeBattleLog(makeReplayLog({ action_type: "WAIT" }), names)).toBe("攻撃できず待機中");
+  });
+
+  it("作った文で旧形式と同じスタイルを選ぶ", () => {
+    const wait = formatBattleLog(makeReplayLog({ action_type: "WAIT" }), false, PLAYER_ID, names);
+    expect(wait.style.borderStyle).toBe("border-orange-500");
+    const target = formatBattleLog(
+      makeReplayLog({ action_type: "TARGET_SELECTION", target_id: ENEMY_ID }),
+      false,
+      PLAYER_ID,
+      names
+    );
+    expect(target.message).toBe("Zakuをターゲットに選択");
+    expect(target.style.borderStyle).toBe("border-blue-500");
   });
 });

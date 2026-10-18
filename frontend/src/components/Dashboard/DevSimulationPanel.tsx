@@ -39,6 +39,10 @@ export default function DevSimulationPanel({
 
   if (process.env.NODE_ENV !== "development") return null;
 
+  const unitNames = new Map(
+    [playerData, ...enemiesData].filter((ms) => ms !== null).map((ms) => [ms.id, ms.name])
+  );
+
   return (
     <SciFiPanel variant="secondary" className="mb-4 sm:mb-8 mission-selection-panel">
       <div className="p-4 sm:p-6">
@@ -141,7 +145,7 @@ export default function DevSimulationPanel({
                     || log.actor_id;
                 const isPlayer = log.actor_id === playerData?.id;
 
-                const displayLog = formatBattleLog(log, isProductionPreview, playerData?.id ?? "");
+                const displayLog = formatBattleLog(log, isProductionPreview, playerData?.id ?? "", unitNames);
                 const { borderStyle, bgStyle, textStyle } = isCurrentTimestamp
                   ? { borderStyle: "border-green-400", bgStyle: "bg-green-900/30", textStyle: "text-white" }
                   : displayLog.style;
