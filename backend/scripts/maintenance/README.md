@@ -71,3 +71,52 @@ python scripts/maintenance/offload_battle_logs_to_gcs.py --restore-archived --dr
 | `--limit N` | 1回の実行で処理する件数の上限 |
 | `--yes` / `-y` | 確認プロンプトをスキップして即座に実行 |
 | `--restore-archived` | `gcs_path`未設定の通常行ではなく、#489で退避・削除された巨大行の復元モードに切り替える。`battle_results.battle_log_id`の再リンクは行わず、候補を表示するのみ（手動確認が必要） |
+
+---
+
+# sync_weapon_master.py
+
+武器マスター（`master_weapons`）の値を、武器スペックのコピーを持つデータへ同期するスクリプトです（Issue #656）。
+バランス調整で武器マスターを変えたあとに実行します。同期先とルールは `docs/features/weapon-data-model.md` を参照してください。
+
+> ⚠️ `--apply` を付けると実DB（Neon）へ書き込みます。本番に対しては、読み取りのみの実行結果を確認・承認してから実行してください。
+
+## 使い方
+
+```bash
+cd backend
+
+# 全武器の差分を表示するだけ（書き込まない）
+python scripts/maintenance/sync_weapon_master.py
+
+# 武器を絞る（複数指定・カンマ区切りも可）
+python scripts/maintenance/sync_weapon_master.py --weapon-id giant_bazooka
+
+# 同期するフィールドを絞る
+python scripts/maintenance/sync_weapon_master.py --weapon-id giant_bazooka --fields max_ammo
+
+# 書き込む（確認プロンプトあり）
+python scripts/maintenance/sync_weapon_master.py --weapon-id giant_bazooka --apply
+```
+
+## オプション
+
+| オプション | 説明 |
+|---|---|
+| `--weapon-id ID` | 対象の武器マスターID。複数指定・カンマ区切り可。省略すると全武器 |
+| `--fields F1,F2` | 同期するフィールド。省略すると全スペックフィールドと `name` |
+| `--apply` | 書き込む。付けなければ差分の表示のみ |
+| `--yes` / `-y` | `--apply` の確認プロンプトを省く |
+
+## 出力の読み方
+
+```
+== player_weapons.base_snapshot（23 行）
+  giant_bazooka / max_ammo: None → 8 (23件)
+```
+
+- 同期先ごとに、更新する行数と「武器ID / フィールド: 変更前 → 変更後 (件数)」を表示します。
+- 何度実行しても結果は同じです。同期済みなら「変更なし」と表示します。
+- 購入した武器のスロットは、バトルエントリー時と同じ `resync_mobile_suit_weapons` で作り直します。そのため、`--fields` で絞っても、未反映だった改造差分などほかのフィールドが変わることがあります（表示に出ます）。
+- エースパイロットの武器は更新せず、差分の件数だけを表示します。
+- ショップの表示は、backend のマスターデータのキャッシュ（`MASTER_DATA_CACHE_TTL_SEC`、既定60秒）が切れるまで古い値のままです。

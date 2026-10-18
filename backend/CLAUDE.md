@@ -86,7 +86,7 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 武器の所持・装備は `PlayerWeapon`（`player_weapons` テーブル、`models.py`）でインスタンス管理されている:
 
 - `id`（UUID）/ `user_id` / `master_weapon_id`（`master_weapons` への論理FK）
-- `base_snapshot`: 購入時点の `Weapon` スペックのスナップショット（JSON）
+- `base_snapshot`: 武器マスターに追従する `Weapon` スペック（JSON）。購入時に作り、武器マスターを変えたら `scripts/maintenance/sync_weapon_master.py` で同期する（初期装備のスロット・機体マスター内の武器も同時に直す。Issue #656）
 - `custom_stats`: 強化・改造による差分（`power_bonus` / `accuracy_bonus` / `upgrade_level`、スキーマは `WeaponCustomStats`）。`WeaponEngineeringService`（`app/services/weapon_engineering_service.py`、Issue #411）が改造ロジックを担い、`pilot.credits` を消費して段階強化する。上限は base値に対する倍率（`power_bonus` は200%、`accuracy_bonus` は130%）。実効スペックは `WeaponService.apply_effective_spec` で `base_snapshot + custom_stats` をマージして計算する
 - `equipped_ms_id` / `equipped_slot`: 装備状態の正。`UniqueConstraint(equipped_ms_id, equipped_slot)` で1スロット1武器を担保
 

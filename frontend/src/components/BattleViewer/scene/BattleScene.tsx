@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { MobileSuit } from "@/types/battle";
 import { EnvironmentEffects } from "./EnvironmentEffects";
 import { MobileSuitMesh } from "./MobileSuitMesh";
+import { DestroyedExplosion } from "./DestroyedExplosion";
 import { ObstacleMesh } from "./ObstacleMesh";
 import { ForestGroves } from "./ForestGroves";
 import { TracerMesh } from "./TracerMesh";
@@ -151,6 +152,8 @@ interface BattleSceneProps {
     playerDisengagedAt: number | null;
     /** チャプタージャンプ時のみ増分されるトークン。カメラターゲットの再センタリングをトリガーする（Issue #524） */
     recenterToken?: number;
+    /** 自機が撃破済みのとき true。機体を消して爆発を出す。 */
+    isPlayerDestroyed?: boolean;
 }
 
 /** 自機からターゲット敵MSへの照準線コンポーネント */
@@ -246,6 +249,7 @@ export function BattleScene({
     currentTimestamp,
     playerDisengagedAt,
     recenterToken,
+    isPlayerDestroyed = false,
 }: BattleSceneProps) {
     // フィールド中心・全体をカバーするグリッドの位置とフェード距離を算出（Issue #436）
     const [mapMin, mapMax] = mapBounds ?? DEFAULT_MAP_BOUNDS;
@@ -358,20 +362,24 @@ export function BattleScene({
             <EnvironmentEffects environment={environment} fieldCenter={fieldCenter} fieldSpan={fieldSpan} />
 
             {/* Player */}
-            <MobileSuitMesh
-                position={playerState.pos}
-                maxHp={player.max_hp}
-                currentHp={playerState.hp}
-                prevHp={playerState.prevHp}
-                name={player.name}
-                sensorRange={player.sensor_range}
-                showSensorRange={true}
-                warnings={playerState.warnings}
-                heading={playerState.heading}
-                isAttacking={attackingUnitIds?.has(String(player.id))}
-                isFlashing={criticalTargetIds.has(String(player.id))}
-                isSelf={true}
-            />
+            {isPlayerDestroyed ? (
+                <DestroyedExplosion position={playerState.pos} />
+            ) : (
+                <MobileSuitMesh
+                    position={playerState.pos}
+                    maxHp={player.max_hp}
+                    currentHp={playerState.hp}
+                    prevHp={playerState.prevHp}
+                    name={player.name}
+                    sensorRange={player.sensor_range}
+                    showSensorRange={true}
+                    warnings={playerState.warnings}
+                    heading={playerState.heading}
+                    isAttacking={attackingUnitIds?.has(String(player.id))}
+                    isFlashing={criticalTargetIds.has(String(player.id))}
+                    isSelf={true}
+                />
+            )}
             <DisengageIcon position={playerState.pos} triggeredAt={playerDisengagedAt} />
 
             {/* Enemies */}
@@ -393,7 +401,7 @@ export function BattleScene({
             ))}
 
             {/* 自機 → ターゲット敵MSへの照準線（自機・ターゲット双方が生存している場合のみ表示） */}
-            {playerState.hp > 0 && targetedEnemy && targetedEnemy.state.hp > 0 && (
+            {!isPlayerDestroyed && playerState.hp > 0 && targetedEnemy && targetedEnemy.state.hp > 0 && (
                 <TargetLine
                     playerPos={playerState.pos}
                     targetPos={targetedEnemy.state.pos}

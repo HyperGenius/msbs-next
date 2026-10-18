@@ -1,7 +1,7 @@
 /* frontend/src/app/page.tsx */
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { BattleResult, BattleRewards, LootItem, MobileSuit } from "@/types/battle";
@@ -17,6 +17,7 @@ import {
   markBattleAsRead,
 } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
+import { findPlayerDestroyedAt, getPlaybackLimit } from "@/components/BattleViewer/utils/playerDestruction";
 import CountdownTimer from "@/components/Dashboard/CountdownTimer";
 import EntryDashboard from "@/components/Dashboard/EntryDashboard";
 import BattleResultModal from "@/components/Dashboard/BattleResultModal";
@@ -161,6 +162,11 @@ export default function Home() {
     return new Date(entryStatus.next_room.scheduled_at);
   };
 
+  const playbackLimit = useMemo(
+    () => getPlaybackLimit(maxTimestamp, playerData ? findPlayerDestroyedAt(logs, playerData.id) : null),
+    [logs, playerData, maxTimestamp]
+  );
+
   const isSystemBooting =
     !isLoaded ||
     missionsLoading ||
@@ -197,10 +203,11 @@ export default function Home() {
               mapBounds={mapBounds}
               currentTimestamp={currentTimestamp}
               environment={currentEnvironment}
+              rewards={rewards ? { exp: rewards.exp_gained, credits: rewards.credits_gained } : null}
             />
             <TurnController
               currentTimestamp={currentTimestamp}
-              maxTimestamp={maxTimestamp}
+              maxTimestamp={playbackLimit}
               onTimestampChange={setCurrentTimestamp}
             />
           </div>
