@@ -255,7 +255,8 @@ export function BattleScene({
     const [mapMin, mapMax] = mapBounds ?? DEFAULT_MAP_BOUNDS;
     const fieldCenter = ((mapMin + mapMax) / 2) * POSITION_SCALE;
     const fieldSpan = (mapMax - mapMin) * POSITION_SCALE;
-    const gridFadeDistance = Math.max(100, fieldSpan * 1.2);
+    // fadeFrom=0 でフェード起点がグリッド位置（フィールド中心）になる。外周（中心から span/2）と角（約 0.71 * span）でも線が残る距離にする
+    const gridFadeDistance = Math.max(100, fieldSpan * 1.5);
     // 自機MS初期Three.js座標をマウント時のみキャプチャ（MobileSuitMesh と同じ軸変換）
     const [initialPos] = useState(() => ({
         x: playerState.pos.x * POSITION_SCALE,
@@ -334,6 +335,7 @@ export function BattleScene({
                 infiniteGrid
                 sectionSize={10}
                 cellSize={1}
+                fadeFrom={0}
                 fadeDistance={gridFadeDistance}
                 sectionColor={GRID_COLORS[environment]?.section ?? DEFAULT_GRID_COLORS.section}
                 cellColor={GRID_COLORS[environment]?.cell ?? DEFAULT_GRID_COLORS.cell}
