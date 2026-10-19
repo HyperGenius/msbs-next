@@ -280,7 +280,7 @@ export default function WeaponInventoryList({
             <TypeIcon className="w-4 h-4 text-[#00ff41]/60 shrink-0" />
             <SciFiSelect
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+              onChange={(v) => setTypeFilter(v as TypeFilter)}
               className="!w-auto !px-2 !py-2 !text-xs min-h-11"
               options={[
                 { value: "ALL", label: "属性: すべて" },
