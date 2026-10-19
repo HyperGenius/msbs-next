@@ -167,13 +167,17 @@ export default function Home() {
     [logs, playerData, maxTimestamp]
   );
 
+  // ブート画面はコンテナのコールドスタート待ちを隠すためのもの。
+  // コールドスタート中はすべてのAPIが同時に待たされるので、どれか1つでも応答があれば
+  // バックエンドは起動済みとみなしてダッシュボードを出す（残りは各セクションのローディング表示に任せる）。
+  // SWRの isLoading はキャッシュがあれば false になるため、取得済みデータがある再訪時はここを通らない
   const isSystemBooting =
     !isLoaded ||
-    missionsLoading ||
-    mobileSuitsLoading ||
-    entryStatusLoading ||
-    pilotLoading ||
-    battlesLoading;
+    (missionsLoading &&
+      mobileSuitsLoading &&
+      entryStatusLoading &&
+      pilotLoading &&
+      battlesLoading);
 
   if (isSystemBooting) {
     return <SystemBootScreen />;
