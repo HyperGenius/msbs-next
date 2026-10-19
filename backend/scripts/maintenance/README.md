@@ -99,6 +99,17 @@ python scripts/maintenance/sync_weapon_master.py --weapon-id giant_bazooka --fie
 python scripts/maintenance/sync_weapon_master.py --weapon-id giant_bazooka --apply
 ```
 
+## GitHub Actions から実行する
+
+ローカルの `backend/.env` が無くても、Actions の `Sync Weapon Master`（`.github/workflows/sync-weapon-master.yml`）から手動で実行できます。接続先は `secrets.NEON_DATABASE_URL` です。
+
+1. Actions の画面で `Sync Weapon Master` を選び、`Run workflow` を押す。
+2. `weapon_ids`（カンマ区切り）と `fields`（カンマ区切り）を必要なら入力する。空なら全武器・全フィールド。
+3. `apply` は既定で `false`（差分の表示のみ）。まずこのまま実行し、ジョブサマリーの差分を確認する。
+4. 差分を承認したら、同じ入力で `apply` を `true` にして再実行する。書き込む前に同じ形式で差分が出るので、確認時との一致を見られる。
+
+実行ログとジョブサマリーに、実行者・入力値・差分が残ります。不正な武器IDやフィールドを指定するとジョブは失敗します。同時に実行できるのは1つだけです。
+
 ## オプション
 
 | オプション | 説明 |
