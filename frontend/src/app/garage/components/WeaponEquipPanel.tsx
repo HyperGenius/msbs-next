@@ -141,7 +141,7 @@ function UnequippedWeaponForm({
         <SciFiSelect
           label="装備先の機体"
           value={selectedMsId}
-          onChange={(e) => handleSelectMs(e.target.value)}
+          onChange={handleSelectMs}
           className="min-h-11"
           options={[
             { value: "", label: "機体を選択" },
@@ -153,7 +153,7 @@ function UnequippedWeaponForm({
           <SciFiSelect
             label="スロット"
             value={selectedSlot}
-            onChange={(e) => setSelectedSlot(Number(e.target.value))}
+            onChange={(v) => setSelectedSlot(Number(v))}
             className="min-h-11"
             options={equippableSlots.map((slot) => {
               const occupant = occupantBySlot.get(slot.index);
