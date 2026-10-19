@@ -2,13 +2,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PlayerWeapon, Weapon, Pilot } from "@/types/battle";
+import { PlayerWeapon, Pilot } from "@/types/battle";
 import { EnrichedMobileSuit } from "@/utils/rankUtils";
 import { SciFiButton, SciFiCard, SciFiHeading, SciFiPanel, SciFiSelect } from "@/components/ui";
 import { getWeaponRank } from "@/utils/rankUtils";
-import { getWeaponSlots, getWeaponSlotLabel } from "../constants";
+import { getWeaponSlotLabel } from "../constants";
+import { countUpgradeSteps, resolveWeaponSpec } from "../weaponUpgrade";
 import { usePlayerWeapons } from "@/hooks/usePlayerWeapons";
-import WeaponUpgradeModal from "./WeaponUpgradeModal";
+import WeaponResourceBadges from "./WeaponResourceBadges";
+import WeaponUpgradeModal, { WeaponModalTab } from "./WeaponUpgradeModal";
 
 type TypeFilter = "ALL" | "BEAM" | "PHYSICAL";
 type EquipFilter = "ALL" | "UNEQUIPPED_ONLY";
@@ -107,27 +109,33 @@ function EmptyBoxIcon({ className }: { className?: string }) {
   );
 }
 
+/** カードを押すと改造モーダルが開くことを示すアイコン（右向き山括弧） */
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+
 interface WeaponInventoryListProps {
   mobileSuits: EnrichedMobileSuit[] | undefined;
   isBusy: boolean;
   pilot: Pilot | undefined;
   onNavigateToEquippedMs: (msId: string) => void;
-  onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => Promise<void>;
+  /** 装備に成功したら true を返す */
+  onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => Promise<boolean>;
   /** 武器改造モーダルでの改造成功時に呼ばれる（呼び出し元でパイロットのクレジット残高を再検証する。所持武器一覧自体は本コンポーネントが自分のSWRキーで再検証する） */
   onWeaponUpgraded: () => void;
-}
-
-/** base_snapshot に custom_stats の改造差分（power_bonus/accuracy_bonus）をマージした実効スペックを解決する */
-function resolveSpec(pw: PlayerWeapon): Weapon {
-  const base = pw.base_snapshot as unknown as Weapon;
-  const powerBonus = pw.custom_stats?.power_bonus ?? 0;
-  const accuracyBonus = pw.custom_stats?.accuracy_bonus ?? 0;
-  if (powerBonus === 0 && accuracyBonus === 0) return base;
-  return {
-    ...base,
-    power: base.power + powerBonus,
-    accuracy: base.accuracy + accuracyBonus,
-  };
 }
 
 export default function WeaponInventoryList({
@@ -142,8 +150,11 @@ export default function WeaponInventoryList({
   const [equipFilter, setEquipFilter] = useState<EquipFilter>("ALL");
   const [sortOrder, setSortOrder] = useState<SortOrder>("ACQUIRED_DESC");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  // 改造モーダルで表示中の武器（カードクリックで開く。null なら非表示）
-  const [upgradingWeapon, setUpgradingWeapon] = useState<PlayerWeapon | null>(null);
+  // 改造モーダルで表示中の武器と、開いたときのタブ（null なら非表示）
+  const [modalTarget, setModalTarget] = useState<{
+    playerWeapon: PlayerWeapon;
+    initialTab: WeaponModalTab;
+  } | null>(null);
 
   // 「未装備のみ表示」がONの場合は GET /api/player-weapons?unequipped=true を使い、
   // 装備済みも含めた全件取得を避ける（同一URLのSWRキーはアプリ内で共有されるため、
@@ -164,7 +175,7 @@ export default function WeaponInventoryList({
     if (!playerWeapons) return [];
 
     const filtered = playerWeapons.filter((pw) => {
-      const spec = resolveSpec(pw);
+      const spec = resolveWeaponSpec(pw);
       if (typeFilter !== "ALL" && (spec.type || "PHYSICAL") !== typeFilter) {
         return false;
       }
@@ -193,30 +204,41 @@ export default function WeaponInventoryList({
     setEquipFilter("ALL");
   };
 
-  // 一覧から装備した際、このコンポーネントが保持するSWRキャッシュ（未装備のみ/全件）を再検証する
+  // 装備した際、このコンポーネントが保持するSWRキャッシュ（未装備のみ/全件）を再検証する。
+  // 装備後はカードの「装備先へ移動」ボタンが結果を示すので、モーダルは閉じる。
   const handleEquip = async (
     playerWeaponId: string,
     msId: string,
     slotIndex: number
   ) => {
-    await onEquip(playerWeaponId, msId, slotIndex);
+    const equipped = await onEquip(playerWeaponId, msId, slotIndex);
     mutatePlayerWeapons();
+    if (equipped) setModalTarget(null);
+    return equipped;
+  };
+
+  // 装備先の CustomizationModal はこのモーダルと同じ z-index なので、先に閉じてから開く
+  const handleNavigateFromModal = (msId: string) => {
+    setModalTarget(null);
+    onNavigateToEquippedMs(msId);
   };
 
   // 武器改造成功時: モーダル内の表示を更新し、現在のフィルタ状態に対応するSWRキーの
   // 所持武器一覧を再検証する（パイロットのクレジット残高の再検証は onWeaponUpgraded 側の責務）
   const handleWeaponUpgraded = (updated: PlayerWeapon) => {
-    setUpgradingWeapon(updated);
+    setModalTarget((prev) => (prev ? { ...prev, playerWeapon: updated } : prev));
     mutatePlayerWeapons();
     onWeaponUpgraded();
   };
 
   return (
     <>
-      <SciFiPanel variant="primary">
-      <div className="p-4 sm:p-6">
-        <div className="flex items-baseline justify-between mb-3">
-          <SciFiHeading level={3} className="text-lg sm:text-xl">
+      {/* モバイルではパネルを親の残り高さに合わせ、カードのリストだけをスクロールさせる。
+          md 以上はページ全体のスクロールに任せる（ルートレイアウトが md 以上で main の高さ固定を外すため）。 */}
+      <SciFiPanel variant="primary" className="flex flex-col flex-1 min-h-0 md:flex-none">
+      <div className="flex flex-col flex-1 min-h-0 p-3 sm:p-6">
+        <div className="shrink-0 flex items-baseline justify-between mb-2 sm:mb-3">
+          <SciFiHeading level={3} className="text-base sm:text-xl">
             所持武器一覧
           </SciFiHeading>
           {playerWeapons && (
@@ -234,7 +256,7 @@ export default function WeaponInventoryList({
 
         {/* フィルタ: 使用頻度の高い2つ（未装備のみ／属性）だけを常時表示し、
             並び替えはアイコンボタンからポップアップメニューで選ばせる（1行に3種のUIを混在させない） */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className="shrink-0 flex items-center gap-2 mb-3 sm:mb-4">
           <button
             type="button"
             title="未装備のみ表示"
@@ -244,7 +266,7 @@ export default function WeaponInventoryList({
                 prev === "UNEQUIPPED_ONLY" ? "ALL" : "UNEQUIPPED_ONLY"
               )
             }
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-2 transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-1.5 min-h-11 px-3 text-xs font-bold border-2 transition-colors whitespace-nowrap ${
               equipFilter === "UNEQUIPPED_ONLY"
                 ? "bg-[#00ff41] text-black border-[#00ff41]"
                 : "bg-transparent text-[#00ff41] border-[#00ff41]/40 hover:border-[#00ff41]"
@@ -259,7 +281,7 @@ export default function WeaponInventoryList({
             <SciFiSelect
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-              className="!w-auto !px-2 !py-2 !text-xs"
+              className="!w-auto !px-2 !py-2 !text-xs min-h-11"
               options={[
                 { value: "ALL", label: "属性: すべて" },
                 { value: "BEAM", label: "BEAM" },
@@ -276,7 +298,7 @@ export default function WeaponInventoryList({
               aria-haspopup="menu"
               aria-expanded={sortMenuOpen}
               onClick={() => setSortMenuOpen((prev) => !prev)}
-              className={`flex items-center justify-center w-9 h-9 border-2 transition-colors ${
+              className={`flex items-center justify-center w-11 h-11 border-2 transition-colors ${
                 sortMenuOpen
                   ? "bg-[#00ff41]/20 border-[#00ff41] text-[#00ff41]"
                   : "bg-transparent border-[#00ff41]/40 text-[#00ff41]/70 hover:border-[#00ff41] hover:text-[#00ff41]"
@@ -336,17 +358,15 @@ export default function WeaponInventoryList({
             )}
           </div>
         ) : (
-          <ul className="space-y-2">
+          // px-1/py-1 は hover 時の scale-[1.02] でカードの縁がスクロール領域に切られないための余白
+          <ul className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden md:overflow-visible -mx-1 px-1 py-1 space-y-2">
             {rows.map((pw) => (
               <WeaponInventoryRow
                 key={pw.id}
                 playerWeapon={pw}
-                mobileSuits={mobileSuits}
                 msById={msById}
-                isBusy={isBusy}
                 onNavigateToEquippedMs={onNavigateToEquippedMs}
-                onEquip={handleEquip}
-                onOpenUpgrade={setUpgradingWeapon}
+                onOpenModal={(initialTab) => setModalTarget({ playerWeapon: pw, initialTab })}
               />
             ))}
           </ul>
@@ -354,12 +374,17 @@ export default function WeaponInventoryList({
       </div>
       </SciFiPanel>
 
-      {upgradingWeapon && (
+      {modalTarget && (
         <WeaponUpgradeModal
-          playerWeapon={upgradingWeapon}
+          playerWeapon={modalTarget.playerWeapon}
           pilot={pilot}
-          onClose={() => setUpgradingWeapon(null)}
+          mobileSuits={mobileSuits}
+          isBusy={isBusy}
+          initialTab={modalTarget.initialTab}
+          onClose={() => setModalTarget(null)}
           onUpgraded={handleWeaponUpgraded}
+          onEquip={handleEquip}
+          onNavigateToEquippedMs={handleNavigateFromModal}
         />
       )}
     </>
@@ -368,139 +393,126 @@ export default function WeaponInventoryList({
 
 interface WeaponInventoryRowProps {
   playerWeapon: PlayerWeapon;
-  mobileSuits: EnrichedMobileSuit[] | undefined;
   msById: Map<string, EnrichedMobileSuit>;
-  isBusy: boolean;
   onNavigateToEquippedMs: (msId: string) => void;
-  onEquip: (playerWeaponId: string, msId: string, slotIndex: number) => void;
-  /** カード本体クリックで武器改造モーダルを開く（装備中・未装備どちらの武器も対象） */
-  onOpenUpgrade: (playerWeapon: PlayerWeapon) => void;
+  /** カード本体は改造タブ、「装備する」ボタンは装備タブを指定してモーダルを開く */
+  onOpenModal: (initialTab: WeaponModalTab) => void;
 }
+
+const CARD_ACTION_BUTTON_CLASS =
+  "min-h-11 border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black active:bg-[#00ff41] active:text-black transition-colors font-bold font-mono text-sm px-4 py-2";
 
 function WeaponInventoryRow({
   playerWeapon,
-  mobileSuits,
   msById,
-  isBusy,
   onNavigateToEquippedMs,
-  onEquip,
-  onOpenUpgrade,
+  onOpenModal,
 }: WeaponInventoryRowProps) {
-  const spec = resolveSpec(playerWeapon);
+  const spec = resolveWeaponSpec(playerWeapon);
+  const upgradeSteps = countUpgradeSteps(playerWeapon);
   const isEquipped = playerWeapon.equipped_ms_id !== null;
   const equippedMs = playerWeapon.equipped_ms_id
     ? msById.get(playerWeapon.equipped_ms_id)
     : undefined;
-
-  const [selectedMsId, setSelectedMsId] = useState<string>("");
-  const [selectedSlot, setSelectedSlot] = useState<number>(0);
 
   const powerRank = spec.power_rank ?? getWeaponRank("weapon_power", spec.power);
   const rangeRank = spec.range_rank ?? getWeaponRank("weapon_range", spec.range);
   const accuracyRank =
     spec.accuracy_rank ?? getWeaponRank("weapon_accuracy", spec.accuracy);
 
-  const selectedMs = msById.get(selectedMsId);
-  const slots = getWeaponSlots(selectedMs?.weapon_slot_count);
-
   return (
+    // SciFiCard の既定の p-6 が p-3 より優先されるため、important で上書きする
     <SciFiCard
       variant="primary"
-      className="p-3"
+      className="!p-3"
       interactive
-      onClick={() => onOpenUpgrade(playerWeapon)}
+      onClick={() => onOpenModal("UPGRADE")}
     >
-      <div className="flex justify-between items-start gap-3">
-        <div className="font-bold text-base sm:text-lg">{spec.name}</div>
-        <span
-          className={`shrink-0 px-2 py-1 text-xs font-bold rounded ${
-            spec.type === "BEAM"
-              ? "bg-blue-500/20 text-blue-400"
-              : "bg-yellow-500/20 text-yellow-400"
-          }`}
-        >
-          {spec.type || "PHYSICAL"}
-        </span>
-      </div>
-
-      <div className="mt-2 flex gap-2">
-        <span
-          className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(powerRank)}`}
-        >
-          威力{powerRank}
-        </span>
-        <span
-          className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(rangeRank)}`}
-        >
-          射程{rangeRank}
-        </span>
-        <span
-          className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(accuracyRank)}`}
-        >
-          命中{accuracyRank}
-        </span>
-      </div>
-
-      {/* カード本体のクリック（改造モーダルを開く）とは別の操作のため、伝播を止める */}
-      <div onClick={(e) => e.stopPropagation()}>
-        <div className="mt-2">
-          {isEquipped ? (
-            equippedMs ? (
-              <button
-                type="button"
-                onClick={() => onNavigateToEquippedMs(equippedMs.id)}
-                className="w-full border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black active:bg-[#00ff41] active:text-black transition-colors font-bold font-mono text-sm px-4 py-2.5"
-              >
-                → {equippedMs.name}へ移動（
-                {getWeaponSlotLabel(playerWeapon.equipped_slot ?? 0)}）
-              </button>
-            ) : (
-              <span className="text-xs sm:text-sm font-bold text-[#ffb000]">
-                装備先: 不明な機体
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-start gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-bold text-base sm:text-lg break-words min-w-0">
+                {spec.name}
               </span>
-            )
-          ) : (
-            <span className="text-xs sm:text-sm text-[#00ff41]/50">未装備</span>
-          )}
+              {upgradeSteps > 0 && (
+                <span
+                  className="shrink-0 px-1.5 py-0.5 text-xs font-bold border rounded bg-[#00f0ff]/10 text-[#00f0ff] border-[#00f0ff]/50"
+                  title={`改造済み（${upgradeSteps}段階）`}
+                >
+                  改+{upgradeSteps}
+                </span>
+              )}
+            </div>
+            <span
+              className={`shrink-0 px-2 py-1 text-xs font-bold rounded ${
+                spec.type === "BEAM"
+                  ? "bg-blue-500/20 text-blue-400"
+                  : "bg-yellow-500/20 text-yellow-400"
+              }`}
+            >
+              {spec.type || "PHYSICAL"}
+            </span>
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span
+              className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(powerRank)}`}
+            >
+              威力{powerRank}
+            </span>
+            <span
+              className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(rangeRank)}`}
+            >
+              射程{rangeRank}
+            </span>
+            <span
+              className={`px-1.5 py-0.5 text-xs font-bold border rounded ${rankBadgeClass(accuracyRank)}`}
+            >
+              命中{accuracyRank}
+            </span>
+            <WeaponResourceBadges spec={spec} />
+          </div>
+
+          {/* カード内のボタンはカード本体のクリック（改造モーダルを開く）と別の操作なので、伝播を止める */}
+          <div className="mt-2">
+            {isEquipped ? (
+              equippedMs ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNavigateToEquippedMs(equippedMs.id);
+                  }}
+                  className={`w-full ${CARD_ACTION_BUTTON_CLASS}`}
+                >
+                  → {equippedMs.name}へ移動（
+                  {getWeaponSlotLabel(playerWeapon.equipped_slot ?? 0)}）
+                </button>
+              ) : (
+                <span className="text-xs sm:text-sm font-bold text-[#ffb000]">
+                  装備先: 不明な機体
+                </span>
+              )
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs sm:text-sm text-[#00ff41]/50">未装備</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenModal("EQUIP");
+                  }}
+                  className={CARD_ACTION_BUTTON_CLASS}
+                >
+                  装備する
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {!isEquipped && (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <SciFiSelect
-              value={selectedMsId}
-              onChange={(e) => {
-                setSelectedMsId(e.target.value);
-                setSelectedSlot(0);
-              }}
-              options={[
-                { value: "", label: "装備先の機体を選択" },
-                ...(mobileSuits?.map((ms) => ({ value: ms.id, label: ms.name })) ?? []),
-              ]}
-            />
-
-            {selectedMsId && (
-              <SciFiSelect
-                value={selectedSlot}
-                onChange={(e) => setSelectedSlot(Number(e.target.value))}
-                options={slots.map((slot) => ({
-                  value: slot.index,
-                  label: slot.labelJa,
-                }))}
-              />
-            )}
-
-            <SciFiButton
-              variant="accent"
-              size="sm"
-              disabled={!selectedMsId || isBusy}
-              onClick={() =>
-                onEquip(playerWeapon.id, selectedMsId, selectedSlot)
-              }
-            >
-              装備する
-            </SciFiButton>
-          </div>
-        )}
+        <ChevronRightIcon className="w-5 h-5 shrink-0 text-[#00ff41]/50" />
       </div>
     </SciFiCard>
   );
