@@ -37,6 +37,19 @@ resource "google_storage_bucket" "battle_logs" {
     }
   }
 
+  # 解析用ログ（エンジンの出力をデバッグ項目ごと gzip したもの。ブラウザには配信しない）。
+  # 50機の戦闘で1件 10MB 程度になるため、配信用ログより短く残す。接頭辞は
+  # battle_log_storage_service.py の _ANALYSIS_OBJECT_PREFIX と揃える。
+  lifecycle_rule {
+    condition {
+      age            = 30
+      matches_prefix = ["analysis-logs/"]
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
   # storage.googleapis.com の有効化は base モジュール（required_apis）側で行う。
   # この module は base の repository_url 経由でしか base に依存していないため、
   # storage API 自体への直接依存は表現できないが、対象プロジェクトには既存の

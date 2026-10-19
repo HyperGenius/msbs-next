@@ -16,7 +16,7 @@ export interface BattleEventsResult {
 }
 
 export function isCriticalLog(log: BattleLog): boolean {
-    return log.is_crit === true || log.message.includes("クリティカルヒット");
+    return log.is_crit === true || log.message?.includes("クリティカルヒット") === true;
 }
 
 function resolveTracerKind(log: BattleLog, beamWeaponIds: ReadonlySet<string>): TracerKind {
@@ -26,7 +26,8 @@ function resolveTracerKind(log: BattleLog, beamWeaponIds: ReadonlySet<string>): 
 
 // RESIST の判定文字列は現行バックエンドの文言と一致していない。
 // 判定を直すまで本番では resistPercent が付かない。
-function parseResistPercent(message: string): number | undefined {
+function parseResistPercent(message: string | undefined): number | undefined {
+    if (message === undefined) return undefined;
     if (!message.includes("対ビーム装甲により") && !message.includes("対実弾装甲により")) {
         return undefined;
     }

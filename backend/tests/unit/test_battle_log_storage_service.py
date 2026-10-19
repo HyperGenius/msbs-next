@@ -206,3 +206,93 @@ def test_stream_battle_log_chunks_yields_all_chunks() -> None:
 
     chunks = asyncio.run(_collect())
     assert chunks == [b"line1\n", b"line2\n"]
+
+
+def _analysis_logs() -> list:
+    from app.models.models import BattleLog, Vector3
+
+    actor_id = uuid.uuid4()
+    return [
+        BattleLog(
+            timestamp=0.1,
+            actor_id=actor_id,
+            action_type="AI_DECISION",
+            message="判断",
+            position_snapshot=Vector3(x=0, y=0, z=0),
+            fuzzy_scores={"attack": 0.8},
+        ),
+        BattleLog(
+            timestamp=0.2,
+            actor_id=actor_id,
+            action_type="MOVE",
+            message="移動",
+            position_snapshot=Vector3(x=1.234, y=0, z=0),
+        ),
+    ]
+
+
+def test_analysis_object_path_for_uses_separate_prefix() -> None:
+    """解析用ログは配信用ログと別の接頭辞に置く（ライフサイクルルールの対象を分けるため）."""
+    log_id = uuid.uuid4()
+    assert svc.analysis_object_path_for(log_id) == f"analysis-logs/{log_id}.ndjson.gz"
+
+
+def test_upload_analysis_log_writes_gzipped_engine_logs() -> None:
+    """解析用ログは、デバッグ項目と全行を残した gzip の NDJSON になる."""
+    import gzip
+    import io
+    import json
+
+    log_id = uuid.uuid4()
+    raw = io.BytesIO()
+    mock_blob = MagicMock()
+    mock_blob.open.return_value.__enter__.return_value = raw
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_client = MagicMock()
+    mock_client.bucket.return_value = mock_bucket
+    logs = _analysis_logs()
+
+    with patch.object(svc, "_client", return_value=mock_client):
+        path = svc.upload_analysis_log(log_id, logs)
+
+    assert path == f"analysis-logs/{log_id}.ndjson.gz"
+    mock_bucket.blob.assert_called_once_with(path)
+    mock_blob.open.assert_called_once_with("wb", content_type="application/gzip")
+    lines = gzip.decompress(raw.getvalue()).decode("utf-8").splitlines()
+    assert [json.loads(line) for line in lines] == [
+        log.model_dump(mode="json") for log in logs
+    ]
+    assert json.loads(lines[0])["fuzzy_scores"] == {"attack": 0.8}
+
+
+def test_upload_analysis_log_fails_before_creating_client_without_bucket(
+    monkeypatch,  # noqa: ANN001
+) -> None:
+    """バケット未設定なら、認証情報を探す `storage.Client()` を作らずに失敗する."""
+    import pytest
+
+    monkeypatch.delenv("BATTLE_LOG_GCS_BUCKET", raising=False)
+    mock_client_factory = MagicMock()
+
+    with (
+        patch.object(svc, "_client", mock_client_factory),
+        pytest.raises(RuntimeError),
+    ):
+        svc.upload_analysis_log(uuid.uuid4(), _analysis_logs())
+
+    mock_client_factory.assert_not_called()
+
+
+def test_save_analysis_log_returns_false_on_upload_failure() -> None:
+    """解析用ログの保存に失敗しても、例外を投げずFalseを返す."""
+    with patch.object(svc, "upload_analysis_log", side_effect=RuntimeError("boom")):
+        assert svc.save_analysis_log(uuid.uuid4(), _analysis_logs()) is False
+
+
+def test_save_analysis_log_returns_true_on_success() -> None:
+    """解析用ログを保存できたらTrueを返す."""
+    with patch.object(
+        svc, "upload_analysis_log", return_value="analysis-logs/x.ndjson.gz"
+    ):
+        assert svc.save_analysis_log(uuid.uuid4(), _analysis_logs()) is True

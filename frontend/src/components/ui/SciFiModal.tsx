@@ -12,6 +12,11 @@ interface SciFiModalProps {
   variant?: "primary" | "secondary" | "accent";
   /** モーダル幅の上限（Tailwind クラス, デフォルト: max-w-3xl） */
   maxWidthClass?: string;
+  /**
+   * 固定高さ（Tailwind クラス）。タブで中身が切り替わるモーダルに指定する。
+   * 指定時は外側でスクロールしないため、children 側でスクロール領域を作る。
+   */
+  fixedHeightClass?: string;
   children: React.ReactNode;
 }
 
@@ -20,6 +25,7 @@ interface SciFiModalProps {
  * - 全サイズで画面中央に表示（上下均等な余白）
  * - z-[60] により BottomNav（z-50）の上に重なる
  * - 内部コンテンツは max-h-[85dvh] + overflow-y-auto で独立スクロール
+ *   （fixedHeightClass 指定時は高さ固定の flex 列になり、スクロールは children が持つ）
  * - Esc キーおよびオーバーレイクリックで閉じる
  */
 export default function SciFiModal({
@@ -27,6 +33,7 @@ export default function SciFiModal({
   onClose,
   variant = "primary",
   maxWidthClass = "max-w-3xl",
+  fixedHeightClass,
   children,
 }: SciFiModalProps) {
   /** Esc キーで閉じる */
@@ -53,17 +60,24 @@ export default function SciFiModal({
 
   if (!isOpen) return null;
 
+  const sizeClass = fixedHeightClass
+    ? `${fixedHeightClass} flex flex-col`
+    : "max-h-[85dvh] overflow-y-auto";
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className={`w-full ${maxWidthClass} mx-4 max-h-[85dvh] overflow-y-auto
+        className={`w-full ${maxWidthClass} mx-4 ${sizeClass}
           animate-in slide-in-from-bottom-4 duration-300`}
         onClick={(e) => e.stopPropagation()}
       >
-        <SciFiPanel variant={variant} className="p-0">
+        <SciFiPanel
+          variant={variant}
+          className={fixedHeightClass ? "p-0 flex flex-col flex-1 min-h-0" : "p-0"}
+        >
           {children}
         </SciFiPanel>
       </div>

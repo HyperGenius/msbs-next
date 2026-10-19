@@ -1,0 +1,76 @@
+name: Sync Weapon Master
+
+on:
+  workflow_dispatch:
+    inputs:
+      weapon_ids:
+        description: "対象の武器マスターID（カンマ区切り。空なら全武器）"
+        type: string
+        default: ""
+      fields:
+        description: "同期するフィールド（カンマ区切り。空なら全フィールド）"
+        type: string
+        default: ""
+      apply:
+        description: "true のときだけ書き込む（false は差分の表示のみ）"
+        type: boolean
+        default: false
+
+# 同期は mobile_suits.weapons を行ロックなしで書き戻すため、並行実行しない
+concurrency:
+  group: sync-weapon-master
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+
+      - name: Sync weapon master
+        # pipefail を効かせるため shell を明示する（tee 経由でもスクリプトの失敗を拾う）
+        shell: bash
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          WEAPON_IDS: ${{ inputs.weapon_ids }}
+          FIELDS: ${{ inputs.fields }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          args=()
+          if [ -n "$WEAPON_IDS" ]; then
+            args+=(--weapon-id "$WEAPON_IDS")
+          fi
+          if [ -n "$FIELDS" ]; then
+            args+=(--fields "$FIELDS")
+          fi
+          if [ "$APPLY" = "true" ]; then
+            mode="書き込み（--apply）"
+            args+=(--apply --yes)
+          else
+            mode="読み取りのみ"
+          fi
+
+          {
+            echo "## 武器マスター同期"
+            echo
+            echo "- 実行モード: $mode"
+            echo "- weapon_ids: \`${WEAPON_IDS:-（全武器）}\`"
+            echo "- fields: \`${FIELDS:-（全フィールド）}\`"
+            echo "- 実行者: ${GITHUB_ACTOR}"
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          status=0
+          python scripts/maintenance/sync_weapon_master.py "${args[@]}" 2>&1 \
+            | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

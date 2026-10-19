@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { markBattleAsRead, fetchBattleLogsNdjson } from "@/services/battle";
 import type { BattleLog } from "@/types/battle";
+import { UnsupportedReplayVersionError } from "@/utils/replayLog";
 
 vi.mock("@/services/auth", async () => {
   const actual = await vi.importActual<typeof import("@/services/auth")>("@/services/auth");
@@ -188,10 +189,24 @@ describe("fetchBattleLogsNdjson", () => {
     const logs = await fetchBattleLogsNdjson("http://example.com/logs", onProgress);
 
     expect(logs).toHaveLength(lineCount);
-    // 500行ごとに通知されるため、1200行なら2回（500件目・1000件目）呼ばれる
-    expect(onProgress).toHaveBeenCalledTimes(2);
+    // 500行ごとに通知し、読み終えたら残りの200行を含めた全件を通知する
+    expect(onProgress).toHaveBeenCalledTimes(3);
     expect(onProgress.mock.calls[0][0]).toHaveLength(500);
     expect(onProgress.mock.calls[1][0]).toHaveLength(1000);
+    expect(onProgress.mock.calls[2][0]).toHaveLength(lineCount);
+  });
+
+  it("行数がバッチサイズの倍数なら、読み終えたときに同じ件数を重ねて通知しない", async () => {
+    const lineCount = 1000;
+    const ndjson = Array.from({ length: lineCount }, (_, i) =>
+      `{"timestamp":${i},"actor_id":"a","action_type":"MOVE","message":"m${i}","position_snapshot":{"x":0,"y":0,"z":0}}`
+    ).join("\n") + "\n";
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson, 4096));
+
+    const onProgress = vi.fn();
+    await fetchBattleLogsNdjson("http://example.com/logs", onProgress);
+
+    expect(onProgress.mock.calls.map(([partial]) => partial.length)).toEqual([500, 1000]);
   });
 
   it("onProgressに渡す配列は呼び出しごとに独立したコピーである", async () => {
@@ -221,5 +236,80 @@ describe("fetchBattleLogsNdjson", () => {
 
     expect(onProgress).not.toHaveBeenCalled();
     expect(logs).toHaveLength(1);
+  });
+
+  // ─────────────────────────────────────────────
+  // 配信用ログ — 先頭のヘッダー行で形式を判定する
+  // ─────────────────────────────────────────────
+
+  it("配信用ログはヘッダー行を除いて返す", async () => {
+    const ndjson =
+      '{"replay_version":1}\n' +
+      '{"timestamp":0.1,"actor_id":"a","action_type":"MOVE","position_snapshot":{"x":0,"y":0,"z":0}}\n' +
+      '{"timestamp":0.2,"actor_id":"a","action_type":"ATTACK","message":"m2","position_snapshot":{"x":1,"y":0,"z":0}}\n';
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson));
+
+    const logs = await fetchBattleLogsNdjson("http://example.com/logs");
+
+    expect(logs.map((log) => log.action_type)).toEqual(["MOVE", "ATTACK"]);
+    expect(logs[0].message).toBeUndefined();
+  });
+
+  it("res.bodyが無い環境でも配信用ログのヘッダー行を除く", async () => {
+    const ndjson =
+      '{"replay_version":1}\n' +
+      '{"timestamp":0.1,"actor_id":"a","action_type":"MOVE","position_snapshot":{"x":0,"y":0,"z":0}}\n';
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      body: null,
+      text: () => Promise.resolve(ndjson),
+    } as unknown as Response);
+
+    const logs = await fetchBattleLogsNdjson("http://example.com/logs");
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0].action_type).toBe("MOVE");
+  });
+
+  it("2行目以降に replay_version があってもヘッダーとして扱わない", async () => {
+    const ndjson =
+      '{"timestamp":0,"actor_id":"a","action_type":"MOVE","message":"m1","position_snapshot":{"x":0,"y":0,"z":0}}\n' +
+      '{"replay_version":2}\n';
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson));
+
+    const logs = await fetchBattleLogsNdjson("http://example.com/logs");
+
+    expect(logs).toHaveLength(2);
+  });
+
+  it("未対応のバージョンの配信用ログは読まずにエラーにする", async () => {
+    const ndjson =
+      '{"replay_version":2}\n' +
+      '{"timestamp":0.1,"actor_id":"a","action_type":"MOVE","position_snapshot":{"x":0,"y":0,"z":0}}\n';
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson));
+    const onProgress = vi.fn();
+
+    await expect(fetchBattleLogsNdjson("http://example.com/logs", onProgress)).rejects.toBeInstanceOf(
+      UnsupportedReplayVersionError
+    );
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
+  it("onProgressに渡す件数にヘッダー行を数えない", async () => {
+    const lineCount = 500;
+    const ndjson =
+      '{"replay_version":1}\n' +
+      Array.from({ length: lineCount }, (_, i) =>
+        `{"timestamp":${i},"actor_id":"a","action_type":"MOVE","position_snapshot":{"x":0,"y":0,"z":0}}`
+      ).join("\n") +
+      "\n";
+    vi.mocked(fetch).mockResolvedValue(mockNdjsonResponse(ndjson, 4096));
+
+    const onProgress = vi.fn();
+    const logs = await fetchBattleLogsNdjson("http://example.com/logs", onProgress);
+
+    expect(logs).toHaveLength(lineCount);
+    expect(onProgress).toHaveBeenCalledTimes(1);
+    expect(onProgress.mock.calls[0][0]).toHaveLength(500);
   });
 });

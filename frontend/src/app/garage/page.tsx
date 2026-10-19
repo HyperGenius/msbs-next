@@ -55,10 +55,13 @@ export default function GaragePage() {
     );
   }
 
+  // モバイルではページを main の高さに合わせ、タブの中のリストだけをスクロールさせる。
+  // md 以上は main の高さ固定が外れるので、従来どおりページ全体をスクロールさせる。
   return (
-    <div className="min-h-full bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-4 sm:mb-8 border-b-2 border-[#00ff41]/30 pb-4">
+    <div className="h-full overflow-hidden md:h-auto md:min-h-full md:overflow-visible bg-[#050505] text-[#00ff41] px-4 pb-3 sm:p-6 md:p-8 font-mono flex flex-col">
+      <div className="max-w-6xl mx-auto w-full flex flex-col flex-1 min-h-0">
+        {/* スマホでは見出しとタブを 1 行にまとめ、リストに使える高さを確保する */}
+        <div className="shrink-0 mb-3 sm:mb-8 border-b-2 border-[#00ff41]/30 pb-2 sm:pb-4 flex items-end justify-between gap-2 sm:block">
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-0 justify-between items-start sm:items-center">
             <div>
               <SciFiHeading level={2} className="text-xl sm:text-2xl">GARAGE</SciFiHeading>
@@ -66,7 +69,7 @@ export default function GaragePage() {
           </div>
 
           {/* タブ切り替え: 機体一覧 / 所持武器一覧 */}
-          <div className="flex gap-1 mt-4">
+          <div className="flex gap-1 sm:mt-4">
             <button
               type="button"
               aria-pressed={activeTab === "MOBILE_SUITS"}
@@ -95,7 +98,7 @@ export default function GaragePage() {
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center items-center h-64">
+          <div className="shrink-0 flex justify-center items-center h-64">
             <SciFiPanel variant="accent">
               <div className="p-8">
                 <p className="text-xl animate-pulse text-[#00f0ff]">LOADING DATA...</p>
@@ -103,7 +106,7 @@ export default function GaragePage() {
             </SciFiPanel>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto w-full flex flex-col flex-1 min-h-0">
             {activeTab === "MOBILE_SUITS" ? (
               <MobileSuitList
                 mobileSuits={mobileSuits}

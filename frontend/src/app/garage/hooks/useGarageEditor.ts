@@ -164,12 +164,13 @@ export function useGarageEditor() {
     mutatePilot();
   };
 
-  // 所持武器一覧から直接、指定機体・スロットへ武器を装備する
+  // 所持武器一覧から直接、指定機体・スロットへ武器を装備する。
+  // 失敗はここで通知済みなので、呼び出し元には成否だけを返す。
   const handleEquipFromInventory = async (
     playerWeaponId: string,
     msId: string,
     slotIndex: number
-  ) => {
+  ): Promise<boolean> => {
     setIsSaving(true);
     try {
       await equipWeapon(msId, {
@@ -178,11 +179,13 @@ export function useGarageEditor() {
       });
       mutate();
       mutatePlayerWeapons();
+      return true;
     } catch (error) {
       console.error("Equip error:", error);
       alert(
         error instanceof Error ? error.message : "武器の装備に失敗しました"
       );
+      return false;
     } finally {
       setIsSaving(false);
     }

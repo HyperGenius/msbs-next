@@ -271,11 +271,12 @@ luk: number;
 - `SciFiSelect` は `<option>` を子要素に渡す方式ではなく、**`options: { value, label }[]` prop必須**（`SciFiSelect.tsx`）。`<SciFiSelect><option>...</option></SciFiSelect>` のような書き方はできない
 - `SciFiSelect` は既定で `w-full`（幅いっぱい）。フィルタバーなどで幅を詰めたい場合、`className` に通常の `w-auto` を渡しても効かないことがある（`w-full` が base クラス文字列に先に埋め込まれており、Tailwindの生成順序次第でどちらが勝つか不定なため）。確実に上書きするには `!w-auto`（important修飾子）を使う。同様に `!px-2 !py-2 !text-xs` のようにpadding/font-sizeも上書き可能
 - `SciFiButton` は `primary`/`secondary`/`accent`/`danger` の**塗りつぶしvariantのみ**で、アウトライン（枠線のみ）variantは存在しない。ボーダーのみ→hover/active時に反転する強調ボタンが欲しい場合は `SciFiButton` を使わず素の `<button>` に自前でクラスを書く（例: `border border-[#00ff41] text-[#00ff41] bg-transparent hover:bg-[#00ff41] hover:text-black`）
-- `SciFiCard` の `onClick` は `() => void`（イベント引数を受け取らない）。`(e) => e.stopPropagation()` のような使い方はできない
+- `SciFiCard` の `onClick` は `() => void`（イベント引数を受け取らない）。`(e) => e.stopPropagation()` のような使い方はできない。カード内のボタンでカードのクリックを止めたい場合は、そのボタン自身の `onClick` で `e.stopPropagation()` を呼ぶ
+- `SciFiCard` は既定で `p-6` を持つ。`className="p-3"` を渡しても `p-6` が勝って余白が変わらない（`SciFiSelect` の `w-full` と同じ理由）。余白を詰めるときは `!p-3` のように important 修飾子を付ける
 
 ## 強化・改造系モーダルのUI規約（Issue #413）
 
-機体強化（`StatusTab.tsx`、`CustomizationModal` の STATUS タブ）と武器改造（`WeaponUpgradeModal.tsx`）は、レイアウト・操作感を統一している。新しく強化・改造系のUI（ステータスを段階的に上げる操作）を追加する場合は、この2つを参考に同じパターンに揃えること。
+機体強化（`StatusTab.tsx`、`CustomizationModal` の STATUS タブ）と武器改造（`WeaponUpgradeModal.tsx` の「改造」タブ = `WeaponUpgradePanel.tsx`）は、レイアウト・操作感を統一している。新しく強化・改造系のUI（ステータスを段階的に上げる操作）を追加する場合は、この2つを参考に同じパターンに揃えること。
 
 ### 共通レイアウト（`StatusTab.tsx` が原型）
 
@@ -287,20 +288,24 @@ luk: number;
 ```
 
 - **ランクバッジ + `SciFiBlockIndicator`（`components/ui/SciFiBlockIndicator.tsx`）+ `[-]`/`[+]` ステッパー** の3点セットを1行に横並びする。ステップ数はコンポーネント内 state（`pendingSteps: Record<string, number>`）で保持し、実際のAPI呼び出しは行わずクライアント側でシミュレーションしてプレビューする
-- 複数ステータスがある場合も、末尾に置いた **1つの `HoldSciFiButton`（長押し確定）でまとめて一括確定**する（`StatusTab.tsx` の `handleApplyAll` / `WeaponUpgradeModal.tsx` の `handleApplyAll` を参照）。ステータスごとに個別の確定ボタンを設けない
+- 複数ステータスがある場合も、末尾に置いた **1つの `HoldSciFiButton`（長押し確定）でまとめて一括確定**する（`StatusTab.tsx` の `handleApplyAll` / `WeaponUpgradePanel.tsx` の `handleApplyAll` を参照）。ステータスごとに個別の確定ボタンを設けない
 - 先頭に所持クレジットの「現在 ➔ 変更後」表示（ペンディングがある時だけ矢印以降を表示、支払い可能なら `text-[#00f0ff]`、不可なら `text-red-400`）を置く
 
 ### 生の数値（raw value）を表示しない
 
-**ステータスの実数値（例: 威力「200」「→ 205」、命中率「85.0%」など）はUIに出力しない。** ランクバッジ（S〜E）と `SciFiBlockIndicator` の埋まり具合のみで、現在の強さ・改造後の変化を表現する。理由: 武器改造UIで一度、実数値を表示する行を追加したが、バックエンドAPIの `current_value`/`new_value` の意味（実効値かボーナス値か）を取り違えて誤表示するバグを生んだ経緯があり、そもそも生数値を出さない方針に倒すことで作り込みとバグの両方を避けている（`WeaponUpgradeModal.tsx` 参照。武器改造プレビューAPI自体は実効値を返すよう既に修正済みだが、UIでは使っていない）。
+**ステータスの実数値（例: 威力「200」「→ 205」、命中率「85.0%」など）はUIに出力しない。** ランクバッジ（S〜E）と `SciFiBlockIndicator` の埋まり具合のみで、現在の強さ・改造後の変化を表現する。理由: 武器改造UIで一度、実数値を表示する行を追加したが、バックエンドAPIの `current_value`/`new_value` の意味（実効値かボーナス値か）を取り違えて誤表示するバグを生んだ経緯があり、そもそも生数値を出さない方針に倒すことで作り込みとバグの両方を避けている（`WeaponUpgradePanel.tsx` 参照。武器改造プレビューAPI自体は実効値を返すよう既に修正済みだが、UIでは使っていない）。
 
 ### コスト計算式はクライアント側にバックエンドと同じ式を複製する
 
-`StatusTab.tsx`（`EngineeringService` の式）・`WeaponUpgradeModal.tsx`（`WeaponEngineeringService` の式）はいずれも、コスト計算・上限キャップの式をクライアント側に複製し、プレビュー用APIを都度呼ばずに `+`/`-` ボタン操作を即座に反映させている。**バックエンド側の定数（`BASE_*_COST`、除数、増分、上限）を変更した場合は、対応するフロントエンドの定数も必ず同期して更新すること。** 式がずれると、クライアント側の見積もりと実際にAPIで確定した結果が食い違う（コストや上限判定がずれる）。
+`StatusTab.tsx`（`EngineeringService` の式）・`app/garage/weaponUpgrade.ts`（`WeaponEngineeringService` の式。`WeaponUpgradePanel.tsx` と一覧の「改+N」表示が共有する）はいずれも、コスト計算・上限キャップの式をクライアント側に複製し、プレビュー用APIを都度呼ばずに `+`/`-` ボタン操作を即座に反映させている。**バックエンド側の定数（`BASE_*_COST`、除数、増分、上限）を変更した場合は、対応するフロントエンドの定数も必ず同期して更新すること。** 式がずれると、クライアント側の見積もりと実際にAPIで確定した結果が食い違う（コストや上限判定がずれる）。
 
 ### タブ切り替えのあるモーダルは固定高さにする（`max-h` にしない）
 
 `CustomizationModal.tsx`（STATUS/TERRAIN/LOADOUT/TACTICS のタブ切り替え）のように**タブでコンテンツが差し替わるモーダル**は、外側コンテナに `h-[85dvh]` のような**固定高さ**を指定し、タブ内コンテンツ側を `overflow-y-auto flex-1` でスクロールさせること。`max-h-[85dvh]`（上限のみ）にすると、タブごとにコンテンツの実高さが異なるためモーダル自体の高さが伸縮し、ヘッダー・タブバーの表示位置がタブ切り替えのたびにずれてユーザーが混乱する（一度この実装で回帰させた経緯があるため要注意。Issue #413）。一方、タブが無く単一ビューのモーダル（`WeaponChangeModal.tsx`、`SciFiModal` ベースのモーダル全般）はコンテンツ量に応じて高さが変わって構わないため `max-h-[85dvh]` のままでよい。
+
+`SciFiModal` でタブ付きモーダルを作る場合は `fixedHeightClass`（例: `h-[min(85dvh,40rem)]`）を渡す。外側のスクロールが無くなり、パネルが高さ固定の flex 列になるので、各タブ側で「`flex-1 min-h-0 overflow-y-auto` の中身 + `shrink-0` のフッター」を組む（`WeaponUpgradeModal.tsx` が実装例）。確定ボタンをフッターに置けば、中身をスクロールしなくても押せる。
+
+タブを切り替えても確定前の入力（ペンディングの強化ステップなど）を残したい場合は、非表示のタブをアンマウントせず `hidden` クラスで隠す（`WeaponUpgradeModal.tsx` の `panelClass`）。条件付きレンダリングで切り替えると、タブを戻したときに state が初期化される。
 
 ## アイコンの扱い
 

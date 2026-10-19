@@ -3,7 +3,8 @@
 ## 概要
 
 バトルの生ログ（`BattleLog[]`）のデータモデルとバックエンド配信（NDJSONストリーミング・GCSオフロード）の仕様を定義する。
-プレイヤーに配信する軽量な形式は「[配信用ログ（replay）](#配信用ログreplayissue-634)」を参照。
+プレイヤーに配信する軽量な形式は「[配信用ログ（replay）](#配信用ログreplayissue-634)」、
+デバッグ情報付きで残す形式は「[解析用ログ（analysis）](#解析用ログanalysisissue-636)」を参照。
 
 **フロントエンドのテキストログ表示（`BattleLogViewer`）はIssue #521で廃止した。** ユーザー向けフィードバックは
 バトルビューア（3Dリプレイ）側の「チャプタートラック」「戦果サマリー」に統一されている。詳細は
@@ -43,8 +44,8 @@ BattleViewer の EN ゲージ表示のため、EN 残量を `BattleLog.details` 
 
 ### `BattleLog` に専用フィールドを追加しない理由
 
-保存時の `strip_debug_fields()` は `model_dump()` をそのまま使うため、`None` のフィールドも
-全ログに `null` として保存される。専用フィールド（例: `en_after`）を追加すると、EN を消費しない
+旧形式の保存（`strip_debug_fields()`）は `model_dump()` をそのまま使うため、`None` のフィールドも
+全ログに `null` として保存される（配信用ログは null を省くが、解析用ログは null を残す）。専用フィールド（例: `en_after`）を追加すると、EN を消費しない
 大多数のログにもキーが付き、ログサイズとダウンロード時間が増える。既存の `details` は EN 消費ログ
 以外では `null` のままなので、サイズ増加は EN 消費ログの分だけで済む。
 NPC エース同士の1vs1（20戦）の実測では、ログ1件あたりの平均サイズは 744.6 → 746.2 byte（+0.2%）だった。
@@ -57,8 +58,12 @@ Epic #631 で、プレイヤーに配信するログを描画に必要な項目�
 保存時に `app/engine/replay_log.py` の `to_replay_logs()` で変換する。変換は DB・GCS に触れない純粋関数で、
 同じ入力なら同じ出力になる。
 
-**Issue #634 の時点では書き込み経路を変えていない。** バッチ・ソロミッションは今も旧形式（`strip_debug_fields()` の出力）を
-保存・配信している。フロントが両方の形式を読めるようにする（Issue #635）→ バックエンドの書き込みを切り替える（Issue #636）の順にデプロイする。
+Issue #636 で書き込み経路を切り替えた。バッチ（`scripts/run_batch.py` の `_save_battle_results()`）と
+ソロミッション（`main.py` の `simulate_battle`）は、どちらも `to_replay_logs()` の出力を `battle_logs.logs` に保存する。
+ソロミッションのレスポンス（`BattleResponse.logs`）も同じ配信用ログで、先頭はヘッダー行になる。`fuzzy_scores` は含まない。
+
+* 既存の戦闘（旧形式）は変換せず、そのまま配信する。本番DBの一括変換はしない。フロントが先頭行で形式を判定する
+* デプロイの順序: フロントが両方の形式を読めるようにする（Issue #635）→ バックエンドの書き込みを切り替える（Issue #636）
 
 ### 形式とバージョン
 
@@ -136,11 +141,84 @@ Epic #631 で、プレイヤーに配信するログを描画に必要な項目�
 * 旧形式は向きの無い行に `heading: null` を持つ。`getBattleSnapshot()` が null で向きを上書きし、自機の向き矢印が 0度を指していた。数値の `heading` だけを使うようにした
 * `selectHudLogLines()` が、ちょうど3秒前の行を時刻の誤差（`51.00000000000001` など）で出していた。誤差を許して判定するようにした
 
-### ビューアで読むときの注意（Issue #635 向け）
+### ビューアでの読み方（Issue #635）
 
-* `message` の無い行がある。`DevSimulationPanel`（`formatBattleLog()`）は全行の `message` を読むため、そのままでは配信用ログを表示できない
-* `hit_part` / `weapon_slot_role` が無い。`usePartHitSummary` のようにログから集計するフォールバックは、配信用ログでは空になる。配信用ログの結果には集計が保存されている前提で、保存した集計を使う
+フロントは配信用ログと旧形式のどちらも読める。読み込むときに先頭行で形式を判定し、ヘッダー行を取り除く。
+ビューアの部品（`useBattleSnapshot` / `useBattleChapters` / `useBattleEvents` / `useHudAttackLog`）には、どちらの形式も同じ `BattleLog[]` として渡す。
+
+| 読み込む場所 | 経路 | 判定 |
+|---|---|---|
+| 履歴詳細（`BattleDetailModal`）・`/dev/sim`（`SimReplay`） | `useNdjsonBattleLogs()` → `fetchBattleLogsNdjson()`（`services/battle.ts`） | 1行目を `consumeReplayLogHeader()` に渡す。ヘッダーなら配列に入れない |
+| ソロミッションのレスポンス（`useBattleSimulation`） | `POST /api/battle/simulate` の `logs` | `toViewerLogs()`（`utils/replayLog.ts`）でヘッダー行を除く |
+
+* 1行目だけを見る。2行目以降に `replay_version` があってもヘッダーとして扱わない
+* 行の中身は変換しない。省いた項目（`undefined`）と旧形式の `null` は、ビューアの部品がどちらも「値が無い」と読む（`!= null`・`typeof`・真偽値で判定している）。旧形式の `heading: null` は数値の `heading` だけを使うことで無視する
 * `TARGET_SELECTION` の行が減っても、`getBattleSnapshot()` のターゲットの追跡は変わらない（上のテストで確かめている）
+* ソロミッションのレスポンス（`POST /api/battle/simulate` の `logs`）も、先頭がヘッダー行の配信用ログになる。`useBattleSimulation` は `logs` をそのまま使っているため、NDJSON と同じくヘッダー行を取り除いて読む
+
+---
+
+## 解析用ログ（analysis）（Issue #636）
+
+エンジンの出力（`simulator.logs`）を、項目を削らずに GCS に保存する。`fuzzy_scores`・`minovsky_hit_multiplier`・
+`AI_DECISION` の行・null の項目もすべて残す。ブラウザには配信しない。開発者がツールで取得する（Issue #637）。
+
+| 項目 | 内容 |
+|---|---|
+| 保存先 | 配信用ログと同じバケット（`BATTLE_LOG_GCS_BUCKET`）の `analysis-logs/{battle_log_id}.ndjson.gz` |
+| 形式 | 1行1件の NDJSON（`BattleLog.model_dump_json()`）を gzip したもの。`Content-Type: application/gzip`、`Content-Encoding` は付けない |
+| パスの決め方 | `battle_logs.id` から決める（`analysis_object_path_for()`）。DB にはパスを持たない |
+| 保存期間 | 30日。バケットのライフサイクルルール（`infra/cloud-run/modules/cloud-run/battle_log_storage.tf`）が `analysis-logs/` の接頭辞で削除する |
+| サイズ | 上の「サイズ」と同じ50機・177秒の個人戦で、12.3万行・gzip 約10.3MB。圧縮レベル 6 で約1.4秒（9 は 10.1MB・約2.3秒。M1 Mac） |
+
+### 保存のタイミングと失敗時の扱い
+
+`app/services/battle_log_storage_service.py` の `save_analysis_log()` で保存する。失敗しても例外を投げず、戦闘結果の保存は止めない。
+元のログはメモリにしか無いため、配信用ログのオフロードと違って後から再試行できない。失敗はログに残すだけにする。
+
+| 経路 | タイミング |
+|---|---|
+| ソロミッション（`main.py` の `simulate_battle`） | `BackgroundTasks` でレスポンスの送出後。配信用ログのオフロードとは別のタスク |
+| バッチ（`scripts/run_batch.py` の `_save_battle_results()`） | `session.commit()` の後。アップロード中にトランザクションを開いたままにしないため |
+
+書き込みは `blob.open("wb")` に `gzip.GzipFile` を重ねたストリーミングで、ログを dict の一覧にしない。
+ピークメモリは配信用ログのアップロードと同じく、チャンク（`_STREAM_CHUNK_SIZE`）の分で済む。
+
+### 取得のしかた
+
+```bash
+# battle_results.battle_log_id から決まるパスを取得する
+gcloud storage cp gs://<バケット>/analysis-logs/<battle_log_id>.ndjson.gz .
+gunzip -c <battle_log_id>.ndjson.gz | head
+```
+
+Cloud Run のサービスアカウントには `objectViewer` と `objectCreator` だけを付けている。削除はライフサイクルルールが行う。
+
+**未対応のバージョン:** ヘッダーの `replay_version` が `REPLAY_LOG_VERSION` と違うときは、再生を始めずに `UnsupportedReplayVersionError` を投げる。
+新しいバージョンの読み方を古いフロントは知らないため、そのまま描画すると表示が崩れる。バックエンドを先にデプロイし、フロントが古いままのタブで起きる。
+
+* `useNdjsonBattleLogs()` はこのエラーのときだけ取り直さない（`onErrorRetry`）。他のエラーは SWR の既定の方法で取り直す
+* 履歴詳細は「このリプレイは新しい形式のため再生できません。ページを再読み込みしてください」と表示する（`BattleReplayPanel` の `logsError`）。ログが1件も無いまま取得に失敗したときも、空のビューアではなく「リプレイのログを読み込めませんでした」と表示する
+* ソロミッションは、通信エラーと同じく `alert` で再読み込みを促す
+
+**`message` の無い行:** MOVE・WAIT・TARGET_SELECTION の行は `message` を持たない（`BattleLog.message` は省略可能にした）。
+
+| 読む場所 | 扱い |
+|---|---|
+| `DevSimulationPanel`（`formatBattleLog()`） | `describeBattleLog()`（`utils/logFormatter.ts`）で構造化された項目から文を作る。MOVE は「移動中」、WAIT は `details.reason_code` が EN 不足なら「ENが枯渇し、待機中」で、それ以外は「攻撃できず待機中」、TARGET_SELECTION は「{相手の機体名}をターゲットに選択」。機体名は行の先頭に別に出しているため、文には入れない。スタイルの判定もこの文で行い、旧形式と同じ色になる |
+| `isCriticalLog()`（`useBattleEvents.ts`） | `is_crit` で判定する。`message` が無い行はクリティカルではない |
+| `parseResistPercent()`（同上） | `message` が無ければ軽減率を付けない |
+| `/dev/sim` の AI の判断（`readDecisionLogs()`） | ローカルの `battle_NNN.json` は旧形式のため影響しない。型を合わせるため、無いときは空文字にする |
+
+**ログから集計するフォールバック:** `hit_part` / `weapon_slot_role` が無いため、`usePartHitSummary` のフォールバックは配信用ログでは空になる。
+配信用ログを保存する戦闘（バッチ）は集計も `BattleResult` に保存する（Issue #633）ため、保存した集計を使う。命中率・索敵のフォールバックは、配信用ログに残る項目（`weapon_name`・`DETECTION` の行）で計算できる。
+
+**`/dev/sim` のログは旧形式のまま:** ローカルの `battle_NNN.json` はエンジンの出力そのまま（`AI_DECISION` や `fuzzy_scores` を含む）で、Route Handler もそのまま返す。
+AI の判断のデバッグに使う項目を残すため、配信用ログには変換しない。変換をフロントに複製すると、バックエンドの `to_replay_logs()`（Python の丸め）とずれうる。
+ビューアは両方の形式を同じ経路で読むため、`battle_NNN.json` の `logs` を配信用ログに書き換えれば、`/dev/sim` で配信用ログの再生を確かめられる（下の計測はこの方法で行った）。
+
+**端末の負荷:** 50機の戦闘を Chrome（Slow 4G・CPU 4倍スロットリング）の `/dev/sim` で再生し、旧形式と比べた。配信用ログでは約3秒で再生が始まり、約8秒で全件を読み終える。
+時間帯ごとに分けて読み込む方式は採らなかった。計測の詳細は `docs/features/local-battle-simulator.md` の「ブラウザでの計測（Issue #635）」。
 
 ---
 
@@ -153,9 +231,9 @@ Epic #631 で、プレイヤーに配信するログを描画に必要な項目�
 ### レスポンス生成はDBの検証済みdictをそのまま返す（Pydanticオブジェクト化しない）
 
 `backend/main.py` の `get_battle_logs` は、DBから取得した `list[dict]` を `BattleLog(**entry)` で
-Pydanticオブジェクト化しない。保存時点で `strip_debug_fields`（`app/engine/battle_utils.py`）により
-既にBattleLog相当のJSON互換dictとして確定しているため、配信時に再度オブジェクト化・再バリデーション
-する意味がない。
+Pydanticオブジェクト化しない。保存時点で（配信用ログは `to_replay_logs()`、旧形式は `strip_debug_fields()` により）
+既にJSON互換dictとして確定しているため、配信時に再度オブジェクト化・再バリデーション
+する意味がない。保存した形式（配信用ログか旧形式か）は変換せず、そのまま返す。
 
 `room_size=50/100` 規模のバトルはログが10万件を超えることがあり、
 「DBのdict → `BattleLog`オブジェクト → `response_model`再バリデーション → JSON」という
@@ -196,9 +274,18 @@ Issue #488の時点では、`fetchBattleLogsNdjson` は行単位で逐次パー�
 
 `useBattleLogs`（同ファイル）はこの `onProgress` から、SWRのグローバル `mutate`（`swr` パッケージの
 無名エクスポート）をキー（URL）付きで直接呼び出し、リクエストが完了する前にSWRのキャッシュ・`data`
-を更新する。これによりSWRの `isLoading`（`isValidating && !data` 相当）は最初のバッチが届いた時点で
+を更新する。フックが返す `isLoading` は `data === undefined && isValidating` で、最初のバッチが届いた時点で
 `false` になる。呼び出し元は「初回データが届いたか」を `isLoading`、「まだ末尾まで読み込み中か」を
 `isStreaming`（`isValidating`）で判別する。
+
+SWR 2 の挙動に合わせて、次の2点を守る（Issue #635 で、どちらも守られていなかったことが分かった）。
+
+* **SWR の `isLoading` をそのまま返さない。** SWR 2 の `isLoading` はキャッシュに持つ状態で、取得の開始で `true` になり、取得の完了まで戻らない。
+  途中で `mutate` してデータが入っても `true` のままになる。そのまま返すと、ビューアが全件の取得を待ってからマウントされていた
+  （50機の旧形式で、Slow 4G・CPU 4倍のとき再生開始まで約44秒）
+* **読み終えたときに、残りの行も `onProgress` で通知する。** SWR は、取得中に `mutate` したキーの取得結果（fetcher の戻り値）を古いとみなして捨てる。
+  500行ごとの通知だけでは、最後の500行に満たない末尾の行がキャッシュに入らない。50機の配信用ログでは、自機の撃破を含む末尾の約13秒分が反映されなかった。
+  一度も通知していない（500行未満の）ときは、取得結果がそのまま使われるため通知しない
 
 呼び出し元（`BattleDetailModal.tsx`）は `isLoading` が `false` になった時点で `BattleViewer` と
 ログ一覧をマウントし、`isStreaming` が `true` の間は「続きのログを読み込み中」の控えめな表示のみ行う

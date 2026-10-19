@@ -119,7 +119,7 @@ def determine_hit_part(attacker, target, weapon, attack_sector, distance) -> str
 - `WeaponCustomStats.aim_distribution: dict[str, float] | None`: ユーザーが武器インスタンス単位で上書きする戦術設定。`power_bonus`/`accuracy_bonus` と異なりクレジットを消費しない無償の設定。`None` の場合は `base_snapshot` 側の値（マスター初期値）を使う。`WeaponService.apply_effective_spec()` が `custom_stats.aim_distribution` が設定されていればそれを、無ければ `base_snapshot.aim_distribution` をそのまま実効値として採用する
 - `WeaponService.update_aim_distribution()`（`app/services/weapon_service.py`）: 部位名の妥当性・非負・合計100%（許容誤差1%）を検証した上で `custom_stats.aim_distribution` を更新する。装備中の武器であれば `resync_mobile_suit_weapons()` で `MobileSuit.weapons` の実効スペックも合わせて再同期する。`PUT /api/player-weapons/{pw_id}/aim-distribution` から呼び出される
 - `PART_HIT_DIFFICULTY` / `PART_DIFFICULTY_DECAY_RANGE` / `PART_DIFFICULTY_DECAY_FLOOR`（`app/engine/constants.py`）: 距離による命中難易度減衰。`_part_distance_decay()`（`app/engine/combat.py`）が、難易度の高い部位（頭部: 1.0、腕: 0.5、脚: 0.35）ほど距離0〜`PART_DIFFICULTY_DECAY_RANGE`(600m)にかけて重みを`PART_DIFFICULTY_DECAY_FLOOR`(0.1)まで減衰させる。難易度0の胴体は常に減衰なし（1.0）で、遠距離での命中の受け皿になる。これにより「遠距離では頭部狙いでもほとんど胴体に当たる」という直感的なリアリティを表現している
-- フロントエンド: `frontend/src/app/garage/components/AimDistributionEditor.tsx`（`WeaponUpgradeModal.tsx` から呼び出される）で、部位ごとのスライダー（合計100%になるよう検証）から `updatePlayerWeaponAimDistribution()`（`frontend/src/services/weaponEngineering.ts`）経由で設定・保存できる
+- フロントエンド: `frontend/src/app/garage/components/AimDistributionEditor.tsx`（`WeaponUpgradeModal.tsx` の「狙う部位配分」タブ）で、部位ごとのスライダー（合計100%になるよう検証）から `updatePlayerWeaponAimDistribution()`（`frontend/src/services/weaponEngineering.ts`）経由で設定・保存できる
 
 ### 武装持ち替えアルゴリズムと行動不能ペナルティ（Phase 5, Issue #506）
 

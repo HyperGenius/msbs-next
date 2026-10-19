@@ -178,6 +178,23 @@ return Weapon(**merged)
 - エントリー済みの `battle_entries.mobile_suit_snapshot` はエントリー時点のスナップショットなので対象外。次のエントリーから反映される。
 - 機体強化（`weapon_power`）の加算は `weapon_power_bonus` から足し直すため、同期で消えない（#657）。
 
+### Actions からの実行（Issue #662）
+
+`.github/workflows/sync-weapon-master.yml`（`workflow_dispatch` のみ）から手動で実行できる。接続先は `secrets.NEON_DATABASE_URL`。
+
+| 入力 | 既定 | スクリプトへの渡し方 |
+|---|---|---|
+| `weapon_ids` | 空（全武器） | `--weapon-id` |
+| `fields` | 空（全フィールド） | `--fields` |
+| `apply` | `false` | `true` のときだけ `--apply --yes` |
+
+- 既定は読み取りのみ。差分はジョブのログとジョブサマリーに出る。サマリーの先頭に実行モード・入力値・実行者を書く。
+- `apply: true` でも、書き込む前に同じ差分を出す。読み取りのみで確認したときの差分と見比べられる。
+- 入力は `env:` で環境変数として渡し、シェルで引用符付きで展開する。`concurrency` で同時実行は1つに限る。
+- 不正な武器IDやフィールドではスクリプトが異常終了し、ジョブも失敗する。
+- 定期実行と pre-commit は採らない。承認なしで全ユーザーのデータへ広がること、行ロックなしの書き戻しが同時の装備変更を上書きすることが理由。
+- 同期後も、マスターデータのキャッシュ（`MASTER_DATA_CACHE_TTL_SEC`）が切れるまでショップの表示は古い値のまま。
+
 実装は `app/services/weapon_master_sync_service.py` の `sync_weapon_master`。commit せずに変更を session に積むので、スクリプトは結果を表示してから commit か rollback を選ぶ。autoflush を止めているので、読み取りのみの実行では DB に書き込まない。
 
 ---

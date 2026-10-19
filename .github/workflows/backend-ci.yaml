@@ -6,10 +6,12 @@ on:
     branches: [ "main" ]
     paths:
       - "backend/**"
+      - "!backend/**/*.md"
   pull_request:
     branches: [ "main" ]
     paths:
       - "backend/**"
+      - "!backend/**/*.md"
 
 # 連続してPushされた際、古いCIジョブを自動キャンセルする
 concurrency:
@@ -24,6 +26,7 @@ permissions:
 
 jobs:
   test:
+    name: Backend Test
     runs-on: ubuntu-latest
     defaults:
       run:
