@@ -13,25 +13,39 @@ const BOOT_SEQUENCE = [
   "SYSTEM READY.",
 ];
 
+/** この時間内に応答が揃えばブート画面を出さない（速い応答のたびに一瞬チラつくのを防ぐ） */
+const BOOT_SCREEN_DELAY_MS = 400;
+
+/** コールドスタート待ちの間に表示する起動演出。応答が速ければ何も描画しない */
 export default function SystemBootScreen() {
+  const [isVisible, setIsVisible] = useState(false);
   const [visibleLines, setVisibleLines] = useState<number>(0);
 
   useEffect(() => {
-    if (visibleLines >= BOOT_SEQUENCE.length) return;
+    const timer = setTimeout(() => setIsVisible(true), BOOT_SCREEN_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible || visibleLines >= BOOT_SEQUENCE.length) return;
 
     const timer = setTimeout(() => {
       setVisibleLines((prev) => prev + 1);
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [visibleLines]);
+  }, [isVisible, visibleLines]);
+
+  if (!isVisible) {
+    return <div aria-busy="true" className="min-h-full bg-[#050505]" />;
+  }
 
   const progress = Math.round((visibleLines / (BOOT_SEQUENCE.length || 1)) * 100);
 
   return (
-    <main
+    <div
       aria-label="システム起動中"
-      className="min-h-screen bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono flex flex-col items-center justify-center"
+      className="min-h-full bg-[#050505] text-[#00ff41] p-4 sm:p-6 md:p-8 font-mono flex flex-col items-center justify-center"
     >
       <div className="w-full max-w-2xl space-y-8">
         <SciFiHeading level={1} variant="primary" className="text-center">
@@ -83,6 +97,6 @@ export default function SystemBootScreen() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
