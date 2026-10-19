@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import { PlayerWeapon } from "@/types/battle";
 import { updatePlayerWeaponAimDistribution } from "@/services/api";
-import { SciFiButton, SciFiHeading } from "@/components/ui";
+import { SciFiButton } from "@/components/ui";
 
 interface AimDistributionEditorProps {
   playerWeapon: PlayerWeapon;
@@ -58,6 +58,7 @@ function resolveCurrentDistribution(playerWeapon: PlayerWeapon): Record<string, 
   return result;
 }
 
+/** 武器改造モーダルの「狙う部位配分」タブ。中身をスクロールさせ、適用ボタンはフッターに固定する。 */
 export default function AimDistributionEditor({
   playerWeapon,
   onUpdated,
@@ -112,76 +113,83 @@ export default function AimDistributionEditor({
     }
   };
 
+  const remaining = 100 - total;
+
   return (
-    <div className="pt-4 border-t border-[#00ff41]/20">
-      <div className="flex items-center justify-between mb-1">
-        <SciFiHeading level={4} className="text-base">
-          狙う部位配分
-        </SciFiHeading>
-        <span
-          className={`text-xs font-mono ${
-            isValidTotal ? "text-[#00ff41]/70" : "text-red-400"
-          }`}
-        >
-          合計: {total}%
-        </span>
-      </div>
-      <p className="text-xs text-[#00ff41]/50 mb-3">
-        この武器が命中時に狙う部位の割合を設定します（合計100%）。相対角度・距離による補正と組み合わせて実際の命中部位が決まります
-      </p>
+    <>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+        <p className="text-xs text-[#00ff41]/50 mb-2">
+          命中時に狙う部位の割合（合計100%）。実際の命中部位には相対角度・距離の補正も加わります
+        </p>
 
-      <div className="space-y-2">
-        {PART_LABELS.map(({ key, label }) => (
-          <div key={key} className="flex items-center gap-2">
-            <span className="w-10 text-xs font-mono text-[#00ff41]/80 shrink-0">
-              {label}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={values[key] ?? 0}
-              onChange={(e) => handleChange(key, Number(e.target.value))}
-              className="flex-1 accent-[#00ff41]"
-              aria-label={`${label}の配分`}
-            />
-            <span className="w-12 text-right text-xs font-mono text-[#00ff41]">
-              {values[key] ?? 0}%
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {message && (
-        <div
-          className={`mt-3 p-2 rounded border text-xs ${
-            message.startsWith("✓")
-              ? "bg-[#00ff41]/10 border-[#00ff41]/50 text-[#00ff41]"
-              : "bg-red-900/30 border-red-600/50 text-red-300"
-          }`}
-        >
-          {message}
+        <div>
+          {PART_LABELS.map(({ key, label }) => (
+            <div key={key} className="flex items-center gap-2 min-h-10">
+              <span className="w-10 text-xs font-mono text-[#00ff41]/80 shrink-0">
+                {label}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={values[key] ?? 0}
+                onChange={(e) => handleChange(key, Number(e.target.value))}
+                className="flex-1 h-8 accent-[#00ff41] touch-manipulation"
+                aria-label={`${label}の配分`}
+              />
+              <span className="w-12 text-right text-xs font-mono text-[#00ff41]">
+                {values[key] ?? 0}%
+              </span>
+            </div>
+          ))}
         </div>
-      )}
 
-      <div className="flex items-center gap-2 mt-3">
+        {message && (
+          <div
+            className={`mt-3 p-2 rounded border text-xs ${
+              message.startsWith("✓")
+                ? "bg-[#00ff41]/10 border-[#00ff41]/50 text-[#00ff41]"
+                : "bg-red-900/30 border-red-600/50 text-red-300"
+            }`}
+          >
+            {message}
+          </div>
+        )}
+      </div>
+
+      <div className="shrink-0 p-4 sm:px-6 border-t border-[#00ff41]/20 flex items-center gap-3">
+        {/* 合計がちょうど 100% でないと適用できないため、あと何 % 動かせばよいかを示す */}
+        <div className="flex flex-col text-xs font-mono mr-auto" aria-live="polite">
+          <span className={isValidTotal ? "text-[#00ff41]/70" : "text-red-400"}>
+            合計: {total}%
+          </span>
+          <span className={isValidTotal ? "text-[#00ff41]/70" : "text-red-400 font-bold"}>
+            {remaining > 0
+              ? `残り ${remaining}%`
+              : remaining < 0
+                ? `${-remaining}% 超過`
+                : "OK"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={isSaving}
+          className="min-h-11 px-1 text-xs text-[#00ff41]/50 hover:text-[#00ff41] underline disabled:opacity-30"
+        >
+          初期値に戻す
+        </button>
         <SciFiButton
           size="sm"
           variant="accent"
           onClick={handleApply}
           disabled={!isValidTotal || isSaving}
+          className="min-h-11"
         >
           {isSaving ? "更新中..." : "配分を適用"}
         </SciFiButton>
-        <button
-          onClick={handleReset}
-          disabled={isSaving}
-          className="text-xs text-[#00ff41]/50 hover:text-[#00ff41] underline disabled:opacity-30"
-        >
-          初期値に戻す
-        </button>
       </div>
-    </div>
+    </>
   );
 }

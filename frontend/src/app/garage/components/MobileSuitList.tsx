@@ -16,14 +16,16 @@ export default function MobileSuitList({
   onSelect,
 }: MobileSuitListProps) {
   return (
-    <SciFiPanel variant="primary">
-      <div className="p-4 sm:p-6">
-        <SciFiHeading level={3} className="mb-4 text-lg sm:text-xl">
+    // 所持武器一覧と同じく、モバイルではリストだけをスクロールさせる
+    <SciFiPanel variant="primary" className="flex flex-col flex-1 min-h-0 md:flex-none">
+      <div className="flex flex-col flex-1 min-h-0 p-3 sm:p-6">
+        <SciFiHeading level={3} className="shrink-0 mb-2 sm:mb-4 text-base sm:text-xl">
           MS一覧
         </SciFiHeading>
 
         {mobileSuits && mobileSuits.length > 0 ? (
-          <ul className="space-y-2">
+          // px-1/py-1 は hover 時の scale-[1.02] でカードの縁がスクロール領域に切られないための余白
+          <ul className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden md:overflow-visible -mx-1 px-1 py-1 space-y-2">
             {mobileSuits.map((ms) => {
               return (
                 <SciFiCard
