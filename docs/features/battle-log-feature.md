@@ -192,6 +192,9 @@ gcloud storage cp gs://<バケット>/analysis-logs/<battle_log_id>.ndjson.gz .
 gunzip -c <battle_log_id>.ndjson.gz | head
 ```
 
+`/dev/sim` で再生するときは、ローカルシミュレータの `fetch-log` でバトル結果IDから取得する
+（[local-battle-simulator.md](local-battle-simulator.md) の「fetch-log: 本番の解析用ログの取得」、Issue #637）。
+
 Cloud Run のサービスアカウントには `objectViewer` と `objectCreator` だけを付けている。削除はライフサイクルルールが行う。
 
 **未対応のバージョン:** ヘッダーの `replay_version` が `REPLAY_LOG_VERSION` と違うときは、再生を始めずに `UnsupportedReplayVersionError` を投げる。

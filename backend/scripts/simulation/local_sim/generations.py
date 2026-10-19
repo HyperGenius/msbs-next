@@ -30,6 +30,8 @@ GENERATION_TIME_FORMAT = "%Y%m%d-%H%M%S"
 _TMP_PREFIX = ".tmp-"
 
 WinLoss = Literal["WIN", "LOSE"]
+# 世代の出どころ。local は `run` で実行した世代、production は `fetch-log` で本番から取得した世代。
+GenerationSource = Literal["local", "production"]
 
 
 class GitInfo(BaseModel):
@@ -46,7 +48,9 @@ class BattleSummary(BaseModel):
 
     index: int = Field(description="1 始まりの戦闘番号")
     file: str
-    seed: int
+    seed: int | None = Field(
+        default=None, description="戦闘のシード。本番から取得した戦闘では null"
+    )
     win_loss: WinLoss
     kills: int
     elapsed_time: float = Field(description="戦闘の経過時間（秒）")
@@ -84,18 +88,31 @@ class Manifest(BaseModel):
     label: str
     created_at: datetime
     pinned: bool = False
-    roster_name: str
-    roster_file: str = ROSTER_FILE
-    player_entry_index: int = Field(
-        description="勝敗と撃墜数を判定する機体の、ロスターの entries での位置"
+    source: GenerationSource = Field(
+        default="local", description="世代の出どころ。古い世代は local"
+    )
+    source_battle_result_id: str | None = Field(
+        default=None, description="本番から取得した世代の、取得元のバトル結果ID"
+    )
+    source_room_id: str | None = Field(
+        default=None, description="本番から取得した世代の、取得元のルームID"
+    )
+    # 本番から取得した世代は、ロスター・シード・最大ステップ数・コードの状態を持たない。
+    roster_name: str | None = None
+    roster_file: str | None = ROSTER_FILE
+    player_entry_index: int | None = Field(
+        default=None,
+        description="勝敗と撃墜数を判定する機体の、ロスターの entries での位置",
     )
     player_name: str | None = None
-    seed: int = Field(description="1戦目のシード。N 戦目は seed + N - 1")
+    seed: int | None = Field(
+        default=None, description="1戦目のシード。N 戦目は seed + N - 1"
+    )
     rounds: int
-    max_steps: int
+    max_steps: int | None = None
     git: GitInfo
-    fuzzy_rules_hash: str = Field(
-        description="backend/data/fuzzy_rules/ の全ファイルの SHA-256"
+    fuzzy_rules_hash: str | None = Field(
+        default=None, description="backend/data/fuzzy_rules/ の全ファイルの SHA-256"
     )
     theater_id: str | None = None
     environment: str
@@ -112,7 +129,9 @@ class BattleRecord(BaseModel):
 
     schema_version: int = GENERATION_SCHEMA_VERSION
     index: int
-    seed: int
+    seed: int | None = Field(
+        default=None, description="戦闘のシード。本番から取得した戦闘では null"
+    )
     win_loss: WinLoss
     kills: int = Field(description="判定する機体自身の撃墜数")
     elapsed_time: float

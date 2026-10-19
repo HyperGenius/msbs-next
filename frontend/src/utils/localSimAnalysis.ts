@@ -68,10 +68,10 @@ export function unitLabel(unit: LocalSimUnitStats): string {
 /** 実行条件を並べる。違う項目は differs が true */
 export function compareConditions(a: LocalSimManifest, b: LocalSimManifest): ConditionRow[] {
   const conditions = (m: LocalSimManifest): [string, string][] => [
-    ["ロスター", m.roster_name],
+    ["ロスター", m.roster_name ?? "-"],
     ["判定する機体", m.player_name ?? "-"],
-    ["seed", String(m.seed)],
-    ["最大ステップ数", String(m.max_steps)],
+    ["seed", m.seed === null ? "-" : String(m.seed)],
+    ["最大ステップ数", m.max_steps === null ? "-" : String(m.max_steps)],
     ["コミット", `${m.git.commit?.slice(0, COMMIT_DIGITS) ?? "-"}${m.git.dirty ? " (dirty)" : ""}`],
     ["ファジィルール", m.fuzzy_rules_hash?.slice(0, HASH_DIGITS) ?? "-"],
     ["戦域", `${m.theater_id ?? "なし"} / ${m.environment} / ミノフスキー ${m.minovsky_density}`],

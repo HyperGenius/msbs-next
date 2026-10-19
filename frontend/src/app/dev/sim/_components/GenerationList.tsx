@@ -34,6 +34,14 @@ export default function GenerationList({ generations, selectedId, onSelect }: Ge
                 <div className="flex items-center gap-2">
                   {g.pinned && <span title="ピン留め">📌</span>}
                   <span className="font-bold text-green-300 truncate">{g.label}</span>
+                  {g.source === "production" && (
+                    <span
+                      title="本番の戦闘の解析用ログから取得"
+                      className="shrink-0 rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] font-bold text-amber-300"
+                    >
+                      本番
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-gray-400">
                   {new Date(g.created_at).toLocaleString("ja-JP")}
@@ -43,7 +51,7 @@ export default function GenerationList({ generations, selectedId, onSelect }: Ge
                   {g.summary.timeouts > 0 && ` (打ち切り${g.summary.timeouts})`} · 撃墜{g.summary.total_kills}
                 </div>
                 <div className="text-[10px] text-gray-500 truncate">
-                  {g.roster_name}
+                  {g.source === "production" ? g.source_battle_result_id : g.roster_name}
                   {g.git.commit && ` · ${g.git.commit.slice(0, COMMIT_DIGITS)}${g.git.dirty ? " (dirty)" : ""}`}
                 </div>
               </button>

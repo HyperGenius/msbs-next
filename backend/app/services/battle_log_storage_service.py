@@ -176,6 +176,31 @@ def save_analysis_log(battle_log_id: uuid.UUID, logs: Iterable[BattleLog]) -> bo
     return True
 
 
+class AnalysisLogNotFoundError(Exception):
+    """解析用ログがGCSに無いことを表す（保存期間を過ぎて削除された場合など）."""
+
+
+def download_analysis_log(battle_log_id: uuid.UUID) -> list[dict]:
+    """解析用ログをGCSから取得し、ログdictの列として返す（開発者のツール用）.
+
+    Raises:
+        AnalysisLogNotFoundError: オブジェクトが無い場合
+    """
+    from google.cloud.exceptions import NotFound
+
+    path = analysis_object_path_for(battle_log_id)
+    blob = _client().bucket(_bucket_name()).blob(path)
+    try:
+        data = blob.download_as_bytes()
+    except NotFound as exc:
+        raise AnalysisLogNotFoundError(path) from exc
+    return [
+        json.loads(line)
+        for line in gzip.decompress(data).decode("utf-8").splitlines()
+        if line
+    ]
+
+
 def upload_ndjson_text(battle_log_id: uuid.UUID, ndjson_text: str) -> str:
     """既にNDJSONテキスト化済みのログをそのままGCSへアップロードする.
 

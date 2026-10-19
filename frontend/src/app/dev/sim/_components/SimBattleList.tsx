@@ -37,7 +37,7 @@ export default function SimBattleList({ battles, selectedIndex, onSelect }: SimB
                   {b.elapsed_time.toFixed(1)}秒 · 撃墜{b.kills}
                   {b.timed_out && <span className="text-yellow-400"> · 打ち切り</span>}
                 </span>
-                <span className="text-gray-500">seed {b.seed}</span>
+                {b.seed !== null && <span className="text-gray-500">seed {b.seed}</span>}
               </button>
             </li>
           );

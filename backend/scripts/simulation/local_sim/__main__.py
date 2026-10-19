@@ -3,6 +3,7 @@
 backend/ で実行する:
     python -m scripts.simulation.local_sim fetch --pilot <パイロットID> --npc 7
     python -m scripts.simulation.local_sim run --roster <ロスター名> --rounds 20
+    python -m scripts.simulation.local_sim fetch-log --result <バトル結果ID>
     python -m scripts.simulation.local_sim list
     python -m scripts.simulation.local_sim report <世代>
     python -m scripts.simulation.local_sim compare <世代A> <世代B>
@@ -16,6 +17,7 @@ import argparse
 import contextlib
 import json
 import sys
+import uuid
 from pathlib import Path
 
 from sqlalchemy import Engine
@@ -131,10 +133,79 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_fetch_log(args: argparse.Namespace) -> int:
+    result_id = _parse_uuid(args.result, "--result")
+    room_id = _parse_uuid(args.room, "--room")
+    engine = _connect_readonly()
+
+    from sqlmodel import Session
+
+    from app.services.battle_log_storage_service import (
+        AnalysisLogNotFoundError,
+        download_analysis_log,
+    )
+    from scripts.simulation.local_sim.fetch_log import (
+        AnalysisLogUnavailableError,
+        find_battle_result,
+        save_production_generation,
+    )
+
+    # 取得した ORM オブジェクトは読むだけ。念のため autoflush を止め、最後にロールバックする。
+    with Session(engine, autoflush=False) as session:
+        result, room_results = find_battle_result(
+            session, result_id=result_id, room_id=room_id, user_id=args.user_id
+        )
+        if result.battle_log_id is None:
+            raise AnalysisLogUnavailableError(
+                f"バトル結果 {result.id} はバトルログを持っていません。"
+            )
+        print(f"バトル結果 {result.id}（ルーム {result.room_id or '-'}）を取得します")
+        if room_id is not None and room_results > 1:
+            print(
+                f"  ルームには {room_results} 件の結果があります。"
+                "他の参加者の視点にするには --result か --user-id を指定してください。"
+            )
+        try:
+            logs = download_analysis_log(result.battle_log_id)
+        except AnalysisLogNotFoundError:
+            raise AnalysisLogUnavailableError(
+                "解析用ログがありません。保存期間（30日）を過ぎて削除されたか、"
+                "解析用ログの保存を始める前の戦闘です。"
+            ) from None
+        except RuntimeError as exc:
+            raise AnalysisLogUnavailableError(str(exc)) from None
+        path, manifest, removed = save_production_generation(
+            result, logs, session, label=args.label, pinned=args.pin
+        )
+        session.rollback()
+
+    battle = manifest.battles[0]
+    print(
+        f"  {battle.win_loss} 撃墜 {battle.kills} / {battle.elapsed_time:.1f}s"
+        f" / ログ {len(logs)} 行 / 判定する機体: {manifest.player_name}"
+    )
+    print(f"保存しました: {path}")
+    for removed_path in removed:
+        print(f"  古い世代を削除しました: {removed_path.name}")
+    if not args.pin:
+        print("  新しい世代が増えると削除されます。残すときは pin を使ってください。")
+    return 0
+
+
+def _parse_uuid(value: str | None, option: str) -> uuid.UUID | None:
+    if value is None:
+        return None
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        raise ValueError(f"{option} には UUID を指定してください: {value}") from None
+
+
 def _format_generation(manifest: Manifest) -> str:
     summary = manifest.summary
     return (
         f"{'*' if manifest.pinned else ' '} {manifest.generation_id:<40}"
+        f" {'本番' if manifest.source == 'production' else 'local':<5}"
         f" {manifest.created_at:%Y-%m-%d %H:%M:%S}"
         f" {manifest.label:<20} {summary.battles:>4} 戦"
         f" {summary.wins:>3} 勝 {summary.losses:>3} 敗"
@@ -146,7 +217,7 @@ def _cmd_list(_args: argparse.Namespace) -> int:
     if not generations:
         print(f"世代がありません（{GENERATIONS_DIR}）")
         return 0
-    print(f"  {'世代':<40} {'日時':<19} {'ラベル':<20}   戦闘数  勝敗")
+    print(f"  {'世代':<40} {'出どころ':<5} {'日時':<19} {'ラベル':<20}   戦闘数  勝敗")
     for _path, manifest in generations:
         print(_format_generation(manifest))
     print(
@@ -439,6 +510,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.set_defaults(func=_cmd_run)
 
+    fetch_log = sub.add_parser(
+        "fetch-log",
+        help="本番の戦闘の解析用ログを取得し、/dev/sim で再生できる世代として保存する",
+        description=(
+            "バトル結果ID（またはルームID）から解析用ログを GCS で引き、fuzzy_scores つきの"
+            " 1戦だけの世代（manifest.json / battle_001.json）として保存する。"
+            " DB は Read Only で読むだけ。GCS には BATTLE_LOG_GCS_BUCKET と"
+            " Application Default Credentials が必要。"
+        ),
+    )
+    target = fetch_log.add_mutually_exclusive_group(required=True)
+    target.add_argument("--result", metavar="ID", help="バトル結果ID")
+    target.add_argument("--room", metavar="ID", help="ルームID")
+    fetch_log.add_argument(
+        "--user-id",
+        metavar="USER_ID",
+        help="--room で、この Clerk User ID の視点の結果を選ぶ",
+    )
+    fetch_log.add_argument(
+        "--label", help="世代のラベル（省略時は prod-<バトル結果IDの先頭8桁>）"
+    )
+    fetch_log.add_argument(
+        "--pin",
+        action="store_true",
+        help="ピン留めして世代管理で削除されないようにする",
+    )
+    fetch_log.set_defaults(func=_cmd_fetch_log)
+
     list_parser = sub.add_parser("list", help="保存した世代を一覧表示する")
     list_parser.set_defaults(func=_cmd_list)
 
@@ -611,7 +710,7 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except (
         ReadOnlyConfigError,
-        ValueError,
+        ValueError,  # fetch_log の BattleResultNotFoundError などを含む
         FileExistsError,
         FileNotFoundError,
     ) as exc:
