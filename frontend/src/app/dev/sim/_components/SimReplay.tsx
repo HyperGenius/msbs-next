@@ -48,7 +48,8 @@ export default function SimReplay({ manifest, index, onClose }: SimReplayProps) 
     <div className="bg-gray-800 border border-green-800 rounded-lg flex flex-col">
       <ModalHeader battle={result} missionName={`${manifest.label} #${index}`} onClose={onClose} />
       <p className="px-4 pt-2 text-xs text-gray-500">
-        seed {battle.seed} · {battle.steps_used} steps · {battle.elapsed_time.toFixed(1)}秒 ·{" "}
+        {manifest.source === "production" ? "本番の戦闘" : `seed ${battle.seed}`} · {battle.steps_used}{" "}
+        steps · {battle.elapsed_time.toFixed(1)}秒 ·{" "}
         {battle.log_count.toLocaleString()}件のログ
         {battle.timed_out && <span className="text-yellow-400"> · 最大ステップ数で打ち切り</span>}
       </p>

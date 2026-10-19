@@ -272,13 +272,16 @@ def unit_label(unit: UnitStats) -> str:
 
 def _conditions(manifest: Manifest) -> dict[str, str]:
     commit = manifest.git.commit[:_COMMIT_DIGITS] if manifest.git.commit else "-"
+    rules_hash = manifest.fuzzy_rules_hash
     return {
-        "ロスター": manifest.roster_name,
+        "ロスター": manifest.roster_name or "-",
         "判定する機体": manifest.player_name or "-",
-        "seed": str(manifest.seed),
-        "最大ステップ数": str(manifest.max_steps),
+        "seed": "-" if manifest.seed is None else str(manifest.seed),
+        "最大ステップ数": "-"
+        if manifest.max_steps is None
+        else str(manifest.max_steps),
         "コミット": commit + (" (dirty)" if manifest.git.dirty else ""),
-        "ファジィルール": manifest.fuzzy_rules_hash[:_HASH_DIGITS],
+        "ファジィルール": rules_hash[:_HASH_DIGITS] if rules_hash else "-",
         "戦域": f"{manifest.theater_id or 'なし'} / {manifest.environment}"
         f" / ミノフスキー {manifest.minovsky_density}",
     }

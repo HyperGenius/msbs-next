@@ -14,6 +14,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609�
 * `report` / `compare` で世代の勝率・戦闘時間・行動分布などを集計し、2つの世代を比べられる。`/dev/sim` でも比べられ、再生中に AI の判断（ファジィスコア）を確かめられる
 * `log-bench` / `log-compare` で、シード固定の50機の戦闘のログのサイズと端末の負荷を、保存形式ごとに測って比べられる（Epic #631 の計測基準。Issue #632）
 * `replay-fixture` で、旧形式と配信用ログの一致テストに使う戦闘のログを作れる（Issue #634）
+* `fetch-log` で、本番の戦闘の解析用ログ（GCS）を取得し、`/dev/sim` でファジィスコア付きで再生できる（Issue #637）
 
 ### 今後の予定（Epic #608）
 
@@ -367,7 +368,7 @@ python -m scripts.simulation.local_sim unpin 20261005-2130
 * ピン留めした世代は5世代の数に含めず、削除しない。`run --pin` で最初からピン留めできる
 * `pin` / `unpin` の引数は世代ID、その前方一致、またはラベル。複数の世代に該当するとエラーにする
 * ピン留めを外した世代は、次の `run` で新しい5世代に入らなければ削除される
-* `list` は世代を古い順に、世代ID・日時・ラベル・戦闘数・勝敗・ピン留め（行頭の `*`）で表示する
+* `list` は世代を古い順に、世代ID・出どころ（`local` / `本番`）・日時・ラベル・戦闘数・勝敗・ピン留め（行頭の `*`）で表示する
 * `manifest.json` が無いディレクトリと一時ディレクトリは、一覧にも削除の対象にもならない
 
 ### 検証（run）
@@ -769,3 +770,68 @@ python -m scripts.simulation.local_sim replay-fixture --roster replay6
 * DB には接続しない（`run` と同じく `forbid_database()` を呼ぶ）
 * 今のフィクスチャは、テスト用の SQLite でマスターから作った6機のロスター（生成 NPC 4・エース 2、戦域 `solomon`）で作った。撃破・クリティカル・EN の記録・相手の切り替えを含む。格闘（`MELEE_COMBO`・`MELEE_CLASH`）・ブースト・仕切り直しは含まない。これらの行は丸めと null の省略だけを受けるため、変換のルールは `test_replay_log.py` で確かめている
 
+---
+
+## fetch-log: 本番の解析用ログの取得
+
+Issue #637 で作った。プレイヤーから報告された本番の戦闘を、手元の `/dev/sim` でファジィスコア付きで追うためのコマンド。
+解析用ログ（エンジンの出力をデバッグ項目ごと gzip したもの。[battle-log-feature.md](battle-log-feature.md) の「解析用ログ」）を GCS から取り、
+`run` と同じ形式（`manifest.json` / `battle_001.json`）の世代として保存する。
+
+```bash
+cd backend
+python -m scripts.simulation.local_sim fetch-log --result <バトル結果ID>
+python -m scripts.simulation.local_sim fetch-log --room <ルームID> --user-id user_xxxx --label report-1021 --pin
+```
+
+| オプション | 説明 |
+|---|---|
+| `--result <ID>` | バトル結果（`battle_results.id`）のID。`--room` とどちらか1つが必須 |
+| `--room <ID>` | ルームID。ルームは参加者ごとに結果を持つので、`--user-id` に合う結果、無ければエントリーが早い結果を選ぶ。複数あるときは件数を表示する |
+| `--user-id <ID>` | `--room` で、この Clerk User ID の視点の結果を選ぶ |
+| `--label <名前>` | 世代のラベル。既定は `prod-<バトル結果IDの先頭8桁>` |
+| `--pin` | ピン留めする |
+
+* 必要な設定
+  * `backend/.env` の `NEON_READONLY_DATABASE_URL`（[準備: Read Only の接続](#準備-read-only-の接続)）。`fetch` と同じ Read Only 接続で `battle_results` を読むだけ。DB には書き込まず、最後にロールバックする
+  * `BATTLE_LOG_GCS_BUCKET`（本番は `msbs-next-battle-logs-prod`）と、`gcloud auth application-default login` の認証情報
+* ログの取得元は `analysis-logs/{battle_log_id}.ndjson.gz`。`battle_log_id` は `battle_results` から引く
+* 解析用ログは30日で削除される。無い場合は「解析用ログがありません。保存期間（30日）を過ぎて削除されたか、解析用ログの保存を始める前の戦闘です。」と表示して終了する（世代は作らない）
+* `battle_001.json` の表示用項目（`player_info` / `enemies_info` / `obstacles_info` / `map_bounds` / `part_hit_summary` など）は `BattleResult` の値をそのまま入れる。
+  戦域名・環境名・表示プリセットはマスターから引く（`TheaterService.labels_for()`）。`logs` は解析用ログをそのまま入れる（`fuzzy_scores` / `strategy_mode` を含む）
+* `report.json` も作るので、`report` / `compare` も使える
+
+### 本番の世代とローカルの世代の違い
+
+`manifest.json` の `source` が `production` の世代は、本番で動いた戦闘を再現したものではなく、記録を取り込んだもの。次の項目が `run` の世代と違う。
+
+| 項目 | 本番の世代 |
+|---|---|
+| `source` / `source_battle_result_id` / `source_room_id` | `production` / 取得元のバトル結果ID / ルームID。`run` の世代の `source` は `local`（古い世代は項目なしで、`local` として扱う） |
+| `roster_name` / `roster_file` / `player_entry_index` | null。`roster.json` は作らない |
+| `seed`（`battles[].seed` も） / `max_steps` | null。本番はシードも最大ステップ数も保存していない |
+| `git` / `fuzzy_rules_hash` | 空 / null。取得時点のコードは、本番で戦闘したときのコードとは限らない |
+| `rounds` / `battles` | 1。1つの世代に1戦だけ入る |
+| `elapsed_time` / `steps_used` | ログの最大の時刻 / ログの時刻の種類数（目安）。本番はどちらも保存していない |
+| `timed_out` | 常に false（本番は打ち切りを保存していない） |
+
+* 勝敗が `WIN` / `LOSE` 以外の結果と、機体・障害物・フィールド範囲の表示用項目が無い古い結果は取り込めない（エラーにする）
+* シードが無いので、本番の戦闘をローカルで再実行して再現することはできない。再生して調べる用途
+
+### 世代管理
+
+本番から取得した世代も、`run` の世代と同じ扱いにする。ピン留めしていない世代が5つを超えたら古い順に削除する。
+取得した世代を残したいときは `--pin` を付けるか、`pin` を使う。
+解析用ログは30日で消えるため、後で見直す戦闘はピン留めしておく。
+
+### /dev/sim での見分け方
+
+* 世代一覧に「本番」のバッジを出し、ロスター名の代わりに取得元のバトル結果IDを表示する
+* 戦闘の一覧ではシードを出さない。再生画面の見出しは `seed N` の代わりに「本番の戦闘」と出す
+* 再生と AI の判断（ファジィスコア）の表示は、`run` の世代と同じ（[AI の判断（デバッグ）](#devsim-世代の比較とaiの判断の表示)）
+* 条件の比較では、null の項目を `-` と表示する
+
+### 検証（fetch-log）
+
+* `tests/unit/test_local_sim_fetch_log.py`: 結果とログからの記録の組み立て、バトル結果IDとルームIDでの選択、`manifest.json` / `battle_001.json` / `report.json` の保存、世代管理とピン留め、不正なラベルで世代を残さないこと、解析用ログ（gzip した NDJSON）の取得と、無いときのエラー
+* 実際の本番DBと GCS への接続は、このリポジトリのテストでは行っていない。本番の戦闘での動作確認は、オーナーの認証情報が必要なため、マージ後に `fetch-log` で行う

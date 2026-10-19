@@ -11,7 +11,8 @@ export interface LocalSimBattleSummary {
     /** 1 始まりの戦闘番号 */
     index: number;
     file: string;
-    seed: number;
+    /** 戦闘のシード。本番から取得した戦闘では null */
+    seed: number | null;
     win_loss: "WIN" | "LOSE";
     kills: number;
     /** 戦闘の経過時間（秒） */
@@ -30,7 +31,10 @@ export interface LocalSimGenerationSummary {
     total_kills: number;
 }
 
-/** 1回の `run` の実行条件と勝敗（`manifest.json`） */
+/** 世代の出どころ。local は `run` で実行、production は `fetch-log` で本番から取得 */
+export type LocalSimSource = "local" | "production";
+
+/** 1回の `run` の実行条件と勝敗、または `fetch-log` で取得した本番の戦闘（`manifest.json`） */
 export interface LocalSimManifest {
     schema_version: number;
     /** 世代ディレクトリの名前 */
@@ -38,15 +42,23 @@ export interface LocalSimManifest {
     label: string;
     created_at: string;
     pinned: boolean;
-    roster_name: string;
+    /** 古い世代には無い。無いときは local */
+    source?: LocalSimSource;
+    /** 本番から取得した世代の、取得元のバトル結果ID */
+    source_battle_result_id?: string | null;
+    /** 本番から取得した世代の、取得元のルームID */
+    source_room_id?: string | null;
+    /** 本番から取得した世代では null */
+    roster_name: string | null;
     player_name: string | null;
-    /** 1戦目のシード */
-    seed: number;
+    /** 1戦目のシード。本番から取得した世代では null */
+    seed: number | null;
     rounds: number;
-    max_steps: number;
+    /** 本番から取得した世代では null */
+    max_steps: number | null;
     git: { commit: string | null; dirty: boolean | null };
-    /** backend/data/fuzzy_rules/ の全ファイルの SHA-256 */
-    fuzzy_rules_hash: string;
+    /** backend/data/fuzzy_rules/ の全ファイルの SHA-256。本番から取得した世代では null */
+    fuzzy_rules_hash: string | null;
     theater_id: string | null;
     environment: string;
     minovsky_density: number;
@@ -57,7 +69,7 @@ export interface LocalSimManifest {
 /** `battle_NNN.json` からログを除いたもの。ログは NDJSON で別に取得する */
 export interface LocalSimBattle {
     index: number;
-    seed: number;
+    seed: number | null;
     win_loss: "WIN" | "LOSE";
     kills: number;
     elapsed_time: number;
