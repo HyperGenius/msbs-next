@@ -92,7 +92,7 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 
 一方で `MobileSuit.weapons`（JSON列）は**バトルエンジンが直接参照するためのスナップショットのリスト**であり、装備操作のたびに `PlayerWeapon` の内容から書き込まれる（dual-write）。装備状態を問い合わせる/表示する処理は必ず `PlayerWeapon.equipped_ms_id`/`equipped_slot` を正として使うこと。装備中の武器を改造した場合は dual-write だけでは反映されないため、`WeaponService.resync_mobile_suit_weapons` がバトルエントリー登録時（`app/routers/entries.py`）に再同期している。
 
-**`weapon_power`（機体強化）との関係**: `EngineeringService`（`app/services/engineering_service.py`）の `weapon_power` 強化項目は、`PlayerWeapon` インスタンス単位ではなく `MobileSuit.weapons` の**全スロットに一律加算**する実装（`_apply_weapon_power_upgrade`）のまま維持されている。武器を外す・付け替えると強化投資が失われるが、これは「機体側のパイロット/システム補正」として意図的に武器インスタンス単位の改造（`custom_stats`）とは別軸として維持する方針（Issue #404 で決定、方針(b)）。詳細は `docs/features/weapon-data-model.md` を参照。
+**`weapon_power`（機体強化）との関係**: `EngineeringService`（`app/services/engineering_service.py`）の `weapon_power` 強化項目は、`PlayerWeapon` インスタンス単位ではなく機体側の補正として、武器インスタンス単位の改造（`custom_stats`）とは別軸で扱う（Issue #404 の方針(b)）。加算値は `MobileSuit.weapon_power_bonus` に持ち、`MobileSuit.weapons[*].power` には加算済みの値を書く（Issue #657）。**`MobileSuit.weapons` を書き直す処理を追加・変更する場合は、`EngineeringService.add_weapon_power_bonus()` で加算値を足し直すこと**（購入した武器のスロットは `WeaponService.build_slot_weapon()` を使う）。足し直さないと、払ったクレジット分の威力が消える（resync が加算を消していた不具合が Issue #657）。詳細は `docs/features/weapon-data-model.md` を参照。
 
 ## バトル結果の集計値（ダイジェスト等）は書き込み時に1回だけ計算する
 

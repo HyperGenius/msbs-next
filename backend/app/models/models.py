@@ -228,6 +228,12 @@ class MobileSuit(SQLModel, table=True):
     turning_bonus: float = Field(
         default=1.0, description="旋回補正 (基準値: 1.0, 将来の向き・旋回速度用)"
     )
+    weapon_power_bonus: int = Field(
+        default=0,
+        description=(
+            "機体強化で全スロットの武器の威力に足す値。weapons の各 power には加算済み"
+        ),
+    )
 
     # Physics Parameters for Inertia Model (Phase 3-1)
     max_speed: float = Field(default=80.0, description="最大速度 (m/s)")

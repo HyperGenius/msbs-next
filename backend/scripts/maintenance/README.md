@@ -131,3 +131,45 @@ python scripts/maintenance/sync_weapon_master.py --weapon-id giant_bazooka --app
 - 購入した武器のスロットは、バトルエントリー時と同じ `resync_mobile_suit_weapons` で作り直します。そのため、`--fields` で絞っても、未反映だった改造差分などほかのフィールドが変わることがあります（表示に出ます）。
 - エースパイロットの武器は更新せず、差分の件数だけを表示します。
 - ショップの表示は、backend のマスターデータのキャッシュ（`MASTER_DATA_CACHE_TTL_SEC`、既定60秒）が切れるまで古い値のままです。
+
+---
+
+# backfill_weapon_power_bonus.py
+
+機体強化（`weapon_power`）の加算値を既存の機体から推定し、`mobile_suits.weapon_power_bonus` に設定するスクリプトです（Issue #657）。
+マイグレーション `o9c0d1e2f3a4`（`weapon_power_bonus` の追加）を当てたあと、1回だけ実行します。推定のしかたは `docs/features/weapon-data-model.md` の「機体強化の加算値を機体に持つ」を参照してください。
+
+> ⚠️ `--apply` を付けると実DB（Neon）へ書き込みます。本番に対しては、読み取りのみの実行結果を確認・承認してから実行してください。
+
+> ⚠️ `sync_weapon_master.py` より先に実行してください。武器マスターの同期は初期装備の威力をマスターの値に戻すため、推定に使う差が消えます。
+
+## 使い方
+
+```bash
+cd backend
+
+# 推定結果を表示するだけ（書き込まない）
+python scripts/maintenance/backfill_weapon_power_bonus.py
+
+# 書き込む（確認プロンプトあり）
+python scripts/maintenance/backfill_weapon_power_bonus.py --apply
+```
+
+## オプション
+
+| オプション | 説明 |
+|---|---|
+| `--apply` | 書き込む。付けなければ推定結果の表示のみ |
+| `--yes` / `-y` | `--apply` の確認プロンプトを省く |
+
+## 出力の読み方
+
+```
+3f2c...  Zaku II (user: user_xxx)
+  加算値: 6  スロットごとの差: [6, 0, ?]
+```
+
+- スロットごとの差は「威力 − 加算前の威力」です。`?` は加算前の威力が分からないスロット（武器マスターに無い武器、加算前から上限以上の武器）です。
+- 購入した武器のスロットの差が 0 なのは、resync で加算が消えたためです。書き込むと resync でこのスロットに加算を戻します。
+- 「※差がスロット間で揃っていません」と出た機体は、武器マスターの威力を後から変えた可能性があります。差の最大値を加算値にしているので、必要なら管理画面などで直してください。
+- 対象は `weapon_power_bonus` が 0 のプレイヤー機体だけです。2回目以降の実行では、設定済みの機体は表示されません。

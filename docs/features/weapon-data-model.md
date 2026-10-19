@@ -33,7 +33,7 @@ player_weapons (プレイヤー武器インスタンス)
 
 ## `weapon_power`（機体強化）と武器改造の関係 — 方針(b)を採用
 
-既存の機体強化機能 `EngineeringService` には `weapon_power` という強化項目があり、装備中の**全武器**の `MobileSuit.weapons[*].power` に一律加算する実装になっている（`_apply_weapon_power_upgrade`）。これは武器インスタンス単位ではなく機体のJSONスナップショットに乗っているため、武器を外す・付け替えると強化投資が失われるという既知の制約がある。
+既存の機体強化機能 `EngineeringService` には `weapon_power` という強化項目があり、装備中の**全武器**の `MobileSuit.weapons[*].power` に一律加算する（`_apply_weapon_power_upgrade`）。Issue #404 の時点では加算値をどこにも記録していなかったため、武器を外す・付け替えると強化投資が失われる制約があった。この制約は Issue #657 で解消した（下記「機体強化の加算値を機体に持つ」）。
 
 本Issueでは、以下の理由から **`weapon_power` を武器インスタンス単位の `custom_stats` へ統合しない（方針(b)）** ことを決定した:
 
@@ -43,6 +43,37 @@ player_weapons (プレイヤー武器インスタンス)
 そのため `weapon_power` は「機体側のパイロット/システム補正」として用途を再定義し、`EngineeringService` の実装はそのまま維持する。武器インスタンス単位の改造（`custom_stats`）とは別軸の強化として、コード上のコメント・将来のUIコピーで明確に区別する（`EngineeringService` docstring 参照）。
 
 この決定に伴い、**Alembic マイグレーションは本Issueでは不要**（`custom_stats` は既存カラムで、スキーマ変更を伴わない）。
+
+### 機体強化の加算値を機体に持つ（Issue #657）
+
+以前は `weapon_power` の加算値を記録していなかった。そのため `MobileSuit.weapons` を書き直す処理が、加算を消していた。
+
+- 購入した武器のスロット: `resync_mobile_suit_weapons`（バトルエントリー時・武器改造時）が `base_snapshot + custom_stats` で置き換えていた。払ったクレジット分の威力が、次のエントリーで消えていた
+- 初期装備のスロット: 武器マスターの同期（Issue #656）が、マスターの `power` で上書きしていた
+
+加算値を `MobileSuit.weapon_power_bonus`（int、既定 0）に持つようにした。`MobileSuit.weapons[*].power` には引き続き加算済みの値を書く。バトルエンジン・フロントエンドは `MobileSuit.weapons` をそのまま読めばよい。
+
+`MobileSuit.weapons` を書き直す処理は、すべて `EngineeringService.add_weapon_power_bonus(power, bonus)` で加算値を足し直す。
+
+| 処理 | 書き込む威力 |
+|---|---|
+| 機体強化（`_apply_weapon_power_upgrade`） | `weapon_power_bonus` を `WEAPON_POWER_INCREASE` 増やし、全スロットの威力にも同じ値を足す |
+| 装備（`equip_weapon`）・resync（`resync_mobile_suit_weapons`） | `WeaponService.build_slot_weapon`: `base_snapshot + custom_stats` の威力 + `weapon_power_bonus` |
+| 武器マスターの同期の初期装備スロット | マスターの威力 + `weapon_power_bonus` |
+
+- 加算後の威力は `MAX_WEAPON_POWER_CAP` で止める。元の威力が上限以上の武器には足さない（以前は上限まで下げていた）
+- 武器を付け替えても加算値は機体に残り、新しい武器にも足される
+- 強化コストと上限判定は、従来どおりスロット0の武器の威力から計算する
+
+#### 既存データの移行
+
+マイグレーション `o9c0d1e2f3a4` は `weapon_power_bonus` を 0 で追加する。既存の機体の加算値は `backend/scripts/maintenance/backfill_weapon_power_bonus.py` で推定して設定する（使い方は `backend/scripts/maintenance/README.md`）。
+
+- 各スロットの「威力 − 加算前の威力」を求める。加算前の威力は、購入した武器なら `base_snapshot + custom_stats`、初期装備なら武器マスターの値
+- 差の最大値を `WEAPON_POWER_INCREASE` の倍数に切り捨てて加算値にする。購入した武器のスロットは resync で加算が消えている場合があるため、最大値を採る
+- 設定後に resync し、購入した武器のスロットに加算を戻す
+- 加算値を正確に復元できない場合がある。武器マスターの威力を後から変えた場合は、初期装備の差がずれる。初期装備をすべて外した機体は、差が残っていない。差がスロット間で揃わない機体は、スクリプトが「※差がスロット間で揃っていません」と表示する
+- `sync_weapon_master.py` より先に実行する。同期は初期装備の威力をマスターの値 + `weapon_power_bonus` に直すため、`weapon_power_bonus` が 0 のままだと推定に使う差が消える
 
 ---
 
@@ -137,7 +168,7 @@ return Weapon(**merged)
 |---|---|---|
 | `player_weapons.base_snapshot` | 武器の購入時 | マスターの値で上書きする。`custom_stats`（改造差分・部位配分の上書き）は触らない |
 | `mobile_suits.weapons` の購入した武器のスロット | 装備時の dual-write、`resync_mobile_suit_weapons` | `base_snapshot` を直したあと、`resync_mobile_suit_weapons` で作り直す |
-| `mobile_suits.weapons` の初期装備のスロット（`player_weapons` の行が無い） | 機体の購入・スターター機体・NPC 機体の作成時に、機体マスターの `specs.weapons` をコピー | `power` を含めてマスターの値で上書きする。初期装備は改造できないものとして扱う |
+| `mobile_suits.weapons` の初期装備のスロット（`player_weapons` の行が無い） | 機体の購入・スターター機体・NPC 機体の作成時に、機体マスターの `specs.weapons` をコピー | マスターの値で上書きする。`power` はマスターの値 + `weapon_power_bonus`。初期装備は改造できないものとして扱う |
 | `master_mobile_suits.specs.weapons` | 機体マスターの登録・編集時 | マスターの値で上書きする。これから作られる機体のコピー元になる |
 
 - `base_snapshot` は「購入時のスペック」ではなく「武器マスターに追従するスペック」として扱う。
@@ -145,7 +176,7 @@ return Weapon(**merged)
 - 機体マスターの武器は既定値のキーを省いて保存されているため、キーが無いフィールドは既定値として比べる。差分のあるキーだけを書き足す。
 - エースパイロット（`ace_pilots.mobile_suit.weapons`）は武器マスターとの対応付けが保証されないため更新しない。差分の件数だけを表示する。
 - エントリー済みの `battle_entries.mobile_suit_snapshot` はエントリー時点のスナップショットなので対象外。次のエントリーから反映される。
-- 初期装備のスロットに機体強化（`weapon_power`）で加算した威力は、同期で消える。購入した武器のスロットでも resync で消えている（#657）。
+- 機体強化（`weapon_power`）の加算は `weapon_power_bonus` から足し直すため、同期で消えない（#657）。
 
 ### Actions からの実行（Issue #662）
 
