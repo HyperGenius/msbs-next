@@ -172,6 +172,31 @@ function CameraInitializer({ px, py, pz, controlsRef }) {
 
 ---
 
+## BattleScene カメラ操作（Issue #677）
+
+### 操作の割り当て
+
+`OrbitControls` で次のように割り当てる。
+
+| 入力 | 操作 |
+|------|------|
+| マウス左ドラッグ | 回転 |
+| マウス右ドラッグ | パン |
+| マウスホイール | ズーム |
+| 1本指ドラッグ | 回転（`THREE.TOUCH.ROTATE`） |
+| 2本指ピンチ / ドラッグ | ズーム・パン（`THREE.TOUCH.DOLLY_PAN`） |
+
+- ズーム範囲は `minDistance={30}` 〜 `maxDistance={150}`
+- ビューアのコンテナには `touch-none` を付け、ブラウザのスクロール・ピンチズームがタッチを奪わないようにしている
+
+### タッチ操作が効かなかった不具合の修正
+
+`touches` を数値リテラル `{ ONE: 2, TWO: 1 }` で指定していた。three.js の定数は `TOUCH = { ROTATE: 0, PAN: 1, DOLLY_PAN: 2, DOLLY_ROTATE: 3 }` のため、実際には1本指が `DOLLY_PAN`、2本指が `PAN` になっていた。`OrbitControls` は1本指で `ROTATE` / `PAN`、2本指で `DOLLY_PAN` / `DOLLY_ROTATE` しか受け付けないので、タッチ操作がすべて無視されていた（マウス操作は `touches` を使わないため影響なし）。
+
+値の取り違えを防ぐため、`THREE.TOUCH.ROTATE` / `THREE.TOUCH.DOLLY_PAN` の定数で指定するよう修正した。
+
+---
+
 ## 自機向き・ターゲット方向の可視化
 
 ### 概要

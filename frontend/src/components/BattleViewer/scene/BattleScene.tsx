@@ -353,8 +353,8 @@ export function BattleScene({
                 enableDamping={true}
                 dampingFactor={0.05}
                 touches={{
-                    ONE: 2, // TOUCH.ROTATE - One finger to rotate
-                    TWO: 1  // TOUCH.DOLLY_PAN - Two fingers to zoom/pan
+                    ONE: THREE.TOUCH.ROTATE,
+                    TWO: THREE.TOUCH.DOLLY_PAN,
                 }}
             />
 
