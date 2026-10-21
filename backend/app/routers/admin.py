@@ -134,6 +134,8 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
         sensor_range=specs_raw.get("sensor_range", 500.0),
         beam_resistance=specs_raw.get("beam_resistance", 0.0),
         physical_resistance=specs_raw.get("physical_resistance", 0.0),
+        max_en=specs_raw.get("max_en", 1000),
+        en_recovery=specs_raw.get("en_recovery", 100),
         melee_aptitude=specs_raw.get("melee_aptitude", 1.0),
         shooting_aptitude=specs_raw.get("shooting_aptitude", 1.0),
         accuracy_bonus=specs_raw.get("accuracy_bonus", 0.0),

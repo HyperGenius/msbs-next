@@ -660,3 +660,59 @@ def test_create_invalid_terrain_grade_returns_422(client_admin):
         "/api/admin/mobile-suits", json=payload, headers=HEADERS
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+def test_create_defaults_en(client_admin):
+    """EN を指定せずに登録すると、MobileSuit と同じ既定値になること."""
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=SAMPLE_MS, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    specs = response.json()["specs"]
+    assert specs["max_en"] == 1000
+    assert specs["en_recovery"] == 100
+
+
+def test_create_and_update_en(client_admin):
+    """EN を登録でき、EN を含まない specs の更新では変わらないこと."""
+    payload = {
+        **SAMPLE_MS,
+        "specs": {**SAMPLE_MS["specs"], "max_en": 1200, "en_recovery": 40},
+    }
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["specs"]["en_recovery"] == 40
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"specs": {**SAMPLE_MS["specs"], "max_hp": 900}},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/test_gm",
+        json={"specs": {**SAMPLE_MS["specs"], "max_hp": 900, "en_recovery": 30}},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+
+    listed = client_admin.get("/api/admin/mobile-suits", headers=HEADERS).json()
+    test_gm = next(ms for ms in listed if ms["id"] == "test_gm")
+    assert test_gm["specs"]["max_hp"] == 900
+    assert test_gm["specs"]["max_en"] == 1200
+    assert test_gm["specs"]["en_recovery"] == 30
+
+
+def test_create_negative_en_recovery_returns_422(client_admin):
+    """EN 回復量が負なら 422 が返ること."""
+    payload = {
+        **SAMPLE_MS,
+        "specs": {**SAMPLE_MS["specs"], "en_recovery": -1},
+    }
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY

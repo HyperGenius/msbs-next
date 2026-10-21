@@ -39,6 +39,8 @@ _MASTER_SPEC_FIELDS = (
     "sensor_range",
     "beam_resistance",
     "physical_resistance",
+    "max_en",
+    "en_recovery",
     "melee_aptitude",
     "shooting_aptitude",
     "accuracy_bonus",

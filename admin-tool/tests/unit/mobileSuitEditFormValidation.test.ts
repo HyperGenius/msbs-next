@@ -37,6 +37,8 @@ const validMobileSuit = {
     sensor_range: 600,
     beam_resistance: 0.1,
     physical_resistance: 0.2,
+    max_en: 1000,
+    en_recovery: 100,
     melee_aptitude: 1.2,
     shooting_aptitude: 1.3,
     accuracy_bonus: 5.0,
@@ -171,6 +173,22 @@ describe("masterMobileSuitSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues.some((i) => i.path.includes("beam_resistance"))).toBe(true);
+  });
+
+  it("specs.en_recovery が負の場合はエラー", () => {
+    const result = masterMobileSuitSchema.safeParse({
+      ...validMobileSuit,
+      specs: { ...validMobileSuit.specs, en_recovery: -1 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("specs.max_en が整数でない場合はエラー", () => {
+    const result = masterMobileSuitSchema.safeParse({
+      ...validMobileSuit,
+      specs: { ...validMobileSuit.specs, max_en: 1000.5 },
+    });
+    expect(result.success).toBe(false);
   });
 
   it("specs.weapons が空配列の場合はエラー", () => {

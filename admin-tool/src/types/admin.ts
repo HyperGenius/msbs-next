@@ -48,6 +48,9 @@ export interface MasterMobileSuitSpec {
     sensor_range: number;
     beam_resistance: number;
     physical_resistance: number;
+    max_en: number;
+    /** 毎秒の EN 回復量 */
+    en_recovery: number;
     melee_aptitude: number;
     shooting_aptitude: number;
     accuracy_bonus: number;

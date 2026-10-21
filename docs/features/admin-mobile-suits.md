@@ -62,6 +62,7 @@ X-API-Key: <ADMIN_API_KEY>
 - `beam_generator_lv`: 0以上の整数。`specs.weapons` 内に `type == "BEAM"` かつ `required_beam_generator_lv` が `beam_generator_lv` を超える武器が含まれる場合は `422`（Issue #383）
 - `blueprint.duplicate_credit_value`: 0以上の整数。負の場合は `422`（Issue #554）
 - `blueprint.tech_requirements`: 購入に必要な技術Lvの一覧。存在しない技術・最大Lv超え・1未満・重複は `422`。指定するとその内容で置き換え、省略すると変更しない（Issue #569）
+- `specs.max_en` / `specs.en_recovery`: 0以上の整数。最大 EN と毎秒の EN 回復量。省略すると `1000` / `100`（`MobileSuit` と同じ既定値）。PUT で `specs` に含めなければ変更しない（Issue #675）
 - `specs.terrain_adaptability`: 環境タイプID → 地形適正ランク（`S`〜`D`）。それ以外のランクは `422`。キーが無い環境は環境タイプの既定ランクを使う。PUT で `specs` に含めるとその内容で置き換え、含めなければ変更しない（Issue #579）
 - DELETE 時: 同名機体がプレイヤー所有の mobile_suits テーブルに存在する場合は `409`
 
@@ -264,6 +265,25 @@ python scripts/seed/seed_master_data.py
 python scripts/seed/seed_master_data.py --force
 ```
 
+### EN（`max_en` / `en_recovery`）と作成済みの機体への反映（Issue #675）
+
+機体マスターの `specs.max_en` / `specs.en_recovery` は、機体の購入（`POST /api/shop/purchase/{id}`）と
+NPC 機の作成時に `mobile_suits` の同名カラムへコピーされる。バトルは `mobile_suits` 側の値を使う。
+`specs` にキーが無い機体マスター（Issue #675 より前に作ったもの）は既定値（`1000` / `100`）として扱う。
+
+コピーなので、機体マスターの EN を変えても**作成済みの機体は古い値のまま**になる。反映するには
+`backend/scripts/maintenance/sync_mobile_suit_en.py` を実行する（既定は差分の表示のみ。`--apply` で書き込む）。
+使い方は `backend/scripts/maintenance/README.md` を参照。
+
+| 同期先 | 扱い |
+|---|---|
+| プレイヤー機（`master_mobile_suit_id` が一致する行） | 同期する |
+| NPC 機（`user_id` が `npc-` で始まる） | 管理画面で機体ごとに調整するため、`--include-npc` を付けたときだけ同期する |
+| エース機（`ace_pilots.mobile_suit`） | 同期しない。エース専用の値を [admin-ace-pilots.md](admin-ace-pilots.md) の画面で設定する |
+| 練習機（`master_mobile_suit_id` が無い） | 同期しない（既定値のまま） |
+
+EN は機体強化（`/api/engineering/*`）の対象ではないため、機体マスターの値でそのまま上書きしてよい。
+
 ### キャッシュ
 
 - マスターデータは `MASTER_DATA_CACHE_TTL_SEC` 秒（デフォルト: 60秒）の TTL キャッシュで保持される
@@ -359,6 +379,7 @@ admin-tool/src/
 
 - `react-hook-form` + `zod` によるバリデーション
 - 全スペック・武装パラメータを編集可能（型番・日本語名・武器スロット数・ビームジェネレータLvを含む、Issue #383）
+- スペック欄で最大 EN・EN 回復量（/秒）を編集（Issue #675）。NPC 機・エース機の編集画面で機体マスターを取り込むと、EN もマスターの値で上書きする。取り込み後はラベルにマスターの値を併記し、異なる値は色を変える
 - 購入画面用フレーバーテキスト（`flavor_text`、1〜2行推奨）入力欄を追加（`WeaponEditForm` と同様、未入力は `null` に正規化して送信、Issue #483）
 - 「設計図」欄で標準配備フラグと重複時の換金額を編集（Issue #554）。換金額の空欄は、新規作成では初期値（価格の20%）、編集では変更なしとして送る
 - 「地形適正」欄で、環境タイプのマスター（`GET /api/admin/environments`）ごとに `S`〜`D` か「既定」を選ぶ（Issue #579）
@@ -489,6 +510,10 @@ NEON_DATABASE_URL="sqlite:///test.db" ADMIN_API_KEY="test_key" python -m pytest 
 - 武器数が `weapon_slot_count` を超える場合の 422（新規追加・更新の両方）（Issue #383）
 - BEAM武器の `required_beam_generator_lv` が `beam_generator_lv` を超える場合の 422（Issue #383）
 - 設計図設定の取得・作成時の指定・更新、価格変更で換金額が変わらないこと、負の換金額 422、設計図マスターが無い機体の保存（Issue #554）
+- `max_en` / `en_recovery` の既定値・保存・EN を含まない更新で変わらないこと・負の値 422（Issue #675）
+
+`tests/unit/test_mobile_suit_en_sync.py`（Issue #675）: 作成済みの機体への EN の同期（読み取りのみ・プレイヤー機のみ更新・`include_npc`・キーが無い機体マスターの既定値・冪等性・不正ID）。
+`tests/test_shop.py` の `test_purchase_mobile_suit_copies_en_from_master`: 購入した機体に機体マスターの EN がコピーされること。
 
 ```bash
 cd backend
@@ -512,7 +537,7 @@ npx vitest run tests/unit/
 
 テスト内容 (`tests/unit/mobileSuitEditFormValidation.test.ts`):
 - `weaponSchema`: id 形式 / 必須フィールド / accuracy 範囲 / type enum など
-- `masterMobileSuitSchema`: id 形式 / 価格 / スペック値範囲 / weapons 必須 1 件以上
+- `masterMobileSuitSchema`: id 形式 / 価格 / スペック値範囲（EN は0以上の整数、Issue #675） / weapons 必須 1 件以上
 
 テスト内容 (`tests/unit/blueprintSettings.test.ts`, Issue #554):
 - 設計図設定のバリデーション（負・小数の換金額はエラー、空欄は許可）
@@ -526,6 +551,7 @@ npx vitest run tests/unit/
 - `backend/app/services/mobile_suit_service.py` — CRUD ロジック
 - `backend/app/core/gamedata.py` — DB 読み書き・TTL キャッシュ
 - `backend/app/core/auth.py` — `verify_admin_api_key` 依存関数
+- `backend/app/services/mobile_suit_en_sync_service.py` / `backend/scripts/maintenance/sync_mobile_suit_en.py` — 作成済みの機体への EN の同期（Issue #675）
 - `backend/app/models/models.py` — `MasterMobileSuit` (テーブルモデル) / `MasterMobileSuitEntry` / `MasterMobileSuitCreate` / `MasterMobileSuitUpdate`
 - `backend/data/master/mobile_suits.json` — シードデータ（Git 管理継続）
 - `backend/scripts/seed/seed_master_data.py` — シードスクリプト

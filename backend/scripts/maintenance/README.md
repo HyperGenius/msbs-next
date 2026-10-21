@@ -74,6 +74,55 @@ python scripts/maintenance/offload_battle_logs_to_gcs.py --restore-archived --dr
 
 ---
 
+# sync_mobile_suit_en.py
+
+機体マスター（`master_mobile_suits.specs`）の `max_en` / `en_recovery` を、作成済みの機体（`mobile_suits`）へ同期するスクリプトです（Issue #675）。
+機体の EN は購入・作成時のコピーなので、機体マスターの EN を変えたあとに実行します。同期先とルールは `docs/features/admin-mobile-suits.md` を参照してください。
+
+> ⚠️ `--apply` を付けると実DB（Neon）へ書き込みます。本番に対しては、読み取りのみの実行結果を確認・承認してから実行してください。
+
+## 使い方
+
+```bash
+cd backend
+
+# 全機体マスターの差分を表示するだけ（書き込まない）
+python scripts/maintenance/sync_mobile_suit_en.py
+
+# 機体マスターを絞る（複数指定・カンマ区切りも可）
+python scripts/maintenance/sync_mobile_suit_en.py --master-id gm,zaku_ii
+
+# NPC機も同期する
+python scripts/maintenance/sync_mobile_suit_en.py --include-npc
+
+# 書き込む（確認プロンプトあり）
+python scripts/maintenance/sync_mobile_suit_en.py --apply
+```
+
+## オプション
+
+| オプション | 説明 |
+|---|---|
+| `--master-id ID` | 対象の機体マスターID。複数指定・カンマ区切り可。省略すると全機体マスター |
+| `--include-npc` | NPC機（`user_id` が `npc-` で始まる）も同期する。付けなければ差分の件数だけ表示する |
+| `--apply` | 書き込む。付けなければ差分の表示のみ |
+| `--yes` / `-y` | `--apply` の確認プロンプトを省く |
+
+## 出力の読み方
+
+```
+== mobile_suits（プレイヤー機）（12 行）
+  gm / en_recovery: 100 → 40 (8件)
+  zaku_ii / en_recovery: 100 → 40 (4件)
+```
+
+- 同期先ごとに、更新する行数と「機体マスターID / フィールド: 変更前 → 変更後 (件数)」を表示します。
+- 何度実行しても結果は同じです。同期済みなら「変更なし」と表示します。
+- エース機（`ace_pilots`）は対象外です。エース専用の EN は管理画面で設定してください。
+- バトルエントリー済みの機体は、エントリー時のスナップショット（`mobile_suit_snapshot`）で戦うため、次のエントリーから反映されます。
+
+---
+
 # sync_weapon_master.py
 
 武器マスター（`master_weapons`）の値を、武器スペックのコピーを持つデータへ同期するスクリプトです（Issue #656）。

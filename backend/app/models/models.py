@@ -629,6 +629,8 @@ class MasterMobileSuitSpec(SQLModel):
     sensor_range: float = 500.0
     beam_resistance: float = 0.0
     physical_resistance: float = 0.0
+    max_en: int = Field(default=1000, ge=0)
+    en_recovery: int = Field(default=100, ge=0, description="毎秒のEN回復量")
     melee_aptitude: float = 1.0
     shooting_aptitude: float = 1.0
     accuracy_bonus: float = 0.0

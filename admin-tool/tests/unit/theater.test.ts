@@ -169,6 +169,8 @@ describe("地形適正", () => {
         sensor_range: 500,
         beam_resistance: 0,
         physical_resistance: 0,
+        max_en: 1000,
+        en_recovery: 100,
         melee_aptitude: 1,
         shooting_aptitude: 1,
         accuracy_bonus: 0,

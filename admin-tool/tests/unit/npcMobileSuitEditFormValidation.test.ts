@@ -82,6 +82,8 @@ const master: MasterMobileSuit = {
     sensor_range: 600,
     beam_resistance: 0.1,
     physical_resistance: 0.1,
+    max_en: 1200,
+    en_recovery: 60,
     melee_aptitude: 1,
     shooting_aptitude: 1,
     accuracy_bonus: 0,
@@ -153,7 +155,7 @@ describe("toNpcMobileSuitPayload", () => {
 // ============================================================
 
 describe("masterToSpecValues", () => {
-  it("機体マスターのスペックと武装で上書きし、EN と戦術は現在の値を残す", () => {
+  it("機体マスターのスペック・EN・武装で上書きし、戦術は現在の値を残す", () => {
     const current = toNpcMobileSuitFormValues(npcSuit).mobile_suit;
     const next = masterToSpecValues(master, current);
     expect(next.name).toBe("Gelgoog");
@@ -161,7 +163,8 @@ describe("masterToSpecValues", () => {
     expect(next.missing_parts).toEqual(["HEAD"]);
     expect(next.weapons.map((w) => w.id)).toEqual(["beam_rifle"]);
     expect(next.weapon_slot_count).toBe(2);
-    expect(next.max_en).toBe(current.max_en);
+    expect(next.max_en).toBe(1200);
+    expect(next.en_recovery).toBe(60);
     expect(next.tactics).toEqual(current.tactics);
   });
 });

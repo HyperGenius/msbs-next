@@ -264,7 +264,7 @@ export function mergeWeaponSources(weapons: WeaponFormValues[], sources: Weapon[
 
 /**
  * 機体マスターのスペックをフォーム値に変換する。
- * 機体マスターに無い項目（EN・戦術）は current の値を残す。
+ * 機体マスターに無い項目（戦術）は current の値を残す。
  * 機体マスターの武器は武器マスターに無い ID も持てる。masterWeaponIds にある ID だけ武器マスターIDとして記録する。
  */
 export function masterToSpecValues(
@@ -283,6 +283,8 @@ export function masterToSpecValues(
     sensor_range: specs.sensor_range,
     beam_resistance: specs.beam_resistance,
     physical_resistance: specs.physical_resistance,
+    max_en: specs.max_en,
+    en_recovery: specs.en_recovery,
     missing_parts: missingPartsToFormValues(specs.missing_parts),
     weapon_slot_count: master.weapon_slot_count,
     weapons: specs.weapons.map((w) => ({
@@ -341,7 +343,7 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
 // マスター値の併記
 // ============================================================
 
-/** 機体マスターにも同じ項目があるもの。EN・戦術は機体マスターに無いため含めない */
+/** 機体マスターにも同じ項目があるもの。戦術は機体マスターに無いため含めない */
 export type MasterMobileSuitKey =
   | Exclude<keyof MasterMobileSuit["specs"], "weapons" | "missing_parts" | "terrain_adaptability">
   | "weapon_slot_count";
@@ -442,13 +444,13 @@ export function MobileSuitSpecSection({ namePlaceholder }: { namePlaceholder?: s
               ["beam_resistance", "ビーム耐性 (0-1)", "0.01"],
               ["physical_resistance", "実弾耐性 (0-1)", "0.01"],
               ["max_en", "最大 EN", "1"],
-              ["en_recovery", "EN 回復量", "1"],
+              ["en_recovery", "EN 回復量 (/秒)", "1"],
               ["weapon_slot_count", "武器スロット数", "1"],
             ] as const
           ).map(([key, label, step]) => (
             <div key={key}>
               <MasterValueLabel
-                masterValue={key === "max_en" || key === "en_recovery" ? undefined : masterMobileSuitValue(master, key)}
+                masterValue={masterMobileSuitValue(master, key)}
                 currentValue={current[key]}
               >
                 {label}
