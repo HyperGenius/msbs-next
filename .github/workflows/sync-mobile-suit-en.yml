@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       master_ids:
-        description: "対象の機体マスターID（カンマ区切り。空なら全機体マスター）"
+        description: "対象の機体マスターID・練習機ID（カンマ区切り。空なら全件）"
         type: string
         default: ""
       include_npc:
@@ -61,7 +61,7 @@ jobs:
             echo "## 機体マスター EN 同期"
             echo
             echo "- 実行モード: $mode"
-            echo "- master_ids: \`${MASTER_IDS:-（全機体マスター）}\`"
+            echo "- master_ids: \`${MASTER_IDS:-（全件）}\`"
             echo "- include_npc: $INCLUDE_NPC"
             echo "- 実行者: ${GITHUB_ACTOR}"
             echo

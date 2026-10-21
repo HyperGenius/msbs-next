@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy.orm import attributes
 from sqlmodel import Session
 
+from app.core.gamedata import STARTER_KITS
 from app.models.models import MasterMobileSuit, MobileSuit
 from app.services.mobile_suit_en_sync_service import (
     TARGET_NPC,
@@ -26,11 +27,14 @@ def _update_master(session: Session, **changes: object) -> None:
 
 
 def _create_ms(
-    session: Session, user_id: str | None, master_id: str | None = MASTER_MS_ID
+    session: Session,
+    user_id: str | None,
+    master_id: str | None = MASTER_MS_ID,
+    name: str = "Zaku II",
 ) -> MobileSuit:
     ms = MobileSuit(
         user_id=user_id,
-        name="Zaku II",
+        name=name,
         max_hp=800,
         current_hp=800,
         armor=50,
@@ -47,12 +51,15 @@ def _create_ms(
 
 @pytest.fixture
 def suits(session: Session) -> dict[str, MobileSuit]:
-    """プレイヤー機・NPC機・エース機のコピー・マスター無しの機体."""
+    """プレイヤー機・NPC機・エース機のコピー・機体マスターIDの無い機体."""
     return {
         "player": _create_ms(session, "en_sync_user"),
         "npc": _create_ms(session, "npc-0123456789abcdef"),
         "ace_copy": _create_ms(session, None),
-        "no_master": _create_ms(session, "en_sync_user", master_id=None),
+        # 機体マスターIDのカラムを追加する前に購入した機体
+        "by_name": _create_ms(session, "en_sync_user", master_id=None),
+        # 機体名を変えると機体マスターを引けない
+        "renamed": _create_ms(session, "en_sync_user", master_id=None, name="My Zaku"),
     }
 
 
@@ -66,8 +73,8 @@ def test_dry_run_reports_changes_without_writing(
     session.rollback()
 
     assert report.has_changes
-    assert report.changes[(TARGET_PLAYER, MASTER_MS_ID, "en_recovery", 100, 40)] == 1
-    assert report.updated_rows[TARGET_PLAYER] == 1
+    assert report.changes[(TARGET_PLAYER, MASTER_MS_ID, "en_recovery", 100, 40)] == 2
+    assert report.updated_rows[TARGET_PLAYER] == 2
     session.refresh(suits["player"])
     assert suits["player"].en_recovery == 100
 
@@ -86,7 +93,8 @@ def test_apply_updates_player_mobile_suits_only(
     assert (suits["player"].max_en, suits["player"].en_recovery) == (800, 40)
     assert suits["npc"].en_recovery == 100
     assert suits["ace_copy"].en_recovery == 100
-    assert suits["no_master"].en_recovery == 100
+    assert (suits["by_name"].max_en, suits["by_name"].en_recovery) == (800, 40)
+    assert suits["renamed"].en_recovery == 100
     assert report.updated_rows[TARGET_NPC_SKIPPED] == 1
     assert report.updated_rows[TARGET_NPC] == 0
 
@@ -141,3 +149,17 @@ def test_unknown_master_id_raises(session: Session) -> None:
     """機体マスターに無いIDを指定するとエラーになる."""
     with pytest.raises(ValueError, match="no_such_ms"):
         sync_mobile_suit_en(session, ["no_such_ms"])
+
+
+def test_starter_kit_mobile_suits_use_starter_kit_values(session: Session) -> None:
+    """機体マスターに無い練習機は、機体名で STARTER_KITS の EN を引く."""
+    kit = STARTER_KITS["ZEON"]
+    trainer = _create_ms(session, "en_sync_user", master_id=None, name=kit["name"])
+
+    report = sync_mobile_suit_en(session, [kit["id"]])
+    session.commit()
+
+    session.refresh(trainer)
+    assert trainer.max_en == kit["specs"]["max_en"]
+    assert trainer.en_recovery == kit["specs"]["en_recovery"]
+    assert report.updated_rows[TARGET_PLAYER] == 1

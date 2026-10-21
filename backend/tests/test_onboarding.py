@@ -5,6 +5,7 @@ import uuid
 from fastapi import status
 
 from app.core.auth import get_current_user
+from app.core.gamedata import STARTER_KITS
 from app.models.models import MobileSuit, Pilot
 from main import app
 
@@ -90,6 +91,8 @@ def test_register_pilot_zeon_success(client, session):
         ms = session.get(MobileSuit, ms_id)
         assert ms is not None
         assert "Zaku II Trainer" in ms.name
+        assert ms.max_en == STARTER_KITS["ZEON"]["specs"]["max_en"]
+        assert ms.en_recovery == STARTER_KITS["ZEON"]["specs"]["en_recovery"]
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 

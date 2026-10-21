@@ -2,7 +2,13 @@
 
 機体のスペックは購入・作成時に機体マスターからコピーされるため、
 機体マスターの EN を変えても作成済みの ``mobile_suits`` は古い値のままになる。
-対応付けには ``mobile_suits.master_mobile_suit_id`` を使う。
+
+コピー元は次の順に引く。
+``master_mobile_suit_id`` が NULL の機体（練習機や、カラム追加前に購入した機体）があるため。
+
+1. ``master_mobile_suit_id`` が指す機体マスター
+2. 機体名が一致する機体マスター（地形適正・武器スロット数の解決と同じ）
+3. 機体名が一致する練習機（``STARTER_KITS``。機体マスターに無い）
 
 - プレイヤー機: 同期する
 - NPC 機（``user_id`` が ``npc-`` で始まる）: 管理画面で機体ごとに調整するため、
@@ -17,6 +23,7 @@ from dataclasses import dataclass, field
 
 from sqlmodel import Session, col, select
 
+from app.core.gamedata import STARTER_KITS
 from app.models.models import MasterMobileSuit, MasterMobileSuitSpec, MobileSuit
 
 SYNCABLE_FIELDS: tuple[str, ...] = ("max_en", "en_recovery")
@@ -32,7 +39,7 @@ TARGET_NPC_SKIPPED = "mobile_suits（NPC機・対象外）"
 class MobileSuitEnSyncReport:
     """同期で変わる（変わった）値の集計."""
 
-    # (同期先, 機体マスターID, フィールド, 変更前, 変更後) → 件数
+    # (同期先, コピー元ID, フィールド, 変更前, 変更後) → 件数
     changes: Counter[tuple[str, str, str, int, int]] = field(default_factory=Counter)
     # 同期先 → 更新した行数
     updated_rows: Counter[str] = field(default_factory=Counter)
@@ -46,28 +53,54 @@ class MobileSuitEnSyncReport:
         )
 
 
-def _load_masters(
-    session: Session, master_ids: list[str] | None
-) -> dict[str, dict[str, int]]:
-    stmt = select(MasterMobileSuit)
-    if master_ids:
-        stmt = stmt.where(col(MasterMobileSuit.id).in_(master_ids))
-    # specs にキーが無い機体マスターは既定値として扱う（バトルで使われる値と同じ）
-    defaults = {
-        name: MasterMobileSuitSpec.model_fields[name].get_default()
+@dataclass
+class _Sources:
+    """コピー元の EN."""
+
+    # コピー元ID（機体マスターID または練習機ID） → フィールド → 値
+    values: dict[str, dict[str, int]]
+    # 機体名 → コピー元ID
+    ids_by_name: dict[str, str]
+
+
+def _en_values(specs: dict) -> dict[str, int]:
+    # specs にキーが無いものは既定値として扱う（バトルで使われる値と同じ）
+    return {
+        name: specs.get(name, MasterMobileSuitSpec.model_fields[name].get_default())
         for name in SYNCABLE_FIELDS
     }
-    masters = {
-        mms.id: {
-            name: (mms.specs or {}).get(name, defaults[name])
-            for name in SYNCABLE_FIELDS
-        }
-        for mms in session.exec(stmt).all()
-    }
-    missing = sorted(set(master_ids or []) - masters.keys())
+
+
+def _load_sources(session: Session, source_ids: list[str] | None) -> _Sources:
+    values: dict[str, dict[str, int]] = {}
+    ids_by_name: dict[str, str] = {}
+    for kit in STARTER_KITS.values():
+        if not source_ids or kit["id"] in source_ids:
+            values[kit["id"]] = _en_values(kit["specs"])
+            ids_by_name[kit["name"]] = kit["id"]
+
+    stmt = select(MasterMobileSuit)
+    if source_ids:
+        stmt = stmt.where(col(MasterMobileSuit.id).in_(source_ids))
+    # 機体名が練習機と重なったときは機体マスターを優先する
+    for mms in session.exec(stmt).all():
+        values[mms.id] = _en_values(mms.specs or {})
+        ids_by_name[mms.name] = mms.id
+
+    missing = sorted(set(source_ids or []) - values.keys())
     if missing:
-        raise ValueError(f"機体マスターに無いIDです: {', '.join(missing)}")
-    return masters
+        raise ValueError(f"機体マスター・練習機に無いIDです: {', '.join(missing)}")
+    return _Sources(values=values, ids_by_name=ids_by_name)
+
+
+def _source_id(ms: MobileSuit, sources: _Sources) -> str | None:
+    if ms.master_mobile_suit_id is not None:
+        return (
+            ms.master_mobile_suit_id
+            if ms.master_mobile_suit_id in sources.values
+            else None
+        )
+    return sources.ids_by_name.get(ms.name)
 
 
 def _target(ms: MobileSuit) -> str | None:
@@ -84,29 +117,33 @@ def sync_mobile_suit_en(
     master_ids: list[str] | None = None,
     include_npc: bool = False,
 ) -> MobileSuitEnSyncReport:
-    """機体マスターの EN を作成済みの機体へ反映し、変わった値を返す.
+    """機体マスター・練習機の EN を作成済みの機体へ反映し、変わった値を返す.
 
+    master_ids には機体マスターIDと練習機IDを指定できる。None なら全件を対象にする。
     commit はしない。呼び出し元が結果を見て commit か rollback を選ぶ。
     """
     report = MobileSuitEnSyncReport()
 
     with session.no_autoflush:
-        masters = _load_masters(session, master_ids)
-        if not masters:
+        sources = _load_sources(session, master_ids)
+        if not sources.values:
             return report
 
         stmt = select(MobileSuit).where(
-            col(MobileSuit.master_mobile_suit_id).in_(list(masters))
+            col(MobileSuit.master_mobile_suit_id).in_(list(sources.values))
+            | (
+                col(MobileSuit.master_mobile_suit_id).is_(None)
+                & col(MobileSuit.name).in_(list(sources.ids_by_name))
+            )
         )
         for ms in session.exec(stmt).all():
             target = _target(ms)
-            if target is None:
+            source_id = _source_id(ms, sources)
+            if target is None or source_id is None:
                 continue
-            master_id = ms.master_mobile_suit_id
-            assert master_id is not None
             diffs = {
                 name: (getattr(ms, name), new)
-                for name, new in masters[master_id].items()
+                for name, new in sources.values[source_id].items()
                 if getattr(ms, name) != new
             }
             if not diffs:
@@ -118,7 +155,7 @@ def sync_mobile_suit_en(
                     setattr(ms, name, new)
                 session.add(ms)
             for name, (old, new) in diffs.items():
-                report.changes[(target, master_id, name, old, new)] += 1
+                report.changes[(target, source_id, name, old, new)] += 1
             report.updated_rows[target] += 1
 
     return report

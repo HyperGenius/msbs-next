@@ -276,12 +276,18 @@ NPC 機の作成時に `mobile_suits` の同名カラムへコピーされる。
 GitHub Actions の `Sync Mobile Suit EN`（`.github/workflows/sync-mobile-suit-en.yml`）からも手動で実行できる。
 使い方は `backend/scripts/maintenance/README.md` を参照。
 
+コピー元は次の順に引く。`master_mobile_suit_id` は Issue #545 で追加したカラムで、それより前に購入した機体と練習機は NULL のため。
+
+1. `master_mobile_suit_id` が指す機体マスター
+2. 機体名が一致する機体マスター（地形適正・武器スロット数の解決と同じ。機体名を変えた機体は引けない）
+3. 機体名が一致する練習機（`app/core/gamedata.py` の `STARTER_KITS`。機体マスターに無い）
+
 | 同期先 | 扱い |
 |---|---|
-| プレイヤー機（`master_mobile_suit_id` が一致する行） | 同期する |
+| プレイヤー機 | 同期する |
 | NPC 機（`user_id` が `npc-` で始まる） | 管理画面で機体ごとに調整するため、`--include-npc` を付けたときだけ同期する |
 | エース機（`ace_pilots.mobile_suit`） | 同期しない。エース専用の値を [admin-ace-pilots.md](admin-ace-pilots.md) の画面で設定する |
-| 練習機（`master_mobile_suit_id` が無い） | 同期しない（既定値のまま） |
+| 練習機 | `STARTER_KITS` の値（`max_en` 200 / `en_recovery` 10）へ同期する。練習機はビーム兵器を使う前提にしないため低くしている |
 
 EN は機体強化（`/api/engineering/*`）の対象ではないため、機体マスターの値でそのまま上書きしてよい。
 

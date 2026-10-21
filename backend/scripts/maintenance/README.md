@@ -89,7 +89,7 @@ cd backend
 # 全機体マスターの差分を表示するだけ（書き込まない）
 python scripts/maintenance/sync_mobile_suit_en.py
 
-# 機体マスターを絞る（複数指定・カンマ区切りも可）
+# 機体マスターを絞る（複数指定・カンマ区切りも可。練習機は gm_trainer / zaku_ii_trainer）
 python scripts/maintenance/sync_mobile_suit_en.py --master-id gm,zaku_ii
 
 # NPC機も同期する
@@ -114,7 +114,7 @@ python scripts/maintenance/sync_mobile_suit_en.py --apply
 
 | オプション | 説明 |
 |---|---|
-| `--master-id ID` | 対象の機体マスターID。複数指定・カンマ区切り可。省略すると全機体マスター |
+| `--master-id ID` | 対象の機体マスターID・練習機ID。複数指定・カンマ区切り可。省略すると全件 |
 | `--include-npc` | NPC機（`user_id` が `npc-` で始まる）も同期する。付けなければ差分の件数だけ表示する |
 | `--apply` | 書き込む。付けなければ差分の表示のみ |
 | `--yes` / `-y` | `--apply` の確認プロンプトを省く |
@@ -129,6 +129,7 @@ python scripts/maintenance/sync_mobile_suit_en.py --apply
 
 - 同期先ごとに、更新する行数と「機体マスターID / フィールド: 変更前 → 変更後 (件数)」を表示します。
 - 何度実行しても結果は同じです。同期済みなら「変更なし」と表示します。
+- コピー元は `master_mobile_suit_id` → 機体名が一致する機体マスター → 機体名が一致する練習機（`STARTER_KITS`）の順に引きます。機体名を変えた機体は、`master_mobile_suit_id` が無いと対象外です。
 - エース機（`ace_pilots`）は対象外です。エース専用の EN は管理画面で設定してください。
 - バトルエントリー済みの機体は、エントリー時のスナップショット（`mobile_suit_snapshot`）で戦うため、次のエントリーから反映されます。
 

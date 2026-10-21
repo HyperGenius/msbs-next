@@ -64,7 +64,7 @@ def main() -> None:
     parser.add_argument(
         "--master-id",
         action="append",
-        help="対象の機体マスターID。複数指定やカンマ区切りも可。省略すると全機体マスター",
+        help="対象の機体マスターID・練習機ID。複数指定やカンマ区切りも可。省略すると全件",
     )
     parser.add_argument("--include-npc", action="store_true", help="NPC機も同期する")
     parser.add_argument(
