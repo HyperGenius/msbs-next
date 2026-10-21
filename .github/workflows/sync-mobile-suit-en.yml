@@ -1,0 +1,76 @@
+name: Sync Mobile Suit EN
+
+on:
+  workflow_dispatch:
+    inputs:
+      master_ids:
+        description: "対象の機体マスターID（カンマ区切り。空なら全機体マスター）"
+        type: string
+        default: ""
+      include_npc:
+        description: "true のとき NPC機も同期する"
+        type: boolean
+        default: false
+      apply:
+        description: "true のときだけ書き込む（false は差分の表示のみ）"
+        type: boolean
+        default: false
+
+# 差分の確認と書き込みの間に、別の実行で値が変わらないようにする
+concurrency:
+  group: sync-mobile-suit-en
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+
+      - name: Sync mobile suit EN
+        # pipefail を効かせるため shell を明示する（tee 経由でもスクリプトの失敗を拾う）
+        shell: bash
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          MASTER_IDS: ${{ inputs.master_ids }}
+          INCLUDE_NPC: ${{ inputs.include_npc }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          args=()
+          if [ -n "$MASTER_IDS" ]; then
+            args+=(--master-id "$MASTER_IDS")
+          fi
+          if [ "$INCLUDE_NPC" = "true" ]; then
+            args+=(--include-npc)
+          fi
+          if [ "$APPLY" = "true" ]; then
+            mode="書き込み（--apply）"
+            args+=(--apply --yes)
+          else
+            mode="読み取りのみ"
+          fi
+
+          {
+            echo "## 機体マスター EN 同期"
+            echo
+            echo "- 実行モード: $mode"
+            echo "- master_ids: \`${MASTER_IDS:-（全機体マスター）}\`"
+            echo "- include_npc: $INCLUDE_NPC"
+            echo "- 実行者: ${GITHUB_ACTOR}"
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          status=0
+          python scripts/maintenance/sync_mobile_suit_en.py "${args[@]}" 2>&1 \
+            | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

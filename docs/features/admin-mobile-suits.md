@@ -273,6 +273,7 @@ NPC 機の作成時に `mobile_suits` の同名カラムへコピーされる。
 
 コピーなので、機体マスターの EN を変えても**作成済みの機体は古い値のまま**になる。反映するには
 `backend/scripts/maintenance/sync_mobile_suit_en.py` を実行する（既定は差分の表示のみ。`--apply` で書き込む）。
+GitHub Actions の `Sync Mobile Suit EN`（`.github/workflows/sync-mobile-suit-en.yml`）からも手動で実行できる。
 使い方は `backend/scripts/maintenance/README.md` を参照。
 
 | 同期先 | 扱い |
