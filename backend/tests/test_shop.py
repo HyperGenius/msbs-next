@@ -158,6 +158,39 @@ def test_purchase_mobile_suit_success(client, session):
         app.dependency_overrides.pop(get_current_user, None)
 
 
+def test_purchase_mobile_suit_copies_en_from_master(client, session, monkeypatch):
+    """購入した機体に、機体マスターの EN（max_en / en_recovery）がコピーされること."""
+    from sqlalchemy.orm import attributes
+
+    from app.core import gamedata as gd
+    from app.models.models import MasterMobileSuit
+
+    master = session.get(MasterMobileSuit, "zaku_ii")
+    assert master is not None
+    master.specs = {**master.specs, "max_en": 800, "en_recovery": 40}
+    attributes.flag_modified(master, "specs")
+    session.add(master)
+    session.commit()
+    monkeypatch.setattr(gd, "_shop_listings_cache", None)
+    monkeypatch.setattr(gd, "_cache_expires_at", None)
+
+    test_user_id = "test_user_purchase_en"
+    _create_pilot(session, test_user_id, credits=1000, faction="ZEON")
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        response = client.post("/api/shop/purchase/zaku_ii")
+        assert response.status_code == status.HTTP_200_OK
+        mobile_suit = session.get(
+            MobileSuit, uuid.UUID(response.json()["mobile_suit_id"])
+        )
+        assert mobile_suit is not None
+        assert mobile_suit.max_en == 800
+        assert mobile_suit.en_recovery == 40
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
 def test_purchase_mobile_suit_insufficient_credits(client, session):
     """所持金不足で購入できないことをテスト."""
     # 所持金不足のパイロットを作成

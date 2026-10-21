@@ -58,6 +58,8 @@ export const masterMobileSuitSchema = z
       sensor_range: z.number({ message: "Must be a number" }).positive(),
       beam_resistance: z.number({ message: "Must be a number" }).min(0).max(1),
       physical_resistance: z.number({ message: "Must be a number" }).min(0).max(1),
+      max_en: z.number({ message: "Must be a number" }).int().nonnegative(),
+      en_recovery: z.number({ message: "Must be a number" }).int().nonnegative(),
       melee_aptitude: z.number({ message: "Must be a number" }).positive(),
       shooting_aptitude: z.number({ message: "Must be a number" }).positive(),
       accuracy_bonus: z.number({ message: "Must be a number" }),
@@ -138,6 +140,8 @@ const defaultValues: MobileSuitFormValues = {
     sensor_range: 500,
     beam_resistance: 0,
     physical_resistance: 0,
+    max_en: 1000,
+    en_recovery: 100,
     melee_aptitude: 1.0,
     shooting_aptitude: 1.0,
     accuracy_bonus: 0,
@@ -169,6 +173,8 @@ function toFormValues(ms: MasterMobileSuit): MobileSuitFormValues {
       sensor_range: ms.specs.sensor_range ?? 500,
       beam_resistance: ms.specs.beam_resistance ?? 0,
       physical_resistance: ms.specs.physical_resistance ?? 0,
+      max_en: ms.specs.max_en ?? 1000,
+      en_recovery: ms.specs.en_recovery ?? 100,
       melee_aptitude: ms.specs.melee_aptitude ?? 1.0,
       shooting_aptitude: ms.specs.shooting_aptitude ?? 1.0,
       accuracy_bonus: ms.specs.accuracy_bonus ?? 0,
@@ -360,6 +366,8 @@ export default function MobileSuitEditForm({
               ["specs.max_hp", "最大 HP"],
               ["specs.armor", "装甲"],
               ["specs.sensor_range", "索敵範囲"],
+              ["specs.max_en", "最大 EN"],
+              ["specs.en_recovery", "EN 回復量 (/秒)"],
             ] as const
           ).map(([name, label]) => (
             <div key={name}>
@@ -368,6 +376,8 @@ export default function MobileSuitEditForm({
               <FieldError msg={
                 name === "specs.max_hp" ? errors.specs?.max_hp?.message
                 : name === "specs.armor" ? errors.specs?.armor?.message
+                : name === "specs.max_en" ? errors.specs?.max_en?.message
+                : name === "specs.en_recovery" ? errors.specs?.en_recovery?.message
                 : errors.specs?.sensor_range?.message
               } />
             </div>

@@ -52,6 +52,9 @@ STARTER_KITS: dict[str, dict[str, Any]] = {
             "sensor_range": 500.0,
             "beam_resistance": 0.0,
             "physical_resistance": 0.0,
+            # 練習機はビーム兵器を使う前提にしないため、EN は少なくてよい
+            "max_en": 200,
+            "en_recovery": 10,
             "melee_aptitude": 1.0,
             "shooting_aptitude": 1.0,
             "accuracy_bonus": 0.0,
@@ -84,6 +87,9 @@ STARTER_KITS: dict[str, dict[str, Any]] = {
             "sensor_range": 500.0,
             "beam_resistance": 0.0,
             "physical_resistance": 0.0,
+            # 練習機はビーム兵器を使う前提にしないため、EN は少なくてよい
+            "max_en": 200,
+            "en_recovery": 10,
             "melee_aptitude": 1.0,
             "shooting_aptitude": 1.0,
             "accuracy_bonus": 0.0,

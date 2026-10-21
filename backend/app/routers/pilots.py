@@ -189,6 +189,8 @@ async def register_pilot(
         sensor_range=specs.get("sensor_range", 500.0),
         beam_resistance=specs.get("beam_resistance", 0.0),
         physical_resistance=specs.get("physical_resistance", 0.0),
+        max_en=specs.get("max_en", 1000),
+        en_recovery=specs.get("en_recovery", 100),
         melee_aptitude=specs.get("melee_aptitude", 1.0),
         shooting_aptitude=specs.get("shooting_aptitude", 1.0),
         accuracy_bonus=specs.get("accuracy_bonus", 0.0),

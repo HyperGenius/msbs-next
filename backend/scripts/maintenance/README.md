@@ -74,6 +74,67 @@ python scripts/maintenance/offload_battle_logs_to_gcs.py --restore-archived --dr
 
 ---
 
+# sync_mobile_suit_en.py
+
+機体マスター（`master_mobile_suits.specs`）の `max_en` / `en_recovery` を、作成済みの機体（`mobile_suits`）へ同期するスクリプトです（Issue #675）。
+機体の EN は購入・作成時のコピーなので、機体マスターの EN を変えたあとに実行します。同期先とルールは `docs/features/admin-mobile-suits.md` を参照してください。
+
+> ⚠️ `--apply` を付けると実DB（Neon）へ書き込みます。本番に対しては、読み取りのみの実行結果を確認・承認してから実行してください。
+
+## 使い方
+
+```bash
+cd backend
+
+# 全機体マスターの差分を表示するだけ（書き込まない）
+python scripts/maintenance/sync_mobile_suit_en.py
+
+# 機体マスターを絞る（複数指定・カンマ区切りも可。練習機は gm_trainer / zaku_ii_trainer）
+python scripts/maintenance/sync_mobile_suit_en.py --master-id gm,zaku_ii
+
+# NPC機も同期する
+python scripts/maintenance/sync_mobile_suit_en.py --include-npc
+
+# 書き込む（確認プロンプトあり）
+python scripts/maintenance/sync_mobile_suit_en.py --apply
+```
+
+## GitHub Actions から実行する
+
+ローカルの `backend/.env` が無くても、Actions の `Sync Mobile Suit EN`（`.github/workflows/sync-mobile-suit-en.yml`）から手動で実行できます。接続先は `secrets.NEON_DATABASE_URL` です。
+
+1. Actions の画面で `Sync Mobile Suit EN` を選び、`Run workflow` を押す。
+2. `master_ids`（カンマ区切り）を必要なら入力する。空なら全機体マスター。NPC機も同期するなら `include_npc` を `true` にする。
+3. `apply` は既定で `false`（差分の表示のみ）。まずこのまま実行し、ジョブサマリーの差分を確認する。
+4. 差分を承認したら、同じ入力で `apply` を `true` にして再実行する。書き込む前に同じ形式で差分が出るので、確認時との一致を見られる。
+
+実行ログとジョブサマリーに、実行者・入力値・差分が残ります。不正な機体マスターIDを指定するとジョブは失敗します。同時に実行できるのは1つだけです。
+
+## オプション
+
+| オプション | 説明 |
+|---|---|
+| `--master-id ID` | 対象の機体マスターID・練習機ID。複数指定・カンマ区切り可。省略すると全件 |
+| `--include-npc` | NPC機（`user_id` が `npc-` で始まる）も同期する。付けなければ差分の件数だけ表示する |
+| `--apply` | 書き込む。付けなければ差分の表示のみ |
+| `--yes` / `-y` | `--apply` の確認プロンプトを省く |
+
+## 出力の読み方
+
+```
+== mobile_suits（プレイヤー機）（12 行）
+  gm / en_recovery: 100 → 40 (8件)
+  zaku_ii / en_recovery: 100 → 40 (4件)
+```
+
+- 同期先ごとに、更新する行数と「機体マスターID / フィールド: 変更前 → 変更後 (件数)」を表示します。
+- 何度実行しても結果は同じです。同期済みなら「変更なし」と表示します。
+- コピー元は `master_mobile_suit_id` → 機体名が一致する機体マスター → 機体名が一致する練習機（`STARTER_KITS`）の順に引きます。機体名を変えた機体は、`master_mobile_suit_id` が無いと対象外です。
+- エース機（`ace_pilots`）は対象外です。エース専用の EN は管理画面で設定してください。
+- バトルエントリー済みの機体は、エントリー時のスナップショット（`mobile_suit_snapshot`）で戦うため、次のエントリーから反映されます。
+
+---
+
 # sync_weapon_master.py
 
 武器マスター（`master_weapons`）の値を、武器スペックのコピーを持つデータへ同期するスクリプトです（Issue #656）。
