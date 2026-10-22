@@ -1258,11 +1258,4 @@ class CombatMixin:
                 chatter=destroyed_chatter,
             )
         )
-        # 勝利判定 (ACTIVE な生存ユニットのteam_idの種類が1つ以下なら戦闘終了)
-        active_teams = {
-            u.team_id
-            for u in self.units  # type: ignore[attr-defined]
-            if u.current_hp > 0 and self.unit_resources[str(u.id)]["status"] == "ACTIVE"  # type: ignore[attr-defined]
-        }
-        if len(active_teams) <= 1:
-            self.is_finished = True  # type: ignore[attr-defined]
+        self._check_objective_complete()  # type: ignore[attr-defined]

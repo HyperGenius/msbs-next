@@ -6,13 +6,13 @@
 
 import random
 import uuid
-from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
 from app.engine import combat
 from app.engine.battle_digest import compute_unit_kills
 from app.engine.battle_utils import serialize_obstacles
+from app.engine.objectives import BattleObjective, ObjectiveResult
 from app.engine.rng import seed_numpy_rngs
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
@@ -31,6 +31,8 @@ class BattleOutcome:
     kills: int
     """プレイヤー機自身の撃墜数。チーム全体の撃墜数ではない。"""
     steps_used: int
+    objective_result: ObjectiveResult | None = None
+    """プレイヤー機のチームから見た作戦の結果。`player_win` はこの結果から決める。"""
 
 
 def snapshot_to_mobile_suit(snapshot: dict) -> MobileSuit:
@@ -64,11 +66,6 @@ def resolve_team_id(unit: MobileSuit) -> str:
     チーム未所属（ソロ参加）のユニットは、ユニット ID を 1 人チームの ID とする。
     """
     return unit.team_id or str(unit.id)
-
-
-def alive_team_ids(units: Iterable[MobileSuit]) -> set[str | None]:
-    """HP が残っているユニットの所属チームを返す."""
-    return {u.team_id for u in units if u.current_hp > 0}
 
 
 def prepare_battle_units(
@@ -111,6 +108,7 @@ def run_battle(
     enemy_units: list[MobileSuit],
     conditions: BattleConditions | None = None,
     max_steps: int = DEFAULT_MAX_STEPS,
+    objective: BattleObjective | None = None,
 ) -> BattleOutcome:
     """戦闘を決着まで実行する.
 
@@ -121,13 +119,17 @@ def run_battle(
         enemy_units: プレイヤー機以外の全ユニット。味方チームの機体も含む。
         conditions: 戦域の条件。省略時は既定の条件（宇宙・濃度0）を使う。
         max_steps: 決着しないときに打ち切るステップ数。
+        objective: 作戦目標。省略時は殲滅とする。
 
     Returns:
-        プレイヤー機のチームが生き残れば `player_win` が真になる。
+        プレイヤー機のチームから見て作戦が成功すれば `player_win` が真になる。
     """
     conditions = conditions or BattleConditions()
     simulator = BattleSimulator(
-        player_unit, enemy_units, **conditions.simulator_kwargs()
+        player_unit,
+        enemy_units,
+        objective=objective,
+        **conditions.simulator_kwargs(),
     )
 
     steps_used = 0
@@ -137,14 +139,15 @@ def run_battle(
         simulator.step()
         steps_used += 1
 
-    player_win = player_unit.team_id in alive_team_ids(simulator.units)
+    objective_result = simulator.evaluate_objective(player_unit.team_id)
     kills = compute_unit_kills(simulator.logs, player_unit.id)
 
     return BattleOutcome(
         simulator=simulator,
-        player_win=player_win,
+        player_win=objective_result.is_success,
         kills=kills,
         steps_used=steps_used,
+        objective_result=objective_result,
     )
 
 

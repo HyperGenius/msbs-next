@@ -783,14 +783,7 @@ class AiDecisionMixin:
                     )
                     break
 
-        # 勝利判定: ACTIVE な生存ユニットのチームが 1 つ以下なら戦闘終了
-        active_teams = {
-            u.team_id
-            for u in self.units  # type: ignore[attr-defined]
-            if u.current_hp > 0 and self.unit_resources[str(u.id)]["status"] == "ACTIVE"  # type: ignore[attr-defined]
-        }
-        if len(active_teams) <= 1:
-            self.is_finished = True  # type: ignore[attr-defined]
+        self._check_objective_complete()  # type: ignore[attr-defined]
 
     def _update_body_heading(self, actor: MobileSuit, dt: float) -> None:
         """胴体（砲塔）の向きを毎ステップ更新する (Phase 6-1).

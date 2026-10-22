@@ -42,6 +42,11 @@ from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.melee_clash import MeleeClashMixin
 from app.engine.movement import MovementMixin
+from app.engine.objectives import (
+    AnnihilationObjective,
+    BattleObjective,
+    ObjectiveResult,
+)
 from app.engine.rng import new_numpy_rng
 from app.engine.spatial_grid import PointSpatialGrid, UnitSpatialGrid
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
@@ -214,6 +219,7 @@ class BattleSimulator(
         battlefield: BattleField | None = None,
         minovsky_density: float | None = None,
         environment_profile: EnvironmentProfile | None = None,
+        objective: BattleObjective | None = None,
     ):
         """初期化.
 
@@ -238,6 +244,7 @@ class BattleSimulator(
                 None の場合、special_effects に MINOVSKY があれば 1.0、なければ 0.0。
             environment_profile: 環境タイプの効果。指定すると environment より優先する。
                 None の場合は索敵・射撃の補正なし、地形適正の既定ランクは A とする。
+            objective: 作戦目標。戦闘の終了と結果を決める。None の場合は殲滅とする。
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -260,6 +267,7 @@ class BattleSimulator(
         self.elapsed_time: float = 0.0
         self._step_count: int = 0
         self.is_finished = False
+        self.objective: BattleObjective = objective or AnnihilationObjective()
         # ポテンシャルフィールド計算用のグリッド（Issue #450）。step() の冒頭で
         # 毎ステップ None にリセットされ、そのステップ内で最初に必要になった
         # タイミングで _get_movement_grid() が最新位置から再構築する（遅延構築）。
@@ -1055,6 +1063,15 @@ class BattleSimulator(
         # 8. 時間を進める
         self.elapsed_time += dt
         self._step_count += 1
+
+    def _check_objective_complete(self) -> None:
+        """作戦目標が戦闘の終了を求めていれば、戦闘を終える."""
+        if self.objective.is_complete(self.units, self.unit_resources):
+            self.is_finished = True
+
+    def evaluate_objective(self, team_id: str | None) -> ObjectiveResult:
+        """`team_id` のチームから見た作戦の結果を返す."""
+        return self.objective.evaluate(self.units, self.unit_resources, team_id)
 
     def _area_shrink_phase(self) -> None:
         """時間経過に応じて map_bounds を段階的に収縮させる (Issue #474).

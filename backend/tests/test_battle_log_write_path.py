@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, col, delete, select
 
 from app.core.auth import get_current_user_optional
+from app.engine.objectives import AnnihilationObjective, ObjectiveResult
 from app.engine.replay_log import REPLAY_LOG_VERSION, to_replay_logs
 from app.models.models import (
     BattleEntry,
@@ -212,6 +213,11 @@ def test_batch_saves_replay_logs_and_analysis_log(
     simulator = MagicMock()
     simulator.units = [unit]
     simulator.logs = engine_logs
+
+    def evaluate_objective(team_id: str | None) -> ObjectiveResult:
+        return AnnihilationObjective().evaluate([unit], {}, team_id)
+
+    simulator.evaluate_objective.side_effect = evaluate_objective
     simulator.obstacles = []
     simulator.map_bounds = (0.0, 1000.0)
 
