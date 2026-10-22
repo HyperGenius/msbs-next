@@ -28,6 +28,10 @@ class ActionHandlerMixin:
         if self.unit_resources[unit_id].get("status") == "RETREATED":  # type: ignore[attr-defined]
             return
 
+        if self._is_withdrawing(actor):  # type: ignore[attr-defined]
+            self._withdraw_action(actor, dt)
+            return
+
         # ファジィ推論で決定した行動を取得
         current_action = self.unit_resources[unit_id].get("current_action", "MOVE")  # type: ignore[attr-defined]
 
@@ -76,6 +80,47 @@ class ActionHandlerMixin:
             self._process_movement(  # type: ignore[attr-defined]
                 actor, pos_actor, pos_target, diff_vector, distance, dt
             )
+
+    def _withdraw_action(self, actor: MobileSuit, dt: float) -> None:
+        """撤退ロールの行動処理: 撤退ポイントへ向かい、射程内の敵には撃ち返す.
+
+        ターゲットへは寄らない。格闘武器は敵に寄らないと届かないため使わない。
+        武装の持ち替え中は撃たずに移動だけする。
+        """
+        pos_actor = actor.position.to_numpy()
+        target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
+        unit_id = str(actor.id)
+        if (
+            target is not None
+            and self.unit_resources[unit_id].get(  # type: ignore[attr-defined]
+                "weapon_switch_lock_remaining_sec", 0.0
+            )
+            <= 0.0
+        ):
+            weapon = self._select_weapon_with_switch_policy(actor, target)  # type: ignore[attr-defined]
+            if weapon is None:
+                weapon = self._resolve_fallback_weapon(actor, unit_id)
+            distance = float(np.linalg.norm(target.position.to_numpy() - pos_actor))
+            if (
+                weapon is not None
+                and not is_melee_weapon(weapon)
+                and distance <= weapon.range
+            ):
+                self._process_attack(actor, target, distance, pos_actor, weapon)  # type: ignore[attr-defined]
+
+        retreat_point = min(
+            self._applicable_retreat_points(actor),  # type: ignore[attr-defined]
+            key=lambda rp: float(np.linalg.norm(rp.position.to_numpy() - pos_actor)),
+        )
+        diff_vector = retreat_point.position.to_numpy() - pos_actor
+        self._process_movement(  # type: ignore[attr-defined]
+            actor,
+            pos_actor,
+            retreat_point.position.to_numpy(),
+            diff_vector,
+            float(np.linalg.norm(diff_vector)),
+            dt,
+        )
 
     def _resolve_fallback_weapon(
         self, actor: MobileSuit, unit_id: str

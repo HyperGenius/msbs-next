@@ -96,10 +96,11 @@ class AiDecisionMixin:
                 continue
 
             # ACTIVE ユニットの strategy_mode を一括更新
+            # 撤退ロールのユニットは、チームの戦略によらず RETREAT のままにする。
             team_unit_resources = [
                 (u, self.unit_resources[str(u.id)])  # type: ignore[attr-defined]
                 for u in self.units  # type: ignore[attr-defined]
-                if u.team_id == team_id
+                if u.team_id == team_id and not self._is_withdrawing(u)  # type: ignore[attr-defined]
             ]
             controller.apply(new_strategy, team_unit_resources)
 
@@ -593,6 +594,11 @@ class AiDecisionMixin:
         if self.unit_resources[unit_id].get("status") == "RETREATED":  # type: ignore[attr-defined]
             return
 
+        # 撤退ロールは敵の有無によらず撤退ポイントへ向かう。
+        if self._is_withdrawing(unit):  # type: ignore[attr-defined]
+            self.unit_resources[unit_id]["current_action"] = "RETREAT"  # type: ignore[attr-defined]
+            return
+
         pos_unit = unit.position.to_numpy()
 
         # 索敵済みの敵ユニットを取得
@@ -794,10 +800,12 @@ class AiDecisionMixin:
         旋回ルール:
         - ATTACK / ENGAGE_MELEE / DISENGAGE かつターゲットあり → ターゲット方向
         - MOVE かつターゲットが武器の射程内 → ターゲット方向
+        - 撤退ロールかつターゲットが武器の射程内 → ターゲット方向
         - 上記以外 → movement_heading_deg（実際の移動方向）
 
         MOVE で射程内の敵を向くのは、側面・背面の敵を正面に収めるため。
         移動方向に追従すると、密着した両機が互いの周りを回り続けて攻撃に移れない。
+        撤退ロールが射程内の敵を向くのは、撃ち返すため。後退になるので撤退は遅くなる。
 
         Args:
             actor: 対象ユニット
@@ -820,7 +828,7 @@ class AiDecisionMixin:
         # 仕切り直しはターゲットを向いたまま下がる。背を向けると背面から撃たれるため。
         if current_action in ("ATTACK", "ENGAGE_MELEE", "DISENGAGE"):
             target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
-        elif current_action == "MOVE":
+        elif current_action == "MOVE" or self._is_withdrawing(actor):  # type: ignore[attr-defined]
             target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
             if target is not None and not self._is_within_weapon_range(actor, target):
                 target = None
