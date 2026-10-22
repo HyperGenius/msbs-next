@@ -268,8 +268,8 @@ Storybook: `Dashboard/TheaterForecastCard`（宇宙・森林・不向きな機�
 
 ## 初期データ
 
-`backend/data/master/environments.json`・`backend/data/master/theaters.json` を
-`backend/scripts/seed/seed_master_data.py` で投入する（既存レコードはスキップ。`--force` で上書き）。
+導入時の値を示す。現在の値は DB が正本で、管理画面で変える。
+新しい環境へは `seed_master_data.py --data-dir` で投入する（[master-data-persistence.md](../architecture/master-data-persistence.md#2-マスターデータの投入新しい環境)）。
 戦域は環境タイプを外部キーで参照するため、環境タイプを先に投入する。
 
 ### 環境タイプ
@@ -281,7 +281,7 @@ Storybook: `Dashboard/TheaterForecastCard`（宇宙・森林・不向きな機�
 
 効果パラメータの使い方は [battle-engine-feature.md 30章](battle-engine-feature.md#30-環境タイプの効果と地形適正) を参照。
 Issue #576 で `SPACE` の障害物密度の既定値を `MEDIUM` から `SPARSE` に変えた。
-既存の本番DBのレコードは `seed_master_data.py --force` で更新する。
+本番DBのレコードは管理画面か差分を更新するスクリプトで直す（`seed_master_data.py --force` は管理画面で直した値も上書きするので、本番には使わない）。
 
 ### 戦域
 

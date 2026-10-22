@@ -253,17 +253,10 @@ cd backend
 alembic upgrade head
 ```
 
-### シードデータ投入
+### マスターデータの投入
 
-初回デプロイ後、`data/master/mobile_suits.json` のデータを DB へ投入する:
-
-```bash
-# 既存レコードは上書きしない（管理画面変更を保護）
-python scripts/seed/seed_master_data.py
-
-# --force で既存レコードも上書き（開発環境リセット用）
-python scripts/seed/seed_master_data.py --force
-```
+マスターの正本は DB で、値は管理画面で変える。新しい環境へは、本番から書き出したデータを
+`seed_master_data.py --data-dir` で投入する。手順は [master-data-persistence.md](../architecture/master-data-persistence.md#2-マスターデータの投入新しい環境) を参照。
 
 ### EN（`max_en` / `en_recovery`）と作成済みの機体への反映（Issue #675）
 
@@ -560,8 +553,9 @@ npx vitest run tests/unit/
 - `backend/app/core/auth.py` — `verify_admin_api_key` 依存関数
 - `backend/app/services/mobile_suit_en_sync_service.py` / `backend/scripts/maintenance/sync_mobile_suit_en.py` — 作成済みの機体への EN の同期（Issue #675）
 - `backend/app/models/models.py` — `MasterMobileSuit` (テーブルモデル) / `MasterMobileSuitEntry` / `MasterMobileSuitCreate` / `MasterMobileSuitUpdate`
-- `backend/data/master/mobile_suits.json` — シードデータ（Git 管理継続）
-- `backend/scripts/seed/seed_master_data.py` — シードスクリプト
+- `backend/scripts/maintenance/export_master_data.py` — DB のマスターを JSON に書き出す
+- `backend/scripts/seed/seed_master_data.py` — 書き出したデータを新しい環境へ投入する
+- `backend/tests/fixtures/master/mobile_suits.json` — テスト用データ（本番の値とは一致させない）
 - `backend/alembic/versions/r1s2t3u4v5w6_add_master_mobile_suits_and_weapons_tables.py` — マイグレーション
 - `backend/alembic/versions/u4v5w6x7y8z9_add_model_number_name_ja_slots_beam_lv.py` — 型番/日本語名/武器スロット数/ビームジェネレータLv追加マイグレーション（Issue #383）
 - `admin-tool/src/app/mobile-suits/page.tsx` — 管理画面（独立アプリ、ポート3100）

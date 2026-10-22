@@ -470,7 +470,7 @@ interface MobileSuitDetailPanelProps {
 | `backend/app/routers/admin.py` | `_raw_to_entry` に `flavor_text` を追加 |
 | `backend/app/routers/shop.py` | `ShopListingResponse` に `name_ja`/`model_number`/`weapon_slot_count`/`beam_generator_lv`/`flavor_text` を追加 |
 | `backend/scripts/seed/seed_master_data.py` | mobile_suits シード時に `flavor_text` を読み書き |
-| `backend/data/master/mobile_suits.json` | 開発用シードデータに6機分のフレーバーテキストを追加 |
+| `backend/tests/fixtures/master/mobile_suits.json` | テスト用データに6機分のフレーバーテキストを追加（当時は `backend/data/master/`） |
 | `frontend/src/types/shop.ts` | `ShopListing` に `name_ja`/`model_number`/`weapon_slot_count`/`beam_generator_lv`/`flavor_text` を追加 |
 | `frontend/src/utils/displayUtils.ts` | `getMobileSuitShopLabel()` を追加 |
 | `frontend/src/utils/msChartCaps.ts`（新規） | レーダーチャート正規化用の固定上限・適正値レンジ |

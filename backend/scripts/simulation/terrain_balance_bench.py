@@ -2,7 +2,8 @@
 # backend/scripts/simulation/terrain_balance_bench.py
 """地形適正と環境タイプの効果のバランスを 1対1 のモンテカルロで確認する.
 
-DB を使わず、`data/master/` の機体・環境タイプの JSON から戦闘を組み立てる。
+機体・環境タイプのマスターは、既定では本番 DB から読み取り専用で読む。
+`--master-dir` を渡すと、その JSON ディレクトリから読む（DB に繋がない環境・テスト用）。
 
 - 同一機体: ザク II の性能で地形適正ランクだけを変え、ランク差の影響を見る。
 - 機体マスター: 地形適正が A 以外の機体を汎用機と戦わせ、環境ごとの勝率を見る。
@@ -10,13 +11,13 @@ DB を使わず、`data/master/` の機体・環境タイプの JSON から戦�
 Usage:
     python scripts/simulation/terrain_balance_bench.py
     python scripts/simulation/terrain_balance_bench.py --rounds 200 --workers 4
+    python scripts/simulation/terrain_balance_bench.py --master-dir tests/fixtures/master
 """
 
 from __future__ import annotations
 
 import argparse
 import itertools
-import json
 import os
 import random
 import sys
@@ -35,8 +36,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 from app.engine.environment import EnvironmentProfile  # noqa: E402
 from app.engine.simulation import BattleSimulator  # noqa: E402
 from app.models.models import BattleField, MobileSuit, Vector3, Weapon  # noqa: E402
+from scripts.master_data import (  # noqa: E402
+    ENVIRONMENTS,
+    MOBILE_SUITS,
+    MasterData,
+    load_master_data,
+)
+from scripts.simulation.local_sim.readonly_db import ReadOnlyConfigError  # noqa: E402
 
-_MASTER_DIR = Path(__file__).resolve().parents[2] / "data" / "master"
 _MAX_STEPS = 3000
 # 同一機体の比較に使う機体。性能が平均的な汎用機にする。
 _BASE_SUIT_ID = "zaku_ii"
@@ -72,26 +79,31 @@ class MatchResult:
         return self.a_wins / decided if decided else 0.0
 
 
-def _load_json(name: str) -> list[dict]:
-    return json.loads((_MASTER_DIR / name).read_text(encoding="utf-8"))
+_suits: dict[str, dict] = {}
+_profiles: dict[str, EnvironmentProfile] = {}
 
 
-def _load_masters() -> dict[str, dict]:
-    return {m["id"]: m for m in _load_json("mobile_suits.json")}
+def use_master_data(data: MasterData) -> None:
+    """戦闘の組み立てに使う機体・環境タイプのマスターを設定する.
 
-
-def _load_profiles() -> dict[str, EnvironmentProfile]:
-    return {
-        e["id"]: EnvironmentProfile(
-            environment_id=e["id"],
-            sensor_range_multiplier=e["sensor_range_multiplier"],
-            ranged_accuracy_penalty=e["ranged_accuracy_penalty"],
-            ranged_penalty_ref_distance=e["ranged_penalty_ref_distance"],
-            default_obstacle_density=e["default_obstacle_density"],
-            default_terrain_grade=e["default_terrain_grade"],
-        )
-        for e in _load_json("environments.json")
-    }
+    並列実行では、ワーカーごとに呼ぶ必要がある。
+    """
+    _suits.clear()
+    _suits.update({m["id"]: m for m in data[MOBILE_SUITS]})
+    _profiles.clear()
+    _profiles.update(
+        {
+            e["id"]: EnvironmentProfile(
+                environment_id=e["id"],
+                sensor_range_multiplier=e["sensor_range_multiplier"],
+                ranged_accuracy_penalty=e["ranged_accuracy_penalty"],
+                ranged_penalty_ref_distance=e["ranged_penalty_ref_distance"],
+                default_obstacle_density=e["default_obstacle_density"],
+                default_terrain_grade=e["default_terrain_grade"],
+            )
+            for e in data[ENVIRONMENTS]
+        }
+    )
 
 
 def _build_unit(master: dict, contestant: Contestant, side: str) -> MobileSuit:
@@ -133,12 +145,11 @@ def _run_one(
     """
     random.seed(seed)
     np.random.seed(seed)
-    masters = _load_masters()
-    profile = _load_profiles()[environment_id]
+    profile = _profiles[environment_id]
     # スポーン位置の偏りを打ち消すため、PLAYER 側を試行ごとに入れ替える。
     first, second = (a, b) if seed % 2 == 0 else (b, a)
-    player = _build_unit(masters[first.master_id], first, "PLAYER")
-    enemy = _build_unit(masters[second.master_id], second, "ENEMY")
+    player = _build_unit(_suits[first.master_id], first, "PLAYER")
+    enemy = _build_unit(_suits[second.master_id], second, "ENEMY")
     sim = BattleSimulator(
         player,
         [enemy],
@@ -233,10 +244,23 @@ def main() -> None:
     parser.add_argument(
         "--skip-masters", action="store_true", help="機体マスターの比較を省く"
     )
+    parser.add_argument(
+        "--master-dir",
+        type=Path,
+        help="機体・環境タイプのマスターを読む JSON ディレクトリ。既定は本番 DB（読み取り専用）",
+    )
     args = parser.parse_args()
 
-    masters = _load_masters()
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
+    try:
+        master_data = load_master_data(args.master_dir)
+    except (ReadOnlyConfigError, FileNotFoundError) as e:
+        sys.exit(str(e))
+    use_master_data(master_data)
+    with ProcessPoolExecutor(
+        max_workers=args.workers,
+        initializer=use_master_data,
+        initargs=(master_data,),
+    ) as pool:
         for environment_id, minovsky in _CONDITIONS:
             condition = f"{environment_id}・ミノフスキー {minovsky}"
             grades = _grade_contestants(environment_id)
@@ -257,7 +281,7 @@ def main() -> None:
                     _run_match(
                         pool, a, b, environment_id, minovsky, args.rounds, args.seed
                     )
-                    for a, b in _master_pairs(masters)
+                    for a, b in _master_pairs(_suits)
                 ],
             )
 

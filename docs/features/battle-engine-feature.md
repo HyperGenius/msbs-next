@@ -2473,7 +2473,7 @@ Issue の初期案は 1 ランク 5 ポイント（S +5 〜 D −15）だった�
 * NPC（`MatchingService._create_npc_mobile_suit()`）はマスターを参照しないため、既定ランク（汎用機扱い）になる
 * admin-tool の機体マスター編集フォームは地形適正を送らない。更新 API は既存の specs とマージするため、保存しても消えない
 
-初期値（`backend/data/master/mobile_suits.json`。`GROUND`/`COLONY`/`UNDERWATER` は従来のデフォルト A/A/C）:
+導入時の初期値（`GROUND`/`COLONY`/`UNDERWATER` は従来のデフォルト A/A/C）。現在の値は DB が正本で、テスト用データ `backend/tests/fixtures/master/mobile_suits.json` はこの値のまま:
 
 | 機体 | 宇宙 | 森林 | 意図 |
 |---|---|---|---|
@@ -2484,7 +2484,7 @@ Issue の初期案は 1 ランク 5 ポイント（S +5 〜 D −15）だった�
 | ドム（`dom`） | C | B | 地上（ホバー）用 |
 | グフ（`gouf`） | C | S | 地上・格闘特化 |
 
-ザク II F型は `mobile_suits.json` に無い。本番DBにある場合は汎用（A/A）として扱う（キーが無ければ既定ランク A）。
+ザク II F型はテスト用データに無い。本番DBにある場合は汎用（A/A）として扱う（キーが無ければ既定ランク A）。
 
 ### 30.8 定数（`backend/app/engine/constants.py`）
 
@@ -2580,7 +2580,7 @@ Issue の初期案は 1 ランク 5 ポイント（S +5 〜 D −15）だった�
 
 `backend/tests/test_terrain_adaptability.py`
 
-* 機体マスターの地形適正（省略可・ランクの検証・シードデータ）
+* 機体マスターの地形適正（省略可・ランクの検証・テスト用データ）
 * エントリーのスナップショットがマスターの値を使う（ID・機体名・マスターなし）
 * ショップ・ガレージの API が地形適正を返す
 * `MasterEnvironment` からのプロファイル作成、`battlefield_for()`

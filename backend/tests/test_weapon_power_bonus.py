@@ -14,7 +14,7 @@ from app.services.weapon_power_bonus_backfill_service import (
 from app.services.weapon_service import WeaponService
 
 USER_ID = "weapon_power_bonus_user"
-# シードデータの zaku_mg の power
+# テスト用データの zaku_mg の power
 ZAKU_MG_POWER = 100
 INCREASE = EngineeringService.WEAPON_POWER_INCREASE
 

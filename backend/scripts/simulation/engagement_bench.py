@@ -2,11 +2,13 @@
 # backend/scripts/simulation/engagement_bench.py
 """交戦距離と膠着の指標を 1対1 のシミュレーションで計測する.
 
-DB を使わず、`data/master/` の機体・武器の JSON から戦闘を組み立てる。
+機体・武器のマスターは、既定では本番 DB から読み取り専用で読む。
+`--master-dir` を渡すと、その JSON ディレクトリから読む（DB に繋がない環境・テスト用）。
 `run` で計測結果を表と JSON に出力し、`diff` で 2 つの結果 JSON を比べる。
 
 Usage:
     python scripts/simulation/engagement_bench.py run --output results/before.json
+    python scripts/simulation/engagement_bench.py run --master-dir tests/fixtures/master
     python scripts/simulation/engagement_bench.py run --scenarios melee_duel --rounds 4
     python scripts/simulation/engagement_bench.py run --ranges MELEE,RANGED --pilot mel=20
     python scripts/simulation/engagement_bench.py diff results/before.json results/after.json
@@ -40,8 +42,14 @@ from app.engine.calculator import PilotStats  # noqa: E402
 from app.engine.constants import FLEE_ENTER_THRESHOLD, MELEE_RANGE  # noqa: E402
 from app.engine.simulation import BattleSimulator  # noqa: E402
 from app.models.models import MobileSuit, Vector3, Weapon  # noqa: E402
+from scripts.master_data import (  # noqa: E402
+    MOBILE_SUITS,
+    WEAPONS,
+    MasterData,
+    load_master_data,
+)
+from scripts.simulation.local_sim.readonly_db import ReadOnlyConfigError  # noqa: E402
 
-_MASTER_DIR = Path(__file__).resolve().parents[2] / "data" / "master"
 # 定期バトルの 3000 ではなく、エンジン上限まで回す。時間切れ自体を指標として見るため。
 _DEFAULT_MAX_STEPS = 5000
 _DT = 0.1
@@ -200,15 +208,32 @@ class BattleMetrics:
 # ---------------------------------------------------------------------------
 
 
-def _load_json(name: str) -> list[dict]:
-    return json.loads((_MASTER_DIR / name).read_text(encoding="utf-8"))
+_suits: dict[str, dict] = {}
+_weapons: dict[str, dict] = {}
+
+
+def use_master_data(data: MasterData) -> None:
+    """戦闘の組み立てに使う機体・武器のマスターを設定する.
+
+    並列実行では、ワーカーごとに呼ぶ必要がある。
+    """
+    _suits.clear()
+    _suits.update({m["id"]: m for m in data[MOBILE_SUITS]})
+    _weapons.clear()
+    _weapons.update({w["id"]: w for w in data[WEAPONS]})
+
+
+def _suit_master(master_id: str) -> dict:
+    if not _suits:
+        raise RuntimeError("use_master_data() でマスターを設定してください")
+    return _suits[master_id]
 
 
 def _build_weapon(weapon_id: str, suit_weapons: dict[str, dict]) -> Weapon:
     """機体マスターの武器を優先し、無ければ武器マスターから組み立てる."""
     if weapon_id in suit_weapons:
         return Weapon(**suit_weapons[weapon_id])
-    master = {w["id"]: w for w in _load_json("weapons.json")}[weapon_id]
+    master = _weapons[weapon_id]
     return Weapon(id=weapon_id, name=master["name"], **master["weapon"])
 
 
@@ -220,8 +245,7 @@ def _build_unit(
     strategy: str,
     tactics_range: str,
 ) -> MobileSuit:
-    master = {m["id"]: m for m in _load_json("mobile_suits.json")}[loadout.master_id]
-    specs = master["specs"]
+    specs = _suit_master(loadout.master_id)["specs"]
     suit_weapons = {w["id"]: w for w in specs["weapons"]}
     return MobileSuit(
         id=unit_id,
@@ -683,13 +707,22 @@ def cmd_run(args: argparse.Namespace) -> None:
     except (TypeError, ValueError) as e:
         sys.exit(str(e))
 
+    try:
+        master_data = load_master_data(args.master_dir)
+    except (ReadOnlyConfigError, FileNotFoundError) as e:
+        sys.exit(str(e))
+    use_master_data(master_data)
     jobs = {
         (key, cond): [args.seed + i for i in range(args.rounds)]
         for key in scenario_keys
         for cond in _conditions(SCENARIOS[key], strategies, ranges)
     }
     results: dict[str, dict[str, dict]] = {}
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
+    with ProcessPoolExecutor(
+        max_workers=args.workers,
+        initializer=use_master_data,
+        initargs=(master_data,),
+    ) as pool:
         futures = {
             job: [
                 pool.submit(run_battle, *job, seed, args.max_steps, pilot)
@@ -713,6 +746,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "rounds": args.rounds,
                 "max_steps": args.max_steps,
                 "pilot": asdict(pilot),
+                "master_source": str(args.master_dir or "readonly_db"),
                 "scenarios": {
                     k: {
                         **asdict(SCENARIOS[k]),
@@ -772,6 +806,11 @@ def main() -> None:
         "--pilot",
         default=_DEFAULT_PILOT,
         help=f"両機のパイロット能力（例: mel=20,ref=5）。既定は {_DEFAULT_PILOT}",
+    )
+    run.add_argument(
+        "--master-dir",
+        type=Path,
+        help="機体・武器のマスターを読む JSON ディレクトリ。既定は本番 DB（読み取り専用）",
     )
     run.add_argument("--output", help="結果 JSON の保存先")
     run.set_defaults(func=cmd_run)

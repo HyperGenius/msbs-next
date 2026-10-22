@@ -234,3 +234,38 @@ python scripts/maintenance/backfill_weapon_power_bonus.py --apply
 - 購入した武器のスロットの差が 0 なのは、resync で加算が消えたためです。書き込むと resync でこのスロットに加算を戻します。
 - 「※差がスロット間で揃っていません」と出た機体は、武器マスターの威力を後から変えた可能性があります。差の最大値を加算値にしているので、必要なら管理画面などで直してください。
 - 対象は `weapon_power_bonus` が 0 のプレイヤー機体だけです。2回目以降の実行では、設定済みの機体は表示されません。
+
+---
+
+# export_master_data.py
+
+DB のマスターデータを JSON に書き出すスクリプトです。
+対象は6つのマスター（機体・武器・エースパイロット・技術・環境タイプ・戦域）と、設計図マスター（`blueprints.json`。購入に必要な技術Lvを含む）です。
+
+マスターの正本は DB です。書き出したデータは `seed_master_data.py --data-dir` で新しい環境へ投入したり、計測ツールの `--master-dir` に渡したりします。
+**書き出したデータは Git に入れません**（Git に残すと、再び DB とずれる JSON になるため）。既定の出力先は `.gitignore` 対象です。
+
+## 使い方
+
+```bash
+cd backend
+
+# 本番 DB から読み取り専用で書き出す（NEON_READONLY_DATABASE_URL を使う）
+python scripts/maintenance/export_master_data.py
+
+# 出力先を指定する
+python scripts/maintenance/export_master_data.py --output-dir /tmp/master
+
+# 本番以外の DB から書き出す
+python scripts/maintenance/export_master_data.py --database-url sqlite:///./dev.db
+
+# 書き出したデータを空の DB へ投入する
+DATABASE_URL=sqlite:///./dev.db python scripts/seed/seed_master_data.py
+```
+
+## オプション
+
+| オプション | 説明 |
+|---|---|
+| `--output-dir` | 出力先。既定は `scripts/maintenance/output/master_data/` |
+| `--database-url` | 本番 DB の代わりに読む DB の URL。省略時は `NEON_READONLY_DATABASE_URL`（SELECT 権限だけのロール）で読み取り専用の接続を使う |

@@ -88,7 +88,7 @@ def test_master_spec_rejects_invalid_grade() -> None:
 
 
 def test_seed_master_has_terrain(session: Session) -> None:
-    """シードデータの機体マスターに地形適正が入っている."""
+    """テスト用データの機体マスターに地形適正が入っている."""
     gouf = session.get(MasterMobileSuit, "gouf")
     assert gouf is not None
     assert gouf.specs["terrain_adaptability"] == GOUF_TERRAIN

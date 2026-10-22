@@ -89,7 +89,7 @@ def test_get_shop_listings(client, session):
 
 
 def test_get_shop_listings_includes_flavor_text(client, session):
-    """シードデータに設定したフレーバーテキストがレスポンスに含まれることをテスト."""
+    """テスト用データに設定したフレーバーテキストがレスポンスに含まれることをテスト."""
     test_user_id = "test_user_flavor_text"
     pilot = Pilot(
         user_id=test_user_id,
