@@ -2,7 +2,7 @@
 
 **バージョン:** 0.9.0  
 **作成日:** 2026-04-27  
-**更新日:** 2026-05-16  
+**更新日:** 2026-10-22  
 **ステータス:** Phase 1-1 / Phase 2-1 / Phase 2-2 / Phase 2-3 / Phase 3-1 / Phase 3-2 / Phase 3-3 / Phase 5-2 / Phase 6-3 / Phase 6-4 / Phase 6-5 / Phase 6-6 実装済み
 
 ---
@@ -3137,3 +3137,52 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 ### 35.6 テスト
 
 * `backend/tests/unit/test_flee_score.py`: 純粋関数（期待 DPS、使えるまでの待ち時間、攻撃手段、戦力差、ヒステリシス）、武器が使えないと最大、戦力差が大きいほど高い、敵の数、索敵できていない敵と射程外の敵を数えない、戦略モードで重みが変わる、乱数・ログを触らない、`AI_DECISION` の `details`、行動が変わらないこと
+
+## 36. 作戦目標（Epic #682 Sub-Issue 1）
+
+戦闘の終了と結果を「作戦目標」が決める。殲滅以外の勝利条件（撤退支援 #686、バトルロイヤルの帰還 #617）を足すための土台で、この段階では挙動を変えない。
+
+### 36.1 インターフェース（`backend/app/engine/objectives.py`）
+
+`BattleObjective` は次の 2 つに答える。DB を参照しない。
+
+| メソッド | 答えること | 呼ぶ場所 |
+|---|---|---|
+| `is_complete(units, unit_resources)` | 戦闘を終えるか | 撃破後（`CombatMixin`）と撤退判定の後（`_retreat_check_phase()`）。`BattleSimulator._check_objective_complete()` 経由 |
+| `evaluate(units, unit_resources, team_id)` | `team_id` のチームから見た結果 | 戦闘後。`BattleSimulator.evaluate_objective()` 経由 |
+
+`evaluate()` は最大ステップ数で打ち切ったとき（`is_complete()` が偽のとき）にも呼ぶ。打ち切ったときの結果も目標が決める。
+
+結果は `ObjectiveResult`:
+
+| フィールド | 意味 |
+|---|---|
+| `status` | `ObjectiveStatus`（`SUCCESS` / `FAILURE` / `DRAW`） |
+| `progress` / `required` | 達成度（例: 離脱させた友軍の数 / 必要数）。`required == 0` は達成度を数えない目標 |
+| `is_success` | `status == SUCCESS` |
+
+`BattleSimulator(..., objective=...)` で渡す。省略時は `AnnihilationObjective` を使う。
+
+### 36.2 殲滅（`AnnihilationObjective`）
+
+* 終了: 戦闘中（HP > 0 かつ `status == "ACTIVE"`）のユニットが残るチームが 1 つ以下になったら終える。`RETREATED` のユニットは戦闘中に数えない
+* 結果: チームに HP の残る機体があれば成功、無ければ失敗。撤退した機体も生き残りに数える。打ち切ったときも同じ基準で、生き残った全チームが成功になる
+* `DRAW` は使わない。ソロミッション（`main.py` の `simulate_battle`）の WIN / LOSE / DRAW 判定は、まだ作戦目標を使っていない
+
+### 36.3 勝敗の判定
+
+| 経路 | 判定 |
+|---|---|
+| `run_battle()`（`backend/app/services/battle_execution.py`） | `simulator.evaluate_objective(プレイヤー機のチーム)` を `BattleOutcome.objective_result` に入れ、`player_win` はその `is_success` |
+| `_save_battle_results()`（`backend/scripts/run_batch.py`） | プレイヤー・NPC ごとに、自分のチームで `evaluate_objective()` を呼ぶ。デイリーバトルロイヤルは各プレイヤーが別チームなので、プレイヤーごとに結果が変わる |
+
+`run_battle(..., objective=...)` で作戦目標を渡せる。
+
+### 36.4 挙動が変わらないことの確認
+
+`run_battle()` を `main` と比べた（2 / 8 / 20 機 × シード 1〜3、`seed_battle_rngs()` とユニット ID・`PYTHONHASHSEED` を固定）。9 戦すべてで、ログのハッシュ・勝敗・撃墜数・ステップ数が一致した。`engine_ci_smoke.py` も 9 ラウンド完走した。
+
+### 36.5 テスト
+
+* `backend/tests/unit/test_objectives.py`: 殲滅の終了判定（2 チーム戦闘中、1 チーム残り、撤退は戦闘中に数えない、全滅）、結果（生き残りで成功、全滅で失敗、撤退も生き残り、打ち切り時）、`BattleSimulator` の既定の目標・終了・評価
+* `backend/tests/unit/test_battle_execution.py`: 作戦目標を省略したときと殲滅を渡したときで、同じシードのログが一致する。`objective_result` が入る

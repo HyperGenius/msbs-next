@@ -34,7 +34,6 @@ from app.models.models import (
 from app.services.battle_digest_service import compute_battle_digest_fields
 from app.services.battle_execution import (
     DEFAULT_MAX_STEPS,
-    alive_team_ids,
     build_battlefield_view_fields,
     build_unit_view_fields,
     prepare_battle_units,
@@ -171,15 +170,14 @@ def _save_battle_results(
     session.add(battle_log_record)
     session.flush()
 
-    surviving_team_ids = alive_team_ids(simulator.units)
-
     # 抽選は全プレイヤーで同じ drop_rng を使う。
     # DBの取得順は保証されないため、処理順をエントリー日時で固定する。
     for entry in sorted(player_entries, key=lambda e: (e.created_at, str(e.id))):
-        # 各プレイヤーの勝敗を判定 (team_idが生存チームに含まれているか)
+        # ルーム内の各プレイヤーは別チームなので、自分のチームから見た結果で決める。
         entry_unit = snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
         entry_team_id = resolve_team_id(entry_unit)
-        individual_win_loss = "WIN" if entry_team_id in surviving_team_ids else "LOSE"
+        objective_result = simulator.evaluate_objective(entry_team_id)
+        individual_win_loss = "WIN" if objective_result.is_success else "LOSE"
         # 勝敗に関わらず自機の撃破数をそのまま使う（main.py のソロミッション経路と
         # 揃える）。敗北時に0へ丸めると、LOSE時のダイジェストタグ判定
         # （kills>=1 なら「力戦及ばず」）が常に「完敗」にしかならず、報酬の
@@ -290,10 +288,9 @@ def _save_battle_results(
             try:
                 npc_pilot = pilot_service.get_npc_pilot(npc_entry.user_id)
                 if npc_pilot:
-                    # NPC の勝敗も team_id ベースで判定
                     npc_unit = snapshot_to_mobile_suit(npc_entry.mobile_suit_snapshot)
                     npc_team_id = resolve_team_id(npc_unit)
-                    npc_win = npc_team_id in surviving_team_ids
+                    npc_win = simulator.evaluate_objective(npc_team_id).is_success
                     exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
                         win=npc_win,
                         kills=0,

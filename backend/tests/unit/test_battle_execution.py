@@ -1,16 +1,19 @@
 """battle_execution の単体テスト."""
 
+import copy
 import uuid
 
 from app.engine.battle_utils import serialize_obstacles
+from app.engine.objectives import AnnihilationObjective, ObjectiveStatus
+from app.engine.rng import seed_numpy_rngs
 from app.models.models import MobileSuit, Vector3, Weapon
 from app.services.battle_execution import (
-    alive_team_ids,
     build_battlefield_view_fields,
     build_unit_view_fields,
     prepare_battle_units,
     resolve_team_id,
     run_battle,
+    seed_battle_rngs,
     snapshot_to_mobile_suit,
 )
 from app.services.theater_service import BattleConditions
@@ -75,15 +78,6 @@ def test_resolve_team_id_falls_back_to_unit_id() -> None:
     assert resolve_team_id(member) == "team-a"
 
 
-def test_alive_team_ids_skips_destroyed_units() -> None:
-    """HP が 0 のユニットのチームを含めない."""
-    alive = _make_unit("Alive", team_id="team-a")
-    destroyed = _make_unit("Destroyed", team_id="team-b")
-    destroyed.current_hp = 0
-
-    assert alive_team_ids([alive, destroyed]) == {"team-a"}
-
-
 # --- prepare_battle_units ---
 
 
@@ -141,8 +135,33 @@ def test_run_battle_judges_by_player_team() -> None:
 
     assert win.player_win is True
     assert lose.player_win is False
+    assert win.objective_result is not None
+    assert win.objective_result.status == ObjectiveStatus.SUCCESS
     assert win.steps_used == 0
     assert win.kills == 0
+
+
+def test_run_battle_default_objective_matches_annihilation() -> None:
+    """作戦目標を省略しても、殲滅を渡しても、同じシードで同じログになる."""
+    player_snapshot = _snapshot("Hero", team_id="team-a")
+    enemy_snapshot = _snapshot("Enemy", team_id="team-b")
+
+    def run(objective: AnnihilationObjective | None) -> list[str]:
+        player, enemies = prepare_battle_units(
+            copy.deepcopy(player_snapshot), [copy.deepcopy(enemy_snapshot)]
+        )
+        seed_battle_rngs(683)
+        outcome = run_battle(player, enemies, max_steps=300, objective=objective)
+        return [log.model_dump_json() for log in outcome.simulator.logs]
+
+    try:
+        default_logs = run(None)
+        annihilation_logs = run(AnnihilationObjective())
+    finally:
+        seed_numpy_rngs(None)
+
+    assert default_logs
+    assert default_logs == annihilation_logs
 
 
 # --- 表示用フィールド ---

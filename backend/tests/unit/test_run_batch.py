@@ -7,6 +7,7 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.db import json_serializer
+from app.engine.objectives import AnnihilationObjective
 from app.models.models import (
     BattleEntry,
     BattleLog,
@@ -84,6 +85,9 @@ def _make_simulator_mock(units, logs=None):
     sim = MagicMock()
     sim.units = units
     sim.logs = logs or []
+    sim.evaluate_objective.side_effect = (
+        lambda team_id: AnnihilationObjective().evaluate(units, {}, team_id)
+    )
     return sim
 
 

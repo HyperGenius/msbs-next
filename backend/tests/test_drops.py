@@ -10,6 +10,7 @@ import pytest
 from sqlmodel import Session, col, delete, select
 
 from app.core.auth import get_current_user_optional
+from app.engine.objectives import AnnihilationObjective
 from app.models.models import (
     BattleEntry,
     BattleResult,
@@ -597,6 +598,9 @@ def _save_batch(
     simulator = MagicMock()
     simulator.units = units
     simulator.logs = []
+    simulator.evaluate_objective.side_effect = (
+        lambda team_id: AnnihilationObjective().evaluate(units, {}, team_id)
+    )
     simulator.obstacles = []
     simulator.map_bounds = (0.0, 1000.0)
     _save_battle_results(
