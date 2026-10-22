@@ -54,7 +54,7 @@ export const technologyFormSchema = z.object({
 
 export type TechnologyFormValues = z.infer<typeof technologyFormSchema>;
 
-// 換金額の初期値。backend/data/master/technologies.json の値に合わせる。
+// 新規作成フォームに入れる換金額の初期値。
 export const DEFAULT_OVERFLOW_CREDIT_VALUE = 500;
 
 export function toTechnologyFormValues(tech: MasterTechnology | null): TechnologyFormValues {

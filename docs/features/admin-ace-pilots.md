@@ -67,18 +67,11 @@ cd backend
 alembic upgrade head
 ```
 
-### シードデータ投入
+### マスターデータの投入
 
-開発環境向けに `backend/data/master/ace_pilots.json` を用意し、`seed_master_data.py` の投入対象に追加した
-（テストの `conftest.py` もこのファイルからシードする）。
-
-```bash
-# 既存レコードは上書きしない（管理画面変更を保護）
-python scripts/seed/seed_master_data.py
-
-# --force で既存レコードも上書き（開発環境リセット用）
-python scripts/seed/seed_master_data.py --force
-```
+マスターの正本は DB で、値は管理画面で変える。新しい環境へは、本番から書き出したデータを
+`seed_master_data.py --data-dir` で投入する。手順は [master-data-persistence.md](../architecture/master-data-persistence.md#2-マスターデータの投入新しい環境) を参照。
+テストの `conftest.py` は、テスト用データ `backend/tests/fixtures/master/ace_pilots.json` を投入する。
 
 ### キャッシュ
 
@@ -246,9 +239,9 @@ admin-tool/src/
 - `backend/main.py` — `_resolve_npc_pilot_stats()`・ルーター登録
 - `backend/app/engine/simulation.py` — `_resolve_flanking_skill_level()`
 - `backend/alembic/versions/e9f0a1b2c3d4_add_ace_pilots_table.py` — テーブル作成・既存5体の移行
-- `backend/data/master/ace_pilots.json` — 開発用シードデータ
-- `backend/scripts/seed/seed_master_data.py` — シードスクリプト
-- `backend/scripts/verify/verify_ace_pilots.py` — エースデータ検証スクリプト（インメモリDBにシードして検証）
+- `backend/tests/fixtures/master/ace_pilots.json` — テスト用データ（本番の値とは一致させない）
+- `backend/scripts/seed/seed_master_data.py` — 書き出したデータを新しい環境へ投入する
+- `backend/scripts/verify/verify_ace_pilots.py` — エースデータ検証スクリプト（インメモリDBにシードして検証。既定はテスト用データ、`--data-dir` で書き出したデータを渡せる）
 - `admin-tool/src/app/ace-pilots/page.tsx` ほか上記フロントエンドファイル
 
 ---
@@ -275,7 +268,7 @@ python -m pytest tests/unit/test_admin_ace_pilots.py --tb=short
 - 持ち替えポリシー・狙う部位配分（Issue #544）: 不正な戦術値・配分（部位名・負値・合計）の422、マッチングで生成するエース機への反映
 
 既存の `test_npc_personality_and_ace.py` / `test_phase_e35_flanking.py` は、`ACE_PILOTS` の代わりに
-`get_ace_pilots()`（`conftest.py` が `ace_pilots.json` からシード）を参照するよう変更した。
+`get_ace_pilots()`（`conftest.py` がテスト用データの `ace_pilots.json` からシード）を参照するよう変更した。
 
 ### admin-tool
 

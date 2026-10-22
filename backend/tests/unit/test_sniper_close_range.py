@@ -16,6 +16,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 import engagement_bench as eb  # noqa: E402
 
 from app.engine.fuzzy_engine import FuzzyEngine  # noqa: E402
+from scripts.master_data import FIXTURE_DIR, read_master_dir  # noqa: E402
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _use_fixture_master_data() -> None:
+    eb.use_master_data(read_master_dir(FIXTURE_DIR))
+
 
 _SNIPER_RULES = (
     Path(__file__).parent.parent.parent / "data" / "fuzzy_rules" / "sniper.json"

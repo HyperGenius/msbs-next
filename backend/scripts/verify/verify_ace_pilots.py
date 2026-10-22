@@ -2,9 +2,15 @@
 """Verification script for NPC personality and ace pilot features.
 
 エースパイロットは ace_pilots テーブルから読み込むため、
-インメモリDBに data/master/ace_pilots.json をシードしてから検証する。
+インメモリDBに ace_pilots.json をシードしてから検証する。
+既定はテスト用の固定データ（tests/fixtures/master/）を使う。
+本番の値で検証するときは、export_master_data.py の出力を --data-dir に渡す。
+
+Usage:
+    python scripts/verify/verify_ace_pilots.py [--data-dir DIR]
 """
 
+import argparse
 import json
 import os
 import sys
@@ -24,13 +30,7 @@ from app.core.gamedata import get_ace_pilots
 from app.core.npc_data import BATTLE_CHATTER, PERSONALITY_TYPES
 from app.models.models import AcePilot
 from app.services.matching_service import MatchingService
-
-_ACE_PILOTS_JSON = (
-    Path(__file__).resolve().parent.parent.parent
-    / "data"
-    / "master"
-    / "ace_pilots.json"
-)
+from scripts.master_data import ACE_PILOTS, FIXTURE_DIR
 
 
 def json_serializer(*args, **kwargs):
@@ -38,7 +38,7 @@ def json_serializer(*args, **kwargs):
     return json.dumps(*args, **kwargs)
 
 
-def _setup_in_memory_db():
+def _setup_in_memory_db(data_dir: Path):
     """インメモリDBを作成し、gamedata の参照先に差し替えてエースをシードする."""
     engine = create_engine(
         "sqlite://",
@@ -50,7 +50,8 @@ def _setup_in_memory_db():
     app_db.engine = engine
 
     with Session(engine) as session:
-        for item in json.loads(_ACE_PILOTS_JSON.read_text(encoding="utf-8")):
+        ace_json = data_dir / f"{ACE_PILOTS}.json"
+        for item in json.loads(ace_json.read_text(encoding="utf-8")):
             session.add(AcePilot(**item))
         session.commit()
     return engine
@@ -166,8 +167,16 @@ def test_battle_chatter_examples():
 
 def main():
     """Run all verification tests."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=FIXTURE_DIR,
+        help="ace_pilots.json のあるディレクトリ（既定: テスト用の固定データ）",
+    )
+    args = parser.parse_args()
     try:
-        engine = _setup_in_memory_db()
+        engine = _setup_in_memory_db(args.data_dir)
         test_ace_pilot_data()
         test_personality_system()
         test_npc_creation(engine)

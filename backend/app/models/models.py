@@ -1949,7 +1949,7 @@ class PlayerWeapon(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: str = Field(index=True, description="所有者 (Pilot.user_id)")
     master_weapon_id: str = Field(
-        index=True, description="weapons.json の id（論理FK）"
+        index=True, description="武器マスター（master_weapons）の id（論理FK）"
     )
     base_snapshot: dict = Field(
         default_factory=dict,

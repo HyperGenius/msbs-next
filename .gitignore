@@ -27,3 +27,6 @@ battle_logs/
 
 # Verification script output (fetched DB data, not for version control)
 backend/scripts/verify/output/
+
+# Master data exported from the DB (the DB is the source of truth)
+backend/scripts/maintenance/output/
