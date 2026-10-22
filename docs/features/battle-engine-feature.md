@@ -3186,3 +3186,52 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 
 * `backend/tests/unit/test_objectives.py`: 殲滅の終了判定（2 チーム戦闘中、1 チーム残り、撤退は戦闘中に数えない、全滅）、結果（生き残りで成功、全滅で失敗、撤退も生き残り、打ち切り時）、`BattleSimulator` の既定の目標・終了・評価
 * `backend/tests/unit/test_battle_execution.py`: 作戦目標を省略したときと殲滅を渡したときで、同じシードのログが一致する。`objective_result` が入る
+
+## 37. ユニットのロールと小隊（Epic #682 Sub-Issue 2）
+
+ユニットに「ロール」と「所属小隊」を割り当てる。ロールはチームの戦略モードより優先できる。撤退支援（#686）の友軍・敵小隊の陣形（#688）・支援のターゲット選択（#689）のための土台。この段階ではロールを持つユニットを生成しないので、既存の戦闘の挙動は変わらない。
+
+### 37.1 割り当て（`backend/app/engine/unit_roles.py`）
+
+`UnitAssignment(role, squad_id)` をユニット ID（str）ごとに `BattleSimulator(..., unit_assignments=...)` で渡す。含まれないユニットはロールも小隊も持たず、今と同じ振る舞いをする。
+
+* ロールと小隊は戦闘ごとの割り当てなので、`MobileSuit` の列にはしない（マイグレーション不要）
+* 引くときは `BattleSimulator.unit_role(unit)` / `BattleSimulator.squad_id(unit)`
+* 小隊 ID は同じチームの中で組んで動く機体の組を表す。この段階では値を持つだけ
+
+### 37.2 ロールの値（`VALID_UNIT_ROLES`、`backend/app/engine/constants.py`）
+
+| ロール | 振る舞い |
+|---|---|
+| `VANGUARD`（前衛） | 値のみ |
+| `SUPPORT`（支援） | 値のみ |
+| `SNIPER`（狙撃） | 値のみ |
+| `COMMANDER`（指揮） | 値のみ |
+| `WITHDRAW`（撤退） | 37.3 |
+
+ロールは戦略モード（`AGGRESSIVE` / `DEFENSIVE` / `SNIPER` / `ASSAULT` / `RETREAT`）や NPC の性格（`AGGRESSIVE` / `CAUTIOUS` / `SNIPER`）とは別の値。特にロールの `SNIPER` と戦略モードの `SNIPER`、ロールの `WITHDRAW` と戦略モードの `RETREAT` を混同しないこと。許容値に無いロールは `UnitAssignment` の生成時に `ValueError` になる。
+
+### 37.3 撤退ロール
+
+自チームが使える撤退ポイント（`team_id` が無いか自チームのもの）があるとき、撤退ロールのユニットは次のように動く。
+
+| 場所 | 振る舞い |
+|---|---|
+| `BattleSimulator.__init__()` | `strategy_mode` を `RETREAT` にする |
+| `_strategy_phase()` | チームの戦略が変わっても `strategy_mode` を書き換えない（`TeamStrategyController.apply()` に渡すユニットから外す） |
+| `_ai_decision_phase()` | ファジィ推論をせず、敵の索敵の有無によらず `RETREAT` を選ぶ |
+| `_update_body_heading()` | 射程内に敵がいれば敵を向く。いなければ移動方向を向く |
+| `_action_phase()`（`_withdraw_action()`） | 射程内の敵には射撃武器で撃ち返す。敵へは寄らず、撤退ポイントへ移動する。格闘武器は使わない。武装の持ち替え中は撃たない |
+| `_retreat_check_phase()` | 撤退ポイントの半径に入ると、今と同じく `RETREATED` になり戦場から離れる |
+
+* 撃ち返すために敵を向くと後退の移動になり（`FACING_SPEED_MODIFIER_BACK`）、撤退は遅くなる
+* 使える撤退ポイントが無い戦場では、ロールを無視する。チームの戦略モードの切り替えを受け、ファジィ推論で行動を決める
+* `TeamMetrics`（生存率・平均 HP）には撤退ロールのユニットも数える
+
+### 37.4 挙動が変わらないことの確認
+
+ロールを持たないユニットだけの戦闘を `main` と比べた（撤退ポイントなしの 2 / 8 機、撤退ポイントありの 8 / 20 機。`seed_battle_rngs()` とユニット ID・`PYTHONHASHSEED` を固定）。4 戦すべてでログのハッシュが一致した。`engine_ci_smoke.py` も 9 ラウンド完走した。
+
+### 37.5 テスト
+
+* `backend/tests/unit/test_unit_roles.py`: 許容値に無いロールの拒否、割り当ての引き当て、撤退ロールの開始時の戦略、撤退ポイントが無い・他チーム専用のときにロールを無視する、チームの戦略変更を受けない、索敵前でも `RETREAT` を選ぶ、チームが `AGGRESSIVE` のまま撤退ポイントで `RETREATED` になる、射程内の敵に撃ち返しつつ撤退ポイントへ向かう

@@ -126,6 +126,13 @@ VALID_STRATEGY_MODES: frozenset[str] = frozenset(
     {"AGGRESSIVE", "DEFENSIVE", "SNIPER", "ASSAULT", "RETREAT"}
 )
 
+# ユニットのロール。戦略モード・NPC の性格とは別の値。
+# 振る舞いを持つのは撤退（UNIT_ROLE_WITHDRAW）だけ。
+UNIT_ROLE_WITHDRAW: str = "WITHDRAW"
+VALID_UNIT_ROLES: frozenset[str] = frozenset(
+    {"VANGUARD", "SUPPORT", "SNIPER", "COMMANDER", UNIT_ROLE_WITHDRAW}
+)
+
 # ユニット種別ごとの慣性パラメータデフォルト値 (Phase 3-1)
 INERTIA_DEFAULTS: dict[str, dict[str, float]] = {
     "NORMAL_MS": {

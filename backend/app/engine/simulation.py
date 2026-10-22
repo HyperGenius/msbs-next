@@ -35,6 +35,7 @@ from app.engine.constants import (
     SPAWN_ZONE_RADIUS_4TEAM,
     SPAWN_ZONE_SAMPLE_MAX_TRIES,
     STRATEGY_UPDATE_INTERVAL,
+    UNIT_ROLE_WITHDRAW,
     VALID_STRATEGY_MODES,
 )
 from app.engine.environment import EnvironmentProfile
@@ -51,6 +52,7 @@ from app.engine.rng import new_numpy_rng
 from app.engine.spatial_grid import PointSpatialGrid, UnitSpatialGrid
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
 from app.engine.targeting import TargetingMixin
+from app.engine.unit_roles import UnitAssignment
 from app.models.models import (
     BattleField,
     BattleLog,
@@ -220,6 +222,7 @@ class BattleSimulator(
         minovsky_density: float | None = None,
         environment_profile: EnvironmentProfile | None = None,
         objective: BattleObjective | None = None,
+        unit_assignments: dict[str, UnitAssignment] | None = None,
     ):
         """初期化.
 
@@ -245,6 +248,8 @@ class BattleSimulator(
             environment_profile: 環境タイプの効果。指定すると environment より優先する。
                 None の場合は索敵・射撃の補正なし、地形適正の既定ランクは A とする。
             objective: 作戦目標。戦闘の終了と結果を決める。None の場合は殲滅とする。
+            unit_assignments: ユニット ID（str）→ ロールと所属小隊。
+                含まれないユニットはロールも小隊も持たない。
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -486,6 +491,9 @@ class BattleSimulator(
             )
             for team_id in team_ids
         }
+
+        self.unit_assignments: dict[str, UnitAssignment] = dict(unit_assignments or {})
+        self._withdrawing_unit_ids: frozenset[str] = self._resolve_withdrawing_units()
 
         # 障害物・スポーン領域の解決と適用 (Phase 6-3)
         # battlefield が明示的に渡された場合のみ自動生成・適用する（後方互換性）
@@ -946,6 +954,46 @@ class BattleSimulator(
         if self._enable_hot_reload:
             return self._rule_cache.get_engines()
         return self._cached_engines
+
+    def _resolve_withdrawing_units(self) -> frozenset[str]:
+        """撤退ロールに従って撤退するユニットを決め、RETREAT 戦略にする.
+
+        自チームが使える撤退ポイントが無いユニットは、ロールを無視する。
+
+        Returns:
+            撤退するユニットの ID。
+        """
+        withdrawing = [
+            unit
+            for unit in self.units
+            if self.unit_role(unit) == UNIT_ROLE_WITHDRAW
+            and self._applicable_retreat_points(unit)
+        ]
+        for unit in withdrawing:
+            unit.strategy_mode = "RETREAT"
+        return frozenset(str(unit.id) for unit in withdrawing)
+
+    def _applicable_retreat_points(self, unit: MobileSuit) -> list[RetreatPoint]:
+        """ユニットのチームが使える撤退ポイントを返す."""
+        return [
+            rp
+            for rp in self.retreat_points
+            if rp.team_id is None or rp.team_id == unit.team_id
+        ]
+
+    def unit_role(self, unit: MobileSuit) -> str | None:
+        """ユニットのロールを返す. ロールが無ければ None."""
+        assignment = self.unit_assignments.get(str(unit.id))
+        return assignment.role if assignment else None
+
+    def squad_id(self, unit: MobileSuit) -> str | None:
+        """ユニットの所属小隊の ID を返す. 小隊が無ければ None."""
+        assignment = self.unit_assignments.get(str(unit.id))
+        return assignment.squad_id if assignment else None
+
+    def _is_withdrawing(self, unit: MobileSuit) -> bool:
+        """撤退ロールに従って撤退ポイントへ向かうユニットか."""
+        return str(unit.id) in self._withdrawing_unit_ids
 
     def _resolve_strategy_mode(self, unit: MobileSuit) -> str:
         """ユニットの戦略モードを解決する.
