@@ -2,13 +2,15 @@
 repos:
   # --- Ruff (Linter & Formatter) ---
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.10
+    rev: v0.17.1
     hooks:
       # Linter
       - id: ruff
         args: [--fix]
       # Formatter
+      # Markdown 内のコードブロックを整形しないよう、v0.17 で増えた markdown を対象から外す。
       - id: ruff-format
+        types_or: [python, pyi, jupyter]
 
   # --- Mypy (Type Checker) ---
   - repo: https://github.com/pre-commit/mirrors-mypy
