@@ -1,3 +1,35 @@
+[project]
+name = "msbs-backend"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+    "numpy",
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+    "sqlmodel==0.0.31",
+    "psycopg2-binary",
+    "alembic",
+    "pyjwt[crypto]",
+    "cryptography",
+    "httpx",
+    "google-cloud-storage",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "mypy",
+    "ruff==0.17.1",
+    "pytest",
+    "pytest-xdist",
+]
+
+[tool.uv]
+# パッケージとしてビルドせず、依存だけを .venv に入れる。
+package = false
+
 [tool.ruff]
 target-version = "py311"
 line-length = 88

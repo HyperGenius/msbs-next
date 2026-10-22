@@ -29,10 +29,8 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install -r requirements.txt
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --no-dev
 
       - name: Sync mobile suit EN
         # pipefail を効かせるため shell を明示する（tee 経由でもスクリプトの失敗を拾う）
@@ -69,7 +67,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           status=0
-          python scripts/maintenance/sync_mobile_suit_en.py "${args[@]}" 2>&1 \
+          uv run python scripts/maintenance/sync_mobile_suit_en.py "${args[@]}" 2>&1 \
             | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
 
           echo '```' >> "$GITHUB_STEP_SUMMARY"

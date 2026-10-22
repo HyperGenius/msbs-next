@@ -12,8 +12,7 @@
 
 ```bash
 cd backend
-source .venv/bin/activate
-NEON_DATABASE_URL=<接続文字列> python scripts/run_batch.py
+NEON_DATABASE_URL=<接続文字列> uv run python scripts/run_batch.py
 ```
 
 ### 必須環境変数

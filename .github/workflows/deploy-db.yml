@@ -16,13 +16,11 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install -r requirements.txt
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked --no-dev
       
       - name: Apply Migration to Neon
         env:
           # GitHub Secrets に登録した本番URLを使用
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-        run: alembic upgrade head
+        run: uv run alembic upgrade head
