@@ -1046,17 +1046,29 @@ BattleDetailModal
 
 ### チャプタートラック（`ChapterTrack.tsx` / `useBattleChapters.ts`）
 
-「読むログ」ではなく「ジャンプ先」として位置づけたコンポーネント。自機関連ログのうち、以下の**有意なイベントのみ**
+「読むログ」ではなく「ジャンプ先」として位置づけたコンポーネント。自機・自チーム関連ログのうち、以下の**有意なイベントのみ**
 を抽出する（通常の `ATTACK`/`MISS` は対象外とし、3Dシーン側の攻撃演出（射線・武器名・着弾数字）と HUD ログ行で表現する。Issue #531）。
 
 | 種別 | 抽出条件 |
 |---|---|
 | `COMBO` | `action_type === "MELEE_COMBO"` かつ自機が `actor_id` |
 | `CRITICAL` | `action_type === "ATTACK"` かつ `is_crit === true`、自機が `actor_id`/`target_id` のいずれか |
-| `DESTROYED_ENEMY` / `DESTROYED_SELF` | `action_type === "DESTROYED"`、`actor_id` が敵機体/自機 |
+| `DESTROYED_SELF` | `action_type === "DESTROYED"` かつ `actor_id` が自機。ラベルは「自機が撃破された」 |
+| `DESTROYED_ALLY` | `action_type === "DESTROYED"` かつ `actor_id` が僚機（Issue #676。ラベルは「僚機{名前}が撃破された」、色は自機識別リングと同じ `#4488ff`） |
+| `DESTROYED_ENEMY` | `action_type === "DESTROYED"` かつ `actor_id` が僚機以外の他機で、撃破者が自機または僚機（Issue #676。ラベルは「{名前}を撃破」） |
 | `DETECTION` | `action_type === "DETECTION"` かつ自機が `actor_id` |
 | `DISENGAGE` | `action_type === "DISENGAGE"` かつ自機が `actor_id`（Issue #599。ラベルは「{相手}から仕切り直し」） |
 | `CLASH` | `action_type === "MELEE_CLASH"` かつ自機が `actor_id`/`target_id` のいずれか（Issue #600。ラベルは「{相手}と鍔迫り合い」、アイコンは ⚡） |
+
+撃破の絞り込み（Issue #676）:
+
+- **僚機**: `enemies`（= `battle.enemies_info`、自機以外の全ユニット）のうち `team_id` が自機の `team_id` と一致するユニット。
+  ソロ参加では `player_info.team_id` が null で、`enemies_info` 側はシミュレーターが自動付与した `team_id` を持つため、
+  自機の `team_id` が null なら僚機なしとして扱う（null 同士を一致とみなさない）。
+- **撃破者**: `DESTROYED` ログの `actor_id` は被撃破ユニット自身で撃破者を持たない。直前のログが同じ対象への
+  `ATTACK`/`MELEE_COMBO` なら、その `actor_id` を撃破者とみなす。戦果画面の撃墜数と食い違わないよう、
+  バックエンドの `compute_unit_kills`（`backend/app/engine/battle_digest.py`）と同じ規則にしている。
+- 第三者同士の撃破と、撃破者を特定できない `DESTROYED` ログ（直前のログが攻撃でないなど）はチャプターにしない。
 
 表示文言は `message` の自由文ではなく、`weapon_name`/`damage`/`combo_count`/`action_type` 等の構造化フィールドから
 組み立てる（`computeBattleChapters()`、`frontend/src/components/BattleViewer/hooks/useBattleChapters.ts`）。

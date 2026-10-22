@@ -54,7 +54,9 @@ export default function BattleReplayPanel({
 
   const chapters = useBattleChapters(
     logs,
-    playerId && battle.player_info ? { id: playerId, name: battle.player_info.name } : null,
+    playerId && battle.player_info
+      ? { id: playerId, name: battle.player_info.name, team_id: battle.player_info.team_id }
+      : null,
     enemies
   );
 
