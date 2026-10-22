@@ -49,7 +49,7 @@
 3. Python 依存関係をインストールします：
    ```bash
    cd backend
-   pip install -r requirements.txt
+   uv sync
    ```
 
 ## 4. アプリケーションの起動
@@ -57,7 +57,7 @@
 ### バックエンド
 ```bash
 cd backend
-uvicorn main:app --reload
+uv run uvicorn main:app --reload
 ```
 
 ### フロントエンド

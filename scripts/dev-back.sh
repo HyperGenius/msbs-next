@@ -8,8 +8,5 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$REPO_ROOT/backend"
 
-# Python 仮想環境を有効化
-source .venv/bin/activate
-
-# uvicorn でホットリロードを有効にして起動
-exec uvicorn main:app --reload
+# uv run は起動前に .venv を uv.lock と同期する。
+exec uv run uvicorn main:app --reload

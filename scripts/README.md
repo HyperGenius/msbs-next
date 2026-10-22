@@ -23,11 +23,9 @@
 
 ## 事前準備
 
-バックエンドの初回起動前に Python 仮想環境のセットアップが必要です。
+バックエンドの初回起動前に [uv](https://docs.astral.sh/uv/) で依存関係を入れます。
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+uv sync
 ```

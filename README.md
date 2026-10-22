@@ -81,7 +81,7 @@ MSBS-Next は、モビルスーツ（MS）をカスタマイズし、戦術を�
 
 ### 前提条件
 
-- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)（Python 3.11 は uv が自動で用意します）
 - Node.js 18+
 - Neon PostgreSQL アカウント
 - Clerk アカウント
@@ -98,23 +98,18 @@ cd msbs-next
 ```bash
 cd backend
 
-# 仮想環境の作成と有効化
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-
-# 依存関係のインストール
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+# 依存関係のインストール（.venv を作成し、開発ツールも入れる）
+uv sync
 
 # 環境変数の設定
 cp .env.example .env
 # .envファイルを編集してNeon接続情報とClerk設定を記入
 
 # データベースマイグレーション
-alembic upgrade head
+uv run alembic upgrade head
 
 # シードデータの投入
-python scripts/seed.py
+uv run python scripts/seed.py
 ```
 
 ### 3. Frontend セットアップ
@@ -212,13 +207,13 @@ msbs-next/
 cd backend
 
 # 全テスト実行
-pytest
+uv run pytest
 
 # カバレッジ付き
-pytest --cov=app --cov-report=html
+uv run pytest --cov=app --cov-report=html
 
 # 特定のテスト
-pytest tests/unit/test_simulation.py
+uv run pytest tests/unit/test_simulation.py
 ```
 
 ### Frontend テスト
@@ -235,19 +230,23 @@ npm run test:e2e
 ### Backend
 
 ```bash
+# 依存関係の追加（pyproject.toml と uv.lock が更新される）
+uv add <package>          # 本番の依存
+uv add --dev <package>    # 開発ツール
+
 # バッチ処理の手動実行
-python scripts/run_batch.py
+uv run python scripts/run_batch.py
 
 # マイグレーション作成
-alembic revision --autogenerate -m "description"
+uv run alembic revision --autogenerate -m "description"
 
 # Linter & Formatter
-ruff check .          # チェックのみ
-ruff check --fix .    # 自動修正
-ruff format .         # フォーマット
+uv run ruff check .          # チェックのみ
+uv run ruff check --fix .    # 自動修正
+uv run ruff format .         # フォーマット
 
 # 型チェック
-mypy .
+uv run mypy .
 ```
 
 ### Frontend

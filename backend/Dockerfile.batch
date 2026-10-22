@@ -1,11 +1,20 @@
 FROM python:3.11-slim
 
+COPY --from=ghcr.io/astral-sh/uv:0.8.20 /uv /bin/uv
+
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# イメージの python を使う。uv に別の Python を取得させない。
+ENV UV_PYTHON_DOWNLOADS=0 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_NO_CACHE=1
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev
 
 COPY . .
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 # バッチスクリプトを直接実行
 CMD ["python", "scripts/run_batch.py"]

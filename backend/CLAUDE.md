@@ -608,7 +608,7 @@ cd backend && python -m pytest tests/unit --tb=line
 `tests/` 全件実行は `tests/unit/test_area_shrink.py`（`BattleSimulator` を数千ステップ回す
 長時間シミュレーションテスト、特に `test_map_bounds_never_below_min_shrunk_field_size` が
 単体で約40秒）が支配的で、ローカル実測（8論理コアのマシン）でシーケンシャル実行約100秒
-かかった。`requirements-dev.txt` に `pytest-xdist` を追加済みなので `-n <workers>` で
+かかった。開発依存（`pyproject.toml` の `dev` グループ）に `pytest-xdist` があるので `-n <workers>` で
 並列実行できる:
 
 ```bash

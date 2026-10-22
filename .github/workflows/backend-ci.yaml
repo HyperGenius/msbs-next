@@ -44,33 +44,32 @@ jobs:
             engine:
               - 'backend/app/engine/**'
 
-      - name: Setup python 3.11
-        uses: actions/setup-python@v5
+      # Python のバージョンは backend/.python-version に従う
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.11"
-          cache: 'pip'
-          # サブディレクトリにファイルがある場合は明示
-          cache-dependency-path: 'backend/requirements-dev.txt'
-      
+          enable-cache: true
+          cache-dependency-glob: 'backend/uv.lock'
+
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: uv sync --locked
 
       - name: Lint (Ruff)
         # --output-format=github をつけるとPR上にインラインで警告が表示される
         run: |
-          ruff check --output-format=github .
-          ruff format --check .
+          uv run ruff check --output-format=github .
+          uv run ruff format --check .
 
       - name: Type Check (mypy)
         # alembic/versions/ 以下はマイグレーションファイルが入る想定で、ここは型チェックの対象外とする
-        run: mypy --exclude '^alembic/versions/' .
+        run: uv run mypy --exclude '^alembic/versions/' .
 
       - name: Run tests (pytest)
-        run: pytest
+        run: uv run pytest
 
       - name: Engine simulation smoke test
         if: steps.engine-diff.outputs.engine == 'true'
-        run: python scripts/simulation/engine_ci_smoke.py
+        run: uv run python scripts/simulation/engine_ci_smoke.py
 
   deploy:
     needs: test
