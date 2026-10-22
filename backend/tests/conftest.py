@@ -37,11 +37,12 @@ from main import app  # noqa: E402
 # テーブルを一括作成
 SQLModel.metadata.create_all(_test_engine)
 
-_MASTER_DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "master"
+# テスト専用の固定データ。本番の値とは一致させない（fixtures/master/README.md）。
+_MASTER_DATA_DIR = Path(__file__).resolve().parent / "fixtures" / "master"
 
 
 def _seed_master_data(session: Session) -> None:
-    """機体・武器・エースパイロット・設計図・技術・戦域の各マスターにシードデータを投入する."""
+    """機体・武器・エースパイロット・設計図・技術・戦域の各マスターにテスト用データを投入する."""
     from app.models.models import (
         AcePilot,
         BlueprintTargetType,

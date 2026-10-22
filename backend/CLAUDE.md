@@ -22,6 +22,7 @@ backend/
 │   └── master/
 │       └── backgrounds.json ← 経歴マスタデータ（フロントエンドの同名ファイルと別管理）
 ├── tests/
+│   ├── fixtures/master/    ← テスト専用のマスターデータ（本番の値とは一致させない）
 │   ├── unit/               ← 単体テスト（DB不使用）
 │   └── test_onboarding.py  ← パイロット登録の統合テスト
 └── main.py                 ← WebSocket バトルセッション・PilotStats 構築
@@ -78,6 +79,20 @@ attacker_dex = 0  # DEX は廃止（Phase E-1: SHT/MEL に置換）
 | `frontend/src/data/backgrounds.json` | Next.js オンボーディングページが読み込む |
 
 現在のベースステータスキー: `SHT`, `MEL`, `INT`, `REF`, `TOU`, `LUK`（`DEX` は存在しない）
+
+---
+
+## マスターデータの正本は DB
+
+機体・武器・エースパイロット・技術・環境タイプ・戦域（と付随する設計図マスター）の正本は DB（`master_*` テーブル・`ace_pilots`）である。
+**値を変えるときは、管理画面か `scripts/maintenance/` のスクリプトで DB を直すこと。** JSON を直しても本番には反映されない
+（かつて `data/master/` にあった JSON だけを直し、本番が古いままになった。Issue #576・#659）。
+
+- `tests/fixtures/master/` はテスト専用の固定データで、本番の値とは一致させない。テストの期待値はこの値に依存する
+- 本番の値が必要なら `scripts/maintenance/export_master_data.py` で書き出す（本番 DB を読み取り専用で読む）。書き出したデータは Git に入れない
+- 新しい環境は「書き出す → `scripts/seed/seed_master_data.py --data-dir` で投入する」で作る。`--force` は管理画面で直した値も上書きするので、本番 DB には使わない
+- バランス計測ツール（`engagement_bench.py` / `terrain_balance_bench.py`）は既定で本番 DB を読み取り専用で読む。`--master-dir` で JSON ディレクトリを渡せる
+- `data/master/` に残る `backgrounds.json`・`thresholds.json` は DB テーブルを持たず、実行時に読む JSON が正本
 
 ---
 

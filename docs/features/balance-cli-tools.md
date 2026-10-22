@@ -277,7 +277,8 @@ python scripts/verify/fetch_recent_battles.py --with-logs
 ## 地形適正・環境効果のバランス確認（`terrain_balance_bench.py`）
 
 `backend/scripts/simulation/terrain_balance_bench.py` は、環境タイプの効果と地形適正の影響を 1対1 のモンテカルロで確認するスクリプトです（Issue #576）。
-DB を使わず、`backend/data/master/mobile_suits.json`・`environments.json` から戦闘を組み立てます。
+機体・環境タイプのマスターは、既定では本番 DB から読み取り専用で読みます（`NEON_READONLY_DATABASE_URL`）。
+`--master-dir` を渡すと、その JSON ディレクトリから読みます（DB に繋がない環境用。`export_master_data.py` の出力か、テスト用データ `tests/fixtures/master`）。
 
 ```bash
 cd backend
@@ -309,7 +310,9 @@ python scripts/simulation/terrain_balance_bench.py --skip-masters
 ## 交戦距離・膠着の計測（`engagement_bench.py`）
 
 `backend/scripts/simulation/engagement_bench.py` は、1対1 の戦闘で「どの距離で戦っているか」「格闘の空振りが続いていないか」を数値で確認するスクリプトです（Issue #595、Epic #594）。
-DB を使わず、`backend/data/master/mobile_suits.json`・`weapons.json` から機体と武器を組み立てます。バトルエンジンの挙動は変えません。
+機体・武器のマスターは、既定では本番 DB から読み取り専用で読みます（`NEON_READONLY_DATABASE_URL`）。
+`run --master-dir` を渡すと、その JSON ディレクトリから読みます（DB に繋がない環境用。`export_master_data.py` の出力か、テスト用データ `tests/fixtures/master`）。結果 JSON の `meta.master_source` に読み先を記録します。バトルエンジンの挙動は変えません。
+テスト（`test_engagement_bench.py` / `test_sniper_close_range.py`）はテスト用データで動かします。
 
 ```bash
 cd backend

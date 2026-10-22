@@ -50,7 +50,7 @@ player_blueprints (所持設計図)
 | マイグレーション（`i3d4e5f6a7b8`） | 既存の全機体・武器マスター分を作成 | 標準配備、換金額 = 価格の20% |
 | admin の機体・武器マスター新規作成 | `MobileSuitService.create_master_mobile_suit` / `WeaponService.create_master_weapon` から作成 | 同上。リクエストの `blueprint` で指定した項目はその値にする |
 | admin の機体・武器マスター更新 | 設計図マスターが無いアイテム（データ不整合）を保存したときに作成 | 同上 |
-| シードスクリプト（`scripts/seed/seed_master_data.py`） | 新規投入した機体・武器分を作成 | 同上 |
+| シードスクリプト（`scripts/seed/seed_master_data.py`） | `blueprints.json` があればその値で作成。無ければ新規投入した機体・武器分を作成 | 同上（`blueprints.json` があればその値） |
 
 * 導入直後にショップの挙動を変えないため、**全件を標準配備で作成する**。運用者が admin-tool から標準配備を外していく
 * 換金額の初期値（価格の20%、`DUPLICATE_CREDIT_RATIO`）は暫定値。アイテムごとに admin-tool から調整する前提で、固定の計算式にはしない
@@ -473,9 +473,10 @@ player_technologies (プレイヤーの累計断片数)
 * 導入時点では全プレイヤーの累計数を0とする（`player_technologies` は空）。既存の機体・武器には購入条件を設定しないため、導入直後に購入できなくなるアイテムは無い
 * マイグレーション `k5f6a7b8c9d0` はテーブル作成と `drop_table_entries` の変更のみ。既存のエントリーは `reward_type = BLUEPRINT` になる
 
-### 初期データ（`backend/data/master/technologies.json`）
+### 初期データ
 
-`scripts/seed/seed_master_data.py` で投入する（既存の技術はスキップ、`--force` で上書き）。
+導入時の値を示す。現在の値は DB が正本で、管理画面で変える。
+新しい環境へは `scripts/seed/seed_master_data.py --data-dir` で投入する（既存の技術はスキップ）。
 
 | ID | 名前 | 閾値 | 最大Lv後の換金額 |
 |---|---|---|---|

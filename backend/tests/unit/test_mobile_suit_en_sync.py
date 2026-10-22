@@ -13,7 +13,7 @@ from app.services.mobile_suit_en_sync_service import (
     sync_mobile_suit_en,
 )
 
-# シードデータにある機体マスター
+# テスト用データにある機体マスター
 MASTER_MS_ID = "zaku_ii"
 
 

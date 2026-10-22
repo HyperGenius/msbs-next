@@ -1,26 +1,32 @@
 #!/usr/bin/env python
 """マスターデータシードスクリプト.
 
-mobile_suits.json / weapons.json / ace_pilots.json / technologies.json /
-environments.json / theaters.json から master_mobile_suits / master_weapons /
-ace_pilots / master_technologies / master_environments / master_theaters テーブルへ
-データを投入する。べき等に実行可能（id が既に存在するレコードはスキップする）。
-新規に投入した機体・武器には、標準配備の設計図マスターも作成する。
+JSON ディレクトリから master_mobile_suits / master_weapons / ace_pilots /
+master_technologies / master_environments / master_theaters / master_blueprints
+テーブルへデータを投入する。新しい環境の DB を作るときに使う。
+べき等に実行可能（id が既に存在するレコードはスキップする）。
+
+マスターの正本は DB である。投入元は次のどちらかにする。
+- 本番から書き出したデータ（`scripts/maintenance/export_master_data.py` の出力。既定）
+- テスト用の固定データ（`tests/fixtures/master/`）。値は本番と一致しない
+
+`blueprints.json` が無いときは、新規に投入した機体・武器に標準配備の設計図マスターを作る。
 
 Usage:
-    python scripts/seed/seed_master_data.py [--force]
+    python scripts/seed/seed_master_data.py [--data-dir DIR] [--force]
 
 Options:
+    --data-dir  投入元の JSON ディレクトリ。
+                デフォルトは export_master_data.py の出力先。
     --force     既存レコードを上書きする（管理画面で変更済みのデータも上書き）。
                 デフォルトは既存レコードをスキップ（管理画面変更を保護する）。
+                本番 DB には使わない。
 
 Environment:
     DATABASE_URL (または NEON_DATABASE_URL): 接続先データベースのURL
-                                             デフォルト: sqlite:///./dev.db
 """
 
 import argparse
-import json
 import os
 import sys
 from datetime import UTC, datetime
@@ -36,6 +42,20 @@ sys.path.insert(0, str(_ROOT))
 # .env を読み込む（backend/.env）
 load_dotenv(_ROOT / ".env")
 
+from scripts.master_data import (  # noqa: E402
+    ACE_PILOTS,
+    BLUEPRINTS,
+    ENVIRONMENTS,
+    EXPORT_DIR,
+    FIXTURE_DIR,
+    MOBILE_SUITS,
+    TECHNOLOGIES,
+    THEATERS,
+    WEAPONS,
+    MasterData,
+    read_master_dir,
+)
+
 
 def _get_engine():
     """DATABASE_URL 環境変数からエンジンを生成する."""
@@ -45,92 +65,15 @@ def _get_engine():
     return create_engine(url)
 
 
-def _seed_ace_pilots(session: Session, data_dir: Path, force: bool) -> tuple[int, int]:
-    """ace_pilots.json から ace_pilots テーブルへデータを投入する.
-
-    Returns:
-        tuple[int, int]: (挿入件数, スキップ件数)
-    """
-    from app.models.models import AcePilot
-
-    ace_json_path = data_dir / "ace_pilots.json"
-    if not ace_json_path.exists():
-        print(f"[WARNING] {ace_json_path} が見つかりません。スキップします。")
-        return 0, 0
-
-    inserted = 0
-    skipped = 0
-    for item in json.loads(ace_json_path.read_text(encoding="utf-8")):
-        existing = session.get(AcePilot, item["id"])
-
-        if existing is not None and not force:
-            skipped += 1
-            continue
-
-        if existing is not None:
-            for key, value in item.items():
-                setattr(existing, key, value)
-            existing.updated_at = datetime.now(UTC)
-            session.add(existing)
-        else:
-            session.add(AcePilot(**item))
-            inserted += 1
-    return inserted, skipped
-
-
-def _seed_technologies(
-    session: Session, data_dir: Path, force: bool
-) -> tuple[int, int]:
-    """technologies.json から master_technologies テーブルへデータを投入する.
-
-    Returns:
-        tuple[int, int]: (挿入件数, スキップ件数)
-    """
-    from app.models.models import MasterTechnology, validate_level_thresholds
-
-    tech_json_path = data_dir / "technologies.json"
-    if not tech_json_path.exists():
-        print(f"[WARNING] {tech_json_path} が見つかりません。スキップします。")
-        return 0, 0
-
-    inserted = 0
-    skipped = 0
-    for item in json.loads(tech_json_path.read_text(encoding="utf-8")):
-        validate_level_thresholds(item["level_thresholds"])
-        existing = session.get(MasterTechnology, item["id"])
-
-        if existing is not None and not force:
-            skipped += 1
-            continue
-
-        if existing is not None:
-            for key, value in item.items():
-                setattr(existing, key, value)
-            existing.updated_at = datetime.now(UTC)
-            session.add(existing)
-        else:
-            session.add(MasterTechnology(**item))
-            inserted += 1
-    return inserted, skipped
-
-
-def _read_items(json_path: Path) -> list[dict]:
-    """JSON ファイルの要素を返す。ファイルが無ければ警告を出して空リストを返す."""
-    if not json_path.exists():
-        print(f"[WARNING] {json_path} が見つかりません。スキップします。")
-        return []
-    return json.loads(json_path.read_text(encoding="utf-8"))
-
-
 def _seed_by_id(
     session: Session, items: list[dict], model: type, force: bool
-) -> tuple[int, int]:
+) -> tuple[list[str], int]:
     """各要素を id をキーにして model のテーブルへ投入する.
 
     Returns:
-        tuple[int, int]: (挿入件数, スキップ件数)
+        tuple[list[str], int]: (挿入した id, スキップ件数)
     """
-    inserted = 0
+    inserted: list[str] = []
     skipped = 0
     for item in items:
         existing = session.get(model, item["id"])
@@ -146,170 +89,141 @@ def _seed_by_id(
             session.add(existing)
         else:
             session.add(model(**item))
-            inserted += 1
+            inserted.append(item["id"])
     return inserted, skipped
 
 
-def _seed_theaters(session: Session, data_dir: Path, force: bool) -> dict[str, int]:
-    """環境タイプと戦域のマスターを投入する.
+def _validate(data: MasterData) -> None:
+    """列挙値と技術Lvの閾値を、DB に書く前に検証する."""
+    from app.models.models import (
+        ObstacleDensity,
+        TerrainGrade,
+        ViewerPreset,
+        validate_level_thresholds,
+    )
+
+    for item in data[TECHNOLOGIES]:
+        validate_level_thresholds(item["level_thresholds"])
+    for item in data[ENVIRONMENTS]:
+        ObstacleDensity(item["default_obstacle_density"])
+        TerrainGrade(item["default_terrain_grade"])
+        ViewerPreset(item["viewer_preset"])
+    for item in data[THEATERS]:
+        if item.get("obstacle_density") is not None:
+            ObstacleDensity(item["obstacle_density"])
+
+
+def _seed_blueprints(
+    session: Session, items: list[dict], force: bool
+) -> tuple[list[str], int]:
+    """設計図マスターと必要な技術Lvを投入する.
+
+    Returns:
+        tuple[list[str], int]: (挿入した id, スキップ件数)
+    """
+    from app.models.models import MasterBlueprint, TechRequirement
+    from app.services.technology_service import TechnologyService
+
+    blueprints = [
+        {k: v for k, v in item.items() if k != "tech_requirements"} for item in items
+    ]
+    inserted, skipped = _seed_by_id(session, blueprints, MasterBlueprint, force)
+    session.flush()
+    for item in items:
+        if force or item["id"] in inserted:
+            TechnologyService.replace_requirements(
+                session,
+                item["id"],
+                [TechRequirement(**r) for r in item.get("tech_requirements", [])],
+            )
+    return inserted, skipped
+
+
+def seed_session(session: Session, data: MasterData, force: bool) -> dict[str, int]:
+    """マスターデータを session へ投入する。コミットは呼び出し側で行う.
 
     Returns:
         dict: 挿入/スキップ件数
     """
     from app.models.models import (
+        AcePilot,
+        BlueprintTargetType,
+        MasterBlueprint,
         MasterEnvironment,
+        MasterMobileSuit,
+        MasterTechnology,
         MasterTheater,
-        ObstacleDensity,
-        TerrainGrade,
-        ViewerPreset,
+        MasterWeapon,
     )
+    from app.services.blueprint_service import BlueprintService
 
-    env_items = _read_items(data_dir / "environments.json")
-    theater_items = _read_items(data_dir / "theaters.json")
-    for item in env_items:
-        ObstacleDensity(item["default_obstacle_density"])
-        TerrainGrade(item["default_terrain_grade"])
-        ViewerPreset(item["viewer_preset"])
-    for item in theater_items:
-        if item.get("obstacle_density") is not None:
-            ObstacleDensity(item["obstacle_density"])
+    _validate(data)
+    result: dict[str, int] = {}
 
-    env_in, env_sk = _seed_by_id(session, env_items, MasterEnvironment, force)
-    # 戦域は環境タイプを外部キーで参照するため、先に環境タイプを書き込む。
-    session.flush()
-    theater_in, theater_sk = _seed_by_id(session, theater_items, MasterTheater, force)
-    return {
-        "environments_inserted": env_in,
-        "environments_skipped": env_sk,
-        "theaters_inserted": theater_in,
-        "theaters_skipped": theater_sk,
+    def seed(name: str, model: type) -> list[str]:
+        inserted, skipped = _seed_by_id(session, data[name], model, force)
+        result[f"{name}_inserted"] = len(inserted)
+        result[f"{name}_skipped"] = skipped
+        # 後続のマスターが外部キーで参照するため、ここで書き込む。
+        session.flush()
+        return inserted
+
+    seed(TECHNOLOGIES, MasterTechnology)
+    seed(ENVIRONMENTS, MasterEnvironment)
+    seed(THEATERS, MasterTheater)
+    seed(ACE_PILOTS, AcePilot)
+    new_suits = seed(MOBILE_SUITS, MasterMobileSuit)
+    new_weapons = seed(WEAPONS, MasterWeapon)
+
+    bp_inserted, bp_skipped = _seed_blueprints(session, data[BLUEPRINTS], force)
+    prices = {
+        (target_type, item["id"]): item["price"]
+        for target_type, name in (
+            (BlueprintTargetType.MOBILE_SUIT, MOBILE_SUITS),
+            (BlueprintTargetType.WEAPON, WEAPONS),
+        )
+        for item in data[name]
     }
+    created_by_default = 0
+    for target_type, ids in (
+        (BlueprintTargetType.MOBILE_SUIT, new_suits),
+        (BlueprintTargetType.WEAPON, new_weapons),
+    ):
+        for target_id in ids:
+            blueprint_id = BlueprintService.blueprint_id_for(target_type, target_id)
+            if session.get(MasterBlueprint, blueprint_id) is None:
+                created_by_default += 1
+            BlueprintService.ensure_master_blueprint(
+                session, target_type, target_id, prices[(target_type, target_id)]
+            )
+    result[f"{BLUEPRINTS}_inserted"] = len(bp_inserted) + created_by_default
+    result[f"{BLUEPRINTS}_skipped"] = bp_skipped
+    return result
 
 
-def seed_master_data(force: bool = False) -> dict[str, int]:
-    """マスターデータを DB へ投入する.
+def seed_master_data(data_dir: Path, force: bool = False) -> dict[str, int]:
+    """data_dir の JSON を DB へ投入する.
 
     Args:
+        data_dir: 投入元の JSON ディレクトリ
         force: True の場合、既存レコードを上書きする
 
     Returns:
         dict: 挿入/スキップ件数
     """
-    # モデルは engine 生成後にインポート（循環インポート回避）
-    from app.models.models import BlueprintTargetType, MasterMobileSuit, MasterWeapon
-    from app.services.blueprint_service import BlueprintService
-
-    data_dir = _ROOT / "data" / "master"
-    engine = _get_engine()
-
     from sqlmodel import SQLModel
 
+    # create_all はインポート済みのモデルのテーブルだけを作る。
+    import app.models.models  # noqa: F401
+
+    data = read_master_dir(data_dir)
+    engine = _get_engine()
     SQLModel.metadata.create_all(engine)
 
-    inserted_ms = 0
-    skipped_ms = 0
-    inserted_w = 0
-    skipped_w = 0
-
     with Session(engine) as session:
-        # === mobile_suits ===
-        ms_json_path = data_dir / "mobile_suits.json"
-        if not ms_json_path.exists():
-            print(f"[WARNING] {ms_json_path} が見つかりません。スキップします。")
-        else:
-            ms_data = json.loads(ms_json_path.read_text(encoding="utf-8"))
-            for item in ms_data:
-                item_id = item["id"]
-                existing = session.get(MasterMobileSuit, item_id)
-
-                if existing is not None and not force:
-                    skipped_ms += 1
-                    continue
-
-                specs = dict(item["specs"])
-
-                if existing is not None:
-                    # --force: 既存レコードを上書き
-                    existing.name = item["name"]
-                    existing.price = item["price"]
-                    existing.faction = item.get("faction", "")
-                    existing.description = item["description"]
-                    existing.flavor_text = item.get("flavor_text")
-                    existing.specs = specs
-                    existing.updated_at = datetime.now(UTC)
-                    session.add(existing)
-                else:
-                    record = MasterMobileSuit(
-                        id=item_id,
-                        name=item["name"],
-                        price=item["price"],
-                        faction=item.get("faction", ""),
-                        description=item["description"],
-                        flavor_text=item.get("flavor_text"),
-                        specs=specs,
-                    )
-                    session.add(record)
-                    BlueprintService.ensure_master_blueprint(
-                        session, BlueprintTargetType.MOBILE_SUIT, item_id, item["price"]
-                    )
-                    inserted_ms += 1
-
-        # === weapons ===
-        weapons_json_path = data_dir / "weapons.json"
-        if not weapons_json_path.exists():
-            print(f"[WARNING] {weapons_json_path} が見つかりません。スキップします。")
-        else:
-            weapons_data = json.loads(weapons_json_path.read_text(encoding="utf-8"))
-            for item in weapons_data:
-                item_id = item["id"]
-                existing = session.get(MasterWeapon, item_id)
-
-                if existing is not None and not force:
-                    skipped_w += 1
-                    continue
-
-                weapon_dict = dict(item["weapon"])
-
-                if existing is not None:
-                    existing.name = item["name"]
-                    existing.price = item["price"]
-                    existing.description = item["description"]
-                    existing.flavor_text = item.get("flavor_text")
-                    existing.weapon = weapon_dict
-                    existing.updated_at = datetime.now(UTC)
-                    session.add(existing)
-                else:
-                    record = MasterWeapon(
-                        id=item_id,
-                        name=item["name"],
-                        price=item["price"],
-                        description=item["description"],
-                        flavor_text=item.get("flavor_text"),
-                        weapon=weapon_dict,
-                    )
-                    session.add(record)
-                    BlueprintService.ensure_master_blueprint(
-                        session, BlueprintTargetType.WEAPON, item_id, item["price"]
-                    )
-                    inserted_w += 1
-
-        inserted_ace, skipped_ace = _seed_ace_pilots(session, data_dir, force)
-        inserted_tech, skipped_tech = _seed_technologies(session, data_dir, force)
-        theater_result = _seed_theaters(session, data_dir, force)
-
+        result = seed_session(session, data, force)
         session.commit()
-
-    return {
-        "mobile_suits_inserted": inserted_ms,
-        "mobile_suits_skipped": skipped_ms,
-        "weapons_inserted": inserted_w,
-        "weapons_skipped": skipped_w,
-        "ace_pilots_inserted": inserted_ace,
-        "ace_pilots_skipped": skipped_ace,
-        "technologies_inserted": inserted_tech,
-        "technologies_skipped": skipped_tech,
-        **theater_result,
-    }
+    return result
 
 
 def main() -> None:
@@ -317,8 +231,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
             "マスターデータ (mobile_suits / weapons / ace_pilots / technologies /"
-            " environments / theaters) を DB へシードする"
+            " environments / theaters / blueprints) を DB へシードする"
         )
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=EXPORT_DIR,
+        help=(
+            "投入元の JSON ディレクトリ（既定: export_master_data.py の出力先）。"
+            f"本番に繋げない場合はテスト用データ {FIXTURE_DIR.relative_to(_ROOT)} を指定する"
+        ),
     )
     parser.add_argument(
         "--force",
@@ -327,20 +250,26 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    print(f"[INFO] シード開始 (force={args.force})")
-    result = seed_master_data(force=args.force)
-    ms_in, ms_sk = result["mobile_suits_inserted"], result["mobile_suits_skipped"]
-    w_in, w_sk = result["weapons_inserted"], result["weapons_skipped"]
-    print(f"[INFO] mobile_suits: {ms_in} 件挿入, {ms_sk} 件スキップ")
-    print(f"[INFO] weapons: {w_in} 件挿入, {w_sk} 件スキップ")
-    ace_in, ace_sk = result["ace_pilots_inserted"], result["ace_pilots_skipped"]
-    print(f"[INFO] ace_pilots: {ace_in} 件挿入, {ace_sk} 件スキップ")
-    tech_in, tech_sk = result["technologies_inserted"], result["technologies_skipped"]
-    print(f"[INFO] technologies: {tech_in} 件挿入, {tech_sk} 件スキップ")
-    env_in, env_sk = result["environments_inserted"], result["environments_skipped"]
-    print(f"[INFO] environments: {env_in} 件挿入, {env_sk} 件スキップ")
-    th_in, th_sk = result["theaters_inserted"], result["theaters_skipped"]
-    print(f"[INFO] theaters: {th_in} 件挿入, {th_sk} 件スキップ")
+    print(f"[INFO] シード開始 (data_dir={args.data_dir}, force={args.force})")
+    try:
+        result = seed_master_data(args.data_dir, force=args.force)
+    except FileNotFoundError as exc:
+        sys.exit(
+            f"[ERROR] {exc}。先に export_master_data.py で書き出すか、"
+            "--data-dir を指定してください。"
+        )
+    for name in (
+        MOBILE_SUITS,
+        WEAPONS,
+        ACE_PILOTS,
+        TECHNOLOGIES,
+        ENVIRONMENTS,
+        THEATERS,
+        BLUEPRINTS,
+    ):
+        inserted = result[f"{name}_inserted"]
+        skipped = result[f"{name}_skipped"]
+        print(f"[INFO] {name}: {inserted} 件挿入, {skipped} 件スキップ")
     print("[INFO] シード完了")
 
 

@@ -96,15 +96,15 @@ def migrate(session: Session) -> None:
 
         # inventory の各武器IDについて count 件の PlayerWeapon を生成
         for weapon_id, count in inventory.items():
-            # weapons.json からスナップショットを取得
+            # 武器マスター（DB）からスナップショットを取得
             listing = get_weapon_listing_by_id(weapon_id)
             if listing:
                 weapon_obj = listing["weapon"]
                 base_snapshot = weapon_obj.model_dump()
             else:
-                # weapons.json に存在しない場合はスキップせずそのまま保持
+                # 武器マスターに存在しない場合はスキップせずそのまま保持
                 print(
-                    f"  警告: weapons.json に {weapon_id} が見つかりません。空スナップショットで保持します。"
+                    f"  警告: 武器マスターに {weapon_id} が見つかりません。空スナップショットで保持します。"
                 )
                 base_snapshot = {"id": weapon_id}
 

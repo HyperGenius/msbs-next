@@ -22,7 +22,7 @@ from app.services.weapon_master_sync_service import (
 )
 
 WEAPON_ID = "giant_bazooka"
-# シードデータで Giant Bazooka を初期装備に持つ機体マスター
+# テスト用データで Giant Bazooka を初期装備に持つ機体マスター
 MASTER_MS_ID = "dom"
 
 OLD_SPEC = {
