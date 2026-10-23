@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from app.core.auth import get_current_user
 from app.db import get_session
-from app.models.models import BattleEntry, BattleRoom, MobileSuit
+from app.models.models import BattleEntry, BattleRoom, Mission, MobileSuit
 from app.services.battle_room_service import BattleRoomService
 from app.services.mobile_suit_service import MobileSuitService
 from app.services.weapon_service import WeaponService
@@ -29,6 +29,8 @@ class EntryResponse(BaseModel):
     mobile_suit_id: str
     scheduled_at: str
     created_at: str
+    mission_id: int | None = None
+    """作戦ID。null はデイリーバトルロイヤル。"""
 
 
 class EntryStatusResponse(BaseModel):
@@ -43,6 +45,8 @@ class EntryRequest(BaseModel):
     """エントリーリクエスト."""
 
     mobile_suit_id: str
+    mission_id: int | None = None
+    """出撃する作戦。省略時はデイリーバトルロイヤル。"""
 
 
 # --- Helper Functions ---
@@ -60,6 +64,18 @@ def ensure_utc_timezone(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
     return dt
+
+
+def _entry_response(entry: BattleEntry, room: BattleRoom) -> EntryResponse:
+    """エントリーとルームからレスポンスを組み立てる."""
+    return EntryResponse(
+        id=str(entry.id),
+        room_id=str(entry.room_id),
+        mobile_suit_id=str(entry.mobile_suit_id),
+        scheduled_at=ensure_utc_timezone(room.scheduled_at).isoformat(),
+        created_at=entry.created_at.isoformat(),
+        mission_id=room.mission_id,
+    )
 
 
 # --- API Endpoints ---
@@ -84,6 +100,12 @@ async def create_entry(
     if not mobile_suit:
         raise HTTPException(status_code=404, detail="Mobile Suit not found")
 
+    mission_id = entry_request.mission_id
+    if mission_id is not None:
+        mission = session.get(Mission, mission_id)
+        if mission is None or not mission.is_active:
+            raise HTTPException(status_code=404, detail="Mission not found")
+
     # ルームの新規作成は commit を伴う。機体の変更を巻き込まないよう、先に取得する。
     room, _ = BattleRoomService.get_or_create_open_room(session)
 
@@ -95,59 +117,44 @@ async def create_entry(
     WeaponService.resync_mobile_suit_weapons(session, mobile_suit)
     session.add(mobile_suit)
 
-    # 既存のエントリーをチェック（同じルームに既にエントリー済みか）
-    existing_entry_statement = (
-        select(BattleEntry)
-        .where(BattleEntry.user_id == user_id)
-        .where(BattleEntry.room_id == room.id)
+    # 1開催に出られるのはバトルロイヤルか作戦のどちらか1つ。
+    existing = BattleRoomService.find_open_entry(session, user_id)
+    if existing is not None:
+        existing_entry, existing_room = existing
+        if existing_room.mission_id == mission_id:
+            # 同じ出撃先なら機体だけ上書きする
+            existing_entry.mobile_suit_id = mobile_suit_uuid
+            existing_entry.mobile_suit_snapshot = (
+                MobileSuitService.build_entry_snapshot(session, mobile_suit)
+            )
+            session.add(existing_entry)
+            session.commit()
+            session.refresh(existing_entry)
+            return _entry_response(existing_entry, existing_room)
+        # 出撃先を変えたら、前のエントリー（と作戦ルーム）を消して入り直す
+        BattleRoomService.remove_entry(session, existing_entry, existing_room)
+
+    target_room = (
+        room
+        if mission_id is None
+        else BattleRoomService.create_mission_room(session, room, mission_id)
     )
-    existing_entry = session.exec(existing_entry_statement).first()
 
-    if existing_entry:
-        # 既にエントリー済みの場合は上書き
-        existing_entry.mobile_suit_id = mobile_suit_uuid
-        existing_entry.mobile_suit_snapshot = MobileSuitService.build_entry_snapshot(
-            session, mobile_suit
-        )
-        session.add(existing_entry)
-        session.commit()
-        session.refresh(existing_entry)
-
-        # Ensure scheduled_at has timezone info (UTC) before serializing
-        scheduled_at = ensure_utc_timezone(room.scheduled_at)
-
-        return EntryResponse(
-            id=str(existing_entry.id),
-            room_id=str(existing_entry.room_id),
-            mobile_suit_id=str(existing_entry.mobile_suit_id),
-            scheduled_at=scheduled_at.isoformat(),
-            created_at=existing_entry.created_at.isoformat(),
-        )
-
-    # 新規エントリーを作成
     # 機体データをスナップショットとして保存
     snapshot = MobileSuitService.build_entry_snapshot(session, mobile_suit)
 
     new_entry = BattleEntry(
         user_id=user_id,
-        room_id=room.id,
+        room_id=target_room.id,
         mobile_suit_id=mobile_suit_uuid,
         mobile_suit_snapshot=snapshot,
     )
     session.add(new_entry)
     session.commit()
     session.refresh(new_entry)
+    session.refresh(target_room)
 
-    # Ensure scheduled_at has timezone info (UTC) before serializing
-    scheduled_at = ensure_utc_timezone(room.scheduled_at)
-
-    return EntryResponse(
-        id=str(new_entry.id),
-        room_id=str(new_entry.room_id),
-        mobile_suit_id=str(new_entry.mobile_suit_id),
-        scheduled_at=scheduled_at.isoformat(),
-        created_at=new_entry.created_at.isoformat(),
-    )
+    return _entry_response(new_entry, target_room)
 
 
 @router.get("/status", response_model=EntryStatusResponse)
@@ -159,46 +166,22 @@ async def get_entry_status(
     # 現在募集中のルームを取得または作成
     room, _ = BattleRoomService.get_or_create_open_room(session)
 
-    # 自分のエントリーをチェック
-    entry_statement = (
-        select(BattleEntry)
-        .where(BattleEntry.user_id == user_id)
-        .where(BattleEntry.room_id == room.id)
-    )
-    entry = session.exec(entry_statement).first()
+    next_room = {
+        "id": str(room.id),
+        "status": room.status,
+        "scheduled_at": ensure_utc_timezone(room.scheduled_at).isoformat(),
+    }
 
-    if entry:
-        # Ensure scheduled_at has timezone info (UTC) before serializing
-        scheduled_at = ensure_utc_timezone(room.scheduled_at)
+    # 自分のエントリー（バトルロイヤルか作戦）をチェック
+    existing = BattleRoomService.find_open_entry(session, user_id)
+    if existing is None:
+        return EntryStatusResponse(is_entered=False, entry=None, next_room=next_room)
 
-        return EntryStatusResponse(
-            is_entered=True,
-            entry=EntryResponse(
-                id=str(entry.id),
-                room_id=str(entry.room_id),
-                mobile_suit_id=str(entry.mobile_suit_id),
-                scheduled_at=scheduled_at.isoformat(),
-                created_at=entry.created_at.isoformat(),
-            ),
-            next_room={
-                "id": str(room.id),
-                "status": room.status,
-                "scheduled_at": scheduled_at.isoformat(),
-            },
-        )
-
-    # エントリーしていない
-    # Ensure scheduled_at has timezone info (UTC) before serializing
-    scheduled_at = ensure_utc_timezone(room.scheduled_at)
-
+    entry, entry_room = existing
     return EntryStatusResponse(
-        is_entered=False,
-        entry=None,
-        next_room={
-            "id": str(room.id),
-            "status": room.status,
-            "scheduled_at": scheduled_at.isoformat(),
-        },
+        is_entered=True,
+        entry=_entry_response(entry, entry_room),
+        next_room=next_room,
     )
 
 
@@ -206,10 +189,8 @@ async def get_entry_status(
 async def get_entry_count(
     session: Session = Depends(get_session),
 ) -> dict[str, int]:
-    """現在募集中のルームへのエントリー数を取得する."""
-    # 現在募集中のルームを取得
-    room_statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
-    room = session.exec(room_statement).first()
+    """現在募集中のバトルロイヤルのルームへのエントリー数を取得する."""
+    room = BattleRoomService.find_open_room(session)
 
     if not room:
         return {"count": 0}
@@ -226,26 +207,13 @@ async def cancel_entry(
     session: Session = Depends(get_session),
     user_id: str = Depends(get_current_user),
 ) -> dict[str, str]:
-    """エントリーをキャンセルする."""
-    # 現在募集中のルームを取得
-    room_statement = select(BattleRoom).where(BattleRoom.status == "OPEN")
-    room = session.exec(room_statement).first()
-
-    if not room:
-        raise HTTPException(status_code=404, detail="No open room found")
-
-    # 自分のエントリーを削除
-    entry_statement = (
-        select(BattleEntry)
-        .where(BattleEntry.user_id == user_id)
-        .where(BattleEntry.room_id == room.id)
-    )
-    entry = session.exec(entry_statement).first()
-
-    if not entry:
+    """エントリー（バトルロイヤルか作戦）をキャンセルする."""
+    existing = BattleRoomService.find_open_entry(session, user_id)
+    if existing is None:
         raise HTTPException(status_code=404, detail="Entry not found")
 
-    session.delete(entry)
+    entry, room = existing
+    BattleRoomService.remove_entry(session, entry, room)
     session.commit()
 
     return {"message": "Entry cancelled successfully"}

@@ -113,22 +113,13 @@ class MatchingService:
             entry_statement = select(BattleEntry).where(BattleEntry.room_id == room.id)
             entries = list(self.session.exec(entry_statement).all())
 
+            if room.mission_id is not None:
+                if self._match_mission_room(room, entries):
+                    created_rooms.append(room)
+                continue
+
             if not entries:
-                print(f"ルーム {room.id} にエントリーがありません")
-                # scheduled_atが過去の場合、翌日の同時刻に更新する
-                now = datetime.now(UTC)
-                scheduled_at = room.scheduled_at
-                # Ensure scheduled_at is timezone-aware for comparison
-                if scheduled_at.tzinfo is None:
-                    scheduled_at = scheduled_at.replace(tzinfo=UTC)
-                if scheduled_at < now:
-                    # 翌日の同時刻に更新
-                    new_scheduled_at = scheduled_at + timedelta(days=1)
-                    room.scheduled_at = new_scheduled_at
-                    BattleRoomService.assign_theater(self.session, room)
-                    print(
-                        f"  エントリーがないため、スケジュールを延期しました: {new_scheduled_at}"
-                    )
+                self._postpone_empty_room(room)
                 continue
 
             print(f"ルーム {room.id}: {len(entries)} 件のエントリーを処理中...")
@@ -213,6 +204,44 @@ class MatchingService:
 
         print(f"\nマッチング完了: {len(created_rooms)} ルーム")
         return created_rooms
+
+    def _postpone_empty_room(self, room: BattleRoom) -> None:
+        """エントリーの無いバトルロイヤルのルームを、開催予定時刻を過ぎていれば翌日に延期する."""
+        print(f"ルーム {room.id} にエントリーがありません")
+        now = datetime.now(UTC)
+        scheduled_at = room.scheduled_at
+        # Ensure scheduled_at is timezone-aware for comparison
+        if scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=UTC)
+        if scheduled_at < now:
+            # 翌日の同時刻に更新
+            new_scheduled_at = scheduled_at + timedelta(days=1)
+            room.scheduled_at = new_scheduled_at
+            BattleRoomService.assign_theater(self.session, room)
+            print(
+                f"  エントリーがないため、スケジュールを延期しました: {new_scheduled_at}"
+            )
+
+    def _match_mission_room(self, room: BattleRoom, entries: list[BattleEntry]) -> bool:
+        """作戦ルームを実行待ちにする。エントリーが無ければルームを消す.
+
+        作戦ルームは NPC で埋めない。敵と友軍は実行時に作戦マスターから作る。
+        専用ルームなので、エントリーが無くても延期しない（キャンセル時にも消している）。
+
+        Returns:
+            実行待ちにしたか。
+        """
+        if not entries:
+            print(f"作戦ルーム {room.id} にエントリーがないため削除します")
+            self.session.delete(room)
+            return False
+        room.status = "WAITING"
+        self.session.add(room)
+        print(
+            f"作戦ルーム {room.id} (作戦ID: {room.mission_id}) のマッチング完了: "
+            f"プレイヤー {len(entries)} 名"
+        )
+        return True
 
     def _fill_with_new_npcs(
         self, room: BattleRoom, new_count: int

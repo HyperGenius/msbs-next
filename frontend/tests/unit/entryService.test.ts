@@ -65,6 +65,17 @@ describe("entryBattle", () => {
     const [, options] = vi.mocked(fetch).mock.calls[0];
     const body = JSON.parse((options as RequestInit).body as string);
     expect(body.mobile_suit_id).toBe("ms-abc");
+    expect(body.mission_id).toBeNull();
+  });
+
+  it("作戦IDを指定するとmission_idとして送信する", async () => {
+    vi.mocked(fetch).mockResolvedValue(mockOk({}));
+
+    await entryBattle("ms-abc", 3);
+
+    const [, options] = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse((options as RequestInit).body as string);
+    expect(body).toEqual({ mobile_suit_id: "ms-abc", mission_id: 3 });
   });
 
   it("Authorizationヘッダーにトークンを付与する", async () => {

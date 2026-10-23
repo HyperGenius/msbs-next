@@ -36,8 +36,11 @@ export function useEntryCount() {
   };
 }
 
-/** 指定機体IDでバトルにエントリーする */
-export async function entryBattle(mobileSuitId: string): Promise<BattleEntry> {
+/** 指定機体IDでバトルにエントリーする（作戦IDを省略するとデイリーバトルロイヤル） */
+export async function entryBattle(
+  mobileSuitId: string,
+  missionId: number | null = null
+): Promise<BattleEntry> {
   const token = await getAuthToken();
   const headers: HeadersInit = {
     "Content-Type": "application/json",
@@ -50,7 +53,7 @@ export async function entryBattle(mobileSuitId: string): Promise<BattleEntry> {
   const res = await fetch(`${API_BASE_URL}/api/entries`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ mobile_suit_id: mobileSuitId }),
+    body: JSON.stringify({ mobile_suit_id: mobileSuitId, mission_id: missionId }),
   });
 
   if (!res.ok) {

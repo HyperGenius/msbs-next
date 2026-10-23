@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from app.engine.objectives import ObjectiveResult, ObjectiveStatus
 from app.models.models import (
     BattleEntry,
     BattleResult,
@@ -227,6 +228,7 @@ def _battle_result_of(
     simulator.obstacles = []
     simulator.map_bounds = (0.0, 1000.0)
     simulator.elapsed_time = 0.1
+    simulator.evaluate_objective.return_value = ObjectiveResult(ObjectiveStatus.SUCCESS)
     monkeypatch.setattr(
         run_batch,
         "run_battle",

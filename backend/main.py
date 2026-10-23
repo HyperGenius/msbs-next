@@ -32,9 +32,9 @@ from app.models.models import (
     LootItem,
     LootItemDetail,
     Mission,
+    MissionUnitConfig,
     MobileSuit,
     Vector3,
-    Weapon,
 )
 from app.routers import (
     admin,
@@ -42,6 +42,7 @@ from app.routers import (
     engineering,
     entries,
     friends,
+    missions,
     mobile_suits,
     pilots,
     player_weapons,
@@ -59,6 +60,7 @@ from app.services.battle_log_storage_service import (
 )
 from app.services.drop_service import DropScope, DropService
 from app.services.loot_service import LootService
+from app.services.mission_battle import build_mission_unit
 
 app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 
@@ -111,6 +113,7 @@ app.include_router(player_weapons.router)
 app.include_router(blueprints.router)
 app.include_router(technologies.router)
 app.include_router(theaters.router)
+app.include_router(missions.router)
 
 # --- Response Schemas ---
 # models.py にあるクラスを使用する形でも良いですが、
@@ -177,36 +180,10 @@ def _resolve_npc_pilot_stats(enemies: list[MobileSuit]) -> "dict[str, PilotStats
 
 def _build_enemies_from_config(enemy_configs: list[dict]) -> list[MobileSuit]:
     """ミッション設定から敵ユニットリストを生成する."""
-    enemies = []
-    for enemy_config in enemy_configs:
-        pos_dict = enemy_config.get("position", {"x": 500, "y": 0, "z": 0})
-        weapon_dict = enemy_config.get("weapon", {})
-        terrain_adapt = enemy_config.get(
-            "terrain_adaptability",
-            {"SPACE": "A", "GROUND": "A", "COLONY": "A", "UNDERWATER": "C"},
-        )
-        enemy = MobileSuit(
-            name=enemy_config.get("name", "ザクII"),
-            max_hp=enemy_config.get("max_hp", 80),
-            current_hp=enemy_config.get("max_hp", 80),
-            armor=enemy_config.get("armor", 5),
-            mobility=enemy_config.get("mobility", 1.2),
-            position=Vector3(**pos_dict),
-            terrain_adaptability=terrain_adapt,
-            weapons=[
-                Weapon(
-                    id=weapon_dict.get("id", "weapon"),
-                    name=weapon_dict.get("name", "Weapon"),
-                    power=weapon_dict.get("power", 15),
-                    range=weapon_dict.get("range", 400),
-                    accuracy=weapon_dict.get("accuracy", 70),
-                )
-            ],
-            side="ENEMY",
-        )
-        enemy.normalize_parts()
-        enemies.append(enemy)
-    return enemies
+    return [
+        build_mission_unit(MissionUnitConfig.model_validate(config), "ENEMY")
+        for config in enemy_configs
+    ]
 
 
 def _snapshot_spawn_positions(

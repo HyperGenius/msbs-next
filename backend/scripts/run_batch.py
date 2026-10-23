@@ -21,6 +21,7 @@ from sqlmodel import Session, select
 
 from app.db import engine
 from app.engine.battle_digest import compute_unit_kills
+from app.engine.objectives import ObjectiveResult, ObjectiveStatus
 from app.engine.replay_log import to_replay_logs
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -29,6 +30,7 @@ from app.models.models import (
     BattleResult,
     BattleRoom,
     LootItem,
+    Mission,
     MobileSuit,
 )
 from app.services.battle_digest_service import compute_battle_digest_fields
@@ -45,6 +47,7 @@ from app.services.battle_log_storage_service import save_analysis_log
 from app.services.battle_room_service import BattleRoomService
 from app.services.drop_service import DropScope, DropService
 from app.services.matching_service import MatchingService
+from app.services.mission_battle import build_mission_battle
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
 from app.services.theater_service import BattleConditions, TheaterService
@@ -116,6 +119,22 @@ def run_simulation_phase(session: Session) -> None:
             continue
 
 
+_WIN_LOSS_BY_STATUS = {
+    ObjectiveStatus.SUCCESS: "WIN",
+    ObjectiveStatus.FAILURE: "LOSE",
+    ObjectiveStatus.DRAW: "DRAW",
+}
+
+
+def _objective_fields(result: ObjectiveResult) -> dict:
+    """`BattleResult` の作戦の結果のカラムを組み立てる."""
+    return {
+        "objective_status": result.status.value,
+        "objective_progress": result.progress,
+        "objective_required": result.required,
+    }
+
+
 def _save_battle_results(
     session: Session,
     room: BattleRoom,
@@ -147,6 +166,11 @@ def _save_battle_results(
         conditions: 戦闘に適用した戦域の条件。省略時は既定の条件（宇宙・濃度0）
     """
     conditions = conditions or BattleConditions()
+    drop_scope = (
+        DropScope.for_battle(conditions.theater_id)
+        if room.mission_id is None
+        else DropScope.mission(room.mission_id)
+    )
     pilot_service = PilotService(session)
     drop_rng = rng or random.Random()
     # entry.mobile_suit_snapshot はエントリー時点（バトル前）のHPしか持たないため、
@@ -173,11 +197,17 @@ def _save_battle_results(
     # 抽選は全プレイヤーで同じ drop_rng を使う。
     # DBの取得順は保証されないため、処理順をエントリー日時で固定する。
     for entry in sorted(player_entries, key=lambda e: (e.created_at, str(e.id))):
-        # ルーム内の各プレイヤーは別チームなので、自分のチームから見た結果で決める。
+        # バトルロイヤルでは各プレイヤーが別チームなので、自分のチームから見た結果で決める。
+        # 作戦ではプレイヤーと友軍が1チームになるため、戦闘に渡した機体のチームを使う。
         entry_unit = snapshot_to_mobile_suit(entry.mobile_suit_snapshot)
-        entry_team_id = resolve_team_id(entry_unit)
+        live_unit = live_units_by_id.get(str(entry_unit.id))
+        entry_team_id = (
+            live_unit.team_id
+            if live_unit is not None and live_unit.team_id is not None
+            else resolve_team_id(entry_unit)
+        )
         objective_result = simulator.evaluate_objective(entry_team_id)
-        individual_win_loss = "WIN" if objective_result.is_success else "LOSE"
+        individual_win_loss = _WIN_LOSS_BY_STATUS[objective_result.status]
         # 勝敗に関わらず自機の撃破数をそのまま使う（main.py のソロミッション経路と
         # 揃える）。敗北時に0へ丸めると、LOSE時のダイジェストタグ判定
         # （kills>=1 なら「力戦及ばず」）が常に「完敗」にしかならず、報酬の
@@ -222,7 +252,7 @@ def _save_battle_results(
                 loot = DropService.roll(
                     session,
                     entry.user_id,
-                    DropScope.for_battle(conditions.theater_id),
+                    drop_scope,
                     is_win=individual_win_loss == "WIN",
                     battle_result_id=battle_result_id,
                     rng=drop_rng,
@@ -261,6 +291,7 @@ def _save_battle_results(
         battle_result = BattleResult(
             id=battle_result_id,
             user_id=entry.user_id,
+            mission_id=room.mission_id,
             room_id=room.id,
             battle_log_id=battle_log_record.id,
             win_loss=individual_win_loss,
@@ -276,6 +307,7 @@ def _save_battle_results(
             level_up=level_up,
             is_read=False,
             loot=[item.model_dump() for item in loot],
+            **_objective_fields(objective_result),
             **unit_fields,
             **battlefield_fields,
             **digest_fields,
@@ -336,24 +368,49 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         print("  警告: プレイヤーエントリーがありません")
         return
 
-    player_unit, enemy_units = prepare_battle_units(
-        player_entries[0].mobile_suit_snapshot,
-        [e.mobile_suit_snapshot for e in player_entries[1:] + npc_entries],
-    )
-
-    print(f"  プレイヤー: {player_unit.name}")
-    print(f"  敵機: {len(enemy_units)} 機")
-
     conditions = TheaterService.battle_conditions(
         session, room.theater_id, room.minovsky_density
     )
+
+    if room.mission_id is None:
+        player_unit, enemy_units = prepare_battle_units(
+            player_entries[0].mobile_suit_snapshot,
+            [e.mobile_suit_snapshot for e in player_entries[1:] + npc_entries],
+        )
+        outcome = run_battle(
+            player_unit, enemy_units, conditions, max_steps=_MAX_SIMULATION_STEPS
+        )
+    else:
+        mission = session.get(Mission, room.mission_id)
+        if mission is None:
+            print(f"  警告: 作戦 {room.mission_id} が見つかりません")
+            return
+        print(f"  作戦: {mission.name} (目標: {mission.objective_config().type})")
+        # 作戦ルームに NPC のエントリーは無い。プレイヤーは全員同じチームで出る。
+        player_unit, other_players = prepare_battle_units(
+            player_entries[0].mobile_suit_snapshot,
+            [e.mobile_suit_snapshot for e in player_entries[1:]],
+        )
+        for unit in other_players:
+            unit.side = "PLAYER"
+        setup = build_mission_battle(mission, [player_unit, *other_players], conditions)
+        conditions = setup.conditions
+        enemy_units = [*other_players, *setup.mission_units]
+        outcome = run_battle(
+            player_unit,
+            enemy_units,
+            conditions,
+            max_steps=_MAX_SIMULATION_STEPS,
+            objective=setup.objective,
+            retreat_points=setup.retreat_points,
+            unit_assignments=setup.unit_assignments,
+        )
+
+    print(f"  プレイヤー: {player_unit.name}")
+    print(f"  敵機・友軍: {len(enemy_units)} 機")
     print(
         f"  戦域: {conditions.theater_id or 'なし'} / 環境: {conditions.environment}"
         f" / ミノフスキー濃度: {conditions.minovsky_density}"
-    )
-
-    outcome = run_battle(
-        player_unit, enemy_units, conditions, max_steps=_MAX_SIMULATION_STEPS
     )
     print(f"  戦闘終了 (経過時間: {outcome.simulator.elapsed_time:.1f}s)")
 

@@ -1111,6 +1111,92 @@ class BattleLogRecord(SQLModel, table=True):
     )
 
 
+MISSION_OBJECTIVE_ANNIHILATION = "ANNIHILATION"
+
+MISSION_TEAM_PLAYER = "PLAYER"
+"""作戦の配置で、プレイヤーと友軍のチームを表すキー。"""
+MISSION_TEAM_ENEMY = "ENEMY"
+"""作戦の配置で、敵機のチームを表すキー。"""
+
+
+class MissionObjectiveConfig(SQLModel):
+    """作戦目標の定義 (`Mission.objective`)."""
+
+    type: str = Field(default=MISSION_OBJECTIVE_ANNIHILATION, description="目標の種類")
+    params: dict[str, Any] = Field(
+        default_factory=dict, description="目標の引数。種類ごとに決める"
+    )
+
+
+class MissionWeaponConfig(SQLModel):
+    """作戦に登場する機体の武器."""
+
+    id: str = "weapon"
+    name: str = "Weapon"
+    power: int = 15
+    range: float = 400
+    accuracy: float = 70
+
+
+class MissionUnitConfig(SQLModel):
+    """作戦に登場する1機の定義.
+
+    `Mission.enemy_config["enemies"]` と `Mission.allies_config` の要素。
+    """
+
+    name: str = "ザクII"
+    max_hp: int = 80
+    armor: int = 5
+    mobility: float = 1.2
+    position: Vector3 = Field(default_factory=lambda: Vector3(x=500, y=0, z=0))
+    terrain_adaptability: dict[str, str] = Field(
+        default_factory=lambda: {
+            "SPACE": "A",
+            "GROUND": "A",
+            "COLONY": "A",
+            "UNDERWATER": "C",
+        }
+    )
+    weapon: MissionWeaponConfig = Field(default_factory=MissionWeaponConfig)
+    role: str | None = Field(
+        default=None, description="ユニットのロール (VALID_UNIT_ROLES)。null はなし"
+    )
+    squad_id: str | None = Field(
+        default=None, description="所属小隊。同じチームの中で組む機体に同じ値を書く"
+    )
+
+
+class MissionLayout(SQLModel):
+    """作戦の配置 (`Mission.layout`).
+
+    `team_id` には MISSION_TEAM_PLAYER か MISSION_TEAM_ENEMY を書く。
+    撤退ポイントの `team_id` が null なら全チームが使える。
+    座標はフィールドの最小辺長 (MIN_FIELD_SIZE) の内側に置く。
+    フィールドの広さは参加機数で変わるため、それより外は場外になりうる。
+    """
+
+    spawn_zones: list[SpawnZone] = Field(
+        default_factory=list, description="空なら既定のスポーン領域を自動生成する"
+    )
+    retreat_points: list[RetreatPoint] = Field(default_factory=list)
+
+    @field_validator("spawn_zones")
+    @classmethod
+    def _validate_spawn_teams(cls, zones: list[SpawnZone]) -> list[SpawnZone]:
+        for zone in zones:
+            if zone.team_id not in (MISSION_TEAM_PLAYER, MISSION_TEAM_ENEMY):
+                raise ValueError(f"unknown mission team: {zone.team_id}")
+        return zones
+
+    @field_validator("retreat_points")
+    @classmethod
+    def _validate_retreat_teams(cls, points: list[RetreatPoint]) -> list[RetreatPoint]:
+        for point in points:
+            if point.team_id not in (None, MISSION_TEAM_PLAYER, MISSION_TEAM_ENEMY):
+                raise ValueError(f"unknown mission team: {point.team_id}")
+        return points
+
+
 class Mission(SQLModel, table=True):
     """ミッション定義 (DBテーブル)."""
 
@@ -1129,8 +1215,49 @@ class Mission(SQLModel, table=True):
         description="特殊環境効果 (MINOVSKY/GRAVITY_WELL/OBSTACLE)",
     )
     enemy_config: dict = Field(
-        default_factory=dict, sa_column=Column(JSON), description="敵機の構成情報"
+        default_factory=dict,
+        sa_column=Column(JSON),
+        description='敵機の構成情報。{"enemies": [MissionUnitConfig, ...]}',
     )
+    objective: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="作戦目標 (MissionObjectiveConfig)。null は殲滅",
+    )
+    allies_config: list[dict] | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="友軍の構成 (MissionUnitConfig のリスト)。null は友軍なし",
+    )
+    layout: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="スポーン領域・撤退ポイントの配置 (MissionLayout)。null は既定の配置",
+    )
+    is_active: bool = Field(
+        default=False, description="定期バトルのエントリーで選べるか"
+    )
+
+    def objective_config(self) -> MissionObjectiveConfig:
+        """作戦目標を返す。未設定は殲滅とする."""
+        return MissionObjectiveConfig.model_validate(self.objective or {})
+
+    def enemy_unit_configs(self) -> list[MissionUnitConfig]:
+        """敵機の構成を返す."""
+        return [
+            MissionUnitConfig.model_validate(item)
+            for item in self.enemy_config.get("enemies", [])
+        ]
+
+    def ally_unit_configs(self) -> list[MissionUnitConfig]:
+        """友軍の構成を返す."""
+        return [
+            MissionUnitConfig.model_validate(item) for item in self.allies_config or []
+        ]
+
+    def layout_config(self) -> MissionLayout:
+        """配置を返す。未設定は既定の配置（スポーン領域の自動生成・撤退ポイントなし）."""
+        return MissionLayout.model_validate(self.layout or {})
 
 
 class LootKind(StrEnum):
@@ -1288,6 +1415,18 @@ class BattleResult(SQLModel, table=True):
         description="戦利品の一覧 (LootItem)。ドロップなしは空配列、導入前のバトルは null",
     )
 
+    # --- 作戦の結果 ---
+    # 定期バトルの結果に入れる。ソロミッション（main.py）と導入前のバトルは null。
+    objective_status: str | None = Field(
+        default=None, description="作戦の結果 (SUCCESS/FAILURE/DRAW)"
+    )
+    objective_progress: int | None = Field(
+        default=None, description="達成した数（例: 離脱させた友軍の数）"
+    )
+    objective_required: int | None = Field(
+        default=None, description="成功に必要な数。0 は達成度を数えない目標"
+    )
+
 
 class BattleResultSummary(SQLModel):
     """バトル結果サマリー (logsを含まない軽量レスポンス用)."""
@@ -1334,6 +1473,9 @@ class BattleResultSummary(SQLModel):
     weapon_accuracy_summary: list[dict] | None = None
     detection_summary: dict | None = None
     loot: list[LootItemDetail] | None = None
+    objective_status: str | None = None
+    objective_progress: int | None = None
+    objective_required: int | None = None
 
 
 # --- Theater Models ---
@@ -1592,6 +1734,12 @@ class BattleRoom(SQLModel, table=True):
     )
     minovsky_density: float | None = Field(
         default=None, description="ミノフスキー濃度 (0〜1)"
+    )
+    mission_id: int | None = Field(
+        default=None,
+        foreign_key="missions.id",
+        index=True,
+        description="作戦ID。null はデイリーバトルロイヤル",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC), description="作成日時"
