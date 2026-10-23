@@ -2,10 +2,14 @@
 
 import uuid
 
+import pytest
+
 from app.engine.objectives import (
     AnnihilationObjective,
     ObjectiveResult,
     ObjectiveStatus,
+    RetreatSupportObjective,
+    build_objective,
 )
 from app.engine.simulation import BattleSimulator
 from app.models.models import MobileSuit, Vector3, Weapon
@@ -176,3 +180,101 @@ def test_simulator_evaluates_objective_for_given_team() -> None:
 
     assert sim.evaluate_objective("team-a").is_success is True
     assert sim.evaluate_objective("team-b").is_success is False
+
+
+# --- RetreatSupportObjective ---
+
+
+def _retreat_setup(
+    statuses: dict[str, str] | None = None,
+    hp: dict[str, int] | None = None,
+    required: int = 2,
+):
+    """プレイヤー 1 機・友軍 3 機・敵 2 機の場面を作る."""
+    player = _make_unit("P", "player-team")
+    allies = [_make_unit(f"ally{i}", "player-team") for i in range(3)]
+    enemies = [_make_unit(f"enemy{i}", "enemy-team") for i in range(2)]
+    units = [player, *allies, *enemies]
+    for unit in units:
+        unit.current_hp = (hp or {}).get(unit.name, unit.current_hp)
+    objective = RetreatSupportObjective({str(a.id) for a in allies}, required)
+    return objective, units, _resources(units, statuses)
+
+
+def test_retreat_support_continues_while_allies_and_enemies_remain() -> None:
+    """友軍が戦場に残り、敵もいる間は終えない."""
+    objective, units, resources = _retreat_setup({"ally0": "RETREATED"})
+
+    assert objective.is_complete(units, resources) is False
+
+
+def test_retreat_support_completes_when_allies_are_retreated_or_destroyed() -> None:
+    """友軍が全員「離脱」か「撃破」になったら終える."""
+    objective, units, resources = _retreat_setup(
+        {"ally0": "RETREATED", "ally1": "RETREATED"}, hp={"ally2": 0}
+    )
+
+    assert objective.is_complete(units, resources) is True
+
+
+def test_retreat_support_completes_when_enemies_are_annihilated() -> None:
+    """敵が全滅したら、友軍が残っていても終える."""
+    objective, units, resources = _retreat_setup(hp={"enemy0": 0, "enemy1": 0})
+
+    assert objective.is_complete(units, resources) is True
+
+
+def test_retreat_support_succeeds_when_required_allies_escape() -> None:
+    """必要数が離脱すれば成功。プレイヤー機が撃破されていても成功とする."""
+    objective, units, resources = _retreat_setup(
+        {"ally0": "RETREATED", "ally1": "RETREATED"},
+        hp={"ally2": 0, "P": 0},
+    )
+
+    result = objective.evaluate(units, resources, "player-team")
+
+    assert result.status == ObjectiveStatus.SUCCESS
+    assert (result.progress, result.required, result.total, result.lost) == (2, 2, 3, 1)
+    assert result.player_survived is False
+
+
+def test_retreat_support_fails_below_required() -> None:
+    """離脱数が必要数に届かなければ失敗。打ち切り時もその時点の離脱数で判定する."""
+    objective, units, resources = _retreat_setup({"ally0": "RETREATED"})
+
+    result = objective.evaluate(units, resources, "player-team")
+
+    assert result.status == ObjectiveStatus.FAILURE
+    assert (result.progress, result.lost) == (1, 0)
+    assert result.player_survived is True
+
+
+def test_retreat_support_counts_remaining_allies_when_enemies_are_gone() -> None:
+    """敵が全滅したとき、戦場に残る友軍は離脱したものとして数える."""
+    objective, units, resources = _retreat_setup(
+        hp={"enemy0": 0, "enemy1": 0, "ally2": 0}
+    )
+
+    result = objective.evaluate(units, resources, "player-team")
+
+    assert result.status == ObjectiveStatus.SUCCESS
+    assert (result.progress, result.lost) == (2, 1)
+
+
+def test_retreat_support_rejects_invalid_arguments() -> None:
+    """友軍がいない、必要数が範囲外のときは拒否する."""
+    with pytest.raises(ValueError):
+        RetreatSupportObjective(set(), 1)
+    with pytest.raises(ValueError):
+        RetreatSupportObjective({"a"}, 2)
+    with pytest.raises(ValueError):
+        RetreatSupportObjective({"a"}, 0)
+
+
+def test_build_objective_builds_retreat_support() -> None:
+    """`RETREAT_SUPPORT` の既定の必要数は友軍の全員."""
+    objective = build_objective("RETREAT_SUPPORT", {}, ["a", "b"])
+
+    assert isinstance(objective, RetreatSupportObjective)
+    assert objective.required == 2
+    assert build_objective("RETREAT_SUPPORT", {"required": 1}, ["a", "b"]).required == 1

@@ -6,12 +6,16 @@ DB を参照しない。
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from app.models.models import MISSION_OBJECTIVE_ANNIHILATION, MobileSuit
+from app.models.models import (
+    MISSION_OBJECTIVE_ANNIHILATION,
+    MISSION_OBJECTIVE_RETREAT_SUPPORT,
+    MobileSuit,
+)
 
 UnitResources = Mapping[str, Mapping[str, Any]]
 """ユニット ID（str）→ `BattleSimulator.unit_resources` の値。"""
@@ -34,6 +38,12 @@ class ObjectiveResult:
     """達成した数（例: 離脱させた友軍の数）。"""
     required: int = 0
     """成功に必要な数。0 は達成度を数えない目標を表す。"""
+    total: int = 0
+    """数える対象の総数（例: 護衛する友軍の数）。"""
+    lost: int = 0
+    """失った数（例: 撃破された友軍の数）。"""
+    player_survived: bool | None = None
+    """プレイヤー側の機体が戦場に残ったか。None は数えない目標。"""
 
     @property
     def is_success(self) -> bool:
@@ -94,12 +104,109 @@ class AnnihilationObjective(BattleObjective):
         )
 
 
-def build_objective(objective_type: str, params: Mapping[str, Any]) -> BattleObjective:
+class RetreatSupportObjective(BattleObjective):
+    """撤退支援。護衛する友軍のうち必要数を撤退ポイントまで逃がす.
+
+    * 終了: 護衛する友軍が全員「離脱」か「撃破」になる、または敵が全滅したとき
+    * 結果: 離脱した数が必要数に届けば成功。プレイヤー機が撃破・離脱しても、
+      友軍が逃げ切れば成功とする（報酬は減る。`PilotService.calculate_battle_rewards()`）
+    * 敵が全滅したとき、戦場に残る友軍は離脱したものとして数える
+    """
+
+    def __init__(self, protected_unit_ids: Collection[str], required: int) -> None:
+        """護衛する友軍のユニット ID（str）と、成功に必要な離脱数で作る.
+
+        Raises:
+            ValueError: 友軍がいないとき、必要数が 1 未満か友軍の数を超えるとき。
+        """
+        self.protected_unit_ids = frozenset(protected_unit_ids)
+        if not self.protected_unit_ids:
+            raise ValueError("retreat support needs at least one ally")
+        if not 1 <= required <= len(self.protected_unit_ids):
+            raise ValueError(
+                f"required must be between 1 and {len(self.protected_unit_ids)}"
+            )
+        self.required = required
+
+    def _protected(self, units: Sequence[MobileSuit]) -> list[MobileSuit]:
+        return [u for u in units if str(u.id) in self.protected_unit_ids]
+
+    def _enemies_remain(
+        self, units: Sequence[MobileSuit], unit_resources: UnitResources
+    ) -> bool:
+        """護衛する友軍と別のチームに、戦闘中のユニットが残っているかを返す."""
+        protected_teams = {u.team_id for u in self._protected(units)}
+        return any(
+            u.team_id not in protected_teams and is_active(u, unit_resources)
+            for u in units
+        )
+
+    def is_complete(
+        self, units: Sequence[MobileSuit], unit_resources: UnitResources
+    ) -> bool:
+        """友軍が全員戦闘から外れたか、敵が全滅したかを返す."""
+        if not any(is_active(u, unit_resources) for u in self._protected(units)):
+            return True
+        return not self._enemies_remain(units, unit_resources)
+
+    def evaluate(
+        self,
+        units: Sequence[MobileSuit],
+        unit_resources: UnitResources,
+        team_id: str | None,
+    ) -> ObjectiveResult:
+        """離脱数（敵が全滅していれば残る友軍も含む）で結果を決める.
+
+        打ち切ったときも同じ基準で、その時点の離脱数で判定する。
+        """
+        protected = self._protected(units)
+        enemies_remain = self._enemies_remain(units, unit_resources)
+        escaped = 0
+        lost = 0
+        for unit in protected:
+            if unit.current_hp <= 0:
+                lost += 1
+            elif unit_resources[str(unit.id)]["status"] == "RETREATED" or (
+                not enemies_remain
+            ):
+                escaped += 1
+        player_survived = any(
+            u.team_id == team_id
+            and str(u.id) not in self.protected_unit_ids
+            and u.current_hp > 0
+            for u in units
+        )
+        return ObjectiveResult(
+            ObjectiveStatus.SUCCESS
+            if escaped >= self.required
+            else ObjectiveStatus.FAILURE,
+            progress=escaped,
+            required=self.required,
+            total=len(protected),
+            lost=lost,
+            player_survived=player_survived,
+        )
+
+
+def build_objective(
+    objective_type: str,
+    params: Mapping[str, Any],
+    protected_unit_ids: Collection[str] = (),
+) -> BattleObjective:
     """作戦マスターの目標の種類と引数から作戦目標を作る.
 
+    Args:
+        objective_type: 目標の種類。
+        params: 目標の引数。撤退支援は `required`（必要な離脱数。省略時は友軍の全員）。
+        protected_unit_ids: 護衛する友軍のユニット ID（str）。撤退支援で使う。
+
     Raises:
-        ValueError: 目標の種類が無いとき。
+        ValueError: 目標の種類が無いとき、撤退支援の友軍や必要数が不正なとき。
     """
     if objective_type == MISSION_OBJECTIVE_ANNIHILATION:
         return AnnihilationObjective()
+    if objective_type == MISSION_OBJECTIVE_RETREAT_SUPPORT:
+        return RetreatSupportObjective(
+            protected_unit_ids, int(params.get("required", len(protected_unit_ids)))
+        )
     raise ValueError(f"unknown objective type: {objective_type}")

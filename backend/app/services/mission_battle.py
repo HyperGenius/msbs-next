@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 from app.engine.objectives import BattleObjective, build_objective
 from app.engine.unit_roles import UnitAssignment
 from app.models.models import (
+    ALL_PART_NAMES,
     MISSION_TEAM_ENEMY,
     MISSION_TEAM_PLAYER,
     Mission,
@@ -35,10 +36,18 @@ class MissionBattleSetup:
 
 def build_mission_unit(config: MissionUnitConfig, side: str) -> MobileSuit:
     """作戦マスターの1機の定義から機体を作る."""
+    unknown_parts = set(config.missing_parts) - set(ALL_PART_NAMES)
+    if unknown_parts:
+        raise ValueError(f"unknown parts: {sorted(unknown_parts)}")
     unit = MobileSuit(
         name=config.name,
         max_hp=config.max_hp,
-        current_hp=config.max_hp,
+        current_hp=(
+            config.max_hp
+            if config.current_hp is None
+            else min(config.current_hp, config.max_hp)
+        ),
+        missing_parts=list(config.missing_parts),
         armor=config.armor,
         mobility=config.mobility,
         position=config.position.model_copy(),
@@ -50,12 +59,24 @@ def build_mission_unit(config: MissionUnitConfig, side: str) -> MobileSuit:
                 power=config.weapon.power,
                 range=config.weapon.range,
                 accuracy=config.weapon.accuracy,
+                weapon_type=config.weapon.weapon_type,
+                is_melee=config.weapon.is_melee,
+                fire_arc_deg=config.weapon.fire_arc_deg,
             )
         ],
         side=side,
     )
     unit.normalize_parts()
+    if unit.current_hp < unit.max_hp:
+        _scale_part_hp(unit)
     return unit
+
+
+def _scale_part_hp(unit: MobileSuit) -> None:
+    """機体の HP の割合に合わせて、各部位の HP を減らす."""
+    ratio = max(unit.current_hp, 1) / unit.max_hp
+    for part in unit.parts.values():
+        part.current_hp = max(1, round(part.max_hp * ratio))
 
 
 def enemy_team_id(mission: Mission) -> str:
@@ -134,10 +155,13 @@ def build_mission_battle(
     ]
 
     objective_config = mission.objective_config()
+    ally_ids = [str(u.id) for u in mission_units if u.team_id == player_team_id]
     return MissionBattleSetup(
         mission_units=mission_units,
         conditions=conditions,
         retreat_points=retreat_points,
         unit_assignments=unit_assignments,
-        objective=build_objective(objective_config.type, objective_config.params),
+        objective=build_objective(
+            objective_config.type, objective_config.params, ally_ids
+        ),
     )

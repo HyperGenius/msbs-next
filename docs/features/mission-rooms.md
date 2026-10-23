@@ -20,7 +20,7 @@ Epic #682「作戦（ミッション）と敵小隊のロール」の Sub-Issue 
 | 1 | 作戦目標の基盤（Issue #683、実装済み。[battle-engine-feature.md 36章](battle-engine-feature.md#36-作戦目標epic-682-sub-issue-1)） |
 | 2 | ユニット単位のロールと小隊の基盤（Issue #684、実装済み。[battle-engine-feature.md 37章](battle-engine-feature.md#37-ユニットのロールと小隊epic-682-sub-issue-2)） |
 | 3 | 作戦マスターの拡張と作戦ルームのバッチ実行（Issue #685、本ドキュメント） |
-| 4 | 撤退支援ミッション。撤退支援の作戦目標と作戦マスターのデータ（Issue #686） |
+| 4 | 撤退支援ミッション。撤退支援の作戦目標と作戦マスターのデータ（Issue #686、実装済み。[retreat-support-mission.md](retreat-support-mission.md)） |
 | 5 | 作戦の選択と結果表示（フロントエンド、Issue #687） |
 | 6 | 小隊の陣形（Issue #688） |
 | 7 | 支援ターゲット選択と戦術 SUPPORT / PROTECT（Issue #689） |
@@ -45,7 +45,7 @@ Epic #682「作戦（ミッション）と敵小隊のロール」の Sub-Issue 
 
 JSON 列は Pydantic モデルで読む（`Mission.objective_config()` / `enemy_unit_configs()` / `ally_unit_configs()` / `layout_config()`）。
 
-* `MissionObjectiveConfig`: `type`（既定 `ANNIHILATION`）と `params`（種類ごとの引数）。種類から作戦目標を作るのは `build_objective()`（`backend/app/engine/objectives.py`）。今ある種類は `ANNIHILATION` だけ。無い種類は組み立て時に `ValueError` になる
+* `MissionObjectiveConfig`: `type`（既定 `ANNIHILATION`）と `params`（種類ごとの引数）。種類から作戦目標を作るのは `build_objective()`（`backend/app/engine/objectives.py`）。今ある種類は `ANNIHILATION` と `RETREAT_SUPPORT`（[retreat-support-mission.md](retreat-support-mission.md)）。無い種類は組み立て時に `ValueError` になる
 * `MissionUnitConfig`: `name` / `max_hp` / `armor` / `mobility` / `position` / `terrain_adaptability` / `weapon`（`id` / `name` / `power` / `range` / `accuracy`）/ `role` / `squad_id`。省略した項目は既存の作戦と同じ既定値になる。`role` は `VALID_UNIT_ROLES` のいずれかで、無い値は組み立て時に `ValueError` になる
 * `MissionLayout`: `spawn_zones`（`SpawnZone` のリスト）と `retreat_points`（`RetreatPoint` のリスト）。`team_id` には `PLAYER`（プレイヤーと友軍）か `ENEMY` を書く。撤退ポイントの `team_id` が null なら全チームが使える。それ以外の値は読み込み時にエラーにする
 

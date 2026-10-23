@@ -1112,6 +1112,7 @@ class BattleLogRecord(SQLModel, table=True):
 
 
 MISSION_OBJECTIVE_ANNIHILATION = "ANNIHILATION"
+MISSION_OBJECTIVE_RETREAT_SUPPORT = "RETREAT_SUPPORT"
 
 MISSION_TEAM_PLAYER = "PLAYER"
 """作戦の配置で、プレイヤーと友軍のチームを表すキー。"""
@@ -1136,6 +1137,13 @@ class MissionWeaponConfig(SQLModel):
     power: int = 15
     range: float = 400
     accuracy: float = 70
+    weapon_type: str = Field(
+        default="RANGED", description="武器種別 (MELEE/CLOSE_RANGE/RANGED)"
+    )
+    is_melee: bool = False
+    fire_arc_deg: float = Field(
+        default=30.0, description="射撃可能弧（片側、度）。格闘武器は 360"
+    )
 
 
 class MissionUnitConfig(SQLModel):
@@ -1163,6 +1171,13 @@ class MissionUnitConfig(SQLModel):
     )
     squad_id: str | None = Field(
         default=None, description="所属小隊。同じチームの中で組む機体に同じ値を書く"
+    )
+    current_hp: int | None = Field(
+        default=None, description="開始時の HP。null は max_hp（損傷なし）"
+    )
+    missing_parts: list[str] = Field(
+        default_factory=list,
+        description="開始時に欠けている部位 (ALL_PART_NAMES のいずれか)",
     )
 
 
@@ -1426,6 +1441,14 @@ class BattleResult(SQLModel, table=True):
     objective_required: int | None = Field(
         default=None, description="成功に必要な数。0 は達成度を数えない目標"
     )
+    objective_detail: dict | None = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description=(
+            "作戦の達成度の内訳。撤退支援は total（友軍の数）/ lost（撃破された友軍の数）"
+            "/ player_survived（プレイヤー機の生存）"
+        ),
+    )
 
 
 class BattleResultSummary(SQLModel):
@@ -1476,6 +1499,7 @@ class BattleResultSummary(SQLModel):
     objective_status: str | None = None
     objective_progress: int | None = None
     objective_required: int | None = None
+    objective_detail: dict | None = None
 
 
 # --- Theater Models ---

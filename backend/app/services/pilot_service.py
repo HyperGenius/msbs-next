@@ -7,10 +7,25 @@ from sqlmodel import Session, func, select
 
 from app.core.gamedata import get_ace_pilots, get_shop_listing_by_id
 from app.core.skills import SKILL_COST, get_skill_definition
+from app.engine.objectives import ObjectiveResult
 from app.models.models import MobileSuit, NpcPilotUpdate, Pilot
 
 # レベルアップ時に付与するステータスポイント数
 STATUS_POINTS_PER_LEVEL: int = 2
+
+# 友軍を逃がす作戦（撤退支援）の報酬。(経験値, クレジット)
+ESCORT_FULL_REWARD: tuple[int, int] = (150, 750)
+"""友軍が全員離脱した。"""
+ESCORT_SUCCESS_REWARD: tuple[int, int] = (100, 500)
+"""必要数を満たしたが、全員は逃がせなかった。"""
+ESCORT_FAILURE_REWARD: tuple[int, int] = (20, 100)
+"""必要数に届かなかった。離脱させた数だけ下の値を加算する。"""
+ESCORT_ESCAPE_EXP: int = 10
+ESCORT_ESCAPE_CREDITS: int = 50
+ESCORT_PLAYER_DOWN_RATIO: float = 0.7
+"""成功したがプレイヤー機が撃破・離脱していたときの、基本報酬の倍率。"""
+ESCORT_KILL_REWARD_RATIO: float = 0.5
+"""撃墜ボーナスの倍率。殲滅戦を 1 とする。"""
 
 
 def get_ace_pilot_names() -> frozenset[str]:
@@ -393,16 +408,22 @@ class PilotService:
         self,
         win: bool,
         kills: int = 0,
+        objective_result: ObjectiveResult | None = None,
     ) -> tuple[int, int]:
         """バトル結果から報酬を計算する.
 
         Args:
             win: 勝利したか
             kills: 撃墜数
+            objective_result: 作戦の達成度。友軍を数える作戦（`total` > 0）のときだけ、
+                離脱数に応じた報酬にする。省略時と殲滅などは勝敗と撃墜数で決める
 
         Returns:
             tuple[int, int]: (経験値, クレジット)
         """
+        if objective_result is not None and objective_result.total > 0:
+            return self._calculate_escort_rewards(objective_result, kills)
+
         if win:
             base_exp = 100
             base_credits = 500
@@ -418,6 +439,34 @@ class PilotService:
         total_credits = base_credits + kill_credits
 
         return total_exp, total_credits
+
+    @staticmethod
+    def _calculate_escort_rewards(
+        result: ObjectiveResult, kills: int
+    ) -> tuple[int, int]:
+        """友軍を逃がす作戦の報酬を、離脱数に応じて段階的に計算する.
+
+        全員離脱 > 必要数を満たした > 失敗。失敗でも離脱させた数だけ加算する。
+        成功してもプレイヤー機が撃破・離脱していれば、基本報酬を減らす。
+        撃墜ボーナスは、倒さなくても勝てる作戦なので殲滅戦より減らす。
+        """
+        if result.is_success:
+            if result.progress >= result.total:
+                base_exp, base_credits = ESCORT_FULL_REWARD
+            else:
+                base_exp, base_credits = ESCORT_SUCCESS_REWARD
+            if result.player_survived is False:
+                base_exp = int(base_exp * ESCORT_PLAYER_DOWN_RATIO)
+                base_credits = int(base_credits * ESCORT_PLAYER_DOWN_RATIO)
+        else:
+            base_exp = ESCORT_FAILURE_REWARD[0] + result.progress * ESCORT_ESCAPE_EXP
+            base_credits = (
+                ESCORT_FAILURE_REWARD[1] + result.progress * ESCORT_ESCAPE_CREDITS
+            )
+
+        kill_exp = int(kills * 10 * ESCORT_KILL_REWARD_RATIO)
+        kill_credits = int(kills * 50 * ESCORT_KILL_REWARD_RATIO)
+        return base_exp + kill_exp, base_credits + kill_credits
 
     def update_pilot_name(self, pilot: Pilot, new_name: str) -> Pilot:
         """パイロット名を更新する.

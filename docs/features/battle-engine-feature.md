@@ -3180,6 +3180,8 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 
 作戦マスターの目標の種類（`Mission.objective`）から作戦目標を作るのは `build_objective()`。作戦ルームではプレイヤーと友軍が1チームになり、`_save_battle_results()` は戦闘に渡した機体のチームで評価する。詳細は [mission-rooms.md](mission-rooms.md)。
 
+撤退支援（`RetreatSupportObjective`、`RETREAT_SUPPORT`）は [retreat-support-mission.md](retreat-support-mission.md)。`ObjectiveResult` には `total` / `lost` / `player_survived` を足した（殲滅では 0 / 0 / None のまま）。
+
 ### 36.4 挙動が変わらないことの確認
 
 `run_battle()` を `main` と比べた（2 / 8 / 20 機 × シード 1〜3、`seed_battle_rngs()` とユニット ID・`PYTHONHASHSEED` を固定）。9 戦すべてで、ログのハッシュ・勝敗・撃墜数・ステップ数が一致した。`engine_ci_smoke.py` も 9 ラウンド完走した。
