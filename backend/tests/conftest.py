@@ -157,6 +157,7 @@ def setup_master_data_db() -> Generator[None, None, None]:
         MasterTechnology,
         MasterTheater,
         MasterWeapon,
+        Mission,
         MobileSuit,
         Pilot,
         PlayerBlueprint,
@@ -183,6 +184,7 @@ def setup_master_data_db() -> Generator[None, None, None]:
         seed_session.exec(delete(BattleRoom))
         seed_session.exec(delete(BattleResult))
         seed_session.exec(delete(BattleLogRecord))
+        seed_session.exec(delete(Mission))
         seed_session.exec(delete(PlayerWeapon))
         seed_session.exec(delete(DropTableEntry))
         seed_session.exec(delete(DropTable))

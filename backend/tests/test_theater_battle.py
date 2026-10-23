@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app.core.auth import get_current_user, get_current_user_optional
+from app.engine.objectives import ObjectiveResult, ObjectiveStatus
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
     BattleEntry,
@@ -193,6 +194,7 @@ def test_process_room_records_theater(
     simulator.obstacles = []
     simulator.map_bounds = (0.0, 1000.0)
     simulator.elapsed_time = 0.1
+    simulator.evaluate_objective.return_value = ObjectiveResult(ObjectiveStatus.SUCCESS)
     captured: dict[str, BattleConditions | None] = {}
 
     def fake_run_battle(player_unit, enemy_units, conditions=None, max_steps=0):  # type: ignore[no-untyped-def]

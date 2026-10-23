@@ -200,6 +200,12 @@ export interface BattleResult {
     detection_summary?: DetectionSummary | null;
     /** 戦利品の一覧。ドロップなしは空配列、導入前のバトルは null */
     loot?: LootItem[] | null;
+    /** 作戦の結果。定期バトルの結果に入る。ソロミッションと導入前のバトルは null */
+    objective_status?: "SUCCESS" | "FAILURE" | "DRAW" | null;
+    /** 達成した数（例: 離脱させた友軍の数） */
+    objective_progress?: number | null;
+    /** 成功に必要な数。0 は達成度を数えない目標 */
+    objective_required?: number | null;
 }
 
 /** battle_logsテーブルのレコード（リプレイ用の全ログを保持） */
@@ -226,6 +232,8 @@ export interface BattleEntry {
     mobile_suit_id: string;
     scheduled_at: string;
     created_at: string;
+    /** 作戦ID。null はデイリーバトルロイヤル */
+    mission_id?: number | null;
 }
 
 /** エントリー状況確認のレスポンス（エントリー済みか・次回ルーム情報を含む） */

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from app.models.models import MobileSuit
+from app.models.models import MISSION_OBJECTIVE_ANNIHILATION, MobileSuit
 
 UnitResources = Mapping[str, Mapping[str, Any]]
 """ユニット ID（str）→ `BattleSimulator.unit_resources` の値。"""
@@ -92,3 +92,14 @@ class AnnihilationObjective(BattleObjective):
         return ObjectiveResult(
             ObjectiveStatus.SUCCESS if survived else ObjectiveStatus.FAILURE
         )
+
+
+def build_objective(objective_type: str, params: Mapping[str, Any]) -> BattleObjective:
+    """作戦マスターの目標の種類と引数から作戦目標を作る.
+
+    Raises:
+        ValueError: 目標の種類が無いとき。
+    """
+    if objective_type == MISSION_OBJECTIVE_ANNIHILATION:
+        return AnnihilationObjective()
+    raise ValueError(f"unknown objective type: {objective_type}")

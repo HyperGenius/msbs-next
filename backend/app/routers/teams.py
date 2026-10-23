@@ -11,11 +11,11 @@ from app.core.auth import get_current_user
 from app.db import get_session
 from app.models.models import (
     BattleEntry,
-    BattleRoom,
     MobileSuit,
     Team,
     TeamMember,
 )
+from app.services.battle_room_service import BattleRoomService
 from app.services.mobile_suit_service import MobileSuitService
 
 router = APIRouter(prefix="/api/teams", tags=["teams"])
@@ -305,8 +305,8 @@ async def team_entry(
             status_code=400, detail="全メンバーの準備が完了していません"
         )
 
-    # 現在募集中のルームを取得
-    room = session.exec(select(BattleRoom).where(BattleRoom.status == "OPEN")).first()
+    # 現在募集中のルームを取得（チームで出られるのはバトルロイヤルだけ）
+    room = BattleRoomService.find_open_room(session)
     if not room:
         raise HTTPException(status_code=404, detail="現在募集中のルームがありません")
 
@@ -314,15 +314,16 @@ async def team_entry(
     entries_created = []
 
     for member in members:
-        # 既存エントリーをチェック
-        existing = session.exec(
-            select(BattleEntry).where(
-                BattleEntry.user_id == member.user_id,
-                BattleEntry.room_id == room.id,
-            )
-        ).first()
-        if existing:
-            entries_created.append(str(existing.id))
+        # 既存エントリーをチェック。1開催に出られるのはバトルロイヤルか作戦の1つ
+        existing = BattleRoomService.find_open_entry(session, member.user_id)
+        if existing is not None:
+            existing_entry, existing_room = existing
+            if existing_room.mission_id is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"メンバー {member.user_id} は作戦にエントリー済みです",
+                )
+            entries_created.append(str(existing_entry.id))
             continue
 
         # メンバーの機体を取得（オーナーは指定された機体、他は最初の機体を使用）

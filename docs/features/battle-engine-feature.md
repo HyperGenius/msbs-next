@@ -3176,7 +3176,9 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 | `run_battle()`（`backend/app/services/battle_execution.py`） | `simulator.evaluate_objective(プレイヤー機のチーム)` を `BattleOutcome.objective_result` に入れ、`player_win` はその `is_success` |
 | `_save_battle_results()`（`backend/scripts/run_batch.py`） | プレイヤー・NPC ごとに、自分のチームで `evaluate_objective()` を呼ぶ。デイリーバトルロイヤルは各プレイヤーが別チームなので、プレイヤーごとに結果が変わる |
 
-`run_battle(..., objective=...)` で作戦目標を渡せる。
+`run_battle(..., objective=...)` で作戦目標を渡せる。撤退ポイント（`retreat_points`）とロール（`unit_assignments`）も渡せる。
+
+作戦マスターの目標の種類（`Mission.objective`）から作戦目標を作るのは `build_objective()`。作戦ルームではプレイヤーと友軍が1チームになり、`_save_battle_results()` は戦闘に渡した機体のチームで評価する。詳細は [mission-rooms.md](mission-rooms.md)。
 
 ### 36.4 挙動が変わらないことの確認
 

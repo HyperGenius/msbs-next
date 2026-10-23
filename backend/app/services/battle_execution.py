@@ -15,7 +15,8 @@ from app.engine.battle_utils import serialize_obstacles
 from app.engine.objectives import BattleObjective, ObjectiveResult
 from app.engine.rng import seed_numpy_rngs
 from app.engine.simulation import BattleSimulator
-from app.models.models import MobileSuit, Vector3, Weapon
+from app.engine.unit_roles import UnitAssignment
+from app.models.models import MobileSuit, RetreatPoint, Vector3, Weapon
 from app.services.theater_service import BattleConditions
 
 # 1 step は 0.1 秒。
@@ -109,6 +110,8 @@ def run_battle(
     conditions: BattleConditions | None = None,
     max_steps: int = DEFAULT_MAX_STEPS,
     objective: BattleObjective | None = None,
+    retreat_points: list[RetreatPoint] | None = None,
+    unit_assignments: dict[str, UnitAssignment] | None = None,
 ) -> BattleOutcome:
     """戦闘を決着まで実行する.
 
@@ -120,6 +123,8 @@ def run_battle(
         conditions: 戦域の条件。省略時は既定の条件（宇宙・濃度0）を使う。
         max_steps: 決着しないときに打ち切るステップ数。
         objective: 作戦目標。省略時は殲滅とする。
+        retreat_points: 撤退ポイント。省略時は無し。
+        unit_assignments: ユニット ID（str）→ ロールと所属小隊。省略時は全機ロールなし。
 
     Returns:
         プレイヤー機のチームから見て作戦が成功すれば `player_win` が真になる。
@@ -129,6 +134,8 @@ def run_battle(
         player_unit,
         enemy_units,
         objective=objective,
+        retreat_points=retreat_points,
+        unit_assignments=unit_assignments,
         **conditions.simulator_kwargs(),
     )
 
