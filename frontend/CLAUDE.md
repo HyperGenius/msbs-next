@@ -23,6 +23,7 @@ services/
 ├── skills.ts       ← スキル習得・レベルアップ
 ├── teams.ts        ← チーム作成・招待・Ready・離脱・エントリー
 ├── theaters.ts     ← 戦域予報
+├── missions.ts     ← エントリーできる作戦の一覧
 └── upgrades.ts     ← 機体強化プレビュー・実行
 ```
 
@@ -63,6 +64,7 @@ types/
 ├── skill.ts        ← スキル定義・SkillId
 ├── social.ts       ← Friend・Team・チームメンバー
 ├── theater.ts      ← 戦域予報
+├── mission.ts      ← 作戦（選べる作戦・作戦の結果・撤退ポイント）
 └── weapon.ts       ← Weapon・WeaponType
 ```
 
@@ -74,7 +76,7 @@ types/
 geometry → (なし)
 weapon   → (なし)
 mobileSuit → geometry, weapon
-battleCore → geometry, mobileSuit
+battleCore → geometry, mobileSuit, mission
 pilot      → (なし)
 skill      → pilot
 shop       → weapon, mobileSuit
@@ -83,6 +85,7 @@ social     → (なし)
 blueprint  → shop
 admin      → weapon
 theater    → (なし)
+mission    → geometry, theater
 localSim   → geometry, mobileSuit, battleCore
 ```
 
@@ -322,13 +325,13 @@ luk: number;
 |---|---|---|
 | `#ff4444`（赤） | 敵ターゲットハイライトリング（`isTargeted`） | `MobileSuitMesh.tsx` |
 | `#00ff00`（緑） | センサー範囲リング（`showSensorRange`） | `AnimatedSensorRing.tsx` |
-| `#4488ff`（青） | 向き矢印（`heading`）、自機識別リング（`isSelf`、Issue #426） | `MobileSuitMesh.tsx` |
+| `#4488ff`（青） | 向き矢印（`heading`）、自機識別リング（`isSelf`、Issue #426）、友軍の細いリング（`allyLabel`、Issue #687。自機は幅広＋点滅、友軍は細い実線で区別） | `MobileSuitMesh.tsx` |
 | `#ff9800`/`#2196f3` | 警告アイコン（弾切れ/クールダウン）。EN不足アイコン（`#ffeb3b`）は Issue #534 で廃止し、`BattleOverlay` のENゲージで示す | `MobileSuitMesh.tsx` |
 | `#5a4a3a`/`#4a5a4a`（塗り）、`#b89b78`/`#8fb88f`（輪郭線） | 障害物本体（SPACE/GROUND）。輪郭線は塗りと同じ色相を明るくしたトーン | `ObstacleMesh.tsx` |
 | `#8a3a3a`（塗り）＋既存の `#ff4444`（輪郭線） | LOS遮断中の障害物（`isBlocking`） | `ObstacleMesh.tsx` |
 | `#4a3626`（幹）、`#2f5a2c`/`#3d6b34`/`#284d2a`（樹冠） | 森林（FOREST）の障害物＝木立。LOS遮断中は `ObstacleMesh` と同じ `#8a3a3a`（塗り）＋`#ff4444`（木立の半径のリング）（Issue #581） | `ForestGroves.tsx` |
 | `#ffd84a`/`#ff5a4e`/`#9aa0a6` | ダメージ数字（与ダメージ/被ダメージ/MISS）。`#ffd84a` は着弾フラッシュのリングにも使う（Issue #531）。鍔迫り合いの文字・輪・火花の光も `#ffd84a` と着弾フラッシュの白（`#ffffff`）で描く（Issue #600） | `utils/index.ts` の `HIT_EFFECT_COLORS` |
-| `#6fe6ff`/`#ffb36b` | 射線と武器名ラベルの帯（ビーム/実弾）（Issue #531）。`#6fe6ff` は自機の仕切り直しのアイコンにも使う（Issue #646、`DisengageIcon.tsx`） | `utils/index.ts` の `HIT_EFFECT_COLORS` |
+| `#6fe6ff`/`#ffb36b` | 射線と武器名ラベルの帯（ビーム/実弾）（Issue #531）。`#6fe6ff` は自機の仕切り直しのアイコン（Issue #646、`DisengageIcon.tsx`）、撤退ポイントの破線の円（`RetreatPointMarker.tsx`）、友軍のラベルと離脱の文字（`RetreatCompleteNotice.tsx`、Issue #687）にも使う | `utils/index.ts` の `HIT_EFFECT_COLORS` |
 
 **新しい視覚要素（マーカー・リング・ラベル等）を追加する際、このパレットから外れる新規の色を独断で導入してはいけない。** 密集戦闘時の自機識別マーカー（Issue #426）で当初マゼンタ（`#ff00ff`）を新規に使ったが、既存パレットからの逸脱だとしてユーザーから差し戻された経緯がある。同種の要素と区別したい場合は、既存色を使い回した上で太さ・点滅（パルスアニメーション）・破線などの**表現方法の違い**で区別すること。既存パレットでは要件を満たせないと判断した場合は、実装前に新しい色の採用についてユーザーと協議すること。
 

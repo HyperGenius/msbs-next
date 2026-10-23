@@ -58,7 +58,9 @@
 { "total": 3, "lost": 1, "player_survived": true }
 ```
 
-殲滅など友軍を数えない目標では null。マイグレーションは `q2e3f4a5b6c7_add_objective_detail.py`（nullable の追加のみ）。
+殲滅など友軍を数えない目標では null。
+
+BattleViewer 用に、撤退ポイントと友軍のロールも同じ列に入れる（#687。[mission-frontend.md](mission-frontend.md)）。マイグレーションは `q2e3f4a5b6c7_add_objective_detail.py`（nullable の追加のみ）。
 
 ## 報酬
 

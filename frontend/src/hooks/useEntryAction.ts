@@ -9,11 +9,16 @@ interface UseEntryActionOptions {
   mobileSuits: MobileSuit[] | undefined;
   mutateEntryStatus: () => void;
   mutateEntryCount: () => void;
+  /** エントリーできる作戦のID。一覧に無い作戦は選択を無視してバトルロイヤルにする */
+  availableMissionIds?: number[];
 }
 
 interface UseEntryActionReturn {
   entryLoading: boolean;
   showEntryModal: boolean;
+  /** 出撃先の作戦ID。null はデイリーバトルロイヤル */
+  selectedMissionId: number | null;
+  setSelectedMissionId: (missionId: number | null) => void;
   setShowEntryModal: (show: boolean) => void;
   handleEntry: () => Promise<void>;
   executeEntry: (mobileSuitId: string) => Promise<void>;
@@ -27,9 +32,11 @@ export function useEntryAction({
   mobileSuits,
   mutateEntryStatus,
   mutateEntryCount,
+  availableMissionIds,
 }: UseEntryActionOptions): UseEntryActionReturn {
   const [entryLoading, setEntryLoading] = useState(false);
   const [showEntryModal, setShowEntryModal] = useState(false);
+  const [selectedMissionId, setSelectedMissionId] = useState<number | null>(null);
 
   const handleEntry = async () => {
     if (!mobileSuits || mobileSuits.length === 0) {
@@ -47,7 +54,11 @@ export function useEntryAction({
   const executeEntry = async (mobileSuitId: string) => {
     setEntryLoading(true);
     try {
-      await entryBattle(mobileSuitId);
+      const missionId =
+        selectedMissionId !== null && availableMissionIds?.includes(selectedMissionId)
+          ? selectedMissionId
+          : null;
+      await entryBattle(mobileSuitId, missionId);
       await mutateEntryStatus();
       await mutateEntryCount();
       setShowEntryModal(false);
@@ -84,6 +95,8 @@ export function useEntryAction({
   return {
     entryLoading,
     showEntryModal,
+    selectedMissionId,
+    setSelectedMissionId,
     setShowEntryModal,
     handleEntry,
     executeEntry,

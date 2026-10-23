@@ -3,7 +3,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { BattleLog, MobileSuit, Obstacle } from "@/types/battle";
+import { BattleLog, MobileSuit, Obstacle, RetreatPointView } from "@/types/battle";
 import { getBattleSnapshot, getDetectedUnits, SnapshotCache } from "./hooks/useBattleSnapshot";
 import { hasDisengageLog, useBattleEvents } from "./hooks/useBattleEvents";
 import { BattleScene } from "./scene/BattleScene";
@@ -12,6 +12,7 @@ import { MinovskyHaze } from "./ui/MinovskyHaze";
 import { PlayerDestroyedBanner, PlayerDestroyedRewards } from "./ui/PlayerDestroyedBanner";
 import { getEnvironmentColor, SIMULATION_STEP_S, toSupportedEnvironment } from "./utils";
 import { hasLos } from "./utils/losUtils";
+import { getRecentRetreatNotices, getRetreatedUnitIds } from "./utils/retreat";
 import { findPlayerDestroyedAt, getPlaybackLimit } from "./utils/playerDestruction";
 
 interface BattleViewerProps {
@@ -31,6 +32,10 @@ interface BattleViewerProps {
     recenterToken?: number;
     /** 自機撃破の表示に出す獲得量。無いときは表示しない。 */
     rewards?: PlayerDestroyedRewards | null;
+    /** 撤退ポイント（作戦のみ）。 */
+    retreatPoints?: RetreatPointView[] | null;
+    /** ユニット ID → ロール。WITHDRAW の友軍に「撤退中」と出す。 */
+    unitRoles?: Record<string, string> | null;
 }
 
 export default function BattleViewer({
@@ -45,6 +50,8 @@ export default function BattleViewer({
     minovskyDensity,
     recenterToken,
     rewards,
+    retreatPoints,
+    unitRoles,
 }: BattleViewerProps) {
     // 呼び出し側が上限を超えた時刻を渡しても、撃破後の描画には進ませない
     const playerDestroyedAt = useMemo(() => findPlayerDestroyedAt(logs, player.id), [logs, player.id]);
@@ -88,9 +95,36 @@ export default function BattleViewer({
         () => getDetectedUnits(player.id, logs, currentTimestamp),
         [player.id, logs, currentTimestamp]
     );
+    // 自機と同じチームの機体（作戦の友軍）。索敵に関わらず常に見える
+    const allyIds = useMemo(
+        () => new Set(
+            enemies
+                .filter(enemy => player.team_id != null && enemy.team_id === player.team_id)
+                .map(enemy => String(enemy.id))
+        ),
+        [enemies, player.team_id]
+    );
+    const retreatedIds = useMemo(() => getRetreatedUnitIds(logs, currentTimestamp), [logs, currentTimestamp]);
     const visibleEnemyStates = useMemo(
-        () => enemyStates.filter(({ enemy }) => detectedIds.has(enemy.id)),
-        [enemyStates, detectedIds]
+        () => enemyStates.filter(({ enemy }) => !allyIds.has(String(enemy.id)) && detectedIds.has(enemy.id)),
+        [enemyStates, detectedIds, allyIds]
+    );
+    // 3D シーンには、見えている敵に加えて、離脱前の友軍も出す。HUD と LOS は敵だけを扱う
+    const sceneUnitStates = useMemo(
+        () => [
+            ...visibleEnemyStates,
+            ...enemyStates.filter(({ enemy }) => allyIds.has(String(enemy.id)) && !retreatedIds.has(String(enemy.id))),
+        ],
+        [visibleEnemyStates, enemyStates, allyIds, retreatedIds]
+    );
+    const allyLabels = useMemo(() => {
+        const labels = new Map<string, string>();
+        allyIds.forEach(id => labels.set(id, unitRoles?.[id] === "WITHDRAW" ? "友軍 撤退中" : "友軍"));
+        return labels;
+    }, [allyIds, unitRoles]);
+    const retreatNotices = useMemo(
+        () => getRecentRetreatNotices(logs, currentTimestamp),
+        [logs, currentTimestamp]
     );
     
     // 現在タイムスタンプ分のログ。再生中は毎 tick 変わるため、ここで一度だけ計算する（Issue #467）
@@ -145,7 +179,7 @@ export default function BattleViewer({
                 environment={sceneEnvironment}
                 player={player}
                 playerState={playerState}
-                enemyStates={visibleEnemyStates}
+                enemyStates={sceneUnitStates}
                 attacks={attacks}
                 criticalTargetIds={criticalTargetIds}
                 obstacles={obstacles}
@@ -156,6 +190,9 @@ export default function BattleViewer({
                 playerDisengagedAt={playerDisengagedAt}
                 recenterToken={recenterToken}
                 isPlayerDestroyed={isPlayerDestroyed}
+                retreatPoints={retreatPoints ?? undefined}
+                allyLabels={allyLabels}
+                retreatNotices={retreatNotices}
             />
 
             <MinovskyHaze density={minovskyDensity} />

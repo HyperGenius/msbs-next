@@ -2,11 +2,12 @@
 "use client";
 
 import { useState } from "react";
-import { MobileSuit, TheaterForecast } from "@/types/battle";
+import { AvailableMission, MobileSuit, TheaterForecast } from "@/types/battle";
 import { getRankColor } from "@/utils/rankUtils";
 import { STATUS_LABELS } from "@/utils/displayUtils";
 import MobileSuitRankBadges from "./MobileSuitRankBadges";
 import TheaterForecastCard from "./TheaterForecastCard";
+import MissionSelector from "./MissionSelector";
 
 interface EntryDashboardProps {
   isEntered: boolean;
@@ -14,6 +15,15 @@ interface EntryDashboardProps {
   mobileSuit?: MobileSuit;
   /** 戦域予報。取得前は undefined */
   forecasts?: TheaterForecast[];
+  /** エントリーできる作戦。取得前・無いときは空 */
+  availableMissions?: AvailableMission[];
+  /** 今回の開催の戦域（作戦カードに表示） */
+  theater?: TheaterForecast | null;
+  /** 選択中の作戦ID。null はデイリーバトルロイヤル */
+  selectedMissionId?: number | null;
+  /** エントリー済みの出撃先の作戦ID。null はバトルロイヤル */
+  enteredMissionId?: number | null;
+  onSelectMission?: (missionId: number | null) => void;
   onEntry: () => void;
   onCancel: () => void;
   isLoading: boolean;
@@ -31,12 +41,21 @@ export default function EntryDashboard({
   entryCount,
   mobileSuit,
   forecasts,
+  availableMissions = [],
+  theater = null,
+  selectedMissionId = null,
+  enteredMissionId = null,
+  onSelectMission,
   onEntry,
   onCancel,
   isLoading,
   disabled = false,
 }: EntryDashboardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const enteredMission =
+    enteredMissionId != null
+      ? availableMissions.find((m) => m.id === enteredMissionId)
+      : undefined;
 
   if (isEntered && mobileSuit) {
     return (
@@ -59,6 +78,14 @@ export default function EntryDashboard({
 
           {/* 機体名 + ランクバッジ */}
           <div className="space-y-2">
+            <div className="flex items-baseline gap-3">
+              <span className="text-[#00ff41]/50 font-mono text-xs">出撃先</span>
+              <span className="text-[#ffb000] font-bold font-mono">
+                {enteredMissionId == null
+                  ? "デイリーバトルロイヤル"
+                  : `作戦: ${enteredMission?.name ?? `Mission ${enteredMissionId}`}`}
+              </span>
+            </div>
             <div className="flex items-baseline gap-3">
               <span className="text-[#00ff41]/50 font-mono text-xs">機体名</span>
               <span className="text-white font-bold font-mono">{mobileSuit.name}</span>
@@ -127,13 +154,15 @@ export default function EntryDashboard({
           )}
         </div>
 
-        {/* 参加者数 */}
+        {/* 参加者数（作戦は専用ルームなので出さない） */}
+        {enteredMissionId == null && (
         <div className="bg-[#0a0a0a] border border-[#00ff41]/20 p-3 flex items-center justify-between font-mono text-xs">
           <span className="text-[#00ff41]/50">現在の参加エントリー数</span>
           <span className="text-[#00ff41] font-bold text-lg">
             {entryCount} <span className="text-[#00ff41]/40 text-xs">機</span>
           </span>
         </div>
+        )}
 
         {/* キャンセルボタン */}
         <button
@@ -167,6 +196,18 @@ export default function EntryDashboard({
           </p>
         </div>
 
+        {onSelectMission && (
+          <div className="mb-5">
+            <MissionSelector
+              missions={availableMissions}
+              theater={theater}
+              selectedMissionId={selectedMissionId}
+              onSelect={onSelectMission}
+              disabled={isLoading}
+            />
+          </div>
+        )}
+
         <button
           onClick={onEntry}
           disabled={isLoading || disabled}
@@ -186,7 +227,8 @@ export default function EntryDashboard({
         )}
       </div>
 
-      {/* 参加者数 */}
+      {/* 参加者数（バトルロイヤルのみ） */}
+      {selectedMissionId == null && (
       <div className="bg-[#0a0a0a] border border-[#00ff41]/20 p-3 font-mono">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-[#00ff41]/50">👥 現在の参加者</span>
@@ -199,6 +241,7 @@ export default function EntryDashboard({
           ></div>
         </div>
       </div>
+      )}
     </div>
   );
 }

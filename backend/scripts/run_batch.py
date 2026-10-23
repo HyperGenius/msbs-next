@@ -126,21 +126,43 @@ _WIN_LOSS_BY_STATUS = {
 }
 
 
-def _objective_fields(result: ObjectiveResult) -> dict:
-    """`BattleResult` の作戦の結果のカラムを組み立てる."""
+def _objective_fields(
+    result: ObjectiveResult, simulator: BattleSimulator | None = None
+) -> dict:
+    """`BattleResult` の作戦の結果のカラムを組み立てる.
+
+    `simulator` を渡すと、BattleViewer が撤退ポイントとロールを描くための
+    `retreat_points` / `unit_roles` を `objective_detail` に含める。
+    """
+    detail: dict | None = None
+    if result.total > 0:
+        detail = {
+            "total": result.total,
+            "lost": result.lost,
+            "player_survived": result.player_survived,
+        }
+    if simulator is not None and (
+        simulator.retreat_points or simulator.unit_assignments
+    ):
+        detail = detail or {}
+        detail["retreat_points"] = [
+            {
+                "position": rp.position.model_dump(),
+                "radius": rp.radius,
+                "team_id": rp.team_id,
+            }
+            for rp in simulator.retreat_points
+        ]
+        detail["unit_roles"] = {
+            unit_id: assignment.role
+            for unit_id, assignment in simulator.unit_assignments.items()
+            if assignment.role is not None
+        }
     return {
         "objective_status": result.status.value,
         "objective_progress": result.progress,
         "objective_required": result.required,
-        "objective_detail": (
-            {
-                "total": result.total,
-                "lost": result.lost,
-                "player_survived": result.player_survived,
-            }
-            if result.total > 0
-            else None
-        ),
+        "objective_detail": detail,
     }
 
 
@@ -317,7 +339,7 @@ def _save_battle_results(
             level_up=level_up,
             is_read=False,
             loot=[item.model_dump() for item in loot],
-            **_objective_fields(objective_result),
+            **_objective_fields(objective_result, simulator),
             **unit_fields,
             **battlefield_fields,
             **digest_fields,

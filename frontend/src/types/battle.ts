@@ -13,4 +13,5 @@ export * from "./leaderboard";
 export * from "./social";
 export * from "./blueprint";
 export * from "./theater";
+export * from "./mission";
 export * from "./localSim";

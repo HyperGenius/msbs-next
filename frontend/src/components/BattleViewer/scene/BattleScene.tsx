@@ -16,9 +16,12 @@ import { TracerMesh } from "./TracerMesh";
 import { WeaponLabel } from "./WeaponLabel";
 import { ImpactMarker } from "./ImpactMarker";
 import { DisengageIcon } from "./DisengageIcon";
+import { RetreatPointMarker } from "./RetreatPointMarker";
+import { RetreatCompleteNotice } from "./RetreatCompleteNotice";
+import { RetreatNotice } from "../utils/retreat";
 import { AttackEvent, WarningType } from "../types";
 import { useAttackEffectQueue } from "../hooks/useAttackEffectQueue";
-import { Obstacle } from "@/types/battle";
+import { Obstacle, RetreatPointView } from "@/types/battle";
 import { getEnvironmentColor } from "../utils";
 
 // MobileSuitMesh と同じスケール定数（座標変換の一貫性）
@@ -154,6 +157,12 @@ interface BattleSceneProps {
     recenterToken?: number;
     /** 自機が撃破済みのとき true。機体を消して爆発を出す。 */
     isPlayerDestroyed?: boolean;
+    /** 撤退ポイント（作戦のみ）。地面に破線の円で出す */
+    retreatPoints?: RetreatPointView[];
+    /** 友軍のユニット ID → 表示ラベル（例: 「友軍 撤退中」） */
+    allyLabels?: Map<string, string>;
+    /** 直近に離脱したユニットの通知 */
+    retreatNotices?: RetreatNotice[];
 }
 
 /** 自機からターゲット敵MSへの照準線コンポーネント */
@@ -250,6 +259,9 @@ export function BattleScene({
     playerDisengagedAt,
     recenterToken,
     isPlayerDestroyed = false,
+    retreatPoints,
+    allyLabels,
+    retreatNotices,
 }: BattleSceneProps) {
     // フィールド中心・全体をカバーするグリッドの位置とフェード距離を算出（Issue #436）
     const [mapMin, mapMax] = mapBounds ?? DEFAULT_MAP_BOUNDS;
@@ -397,6 +409,19 @@ export function BattleScene({
                     isTargeted={enemy.id === playerState.targetId}
                     isAttacking={attackingUnitIds?.has(String(enemy.id))}
                     isFlashing={criticalTargetIds.has(String(enemy.id))}
+                    allyLabel={allyLabels?.get(String(enemy.id))}
+                />
+            ))}
+
+            {/* 撤退ポイントと、離脱した友軍の通知 */}
+            {retreatPoints?.map((point, i) => (
+                <RetreatPointMarker key={i} point={point} />
+            ))}
+            {retreatNotices?.map((notice) => (
+                <RetreatCompleteNotice
+                    key={`${notice.unitId}-${notice.timestamp}`}
+                    notice={notice}
+                    currentTimestamp={currentTimestamp}
                 />
             ))}
 

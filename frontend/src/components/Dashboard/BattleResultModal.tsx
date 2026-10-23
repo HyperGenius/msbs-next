@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { BattleRewards, LootItem, MobileSuit } from "@/types/battle";
+import { BattleRewards, LootItem, MobileSuit, ObjectiveSummary } from "@/types/battle";
+import { OBJECTIVE_STATUS_LABELS } from "@/utils/missionName";
 import MobileSuitRankBadges from "./MobileSuitRankBadges";
 import LootList from "@/components/loot/LootList";
 import { isHighlightedLoot } from "@/utils/technology";
@@ -18,6 +19,10 @@ interface BattleResultModalProps {
   loot?: LootItem[] | null;
   /** 戦域の表示名。戦域の無いバトルは null・未指定で、欄を出さない */
   theaterLabel?: string | null;
+  /** 作戦の結果。バトルロイヤルと作戦の結果が無い戦歴は null・未指定で、欄を出さない */
+  objective?: ObjectiveSummary | null;
+  /** 作戦名。objective と一緒に出す */
+  missionName?: string | null;
   onClose: () => void;
   /** 指定したときだけ「リプレイを見る」ボタンを表示する */
   onOpenReplay?: () => void;
@@ -161,6 +166,8 @@ export default function BattleResultModal({
   kills,
   loot,
   theaterLabel,
+  objective,
+  missionName,
   onClose,
   onOpenReplay,
   animate = true,
@@ -277,6 +284,39 @@ export default function BattleResultModal({
             <section>
               <SectionLabel>戦域</SectionLabel>
               <p className="text-sm text-gray-300">{theaterLabel}</p>
+            </section>
+          )}
+
+          {objective && (
+            <section>
+              <SectionLabel>作戦</SectionLabel>
+              {missionName && (
+                <p className="text-sm text-gray-300 mb-1">{missionName}</p>
+              )}
+              <div
+                className={`flex items-center justify-between border px-3 py-2 ${
+                  objective.status === "SUCCESS"
+                    ? "border-[#00ff41]/60 text-[#00ff41]"
+                    : objective.status === "FAILURE"
+                      ? "border-[#ffb000]/60 text-[#ffb000]"
+                      : "border-[#00f0ff]/60 text-[#00f0ff]"
+                }`}
+              >
+                <span className="text-sm font-bold tracking-widest">
+                  {OBJECTIVE_STATUS_LABELS[objective.status]}
+                </span>
+                {objective.total ? (
+                  <span className="text-sm font-bold">
+                    離脱 {objective.progress ?? 0}/{objective.total}
+                    {objective.required ? `（必要 ${objective.required}）` : ""}
+                  </span>
+                ) : null}
+              </div>
+              {objective.lost ? (
+                <p className="mt-1 text-xs text-gray-500">
+                  撃破された友軍: {objective.lost}機
+                </p>
+              ) : null}
             </section>
           )}
 
