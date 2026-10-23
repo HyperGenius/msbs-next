@@ -9,6 +9,8 @@ interface EntrySelectionModalProps {
   onSelect: (mobileSuitId: string) => void;
   onCancel: () => void;
   isLoading: boolean;
+  /** 出撃先の表示名（作戦名など）。省略時はバトルロイヤル向けの文言 */
+  destinationLabel?: string;
 }
 
 export default function EntrySelectionModal({
@@ -16,6 +18,7 @@ export default function EntrySelectionModal({
   onSelect,
   onCancel,
   isLoading,
+  destinationLabel,
 }: EntrySelectionModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -28,6 +31,9 @@ export default function EntrySelectionModal({
             <p className="text-sm text-[#00ff41]/60">
               バトルに出撃させる機体を選択してください
             </p>
+            {destinationLabel && (
+              <p className="text-sm text-[#ffb000] mt-1">出撃先: {destinationLabel}</p>
+            )}
           </div>
 
           {/* 機体リスト */}

@@ -25,6 +25,7 @@ export function MobileSuitMesh({
     isAttacking,
     isFlashing,
     isSelf,
+    allyLabel,
 }: {
     position: { x: number; y: number; z: number };
     maxHp: number;
@@ -44,6 +45,8 @@ export function MobileSuitMesh({
     isFlashing?: boolean;
     /** 自機の場合 true — 密集戦闘時の視認性向上のための常時識別マーカー表示に使用 (Issue #426) */
     isSelf?: boolean;
+    /** 友軍のときの表示名（例: 「友軍 撤退中」）。指定すると友軍用の細いリングとラベルを出す */
+    allyLabel?: string;
 }) {
     const scale = 0.05;
     // ゲーム座標(x,z=地面平面, y=高度)→Three.js座標(x,y=高さ,z=奥行き)は x→x, y→y, z→z でそのまま対応する
@@ -222,6 +225,25 @@ export function MobileSuitMesh({
                     <ringGeometry args={[1.9, 2.4, 32]} />
                     <meshBasicMaterial color="#4488ff" side={THREE.DoubleSide} transparent opacity={0.8} />
                 </mesh>
+            )}
+
+            {/* 友軍の識別: 自機リングと同じ青（#4488ff）を使い、細い実線・点滅なしで自機と区別する。
+                ラベルは既存パレットのビーム色（#6fe6ff） */}
+            {allyLabel && (
+                <>
+                    <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                        <ringGeometry args={[1.6, 1.75, 32]} />
+                        <meshBasicMaterial color="#4488ff" side={THREE.DoubleSide} transparent opacity={0.9} />
+                    </mesh>
+                    <Html position={[0, 2.2, 0]} center>
+                        <div
+                            className="pointer-events-none select-none whitespace-nowrap text-[10px] font-bold px-1 bg-black/70"
+                            style={{ color: "#6fe6ff", border: "1px solid #4488ff" }}
+                        >
+                            {allyLabel}
+                        </div>
+                    </Html>
+                </>
             )}
             </group>
         </group>

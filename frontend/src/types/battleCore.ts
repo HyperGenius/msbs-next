@@ -1,11 +1,12 @@
 import { Vector3, Obstacle } from "./geometry";
 import { MobileSuit } from "./mobileSuit";
+import { ObjectiveDetail } from "./mission";
 
 /** バトルシミュレーター1ターンぶんの行動ログ */
 export interface BattleLog {
     timestamp: number;
     actor_id: string;
-    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT" | "MELEE_COMBO" | "BOOST_START" | "BOOST_END" | "DISENGAGE" | "MELEE_CLASH";
+    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT" | "MELEE_COMBO" | "BOOST_START" | "BOOST_END" | "DISENGAGE" | "MELEE_CLASH" | "RETREAT_COMPLETE";
     target_id?: string;
     damage?: number;
     /** 配信用ログの MOVE・WAIT・TARGET_SELECTION の行には無い。表示するときは `describeBattleLog()` で作る */
@@ -206,6 +207,8 @@ export interface BattleResult {
     objective_progress?: number | null;
     /** 成功に必要な数。0 は達成度を数えない目標 */
     objective_required?: number | null;
+    /** 作戦の達成度の内訳と、ビューア用の撤退ポイント・ロール。友軍を数えない目標は null */
+    objective_detail?: ObjectiveDetail | null;
 }
 
 /** battle_logsテーブルのレコード（リプレイ用の全ログを保持） */

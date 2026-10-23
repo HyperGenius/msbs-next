@@ -2,7 +2,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { BattleResult, BattleRewards, LootItem, MobileSuit } from "@/types/battle";
+import { BattleResult, BattleRewards, LootItem, MobileSuit, Mission, ObjectiveSummary } from "@/types/battle";
+import { getMissionName, getObjectiveSummary } from "@/utils/missionName";
 import { formatTheaterLabel } from "@/utils/theater";
 
 interface ModalResult {
@@ -12,6 +13,9 @@ interface ModalResult {
   kills?: number;
   loot?: LootItem[] | null;
   theaterLabel?: string | null;
+  objective?: ObjectiveSummary | null;
+  /** 作戦ルームの結果の作戦名 */
+  missionName?: string | null;
 }
 
 interface UseUnreadBattleQueueOptions {
@@ -19,6 +23,8 @@ interface UseUnreadBattleQueueOptions {
   isSignedIn: boolean | undefined;
   unreadBattles: BattleResult[] | undefined;
   showResultModal: boolean;
+  /** 作戦マスター（作戦名の表示用） */
+  missions?: Mission[];
   setModalResult: (result: ModalResult | null) => void;
   setShowResultModal: (show: boolean) => void;
 }
@@ -37,6 +43,7 @@ export function useUnreadBattleQueue({
   isSignedIn,
   unreadBattles,
   showResultModal,
+  missions,
   setModalResult,
   setShowResultModal,
 }: UseUnreadBattleQueueOptions): UseUnreadBattleQueueReturn {
@@ -85,6 +92,9 @@ export function useUnreadBattleQueue({
         kills: next.kills,
         loot: next.loot ?? null,
         theaterLabel: formatTheaterLabel(next),
+        objective: getObjectiveSummary(next),
+        missionName:
+          next.mission_id != null ? getMissionName(missions, next.mission_id) : null,
       });
       setShowResultModal(true);
     }
@@ -92,6 +102,7 @@ export function useUnreadBattleQueue({
     unreadQueue,
     currentUnreadBattle,
     showResultModal,
+    missions,
     setModalResult,
     setShowResultModal,
   ]);

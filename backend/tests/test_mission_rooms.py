@@ -415,3 +415,36 @@ def test_available_missions_lists_active_missions(
     assert mission["objective_type"] == "ANNIHILATION"
     assert mission["environment"] == "FOREST"
     assert (mission["ally_count"], mission["enemy_count"]) == (1, 1)
+
+
+def test_objective_fields_include_viewer_data() -> None:
+    """撤退ポイントとロールを objective_detail に入れ、友軍を数えない目標でも渡す."""
+    from types import SimpleNamespace
+
+    from app.engine.objectives import ObjectiveResult, ObjectiveStatus
+    from app.engine.unit_roles import UnitAssignment
+    from app.models.models import RetreatPoint, Vector3
+
+    simulator = SimpleNamespace(
+        retreat_points=[
+            RetreatPoint(position=Vector3(x=1, y=0, z=2), radius=50, team_id="PLAYER")
+        ],
+        unit_assignments={
+            "a": UnitAssignment(role="WITHDRAW"),
+            "b": UnitAssignment(squad_id="s1"),
+        },
+    )
+    result = ObjectiveResult(status=ObjectiveStatus.SUCCESS, progress=2, required=2)
+
+    fields = run_batch._objective_fields(result, simulator)  # type: ignore[arg-type]
+    detail = fields["objective_detail"]
+    assert detail["retreat_points"] == [
+        {"position": {"x": 1.0, "y": 0.0, "z": 2.0}, "radius": 50, "team_id": "PLAYER"}
+    ]
+    # ロールが無いユニットは含めない
+    assert detail["unit_roles"] == {"a": "WITHDRAW"}
+
+    # シミュレーターを渡さない・撤退ポイントもロールも無いときは従来どおり
+    assert run_batch._objective_fields(result)["objective_detail"] is None
+    empty = SimpleNamespace(retreat_points=[], unit_assignments={})
+    assert run_batch._objective_fields(result, empty)["objective_detail"] is None  # type: ignore[arg-type]

@@ -119,6 +119,8 @@ export default function BattleReplayPanel({
                 theaterName={battle.theater_name}
                 minovskyDensity={battle.minovsky_density}
                 recenterToken={recenterToken}
+                retreatPoints={battle.objective_detail?.retreat_points}
+                unitRoles={battle.objective_detail?.unit_roles}
                 rewards={
                   battle.exp_gained != null && battle.credits_gained != null
                     ? { exp: battle.exp_gained, credits: battle.credits_gained }

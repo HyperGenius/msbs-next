@@ -136,6 +136,8 @@ function getLogStyle(log: BattleLog, msg: string): DisplayLog["style"] {
 
   const isClashMessage = log.action_type === "MELEE_CLASH";
 
+  const isRetreatCompleteMessage = log.action_type === "RETREAT_COMPLETE";
+
   const isAttributeMessage =
     msg.includes("BEAM") ||
     msg.includes("PHYSICAL") ||
@@ -172,6 +174,13 @@ function getLogStyle(log: BattleLog, msg: string): DisplayLog["style"] {
       borderStyle: "border-orange-400",
       bgStyle: "",
       textStyle: "text-orange-300 font-bold",
+    };
+  }
+  if (isRetreatCompleteMessage) {
+    return {
+      borderStyle: "border-cyan-400",
+      bgStyle: "",
+      textStyle: "text-cyan-300 font-bold",
     };
   }
   if (isDisengageMessage) {

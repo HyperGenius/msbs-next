@@ -4,7 +4,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
-import { BattleResult, BattleRewards, LootItem, MobileSuit } from "@/types/battle";
+import { BattleResult, BattleRewards, LootItem, MobileSuit, ObjectiveSummary } from "@/types/battle";
 import {
   useMissions,
   useMobileSuits,
@@ -14,6 +14,7 @@ import {
   useBattleHistory,
   useUnreadBattleResults,
   useTheaterForecast,
+  useAvailableMissions,
   markBattleAsRead,
 } from "@/services/api";
 import BattleViewer from "@/components/BattleViewer";
@@ -43,6 +44,8 @@ type ModalResult = {
   kills?: number;
   loot?: LootItem[] | null;
   theaterLabel?: string | null;
+  objective?: ObjectiveSummary | null;
+  missionName?: string | null;
 };
 
 export default function Home() {
@@ -56,6 +59,7 @@ export default function Home() {
   const { battles, isLoading: battlesLoading } = useBattleHistory(1);
   const { unreadBattles, mutate: mutateUnreadBattles } = useUnreadBattleResults();
   const { forecasts } = useTheaterForecast();
+  const { availableMissions, theater: missionTheater } = useAvailableMissions();
 
   // バトル結果モーダルの状態（シミュレーション・未読キュー共通）
   const [showResultModal, setShowResultModal] = useState(false);
@@ -112,6 +116,7 @@ export default function Home() {
     isSignedIn,
     unreadBattles,
     showResultModal,
+    missions,
     setModalResult,
     setShowResultModal,
   });
@@ -119,11 +124,18 @@ export default function Home() {
   const {
     entryLoading,
     showEntryModal,
+    selectedMissionId: entryMissionId,
+    setSelectedMissionId: setEntryMissionId,
     setShowEntryModal,
     handleEntry,
     executeEntry,
     handleCancelEntry,
-  } = useEntryAction({ mobileSuits, mutateEntryStatus, mutateEntryCount });
+  } = useEntryAction({
+    mobileSuits,
+    mutateEntryStatus,
+    mutateEntryCount,
+    availableMissionIds: availableMissions?.map((m) => m.id),
+  });
 
   /** 表示中の未読バトル結果を既読にする */
   const markCurrentUnreadAsRead = async (battle: BattleResult) => {
@@ -248,6 +260,16 @@ export default function Home() {
                   : undefined
               }
               forecasts={forecasts}
+              availableMissions={availableMissions}
+              theater={missionTheater}
+              // 無効になった作戦を選んだままにしないよう、一覧に無ければバトルロイヤルに戻す
+              selectedMissionId={
+                availableMissions?.some((m) => m.id === entryMissionId)
+                  ? entryMissionId
+                  : null
+              }
+              enteredMissionId={entryStatus?.entry?.mission_id ?? null}
+              onSelectMission={setEntryMissionId}
               onEntry={handleEntry}
               onCancel={handleCancelEntry}
               isLoading={entryLoading}
@@ -265,6 +287,8 @@ export default function Home() {
             kills={modalResult.kills}
             loot={modalResult.loot}
             theaterLabel={modalResult.theaterLabel}
+            objective={modalResult.objective}
+            missionName={modalResult.missionName}
             onClose={handleResultClose}
             // ソロミッションはホーム画面に BattleViewer を表示しているため、リプレイ導線は出さない
             onOpenReplay={currentUnreadBattle ? handleOpenReplay : undefined}
@@ -287,6 +311,9 @@ export default function Home() {
             onSelect={executeEntry}
             onCancel={() => setShowEntryModal(false)}
             isLoading={entryLoading}
+            destinationLabel={
+              availableMissions?.find((m) => m.id === entryMissionId)?.name
+            }
           />
         )}
 

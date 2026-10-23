@@ -4,6 +4,7 @@
 import { BattleResult } from "@/types/battle";
 import LootBadge from "@/components/loot/LootBadge";
 import { formatTheaterLabel } from "@/utils/theater";
+import { getObjectiveSummary, OBJECTIVE_STATUS_LABELS } from "@/utils/missionName";
 
 /**
  * バトル履歴リストを表示するためのプロパティ
@@ -83,6 +84,8 @@ export default function BattleList({
             // 辛勝タグは「土壇場で耐えた」ドラマを強調するため、枠と背景を警告色にする
             const isCritical = battle.digest_tag === "辛勝";
             const theaterLabel = formatTheaterLabel(battle);
+            // 作戦ルームの結果だけ作戦の結果が入る。バトルロイヤルと既存の戦歴は null
+            const objective = getObjectiveSummary(battle);
 
             return (
               <button
@@ -95,7 +98,16 @@ export default function BattleList({
                 }`}
               >
                 <div className="flex justify-between items-start gap-2">
-                  <span className="font-bold">
+                  <span className="font-bold min-w-0">
+                    <span
+                      className={`mr-2 px-1.5 py-0.5 rounded text-[10px] align-middle border ${
+                        battle.mission_id != null
+                          ? "border-amber-500/60 text-amber-400"
+                          : "border-green-700 text-green-500"
+                      }`}
+                    >
+                      {battle.mission_id != null ? "作戦" : "BR"}
+                    </span>
                     {getMissionName(battle.mission_id, battle.created_at)}
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
@@ -119,6 +131,26 @@ export default function BattleList({
                     <span className="block text-gray-400">{theaterLabel}</span>
                   )}
                 </p>
+                {objective && (
+                  <p className="text-sm mb-2">
+                    <span
+                      className={`font-bold ${
+                        objective.status === "SUCCESS"
+                          ? "text-green-300"
+                          : objective.status === "FAILURE"
+                            ? "text-red-400"
+                            : "text-yellow-300"
+                      }`}
+                    >
+                      {OBJECTIVE_STATUS_LABELS[objective.status]}
+                    </span>
+                    {objective.total ? (
+                      <span className="text-gray-400 ml-2">
+                        離脱 {objective.progress ?? 0}/{objective.total}
+                      </span>
+                    ) : null}
+                  </p>
+                )}
                 {hasDigest ? (
                   <>
                     <div className="border-t border-dashed border-gray-700 pt-2 mb-2">
