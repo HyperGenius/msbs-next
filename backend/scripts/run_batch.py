@@ -132,6 +132,15 @@ def _objective_fields(result: ObjectiveResult) -> dict:
         "objective_status": result.status.value,
         "objective_progress": result.progress,
         "objective_required": result.required,
+        "objective_detail": (
+            {
+                "total": result.total,
+                "lost": result.lost,
+                "player_survived": result.player_survived,
+            }
+            if result.total > 0
+            else None
+        ),
     }
 
 
@@ -233,6 +242,7 @@ def _save_battle_results(
                 exp_gained, credits_gained = pilot_service.calculate_battle_rewards(
                     win=individual_win_loss == "WIN",
                     kills=individual_kills,
+                    objective_result=objective_result,
                 )
 
                 pilot, reward_logs = pilot_service.add_rewards(

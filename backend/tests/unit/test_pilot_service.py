@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlmodel import Session
 
+from app.engine.objectives import ObjectiveResult, ObjectiveStatus
 from app.models.models import MobileSuit, Pilot
 from app.services.pilot_service import PilotService
 
@@ -47,6 +48,63 @@ def test_calculate_battle_rewards_lose() -> None:
     exp, credits = service.calculate_battle_rewards(win=False, kills=2)
     assert exp == 40  # 20 + 2*10
     assert credits == 200  # 100 + 2*50
+
+
+def _escort(
+    status: ObjectiveStatus, progress: int, player_survived: bool = True
+) -> ObjectiveResult:
+    return ObjectiveResult(
+        status,
+        progress=progress,
+        required=2,
+        total=3,
+        lost=3 - progress,
+        player_survived=player_survived,
+    )
+
+
+def test_calculate_battle_rewards_escort_tiers() -> None:
+    """友軍を逃がす作戦は、全員離脱 > 必要数を満たした > 失敗の順に報酬が多い."""
+    service = PilotService(MagicMock(spec=Session))
+
+    full = service.calculate_battle_rewards(
+        True, objective_result=_escort(ObjectiveStatus.SUCCESS, 3)
+    )
+    enough = service.calculate_battle_rewards(
+        True, objective_result=_escort(ObjectiveStatus.SUCCESS, 2)
+    )
+    failed = service.calculate_battle_rewards(
+        False, objective_result=_escort(ObjectiveStatus.FAILURE, 1)
+    )
+
+    assert full == (150, 750)
+    assert enough == (100, 500)
+    assert failed == (30, 150)  # 失敗の基本 20/100 + 離脱 1 機 × 10/50
+    assert full > enough > failed
+
+
+def test_calculate_battle_rewards_escort_player_down_and_kills() -> None:
+    """プレイヤー機が撃破されていると基本報酬が減り、撃墜ボーナスは半分になる."""
+    service = PilotService(MagicMock(spec=Session))
+
+    down = service.calculate_battle_rewards(
+        True, objective_result=_escort(ObjectiveStatus.SUCCESS, 2, False)
+    )
+    with_kills = service.calculate_battle_rewards(
+        True, kills=2, objective_result=_escort(ObjectiveStatus.SUCCESS, 2)
+    )
+
+    assert down == (70, 350)
+    assert with_kills == (110, 550)  # 基本 100/500 + 2 機 × 10/50 の半分
+
+
+def test_calculate_battle_rewards_ignores_annihilation_result() -> None:
+    """友軍を数えない目標（殲滅など）の結果を渡しても、勝敗と撃墜数で決める."""
+    service = PilotService(MagicMock(spec=Session))
+
+    result = ObjectiveResult(ObjectiveStatus.SUCCESS)
+
+    assert service.calculate_battle_rewards(True, 3, result) == (130, 650)
 
 
 def test_add_rewards_no_level_up() -> None:

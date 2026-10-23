@@ -3,19 +3,29 @@
 import pytest
 from pydantic import ValidationError
 
-from app.engine.objectives import AnnihilationObjective, build_objective
+from app.engine.objectives import (
+    AnnihilationObjective,
+    RetreatSupportObjective,
+    build_objective,
+)
 from app.models.models import (
     MISSION_TEAM_ENEMY,
     MISSION_TEAM_PLAYER,
     BattleField,
     Mission,
     MissionLayout,
+    MissionUnitConfig,
     MobileSuit,
     Vector3,
     Weapon,
 )
 from app.services.battle_execution import prepare_battle_units, run_battle
-from app.services.mission_battle import build_mission_battle, enemy_team_id
+from app.services.mission_battle import (
+    build_mission_battle,
+    build_mission_unit,
+    enemy_team_id,
+)
+from app.services.retreat_support_mission import build_retreat_support_mission
 from app.services.theater_service import BattleConditions
 from main import _build_enemies_from_config
 
@@ -278,3 +288,59 @@ def test_run_battle_passes_mission_setup_to_simulator() -> None:
     assert ally.strategy_mode == "RETREAT"
     assert simulator.objective is setup.objective
     assert outcome.objective_result is not None
+
+
+def test_retreat_support_mission_master_builds_a_battle() -> None:
+    """撤退支援のマスターから、損傷した友軍・追撃部隊・専用の撤退ポイント・離脱目標を作る."""
+    mission = build_retreat_support_mission()
+    player = _player()
+    player.team_id = "player-team"
+
+    setup = build_mission_battle(mission, [player], BattleConditions())
+
+    allies = [u for u in setup.mission_units if u.team_id == "player-team"]
+    enemies = [u for u in setup.mission_units if u.team_id == enemy_team_id(mission)]
+    assert len(allies) == 3
+    assert len(enemies) == 4
+    assert all(a.current_hp < a.max_hp for a in allies)
+    assert all(setup.unit_assignments[str(a.id)].role == "WITHDRAW" for a in allies)
+    assert "LEFT_ARM" not in allies[0].parts
+    assert {setup.unit_assignments[str(e.id)].role for e in enemies} == {
+        "VANGUARD",
+        "SNIPER",
+    }
+    assert any(e.weapons[0].is_melee for e in enemies)
+    [retreat_point] = setup.retreat_points
+    assert retreat_point.team_id == "player-team"
+    assert isinstance(setup.objective, RetreatSupportObjective)
+    assert setup.objective.protected_unit_ids == {str(a.id) for a in allies}
+
+
+def test_mission_unit_rejects_unknown_missing_part() -> None:
+    """無い部位を欠損に書くと拒否する."""
+    with pytest.raises(ValueError):
+        build_mission_unit(MissionUnitConfig(missing_parts=["WING"]), "PLAYER")
+
+
+def test_retreat_support_battle_runs_and_saves_progress() -> None:
+    """撤退支援を最後まで実行すると、離脱数・友軍の数を含む結果が返る."""
+    mission = build_retreat_support_mission()
+    player = _player()
+    player.team_id = "player-team"
+    setup = build_mission_battle(mission, [player], BattleConditions())
+
+    outcome = run_battle(
+        player,
+        setup.mission_units,
+        setup.conditions,
+        max_steps=3000,
+        objective=setup.objective,
+        retreat_points=setup.retreat_points,
+        unit_assignments=setup.unit_assignments,
+    )
+
+    result = outcome.objective_result
+    assert result is not None
+    assert (result.required, result.total) == (2, 3)
+    assert 0 <= result.progress <= 3
+    assert outcome.player_win == result.is_success
