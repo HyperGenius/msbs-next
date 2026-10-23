@@ -22,7 +22,7 @@ Epic #682「作戦（ミッション）と敵小隊のロール」の Sub-Issue 
 | 3 | 作戦マスターの拡張と作戦ルームのバッチ実行（Issue #685、本ドキュメント） |
 | 4 | 撤退支援ミッション。撤退支援の作戦目標と作戦マスターのデータ（Issue #686、実装済み。[retreat-support-mission.md](retreat-support-mission.md)） |
 | 5 | 作戦の選択と結果表示（フロントエンド、Issue #687、実装済み。[mission-frontend.md](mission-frontend.md)） |
-| 6 | 小隊の陣形（Issue #688） |
+| 6 | 小隊の陣形（Issue #688、実装済み。[battle-engine-feature.md 38章](battle-engine-feature.md#38-小隊の陣形epic-682-sub-issue-6)） |
 | 7 | 支援ターゲット選択と戦術 SUPPORT / PROTECT（Issue #689） |
 
 ---

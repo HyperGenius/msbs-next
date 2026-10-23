@@ -5,7 +5,11 @@
 DB への投入は `scripts/maintenance/upsert_retreat_support_mission.py`。
 """
 
-from app.engine.constants import UNIT_ROLE_WITHDRAW
+from app.engine.constants import (
+    UNIT_ROLE_SNIPER,
+    UNIT_ROLE_VANGUARD,
+    UNIT_ROLE_WITHDRAW,
+)
 from app.models.models import (
     MISSION_OBJECTIVE_RETREAT_SUPPORT,
     MISSION_TEAM_ENEMY,
@@ -50,6 +54,11 @@ def _ally(index: int, current_hp: int, missing_parts: list[str]) -> MissionUnitC
     )
 
 
+def _pursuit_squad(index: int) -> str:
+    """追撃部隊の小隊 ID. 同じ番号の格闘機と狙撃機で 1 小隊を組む."""
+    return f"pursuit-{index}"
+
+
 def _pursuer_vanguard(index: int) -> MissionUnitConfig:
     return MissionUnitConfig(
         name=f"追撃格闘機 #{index}",
@@ -66,8 +75,8 @@ def _pursuer_vanguard(index: int) -> MissionUnitConfig:
             is_melee=True,
             fire_arc_deg=360,
         ),
-        role="VANGUARD",
-        squad_id="pursuit-front",
+        role=UNIT_ROLE_VANGUARD,
+        squad_id=_pursuit_squad(index),
     )
 
 
@@ -84,8 +93,8 @@ def _pursuer_sniper(index: int) -> MissionUnitConfig:
             range=600,
             accuracy=75,
         ),
-        role="SNIPER",
-        squad_id="pursuit-rear",
+        role=UNIT_ROLE_SNIPER,
+        squad_id=_pursuit_squad(index),
     )
 
 

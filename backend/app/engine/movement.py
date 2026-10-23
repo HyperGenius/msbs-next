@@ -729,6 +729,11 @@ class MovementMixin:
         # 4. 味方ユニットへの弱い斥力 (ALLY_REPULSION_RADIUS 以内)
         total_force += self._ally_repulsion(unit, pos_unit)
 
+        # 4b. 小隊の後衛を前衛の後方へ引き寄せる
+        total_force += self._formation_force(  # type: ignore[attr-defined]
+            unit, pos_unit, engagement, current_action
+        )
+
         # 5. マップ境界への斥力 (BOUNDARY_MARGIN 以内)
         total_force += self._boundary_repulsion(pos_unit)
 

@@ -39,6 +39,7 @@ from app.engine.constants import (
     VALID_STRATEGY_MODES,
 )
 from app.engine.environment import EnvironmentProfile
+from app.engine.formation import FormationMixin, SquadKey
 from app.engine.fuzzy_engine import FuzzyEngine
 from app.engine.fuzzy_rule_cache import FuzzyRuleCache
 from app.engine.melee_clash import MeleeClashMixin
@@ -198,6 +199,7 @@ class BattleSimulator(
     BattleUtilsMixin,
     CombatMixin,
     MovementMixin,
+    FormationMixin,
     TargetingMixin,
     AiDecisionMixin,
     ActionHandlerMixin,
@@ -280,6 +282,8 @@ class BattleSimulator(
         # 高脅威敵斥力計算用のグリッド（Issue #453）。セルサイズが上記と異なるため
         # 別キャッシュとして持つ。同様に step() の冒頭で毎ステップリセットされる。
         self._threat_repulsion_grid: UnitSpatialGrid | None = None
+        # 小隊ごとの前衛。step() の冒頭で毎ステップリセットする。
+        self._squad_vanguards: dict[SquadKey, list[MobileSuit]] | None = None
         # _select_target_fuzzy() のステップ内キャッシュ（Issue #454）。
         # unit_id → (計算時点の _step_count, 選択結果)。ステップが変わるか、
         # キャッシュ対象のターゲットが撃破された場合は再計算する
@@ -1075,6 +1079,7 @@ class BattleSimulator(
         # 行動フェーズで最初に必要になったタイミングで最新位置から再構築させる。
         self._movement_grid = None
         self._threat_repulsion_grid = None
+        self._squad_vanguards = None
 
         # 1. エリア収縮フェーズ（Issue #474）: 索敵・移動より前に map_bounds を
         # 更新することで、このステップの索敵・移動が新しい境界を反映する
