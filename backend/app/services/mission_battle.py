@@ -20,6 +20,7 @@ from app.engine.objectives import (
     build_objective,
 )
 from app.engine.simulation import BattleSimulator
+from app.engine.suppression import SuppressionConfig
 from app.engine.unit_roles import UnitAssignment
 from app.models.models import (
     ALL_PART_NAMES,
@@ -45,6 +46,8 @@ class MissionBattleSetup:
     retreat_points: list[RetreatPoint]
     unit_assignments: dict[str, UnitAssignment]
     objective: BattleObjective
+    suppression: SuppressionConfig
+    """射撃の制圧。作戦の戦闘でだけ有効にする。"""
 
 
 def build_mission_unit(
@@ -193,6 +196,7 @@ def build_mission_battle(
         objective=build_objective(
             objective_config.type, objective_config.params, ally_ids
         ),
+        suppression=SuppressionConfig(),
     )
 
 

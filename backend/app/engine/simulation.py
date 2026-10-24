@@ -52,6 +52,7 @@ from app.engine.objectives import (
 from app.engine.rng import new_numpy_rng
 from app.engine.spatial_grid import PointSpatialGrid, UnitSpatialGrid
 from app.engine.strategy_controller import TeamMetrics, TeamStrategyController
+from app.engine.suppression import SuppressionConfig, SuppressionMixin
 from app.engine.targeting import TargetingMixin
 from app.engine.unit_roles import UnitAssignment
 from app.models.models import (
@@ -204,6 +205,7 @@ class BattleSimulator(
     AiDecisionMixin,
     ActionHandlerMixin,
     MeleeClashMixin,
+    SuppressionMixin,
 ):
     """戦闘シミュレータ."""
 
@@ -225,6 +227,7 @@ class BattleSimulator(
         environment_profile: EnvironmentProfile | None = None,
         objective: BattleObjective | None = None,
         unit_assignments: dict[str, UnitAssignment] | None = None,
+        suppression: SuppressionConfig | None = None,
     ):
         """初期化.
 
@@ -252,6 +255,7 @@ class BattleSimulator(
             objective: 作戦目標。戦闘の終了と結果を決める。None の場合は殲滅とする。
             unit_assignments: ユニット ID（str）→ ロールと所属小隊。
                 含まれないユニットはロールも小隊も持たない。
+            suppression: 射撃の制圧の係数。None の場合は制圧なしとする。
 
         Note:
             team_id が未設定のユニットは in-place で team_id が自動付与されます。
@@ -275,6 +279,7 @@ class BattleSimulator(
         self._step_count: int = 0
         self.is_finished = False
         self.objective: BattleObjective = objective or AnnihilationObjective()
+        self.suppression: SuppressionConfig | None = suppression
         # ポテンシャルフィールド計算用のグリッド（Issue #450）。step() の冒頭で
         # 毎ステップ None にリセットされ、そのステップ内で最初に必要になった
         # タイミングで _get_movement_grid() が最新位置から再構築する（遅延構築）。
@@ -444,6 +449,8 @@ class BattleSimulator(
                 "idle_stalemate_until": 0.0,  # 撃たない膠着とみなし続ける期限の時刻 (s)
                 "knockback": None,  # 鍔迫り合いで受けている押し離し (Knockback)
                 "last_melee_clash_at": None,  # 最後に鍔迫り合いをした時刻 (s)
+                "suppression": 0.0,  # 射撃で受けている制圧値
+                "suppression_logged": False,  # SUPPRESSED を出し、SUPPRESSION_END をまだ出していない
             }
             # 各武器のリソース状態を初期化
             for weapon in unit.weapons:
@@ -1117,6 +1124,7 @@ class BattleSimulator(
 
         # 7. リソース更新フェーズ（EN回復・クールダウン減少）
         self._refresh_phase(dt)
+        self._suppression_decay_phase(dt)
 
         # 8. 時間を進める
         self.elapsed_time += dt

@@ -3370,3 +3370,97 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 * `backend/tests/unit/test_support_targeting.py`: 小隊の前衛を攻撃する敵を優先（レガシー・ファジィ）、`CLOSEST` は影響を受けない、該当なしで元に戻る、古い攻撃は無視、未索敵の敵は候補外、別小隊の味方は対象外、`PROTECT` が撤退ロールを優先・いなければ `SUPPORT` と同じ、バトルログの文言、NPC の戦術、API 検証
 * `engine_ci_smoke.py`: 9 ラウンド完走
 * `sim_scale_bench.py --sizes 50 --steps 50`: 変更前後とも 0.0506 s/step
+
+## 40. 射撃の制圧（Issue #716）
+
+射撃（`is_melee=false` の武器）で狙われた機体に「制圧値」をためる。たまった分だけ最高速度を下げ、遠くからの射撃で敵の前進を鈍らせる。実装は `backend/app/engine/suppression.py` の `SuppressionMixin`。
+
+### 40.1 仕様
+
+* 射撃 1 発ごとに、狙われた機体へ `SUPPRESSION_PER_COOLDOWN_SEC × max(cooldown_sec, 0.1)` を足す。命中なら `SUPPRESSION_HIT_MULTIPLIER` 倍。1 発の量を再使用待ちに比例させるため、連射武器も単発武器も 1 秒あたりの量は同じになる
+* 格闘では制圧しない
+* 制圧値は `SUPPRESSION_MAX_VALUE` で止まる。毎ステップ `exp(-SUPPRESSION_DECAY_RATE × dt)` 倍に減り、0.5 未満になると 0 にする
+* 最高速度（`_apply_inertia` の `effective_max_speed`。地形・向き・ブーストを掛けた後）に `1 - SUPPRESSION_MAX_SPEED_PENALTY × 制圧値 / 上限` を掛ける。ブースト中も下がる
+* `SUPPRESSION_ADVANCE_ONLY` が真（既定）なら、後退・逃走中は減速しない。後退・逃走とみなすのは次のどれかに当てはまるとき
+  * 行動が `RETREAT` / `DISENGAGE` / `HIT_AND_AWAY`
+  * 逃走中（`fleeing`）
+  * 機体の向きと逆向きに動いている（`is_backpedaling`）
+* 命中率は下げない。命中補正の足し方（加算か乗算か）は総合バランス調整（#587）で決めるため、ここでは入れていない
+* パイロットの耐性（TOU など）は入れていない
+
+### 40.2 有効にする範囲
+
+作戦の戦闘でだけ有効にする。`build_mission_battle()` が `MissionBattleSetup.suppression` に `SuppressionConfig()` を入れ、`run_battle(suppression=...)` → `BattleSimulator(suppression=...)` に渡す。`BattleSimulator` の既定は `None`（制圧なし）。毎日のバトルロイヤル（`main.py`）と、`main.py` の旧来の 1 人用の戦闘は変えていない。
+
+計測ツールでは `--suppression` で係数を変えられる（`scripts/simulation/suppression_args.py`）。`off` / `on` / `penalty=0.3,decay=0.5,dirs=all` のように書く。`retreat_support_bench.py` の既定は `on`、`engagement_bench.py` の既定は `off`。
+
+### 40.3 定数（`constants.py`）
+
+すべて暫定値。総合バランス調整は #587 で行う。
+
+| 定数 | 値 | 意味 |
+|---|---|---|
+| `SUPPRESSION_PER_COOLDOWN_SEC` | 20.0 | 再使用待ち 1 秒あたりの制圧量（外れ） |
+| `SUPPRESSION_HIT_MULTIPLIER` | 2.0 | 命中したときの倍率 |
+| `SUPPRESSION_MIN_COOLDOWN_SEC` | 0.1 | 再使用待ちの下限。再使用待ち 0 の武器でも制圧する |
+| `SUPPRESSION_MAX_VALUE` | 100.0 | 制圧値の上限 |
+| `SUPPRESSION_DECAY_RATE` | 0.3 | 1 秒あたりの減衰率（約 2.3 秒で半分） |
+| `SUPPRESSION_MAX_SPEED_PENALTY` | 0.5 | 上限のときの最高速度の低下（50%） |
+| `SUPPRESSION_ADVANCE_ONLY` | True | 後退・逃走中は減速しない |
+| `SUPPRESSION_SPARED_ACTIONS` | RETREAT, DISENGAGE, HIT_AND_AWAY | 後退とみなす行動 |
+| `SUPPRESSION_LOG_ENTER_VALUE` / `SUPPRESSION_LOG_EXIT_VALUE` | 30 / 15 | `SUPPRESSED` / `SUPPRESSION_END` を出すしきい値 |
+
+### 40.4 ログ
+
+* ATTACK / MISS の `details.target_suppression`: その射撃の後の、相手の制圧値
+* `SUPPRESSED`: 制圧値が 30 以上になった。`actor_id` は制圧された機体、`target_id` は撃った機体。`details` に `suppression`（値）と `speed_multiplier`（最高速度の倍率）
+* `SUPPRESSION_END`: 15 未満に戻った。開始と終了のしきい値を分け、境目で何度も出ないようにしている
+
+詳細は [battle-log-feature.md](./battle-log-feature.md#射撃の制圧の記録issue-716)。バトルビューアでの表示は [battle-viewer-feature.md](./battle-viewer-feature.md)。
+
+### 40.5 計測
+
+#### 撤退支援・殲滅戦（`retreat_support_bench.py --rounds 120`）
+
+護衛ビルド（`escort`: 射程 600、`PROTECT`）を足した 4 ビルドで計測した。撤退支援の成功率は次のとおり。
+
+| 係数 | annihilator | balanced | mobile | escort |
+|---|---|---|---|---|
+| off | 87% | 88% | 87% | 84% |
+| on（既定） | 88% | 86% | 89% | 86% |
+| dirs=all | 87% | 87% | 86% | 87% |
+| penalty=0.3 | 87% | 86% | 88% | 85% |
+| penalty=0.7 | 88% | 89% | 87% | 87% |
+| per_shot=10 | 88% | 86% | 87% | 86% |
+| per_shot=40 | 85% | 88% | 89% | 86% |
+
+* どの係数でも、成功率・平均撤退数・撤退機の損失は誤差（120 戦で ±3pt 程度）の範囲でしか変わらなかった。**制圧で機動・護衛ビルドの成功率が上がる結果は出ていない**
+* 原因: 撤退機の被害はすべて敵の狙撃機（`SNIPER`）のロングライフルによるもので、撃墜は開始から平均 2.6 秒で起きていた（escort ビルド・60 戦。off: 56 機、on: 53 機）。追ってくる格闘機を遅くしても、撤退機の損失は減らない。成功率を上げるには、狙撃機の初期配置や射程など撤退支援の作戦側の調整が要る（#587）
+* 殲滅戦の勝率: off では annihilator 6% / ほか 0〜1%、on では annihilator 9% / balanced 7% / ほか 0〜1%。殲滅向けビルドの優位は変わらない
+* 小隊戦（殲滅戦の小隊ロール別、120 戦）: 前衛（格闘）の生存率は off → on で annihilator 92% → 87%、balanced 95% → 95%、mobile 100% → 98%。撃墜数も大きくは変わらず、格闘機が一方的に不利になる結果は出ていない
+
+最初は「撃ってきた機体へ近づくときだけ減速」にしていた。この形では、撤退機を追う格闘機を護衛が横から撃っても減速せず、成功率も off と同じだった（off 86/86/89%、on 83/86/88%）。そのため、後退・逃走以外のすべての移動で減速する形に変えた。
+
+#### 1 対 1（`engagement_bench.py --master-dir tests/fixtures/master --rounds 30`、off と on の比較）
+
+* 勝率はどのシナリオ・戦術でも変わらない（fixture の組は勝敗が一方的なため。例外は `ranged_gelgoog_gundam` の DEFENSIVE で 20% → 13%）
+* `melee_only_vs_ranged`（格闘専用機が射撃機へ寄る）: 初格闘 p50 が 8.4〜9.8 秒から 9.3〜12.9 秒に遅れ、<150m の割合が 7〜15pt 下がった。勝率は 100% のまま
+* `melee_vs_ranged`（引き撃ち）: 距離 p50 の差は −5〜+1m で、引き撃ちが強くなりすぎる結果は出ていない
+* `melee_duel` / `melee_only_duel`: ほぼ変わらない
+
+### 40.6 変わらないことの確認
+
+* バトルロイヤル: 2 / 8 / 20 機 × 撤退ポイントあり・なし × 3 シードの 18 戦で、`main` とバトルログのハッシュが一致した
+* `engine_ci_smoke.py`: 9 ラウンド完走
+
+### 40.7 テスト
+
+* `backend/tests/unit/test_suppression.py`: 1 発の量（再使用待ちに比例、命中倍率、下限）、上限、減衰、速度の倍率、後退・逃走の判定、射撃で命中・外れともにたまる、格闘ではたまらない、無効なら何も変えない、`SUPPRESSED` / `SUPPRESSION_END` のログ、前進は減速・後退は減速しない・`dirs=all` なら後退も減速、ブースト中も減速、作戦の戦闘で有効になる
+* `frontend/tests/unit/battleSnapshot.test.ts`: スナップショットの `isSuppressed`
+
+### 40.8 今後の候補
+
+* 命中率の低下（#587 で命中補正の足し方を決めてから）
+* パイロットの耐性（TOU）
+* 武器ごとの制圧量（武器マスターに `suppression` を持たせる）
+* 撤退支援で制圧が効く形にする作戦側の調整（狙撃機の配置・射程）

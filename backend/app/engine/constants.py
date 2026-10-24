@@ -640,3 +640,26 @@ FLEE_POWER_WEIGHTS: dict[str, float] = {
 # 逃走度がこの値以上で逃走に入り、この値未満で逃走を抜ける。
 FLEE_ENTER_THRESHOLD: float = 0.7
 FLEE_EXIT_THRESHOLD: float = 0.4
+
+# 射撃の制圧の定数。作戦の戦闘でだけ使う。値はすべて暫定で、調整は総合バランス調整で行う。
+# 外れた 1 発が狙われた機体に加える制圧値。武器の再使用待ち 1 秒あたり。
+SUPPRESSION_PER_COOLDOWN_SEC: float = 20.0
+# 命中した 1 発は、外れた 1 発の何倍を加えるか。
+SUPPRESSION_HIT_MULTIPLIER: float = 2.0
+# 再使用待ちが 0 の武器の 1 発の量を求めるときの、再使用待ちの下限 (s)。
+SUPPRESSION_MIN_COOLDOWN_SEC: float = 0.1
+SUPPRESSION_MAX_VALUE: float = 100.0
+# 1 秒あたりに減る制圧値の割合。
+SUPPRESSION_DECAY_RATE: float = 0.3
+# 制圧値が上限のときに、最高速度（ブースト中も）から引く割合。
+SUPPRESSION_MAX_SPEED_PENALTY: float = 0.5
+# 真なら、後退・逃走中は減速しない。格闘のバランス方針で、後退と逃走を前進と分けて扱うため。
+SUPPRESSION_ADVANCE_ONLY: bool = True
+# 後退・逃走とみなす行動。この行動の間は制圧で減速しない。
+SUPPRESSION_SPARED_ACTIONS: frozenset[str] = frozenset(
+    {"RETREAT", "DISENGAGE", "HIT_AND_AWAY"}
+)
+# 制圧値がこの値以上になると SUPPRESSED を、下回ると SUPPRESSION_END をログに出す。
+# 境目で出し入れが続かないよう、終わりの値を低くする。
+SUPPRESSION_LOG_ENTER_VALUE: float = 30.0
+SUPPRESSION_LOG_EXIT_VALUE: float = 15.0

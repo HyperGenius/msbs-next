@@ -11,6 +11,7 @@ Usage:
     python scripts/simulation/engagement_bench.py run --master-dir tests/fixtures/master
     python scripts/simulation/engagement_bench.py run --scenarios melee_duel --rounds 4
     python scripts/simulation/engagement_bench.py run --ranges MELEE,RANGED --pilot mel=20
+    python scripts/simulation/engagement_bench.py run --suppression on
     python scripts/simulation/engagement_bench.py diff results/before.json results/after.json
 """
 
@@ -41,6 +42,7 @@ from app.engine import combat  # noqa: E402
 from app.engine.calculator import PilotStats  # noqa: E402
 from app.engine.constants import FLEE_ENTER_THRESHOLD, MELEE_RANGE  # noqa: E402
 from app.engine.simulation import BattleSimulator  # noqa: E402
+from app.engine.suppression import SuppressionConfig  # noqa: E402
 from app.models.models import MobileSuit, Vector3, Weapon  # noqa: E402
 from scripts.master_data import (  # noqa: E402
     MOBILE_SUITS,
@@ -49,6 +51,7 @@ from scripts.master_data import (  # noqa: E402
     load_master_data,
 )
 from scripts.simulation.local_sim.readonly_db import ReadOnlyConfigError  # noqa: E402
+from scripts.simulation.suppression_args import parse_suppression  # noqa: E402
 
 # 定期バトルの 3000 ではなく、エンジン上限まで回す。時間切れ自体を指標として見るため。
 _DEFAULT_MAX_STEPS = 5000
@@ -352,11 +355,12 @@ def run_battle(
     seed: int,
     max_steps: int,
     pilot: PilotStats | None = None,
+    suppression: SuppressionConfig | None = None,
 ) -> BattleMetrics:
     """1 戦して計測値を返す.
 
     seed が奇数のときは B を PLAYER 側にする。行動順の偏りを打ち消すため。
-    `pilot` は両機に同じ値を使う。
+    `pilot` は両機に同じ値を使う。`suppression` を渡すと射撃の制圧を有効にする。
     """
     pilot = pilot or parse_pilot(_DEFAULT_PILOT)
     scenario = SCENARIOS[scenario_key]
@@ -385,6 +389,7 @@ def run_battle(
         [enemy],
         player_pilot_stats=pilot,
         npc_pilot_stats={str(enemy.id): pilot},
+        suppression=suppression,
     )
     records: list[AttackRecord] = []
     _record_attacks(sim, records)
@@ -706,6 +711,10 @@ def cmd_run(args: argparse.Namespace) -> None:
         pilot = parse_pilot(args.pilot)
     except (TypeError, ValueError) as e:
         sys.exit(str(e))
+    try:
+        suppression = parse_suppression(args.suppression)
+    except ValueError as e:
+        sys.exit(str(e))
 
     try:
         master_data = load_master_data(args.master_dir)
@@ -725,7 +734,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     ) as pool:
         futures = {
             job: [
-                pool.submit(run_battle, *job, seed, args.max_steps, pilot)
+                pool.submit(run_battle, *job, seed, args.max_steps, pilot, suppression)
                 for seed in seeds
             ]
             for job, seeds in jobs.items()
@@ -746,6 +755,7 @@ def cmd_run(args: argparse.Namespace) -> None:
                 "rounds": args.rounds,
                 "max_steps": args.max_steps,
                 "pilot": asdict(pilot),
+                "suppression": asdict(suppression) if suppression else None,
                 "master_source": str(args.master_dir or "readonly_db"),
                 "scenarios": {
                     k: {
@@ -811,6 +821,12 @@ def main() -> None:
         "--master-dir",
         type=Path,
         help="機体・武器のマスターを読む JSON ディレクトリ。既定は本番 DB（読み取り専用）",
+    )
+    run.add_argument(
+        "--suppression",
+        default="off",
+        help="射撃の制圧。off / on / 係数の上書き（例: penalty=0.3,dirs=all）。"
+        "既定は off（バトルロイヤルと同じ）",
     )
     run.add_argument("--output", help="結果 JSON の保存先")
     run.set_defaults(func=cmd_run)

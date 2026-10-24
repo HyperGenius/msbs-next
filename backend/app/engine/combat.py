@@ -621,7 +621,13 @@ class CombatMixin:
         log_base = f"{actor_name}が{weapon_display}で攻撃！ (命中: {int(hit_chance)}%)"
 
         # リソース消費
-        en_details = self._consume_attack_resources(weapon, weapon_state, resources)
+        log_details = self._apply_shot_suppression(  # type: ignore[attr-defined]
+            actor,
+            target,
+            weapon,
+            is_hit,
+            self._consume_attack_resources(weapon, weapon_state, resources),
+        )
 
         # 攻撃時のセリフ生成
         attack_chatter = self._generate_chatter(actor, "attack")  # type: ignore[attr-defined]
@@ -639,7 +645,7 @@ class CombatMixin:
                 skill_activated,
                 attack_sector=attack_sector,
                 distance=distance,
-                en_details=en_details,
+                log_details=log_details,
                 minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
         else:
@@ -652,9 +658,10 @@ class CombatMixin:
                 attack_chatter,
                 is_bad_distance,
                 skill_activated,
-                en_details=en_details,
+                log_details=log_details,
                 minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
+        self._log_suppression_start(actor, target)  # type: ignore[attr-defined]
         # 格闘コンボと LUK による完全回避を含めるため、HP の差をダメージとする。
         self._record_attack_exchange(
             actor, target, hp_before - max(0, target.current_hp)
@@ -796,12 +803,12 @@ class CombatMixin:
         skill_activated: bool = False,
         attack_sector: str = "FRONT_SIDE",
         distance: float = 0.0,
-        en_details: dict | None = None,
+        log_details: dict | None = None,
         minovsky_hit_multiplier: float | None = None,
     ) -> None:
         """命中時の処理.
 
-        `en_details` は ATTACK / MISS ログの `details` にそのまま載せる。
+        `log_details`（EN 残量・相手の制圧値）は ATTACK / MISS ログの `details` にそのまま載せる。
         `minovsky_hit_multiplier` はデバッグ用フィールドとして ATTACK / MISS ログに載せる。
         """
         # 命中部位決定 (Issue #505 Phase 4): 命中判定とダメージ計算の間のフック
@@ -852,7 +859,7 @@ class CombatMixin:
                     ),  # type: ignore[attr-defined]
                     weapon_name=weapon.name if weapon else None,
                     weapon_id=weapon.id if weapon else None,
-                    details=en_details,
+                    details=log_details,
                     minovsky_hit_multiplier=minovsky_hit_multiplier,
                 )
             )
@@ -936,7 +943,7 @@ class CombatMixin:
                 velocity_snapshot=Vector3.from_numpy(
                     self.unit_resources[str(actor.id)]["velocity_vec"]  # type: ignore[attr-defined]
                 ),  # type: ignore[attr-defined]
-                details=en_details,
+                details=log_details,
                 minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
         )
@@ -1196,12 +1203,12 @@ class CombatMixin:
         attack_chatter: str | None = None,
         is_bad_distance: bool = False,
         skill_activated: bool = False,
-        en_details: dict | None = None,
+        log_details: dict | None = None,
         minovsky_hit_multiplier: float | None = None,
     ) -> None:
         """ミス時の処理.
 
-        `en_details` は MISS ログの `details` にそのまま載せる。
+        `log_details`（EN 残量・相手の制圧値）は MISS ログの `details` にそのまま載せる。
         `minovsky_hit_multiplier` はデバッグ用フィールドとして MISS ログに載せる。
         """
         # ミス時のセリフ生成
@@ -1228,7 +1235,7 @@ class CombatMixin:
                 ),  # type: ignore[attr-defined]
                 weapon_name=weapon.name if weapon else None,
                 weapon_id=weapon.id if weapon else None,
-                details=en_details,
+                details=log_details,
                 minovsky_hit_multiplier=minovsky_hit_multiplier,
             )
         )

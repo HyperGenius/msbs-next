@@ -6,7 +6,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
-import { getHpColor } from "../utils";
+import { getHpColor, HIT_EFFECT_COLORS } from "../utils";
 import { WarningType } from "../types";
 import { AnimatedSensorRing } from "./AnimatedSensorRing";
 
@@ -25,6 +25,7 @@ export function MobileSuitMesh({
     isAttacking,
     isFlashing,
     isSelf,
+    isSuppressed,
     allyLabel,
 }: {
     position: { x: number; y: number; z: number };
@@ -45,6 +46,8 @@ export function MobileSuitMesh({
     isFlashing?: boolean;
     /** 自機の場合 true — 密集戦闘時の視認性向上のための常時識別マーカー表示に使用 (Issue #426) */
     isSelf?: boolean;
+    /** 射撃の制圧を受けているとき true — 足元の点線リングと「制圧」ラベルを出す */
+    isSuppressed?: boolean;
     /** 友軍のときの表示名（例: 「友軍 撤退中」）。指定すると友軍用の細いリングとラベルを出す */
     allyLabel?: string;
 }) {
@@ -225,6 +228,24 @@ export function MobileSuitMesh({
                     <ringGeometry args={[1.9, 2.4, 32]} />
                     <meshBasicMaterial color="#4488ff" side={THREE.DoubleSide} transparent opacity={0.8} />
                 </mesh>
+            )}
+
+            {/* 制圧中: 実弾の射線と同じ橙（HIT_EFFECT_COLORS.tracerBullet）。ラベルは他のラベルと重ならないよう足元に出す */}
+            {isSuppressed && (
+                <>
+                    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.9, 0]}>
+                        <ringGeometry args={[1.1, 1.3, 12, 1, 0, Math.PI * 2]} />
+                        <meshBasicMaterial color={HIT_EFFECT_COLORS.tracerBullet} side={THREE.DoubleSide} transparent opacity={0.85} wireframe />
+                    </mesh>
+                    <Html position={[0, -2.2, 0]} center>
+                        <div
+                            className="pointer-events-none select-none whitespace-nowrap text-[10px] font-bold px-1 bg-black/70"
+                            style={{ color: HIT_EFFECT_COLORS.tracerBullet, border: `1px solid ${HIT_EFFECT_COLORS.tracerBullet}` }}
+                        >
+                            制圧
+                        </div>
+                    </Html>
+                </>
             )}
 
             {/* 友軍の識別: 自機リングと同じ青（#4488ff）を使い、細い実線・点滅なしで自機と区別する。
