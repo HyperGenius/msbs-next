@@ -4,11 +4,11 @@
 機体マスターの EN を変えても作成済みの ``mobile_suits`` は古い値のままになる。
 
 コピー元は次の順に引く。
-``master_mobile_suit_id`` が NULL の機体（練習機や、カラム追加前に購入した機体）があるため。
+``master_mobile_suit_id`` が NULL の機体（カラム追加前に購入した機体や、バックフィル前の練習機）があるため。
+練習機も機体マスターにある。
 
 1. ``master_mobile_suit_id`` が指す機体マスター
 2. 機体名が一致する機体マスター（地形適正・武器スロット数の解決と同じ）
-3. 機体名が一致する練習機（``STARTER_KITS``。機体マスターに無い）
 
 - プレイヤー機: 同期する
 - NPC 機（``user_id`` が ``npc-`` で始まる）: 管理画面で機体ごとに調整するため、
@@ -23,7 +23,6 @@ from dataclasses import dataclass, field
 
 from sqlmodel import Session, col, select
 
-from app.core.gamedata import STARTER_KITS
 from app.models.models import MasterMobileSuit, MasterMobileSuitSpec, MobileSuit
 
 SYNCABLE_FIELDS: tuple[str, ...] = ("max_en", "en_recovery")
@@ -57,7 +56,7 @@ class MobileSuitEnSyncReport:
 class _Sources:
     """コピー元の EN."""
 
-    # コピー元ID（機体マスターID または練習機ID） → フィールド → 値
+    # 機体マスターID → フィールド → 値
     values: dict[str, dict[str, int]]
     # 機体名 → コピー元ID
     ids_by_name: dict[str, str]
@@ -74,22 +73,16 @@ def _en_values(specs: dict) -> dict[str, int]:
 def _load_sources(session: Session, source_ids: list[str] | None) -> _Sources:
     values: dict[str, dict[str, int]] = {}
     ids_by_name: dict[str, str] = {}
-    for kit in STARTER_KITS.values():
-        if not source_ids or kit["id"] in source_ids:
-            values[kit["id"]] = _en_values(kit["specs"])
-            ids_by_name[kit["name"]] = kit["id"]
-
     stmt = select(MasterMobileSuit)
     if source_ids:
         stmt = stmt.where(col(MasterMobileSuit.id).in_(source_ids))
-    # 機体名が練習機と重なったときは機体マスターを優先する
     for mms in session.exec(stmt).all():
         values[mms.id] = _en_values(mms.specs or {})
         ids_by_name[mms.name] = mms.id
 
     missing = sorted(set(source_ids or []) - values.keys())
     if missing:
-        raise ValueError(f"機体マスター・練習機に無いIDです: {', '.join(missing)}")
+        raise ValueError(f"機体マスターに無いIDです: {', '.join(missing)}")
     return _Sources(values=values, ids_by_name=ids_by_name)
 
 
@@ -117,9 +110,9 @@ def sync_mobile_suit_en(
     master_ids: list[str] | None = None,
     include_npc: bool = False,
 ) -> MobileSuitEnSyncReport:
-    """機体マスター・練習機の EN を作成済みの機体へ反映し、変わった値を返す.
+    """機体マスターの EN を作成済みの機体へ反映し、変わった値を返す.
 
-    master_ids には機体マスターIDと練習機IDを指定できる。None なら全件を対象にする。
+    master_ids には機体マスターIDを指定する。None なら全件を対象にする。
     commit はしない。呼び出し元が結果を見て commit か rollback を選ぶ。
     """
     report = MobileSuitEnSyncReport()

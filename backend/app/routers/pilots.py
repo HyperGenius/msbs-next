@@ -18,6 +18,7 @@ from app.models.models import (
     Pilot,
     Team,
     TeamMember,
+    Weapon,
 )
 from app.services.pilot_service import PilotService
 
@@ -149,6 +150,14 @@ async def register_pilot(
             detail=f"Total bonus points must equal {bonus_points_total}",
         )
 
+    # 勢力に配る練習機を取得する。未設定ならパイロットも作らずにエラーにする。
+    # 練習機なしで登録すると出撃できず、管理画面で設定したあとに登録し直せないため。
+    starter_kit = get_starter_kit_by_faction(session, request.faction)
+    if starter_kit is None:
+        raise HTTPException(
+            status_code=500, detail="Starter kit not found for the specified faction"
+        )
+
     base_stats = background_data["baseStats"]
 
     # パイロット作成
@@ -168,20 +177,12 @@ async def register_pilot(
         luk=base_stats["LUK"] + request.bonus_luk,
     )
     session.add(pilot)
-    session.commit()
-    session.refresh(pilot)
 
-    # 勢力に応じた練習機を取得
-    starter_kit = get_starter_kit_by_faction(request.faction)
-    if not starter_kit:
-        raise HTTPException(
-            status_code=500, detail="Starter kit not found for the specified faction"
-        )
-
-    specs = starter_kit["specs"]
+    specs = starter_kit.specs
     new_mobile_suit = MobileSuit(
         user_id=user_id,
-        name=starter_kit["name"],
+        name=starter_kit.name,
+        master_mobile_suit_id=starter_kit.id,
         max_hp=specs["max_hp"],
         current_hp=specs["max_hp"],
         armor=specs["armor"],
@@ -197,7 +198,7 @@ async def register_pilot(
         evasion_bonus=specs.get("evasion_bonus", 0.0),
         acceleration_bonus=specs.get("acceleration_bonus", 1.0),
         turning_bonus=specs.get("turning_bonus", 1.0),
-        weapons=specs["weapons"],
+        weapons=[Weapon(**w) for w in specs["weapons"]],
         missing_parts=specs.get("missing_parts", []),
         side="PLAYER",
     )
@@ -209,7 +210,7 @@ async def register_pilot(
     return RegisterPilotResponse(
         pilot=pilot.model_dump(mode="json"),
         mobile_suit_id=str(new_mobile_suit.id),
-        message=f"パイロット {name} を登録しました。{starter_kit['name']} を付与しました。",
+        message=f"パイロット {name} を登録しました。{starter_kit.name} を付与しました。",
     )
 
 

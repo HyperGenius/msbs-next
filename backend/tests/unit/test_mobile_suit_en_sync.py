@@ -4,7 +4,6 @@ import pytest
 from sqlalchemy.orm import attributes
 from sqlmodel import Session
 
-from app.core.gamedata import STARTER_KITS
 from app.models.models import MasterMobileSuit, MobileSuit
 from app.services.mobile_suit_en_sync_service import (
     TARGET_NPC,
@@ -151,15 +150,18 @@ def test_unknown_master_id_raises(session: Session) -> None:
         sync_mobile_suit_en(session, ["no_such_ms"])
 
 
-def test_starter_kit_mobile_suits_use_starter_kit_values(session: Session) -> None:
-    """機体マスターに無い練習機は、機体名で STARTER_KITS の EN を引く."""
-    kit = STARTER_KITS["ZEON"]
-    trainer = _create_ms(session, "en_sync_user", master_id=None, name=kit["name"])
+def test_trainer_mobile_suits_use_trainer_master_values(session: Session) -> None:
+    """練習機は、練習機の機体マスターの EN を引く（機体マスターID が NULL なら機体名で引く）."""
+    trainer_master = session.get(MasterMobileSuit, "zaku_ii_trainer")
+    assert trainer_master is not None
+    trainer = _create_ms(
+        session, "en_sync_user", master_id=None, name=trainer_master.name
+    )
 
-    report = sync_mobile_suit_en(session, [kit["id"]])
+    report = sync_mobile_suit_en(session, [trainer_master.id])
     session.commit()
 
     session.refresh(trainer)
-    assert trainer.max_en == kit["specs"]["max_en"]
-    assert trainer.en_recovery == kit["specs"]["en_recovery"]
+    assert trainer.max_en == trainer_master.specs["max_en"]
+    assert trainer.en_recovery == trainer_master.specs["en_recovery"]
     assert report.updated_rows[TARGET_PLAYER] == 1

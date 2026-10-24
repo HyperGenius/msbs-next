@@ -11,11 +11,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.models.models import AcePilot, MasterMobileSuit, MasterWeapon, Weapon
 
-# マスターデータディレクトリのパス (backgrounds.json / STARTER_KITS 用)
+# マスターデータディレクトリのパス (backgrounds.json 用)
 _DATA_DIR = Path(
     os.environ.get(
         "MASTER_DATA_DIR",
@@ -36,82 +36,6 @@ _ace_pilots_cache: list[dict] | None = None
 _ace_pilots_cache_expires_at: datetime | None = None
 # use_static_ace_pilots() で設定する。設定中は DB もキャッシュも使わない。
 _static_ace_pilots: list[dict] | None = None
-
-
-# 練習機マスターデータ（ショップには並ばない専用機体）
-# 連邦・ジオン双方で全ステータスが同一
-STARTER_KITS: dict[str, dict[str, Any]] = {
-    "FEDERATION": {
-        "id": "gm_trainer",
-        "name": "RGM-79T GM Trainer",
-        "description": "地球連邦軍の練習用モビルスーツ。全勢力共通の標準スペック。",
-        "specs": {
-            "max_hp": 700,
-            "armor": 40,
-            "mobility": 1.0,
-            "sensor_range": 500.0,
-            "beam_resistance": 0.0,
-            "physical_resistance": 0.0,
-            # 練習機はビーム兵器を使う前提にしないため、EN は少なくてよい
-            "max_en": 200,
-            "en_recovery": 10,
-            "melee_aptitude": 1.0,
-            "shooting_aptitude": 1.0,
-            "accuracy_bonus": 0.0,
-            "evasion_bonus": 0.0,
-            "acceleration_bonus": 1.0,
-            "turning_bonus": 1.0,
-            "weapons": [
-                Weapon(
-                    id="trainer_spray_gun",
-                    name="Beam Spray Gun(Trainer)",
-                    power=80,
-                    range=400,
-                    accuracy=60,
-                    type="BEAM",
-                    optimal_range=300.0,
-                    decay_rate=0.08,
-                    is_melee=False,
-                )
-            ],
-        },
-    },
-    "ZEON": {
-        "id": "zaku_ii_trainer",
-        "name": "MS-06T Zaku II Trainer",
-        "description": "ジオン公国軍の練習用モビルスーツ。全勢力共通の標準スペック。",
-        "specs": {
-            "max_hp": 700,
-            "armor": 40,
-            "mobility": 1.0,
-            "sensor_range": 500.0,
-            "beam_resistance": 0.0,
-            "physical_resistance": 0.0,
-            # 練習機はビーム兵器を使う前提にしないため、EN は少なくてよい
-            "max_en": 200,
-            "en_recovery": 10,
-            "melee_aptitude": 1.0,
-            "shooting_aptitude": 1.0,
-            "accuracy_bonus": 0.0,
-            "evasion_bonus": 0.0,
-            "acceleration_bonus": 1.0,
-            "turning_bonus": 1.0,
-            "weapons": [
-                Weapon(
-                    id="trainer_machine_gun",
-                    name="Zaku Machine Gun(Trainer)",
-                    power=80,
-                    range=400,
-                    accuracy=60,
-                    type="PHYSICAL",
-                    optimal_range=300.0,
-                    decay_rate=0.08,
-                    is_melee=False,
-                )
-            ],
-        },
-    },
-}
 
 
 # パイロット経歴マスターデータ
@@ -143,16 +67,24 @@ def get_background_by_id(background_id: str) -> dict[str, Any] | None:
     return _get_backgrounds().get(background_id)
 
 
-def get_starter_kit_by_faction(faction: str) -> dict[str, Any] | None:
-    """勢力に対応した練習機データを取得する.
+def get_starter_kit_by_faction(
+    session: Session, faction: str
+) -> MasterMobileSuit | None:
+    """勢力に配る練習機の機体マスターを取得する.
 
     Args:
+        session: DBセッション
         faction: 勢力コード (FEDERATION/ZEON)
 
     Returns:
-        dict | None: 練習機データ。見つからない場合はNone
+        MasterMobileSuit | None: 練習機。その勢力に配る練習機が未設定の場合はNone
     """
-    return STARTER_KITS.get(faction)
+    return session.exec(
+        select(MasterMobileSuit).where(
+            col(MasterMobileSuit.is_trainer).is_(True),
+            MasterMobileSuit.starter_faction == faction,
+        )
+    ).first()
 
 
 def is_available_to_faction(pilot_faction: str, item_faction: str) -> bool:
@@ -188,11 +120,16 @@ def _refresh_cache_expiry() -> None:
 
 
 def _load_mobile_suits_from_db() -> list[dict]:
-    """DBから機体マスターデータを読み込む."""
+    """DBから機体マスターデータを読み込む.
+
+    練習機はショップに並べないため含めない。
+    """
     from app import db as _app_db
 
     with Session(_app_db.engine) as db_session:
-        records = db_session.exec(select(MasterMobileSuit)).all()
+        records = db_session.exec(
+            select(MasterMobileSuit).where(col(MasterMobileSuit.is_trainer).is_(False))
+        ).all()
 
     listings = []
     for record in records:

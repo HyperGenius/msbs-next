@@ -38,7 +38,9 @@ export function useAdminMobileSuits() {
   async function createMobileSuit(payload: MasterMobileSuitCreate): Promise<MasterMobileSuit> {
     const optimisticItem: MasterMobileSuit = {
       ...payload,
-      blueprint: applyBlueprintInput(defaultBlueprintSettings(payload.price), payload.blueprint),
+      blueprint: payload.is_trainer
+        ? null
+        : applyBlueprintInput(defaultBlueprintSettings(payload.price), payload.blueprint),
     };
     const optimisticData = data ? [...data, optimisticItem] : [optimisticItem];
 
@@ -57,6 +59,8 @@ export function useAdminMobileSuits() {
           throw new Error(detail.detail || `Create failed: ${res.status}`);
         }
         const created: MasterMobileSuit = await res.json();
+        // 配る勢力を設定すると、同じ勢力に配っていた練習機の設定も外れるため一覧を取り直す
+        if (payload.starter_faction) return adminFetcher(ENDPOINT);
         return data ? [...data, created] : [created];
       },
       { optimisticData, rollbackOnError: true }
@@ -77,7 +81,7 @@ export function useAdminMobileSuits() {
             ...ms,
             ...payload,
             specs: payload.specs ?? ms.specs,
-            blueprint: applyBlueprintInput(ms.blueprint, payload.blueprint),
+            blueprint: ms.blueprint && applyBlueprintInput(ms.blueprint, payload.blueprint),
           }
         : ms
     );
@@ -97,6 +101,8 @@ export function useAdminMobileSuits() {
           throw new Error(detail.detail || `Update failed: ${res.status}`);
         }
         const updated: MasterMobileSuit = await res.json();
+        // 配る勢力を設定すると、同じ勢力に配っていた練習機の設定も外れるため一覧を取り直す
+        if (payload.starter_faction) return adminFetcher(ENDPOINT);
         return data?.map((ms) => (ms.id === msId ? updated : ms)) ?? [updated];
       },
       { optimisticData, rollbackOnError: true }

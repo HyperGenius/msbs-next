@@ -192,6 +192,8 @@ describe("地形適正", () => {
         ],
         terrain_adaptability: { FOREST: "B" },
       },
+      is_trainer: false,
+      starter_faction: "" as const,
       blueprint: { is_standard_issue: true, duplicate_credit_value: null, tech_requirements: [] },
     };
     expect(masterMobileSuitSchema.safeParse(base).success).toBe(true);

@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { MasterMobileSuit } from "@/types/admin";
+import { MasterMobileSuit, StarterFaction } from "@/types/admin";
 import { defaultBlueprintSettings } from "@/lib/blueprint";
 import { firstErrorMessage } from "@/lib/technology";
 import { terrainAdaptabilitySchema } from "@/lib/theater";
@@ -51,6 +51,9 @@ export const masterMobileSuitSchema = z
     weapon_slot_count: z.number({ message: "Must be a number" }).int().min(1, "Must be ≥ 1"),
     beam_generator_lv: z.number({ message: "Must be a number" }).int().nonnegative("Must be ≥ 0"),
     flavor_text: z.string().nullable().optional(),
+    is_trainer: z.boolean(),
+    // 空文字は「配らない」。送信時に null にする
+    starter_faction: z.enum(["", "FEDERATION", "ZEON"]),
     specs: z.object({
       max_hp: z.number({ message: "Must be a number" }).int().positive("Must be > 0"),
       armor: z.number({ message: "Must be a number" }).int().nonnegative(),
@@ -72,6 +75,13 @@ export const masterMobileSuitSchema = z
     blueprint: blueprintFormSchema,
   })
   .superRefine((data, ctx) => {
+    if (data.starter_faction && !data.is_trainer) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Only trainers can be distributed at pilot registration",
+        path: ["starter_faction"],
+      });
+    }
     if (data.specs.weapons.length > data.weapon_slot_count) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -93,6 +103,12 @@ export const masterMobileSuitSchema = z
 
 export type MobileSuitFormValues = z.infer<typeof masterMobileSuitSchema>;
 
+/** 送信する値。練習機は設計図を持たないため blueprint を送らない */
+export type MobileSuitSubmitValues = Omit<MobileSuitFormValues, "starter_faction" | "blueprint"> & {
+  starter_faction: StarterFaction | null;
+  blueprint?: MobileSuitFormValues["blueprint"];
+};
+
 // ============================================================
 // コンポーネント
 // ============================================================
@@ -102,7 +118,7 @@ interface MobileSuitEditFormProps {
   initialData: MasterMobileSuit | null;
   /** idフィールドを編集不可にする（既存機体の更新時） */
   lockId?: boolean;
-  onSubmit: (values: MobileSuitFormValues) => Promise<void>;
+  onSubmit: (values: MobileSuitSubmitValues) => Promise<void>;
   onCancel: () => void;
   isSubmitting?: boolean;
 }
@@ -133,6 +149,8 @@ const defaultValues: MobileSuitFormValues = {
   weapon_slot_count: 1,
   beam_generator_lv: 0,
   flavor_text: "",
+  is_trainer: false,
+  starter_faction: "",
   specs: {
     max_hp: 800,
     armor: 50,
@@ -166,6 +184,8 @@ function toFormValues(ms: MasterMobileSuit): MobileSuitFormValues {
     weapon_slot_count: ms.weapon_slot_count ?? 1,
     beam_generator_lv: ms.beam_generator_lv ?? 0,
     flavor_text: ms.flavor_text ?? "",
+    is_trainer: ms.is_trainer,
+    starter_faction: ms.starter_faction ?? "",
     specs: {
       max_hp: ms.specs.max_hp,
       armor: ms.specs.armor,
@@ -245,6 +265,7 @@ export default function MobileSuitEditForm({
 
   const { fields, append, remove } = useFieldArray({ control, name: "specs.weapons" });
   const price = watch("price");
+  const isTrainer = watch("is_trainer");
 
   useEffect(() => {
     reset(initialData ? toFormValues(initialData) : defaultValues);
@@ -259,6 +280,8 @@ export default function MobileSuitEditForm({
     return onSubmit({
       ...values,
       flavor_text: trimmedFlavorText ? trimmedFlavorText : null,
+      starter_faction: values.starter_faction || null,
+      blueprint: values.is_trainer ? undefined : values.blueprint,
     });
   }
 
@@ -543,27 +566,71 @@ export default function MobileSuitEditForm({
         />
       </div>
 
-      {/* 設計図 */}
+      {/* 練習機 */}
       <div>
-        <p className={sectionTitle}>設計図</p>
-        <Controller
-          control={control}
-          name="blueprint.tech_requirements"
-          render={({ field }) => (
-            <BlueprintSettingsFields
-              standardIssueField={register("blueprint.is_standard_issue")}
-              creditValueField={register("blueprint.duplicate_credit_value", nullableNumberOptions)}
-              creditValueError={errors.blueprint?.duplicate_credit_value?.message}
-              defaultCreditValue={
-                initialData ? null : defaultBlueprintSettings(Number.isFinite(price) ? price : 0).duplicate_credit_value
-              }
-              techRequirements={field.value}
-              onTechRequirementsChange={field.onChange}
-              techRequirementsError={firstErrorMessage(errors.blueprint?.tech_requirements)}
+        <p className={sectionTitle}>練習機（初期支給機体）</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="is_trainer"
+              {...register("is_trainer")}
+              disabled={lockId}
+              className="accent-[#00ff41] disabled:opacity-50"
             />
-          )}
-        />
+            <label htmlFor="is_trainer" className="text-xs text-[#00ff41]/80">
+              練習機にする
+            </label>
+          </div>
+          <div>
+            <Label>パイロット登録時に配る勢力</Label>
+            <Controller
+              control={control}
+              name="starter_faction"
+              render={({ field }) => (
+                <select
+                  {...field}
+                  disabled={!isTrainer}
+                  className={`${inputCls} bg-[#0a0a0a] disabled:opacity-50`}
+                >
+                  <option value="">— 配らない —</option>
+                  <option value="FEDERATION">FEDERATION</option>
+                  <option value="ZEON">ZEON</option>
+                </select>
+              )}
+            />
+            <FieldError msg={errors.starter_faction?.message} />
+          </div>
+        </div>
+        <p className="mt-1 text-xs text-[#00ff41]/40">
+          練習機はショップに並ばず、設計図を持たない。練習機かどうかは作成後に変更できない。
+          配る勢力を設定すると、その勢力に配っていた練習機の設定は外れる
+        </p>
       </div>
+
+      {/* 設計図 */}
+      {!isTrainer && (
+        <div>
+          <p className={sectionTitle}>設計図</p>
+          <Controller
+            control={control}
+            name="blueprint.tech_requirements"
+            render={({ field }) => (
+              <BlueprintSettingsFields
+                standardIssueField={register("blueprint.is_standard_issue")}
+                creditValueField={register("blueprint.duplicate_credit_value", nullableNumberOptions)}
+                creditValueError={errors.blueprint?.duplicate_credit_value?.message}
+                defaultCreditValue={
+                  initialData ? null : defaultBlueprintSettings(Number.isFinite(price) ? price : 0).duplicate_credit_value
+                }
+                techRequirements={field.value}
+                onTechRequirementsChange={field.onChange}
+                techRequirementsError={firstErrorMessage(errors.blueprint?.tech_requirements)}
+              />
+            )}
+          />
+        </div>
+      )}
 
       {/* ボタン */}
       <div className="flex gap-3 pt-2">

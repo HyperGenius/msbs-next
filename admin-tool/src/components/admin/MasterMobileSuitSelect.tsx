@@ -15,13 +15,21 @@ interface MasterMobileSuitSelectProps {
   buttonLabel: string;
   onApply: (master: MasterMobileSuit) => void | Promise<void>;
   disabled?: boolean;
+  /** 選択肢に出す機体マスターを絞り込む */
+  filter?: (master: MasterMobileSuit) => boolean;
 }
 
 /** 機体マスターをプルダウンで選び、ボタン押下で呼び出し元へ渡す */
-export default function MasterMobileSuitSelect({ buttonLabel, onApply, disabled = false }: MasterMobileSuitSelectProps) {
+export default function MasterMobileSuitSelect({
+  buttonLabel,
+  onApply,
+  disabled = false,
+  filter,
+}: MasterMobileSuitSelectProps) {
   const { mobileSuits, isLoading, isError } = useAdminMobileSuits();
   const [selectedId, setSelectedId] = useState("");
-  const selected = mobileSuits?.find((ms) => ms.id === selectedId);
+  const options = filter ? (mobileSuits ?? []).filter(filter) : (mobileSuits ?? []);
+  const selected = options.find((ms) => ms.id === selectedId);
 
   return (
     <div className="flex gap-2">
@@ -34,7 +42,7 @@ export default function MasterMobileSuitSelect({ buttonLabel, onApply, disabled 
         <option value="">
           {isLoading ? "読み込み中..." : isError ? "機体マスターを取得できません" : "機体マスターを選択"}
         </option>
-        {(mobileSuits ?? []).map((ms) => (
+        {options.map((ms) => (
           <option key={ms.id} value={ms.id}>
             {masterMobileSuitLabel(ms)}
           </option>

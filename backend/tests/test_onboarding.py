@@ -3,10 +3,10 @@
 import uuid
 
 from fastapi import status
+from sqlmodel import select
 
 from app.core.auth import get_current_user
-from app.core.gamedata import STARTER_KITS
-from app.models.models import MobileSuit, Pilot
+from app.models.models import MasterMobileSuit, MobileSuit, Pilot
 from main import app
 
 # テスト用の有効なリクエストボディのベース
@@ -91,8 +91,10 @@ def test_register_pilot_zeon_success(client, session):
         ms = session.get(MobileSuit, ms_id)
         assert ms is not None
         assert "Zaku II Trainer" in ms.name
-        assert ms.max_en == STARTER_KITS["ZEON"]["specs"]["max_en"]
-        assert ms.en_recovery == STARTER_KITS["ZEON"]["specs"]["en_recovery"]
+        trainer = session.get(MasterMobileSuit, "zaku_ii_trainer")
+        assert ms.master_mobile_suit_id == trainer.id
+        assert ms.max_en == trainer.specs["max_en"]
+        assert ms.en_recovery == trainer.specs["en_recovery"]
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 
@@ -281,5 +283,35 @@ def test_register_pilot_negative_bonus(client, session):
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "non-negative" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_register_pilot_without_starter_kit_creates_nothing(client, session):
+    """勢力に配る練習機が未設定なら、パイロットも機体も作らずにエラーにする."""
+    test_user_id = "test_register_no_trainer"
+    trainer = session.get(MasterMobileSuit, "gm_trainer")
+    trainer.starter_faction = None
+    session.add(trainer)
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        response = client.post(
+            "/api/pilots/register",
+            json={"name": "No Trainer", **_BASE_REGISTER_BODY},
+        )
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "Starter kit not found" in response.json()["detail"]
+        assert (
+            session.exec(select(Pilot).where(Pilot.user_id == test_user_id)).first()
+            is None
+        )
+        assert (
+            session.exec(
+                select(MobileSuit).where(MobileSuit.user_id == test_user_id)
+            ).first()
+            is None
+        )
     finally:
         app.dependency_overrides.pop(get_current_user, None)

@@ -71,7 +71,7 @@ player_blueprints (所持設計図)
 対象外:
 
 * NPC・エース機（`user_id` が `NULL`、または `pilots.is_npc = true` のユーザーが所有）
-* 練習機（`STARTER_KITS`）。機体マスターに存在しないため
+* 練習機（`STARTER_KITS`）。機体マスターに存在しないため（Issue #680 で機体マスターに移したが、練習機は設計図マスターを持たないため引き続き対象外）
 * 改名した機体のうち `master_mobile_suit_id` が `NULL` のもの。機体名で機体マスターを引けないため
 
 あわせて、ショップ購入時（`POST /api/shop/purchase/{item_id}`）に `MobileSuit.master_mobile_suit_id` を設定するよう修正した。

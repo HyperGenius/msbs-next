@@ -166,8 +166,12 @@ def _raw_to_entry(raw: dict) -> MasterMobileSuitEntry:
         weapon_slot_count=raw.get("weapon_slot_count", 1),
         beam_generator_lv=raw.get("beam_generator_lv", 0),
         flavor_text=raw.get("flavor_text"),
+        is_trainer=raw.get("is_trainer", False),
+        starter_faction=raw.get("starter_faction"),
         specs=specs,
-        blueprint=MasterBlueprintSettings(**raw["blueprint"]),
+        blueprint=MasterBlueprintSettings(**raw["blueprint"])
+        if raw["blueprint"]
+        else None,
     )
 
 

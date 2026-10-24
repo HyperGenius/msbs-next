@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       master_ids:
-        description: "対象の機体マスターID・練習機ID（カンマ区切り。空なら全件）"
+        description: "対象の機体マスターID（練習機を含む。カンマ区切り。空なら全件）"
         type: string
         default: ""
       include_npc:

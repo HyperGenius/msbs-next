@@ -129,7 +129,7 @@ python scripts/maintenance/sync_mobile_suit_en.py --apply
 
 - 同期先ごとに、更新する行数と「機体マスターID / フィールド: 変更前 → 変更後 (件数)」を表示します。
 - 何度実行しても結果は同じです。同期済みなら「変更なし」と表示します。
-- コピー元は `master_mobile_suit_id` → 機体名が一致する機体マスター → 機体名が一致する練習機（`STARTER_KITS`）の順に引きます。機体名を変えた機体は、`master_mobile_suit_id` が無いと対象外です。
+- コピー元は `master_mobile_suit_id` → 機体名が一致する機体マスターの順に引きます。練習機も機体マスターにあります（Issue #680）。機体名を変えた機体は、`master_mobile_suit_id` が無いと対象外です。
 - エース機（`ace_pilots`）は対象外です。エース専用の EN は管理画面で設定してください。
 - バトルエントリー済みの機体は、エントリー時のスナップショット（`mobile_suit_snapshot`）で戦うため、次のエントリーから反映されます。
 
@@ -234,6 +234,47 @@ python scripts/maintenance/backfill_weapon_power_bonus.py --apply
 - 購入した武器のスロットの差が 0 なのは、resync で加算が消えたためです。書き込むと resync でこのスロットに加算を戻します。
 - 「※差がスロット間で揃っていません」と出た機体は、武器マスターの威力を後から変えた可能性があります。差の最大値を加算値にしているので、必要なら管理画面などで直してください。
 - 対象は `weapon_power_bonus` が 0 のプレイヤー機体だけです。2回目以降の実行では、設定済みの機体は表示されません。
+
+---
+
+# backfill_trainer_master_id.py
+
+所持している練習機の `mobile_suits.master_mobile_suit_id` に、練習機の機体マスターIDを設定するスクリプトです（Issue #680）。
+マイグレーション `r3f4a5b6c7d8`（練習機を機体マスターへ投入）を当てたあと、1回だけ実行します。
+詳細は `docs/features/admin-mobile-suits.md` の「練習機（初期支給機体）」を参照してください。
+
+> ⚠️ `--apply` を付けると実DB（Neon）へ書き込みます。本番に対しては、読み取りのみの実行結果を確認・承認してから実行してください。
+
+## 使い方
+
+```bash
+cd backend
+
+# 設定する件数を表示するだけ（書き込まない）
+python scripts/maintenance/backfill_trainer_master_id.py
+
+# 書き込む（確認プロンプトあり）
+python scripts/maintenance/backfill_trainer_master_id.py --apply
+```
+
+## オプション
+
+| オプション | 説明 |
+|---|---|
+| `--apply` | 書き込む。付けなければ件数の表示のみ |
+| `--yes` / `-y` | `--apply` の確認プロンプトを省く |
+
+## 出力の読み方
+
+```
+== mobile_suits.master_mobile_suit_id（3 行）
+  MS-06T Zaku II Trainer: NULL → zaku_ii_trainer (2件)
+  RGM-79T GM Trainer: NULL → gm_trainer (1件)
+```
+
+- 対象は `master_mobile_suit_id` が NULL で、機体名が練習機の機体マスターと一致する機体です。機体名を変えた練習機は対象外です。
+- `user_id` が NULL の機体（マッチング時に作られるエース機のコピーなど）は対象外です。
+- 何度実行しても結果は同じです。設定済みなら「変更なし」と表示します。
 
 ---
 

@@ -74,6 +74,8 @@ const master: MasterMobileSuit = {
   weapon_slot_count: 2,
   beam_generator_lv: 1,
   flavor_text: null,
+  is_trainer: false,
+  starter_faction: null,
   blueprint: { is_standard_issue: true, duplicate_credit_value: 0, tech_requirements: [] },
   specs: {
     max_hp: 1100,

@@ -30,6 +30,8 @@ const validMobileSuit = {
   description: "宇宙世紀を代表するモビルスーツ。",
   weapon_slot_count: 2,
   beam_generator_lv: 1,
+  is_trainer: false,
+  starter_faction: "" as const,
   specs: {
     max_hp: 1000,
     armor: 80,
@@ -310,5 +312,32 @@ describe("masterMobileSuitSchema", () => {
       },
     });
     expect(result.success).toBe(true);
+  });
+
+  it("練習機は配る勢力を設定できる", () => {
+    const result = masterMobileSuitSchema.safeParse({
+      ...validMobileSuit,
+      is_trainer: true,
+      starter_faction: "FEDERATION",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("練習機ではない機体に配る勢力を設定するとエラー", () => {
+    const result = masterMobileSuitSchema.safeParse({
+      ...validMobileSuit,
+      starter_faction: "ZEON",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((i) => i.path.includes("starter_faction"))).toBe(true);
+  });
+
+  it("配る勢力に不正な値を指定するとエラー", () => {
+    const result = masterMobileSuitSchema.safeParse({
+      ...validMobileSuit,
+      is_trainer: true,
+      starter_faction: "NEUTRAL",
+    });
+    expect(result.success).toBe(false);
   });
 });

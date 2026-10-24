@@ -98,7 +98,8 @@ MASTER_DATA_CACHE_TTL_SEC=0 python -m uvicorn main:app
 
 ## 後方互換性
 
-- `backgrounds.json` と `STARTER_KITS` は変更なし（ファイル / ハードコードのまま）
+- `backgrounds.json` は変更なし（ファイルのまま）
+- `STARTER_KITS`（練習機）は当時ハードコードのまま残したが、Issue #680 で `master_mobile_suits` の行（`is_trainer` / `starter_faction`）に移した。詳細は [admin-mobile-suits.md](../features/admin-mobile-suits.md) の「練習機（初期支給機体）」
 - `_get_shop_listings()` / `_get_weapon_shop_listings()` はシグネチャ変更なし
 - `SHOP_LISTINGS` / `WEAPON_SHOP_LISTINGS` 変数は引き続き `_LazyListProxy` で提供
 

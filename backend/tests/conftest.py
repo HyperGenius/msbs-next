@@ -67,12 +67,17 @@ def _seed_master_data(session: Session) -> None:
             faction=item.get("faction", ""),
             description=item["description"],
             flavor_text=item.get("flavor_text"),
+            weapon_slot_count=item.get("weapon_slot_count", 1),
+            is_trainer=item.get("is_trainer", False),
+            starter_faction=item.get("starter_faction"),
             specs=specs,
         )
         session.add(record)
-        BlueprintService.ensure_master_blueprint(
-            session, BlueprintTargetType.MOBILE_SUIT, item["id"], item["price"]
-        )
+        # 練習機は設計図マスターを持たない
+        if not record.is_trainer:
+            BlueprintService.ensure_master_blueprint(
+                session, BlueprintTargetType.MOBILE_SUIT, item["id"], item["price"]
+            )
 
     # --- weapons ---
     weapons_data = json.loads(
