@@ -284,6 +284,9 @@ class BattleSimulator(
         self._threat_repulsion_grid: UnitSpatialGrid | None = None
         # 小隊ごとの前衛。step() の冒頭で毎ステップリセットする。
         self._squad_vanguards: dict[SquadKey, list[MobileSuit]] | None = None
+        # 支援ターゲット選択用の「攻撃者 ID → 攻撃された味方側ユニット ID」の
+        # ステップ内キャッシュ。(計算時点の _step_count, 集計結果)
+        self._attack_victims_cache: tuple[int, dict[str, str]] | None = None
         # _select_target_fuzzy() のステップ内キャッシュ（Issue #454）。
         # unit_id → (計算時点の _step_count, 選択結果)。ステップが変わるか、
         # キャッシュ対象のターゲットが撃破された場合は再計算する
@@ -436,6 +439,8 @@ class BattleSimulator(
                 "disengage_cooldown_until": 0.0,  # 次の仕切り直しを始められる時刻 (s)
                 "ranged_preference_until": 0.0,  # 射撃武器を優先する期限の時刻 (s)
                 "last_attack_exchange_at": 0.0,  # 最後に攻撃した・された時刻 (s)
+                "last_attack_target_id": None,  # 最後に攻撃した相手の ID（支援ターゲット選択用）
+                "last_attack_target_at": 0.0,  # 最後に攻撃した時刻 (s)
                 "idle_stalemate_until": 0.0,  # 撃たない膠着とみなし続ける期限の時刻 (s)
                 "knockback": None,  # 鍔迫り合いで受けている押し離し (Knockback)
                 "last_melee_clash_at": None,  # 最後に鍔迫り合いをした時刻 (s)

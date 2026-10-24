@@ -690,6 +690,9 @@ class CombatMixin:
             self.elapsed_time,  # type: ignore[attr-defined]
         )
         actor_resources["last_attack_exchange_at"] = self.elapsed_time  # type: ignore[attr-defined]
+        # 支援ターゲット選択が「誰が誰を攻撃したか」を攻撃の記録から引くための値
+        actor_resources["last_attack_target_id"] = str(target.id)
+        actor_resources["last_attack_target_at"] = self.elapsed_time  # type: ignore[attr-defined]
         target_resources["last_attack_exchange_at"] = self.elapsed_time  # type: ignore[attr-defined]
         if damage > 0:
             actor_resources["ranged_preference_until"] = 0.0

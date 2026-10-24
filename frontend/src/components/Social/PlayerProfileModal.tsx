@@ -23,6 +23,8 @@ export default function PlayerProfileModal({
       RANDOM: "ランダム",
       STRONGEST: "強敵優先",
       THREAT: "脅威度優先",
+      SUPPORT: "味方の援護",
+      PROTECT: "護衛",
     }[tactics.priority] || tactics.priority;
 
     const range = {

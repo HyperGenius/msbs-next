@@ -6,17 +6,30 @@
 
 import random
 
+from app.engine.constants import (
+    TACTICS_PRIORITY_SUPPORT,
+    UNIT_ROLE_SNIPER,
+    UNIT_ROLE_SUPPORT,
+)
+
 # --- Personality Types ---
 
 PERSONALITY_TYPES = ["AGGRESSIVE", "CAUTIOUS", "SNIPER"]
 
 
-def build_npc_tactics(personality: str) -> dict[str, str]:
-    """性格に応じた NPC の戦術設定を生成する.
+def build_npc_tactics(personality: str, role: str | None = None) -> dict[str, str]:
+    """性格とロールに応じた NPC の戦術設定を生成する.
+
+    支援・狙撃ロールの NPC は、性格にかかわらず priority を SUPPORT にする
+    （味方を攻撃している敵を優先して撃つ）。
 
     Returns:
         priority と range を持つ戦術設定。未知の性格は SNIPER として扱う。
     """
+    if role in (UNIT_ROLE_SUPPORT, UNIT_ROLE_SNIPER):
+        tactics = build_npc_tactics(personality)
+        tactics["priority"] = TACTICS_PRIORITY_SUPPORT
+        return tactics
     if personality == "AGGRESSIVE":
         return {"priority": random.choice(["CLOSEST", "WEAKEST"]), "range": "MELEE"}
     if personality == "CAUTIOUS":
