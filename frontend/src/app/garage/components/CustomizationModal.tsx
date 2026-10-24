@@ -17,7 +17,7 @@ interface FormData {
   armor: number;
   mobility: number;
   tactics: {
-    priority: "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT";
+    priority: "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT" | "SUPPORT" | "PROTECT";
     range: "MELEE" | "RANGED" | "BALANCED" | "FLEE";
     weapon_switch_policy: "NEVER" | "RACK_ONLY" | "BALANCED" | "AGGRESSIVE";
   };

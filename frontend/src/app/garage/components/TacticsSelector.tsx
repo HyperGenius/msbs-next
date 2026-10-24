@@ -4,7 +4,7 @@
 import { SciFiSelect } from "@/components/ui";
 
 interface TacticsData {
-  priority: "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT";
+  priority: "CLOSEST" | "WEAKEST" | "RANDOM" | "STRONGEST" | "THREAT" | "SUPPORT" | "PROTECT";
   range: "MELEE" | "RANGED" | "BALANCED" | "FLEE";
   // 武装持ち替えポリシー (Issue #506)。バックエンドの tactics dict とキー名を揃える
   weapon_switch_policy: "NEVER" | "RACK_ONLY" | "BALANCED" | "AGGRESSIVE";
@@ -20,6 +20,8 @@ const PRIORITY_OPTIONS = [
   { value: "WEAKEST", label: "WEAKEST - HP最小の敵", description: "残りHPが最も少ない敵を狙い、撃破を優先します" },
   { value: "STRONGEST", label: "STRONGEST - 強敵優先 (戦略価値)", description: "戦略価値の高い敵を優先して狙います" },
   { value: "THREAT", label: "THREAT - 脅威度優先", description: "こちらへの脅威が最も大きい敵を狙います" },
+  { value: "SUPPORT", label: "SUPPORT - 味方の援護", description: "味方を攻撃している敵を優先して狙います。該当する敵がいなければ通常どおり選びます" },
+  { value: "PROTECT", label: "PROTECT - 護衛", description: "撤退する護衛対象を攻撃している敵を優先して狙います。護衛対象がいない戦場では SUPPORT と同じです" },
   { value: "RANDOM", label: "RANDOM - ランダム選択", description: "狙う敵を無作為に選びます" },
 ];
 

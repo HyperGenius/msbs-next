@@ -464,6 +464,8 @@ class ActionHandlerMixin:
             "STRONGEST": "高脅威ターゲット優先",
             "THREAT": "最大脅威優先",
             "RANDOM": "ランダム選択",
+            "SUPPORT": "味方の援護",
+            "PROTECT": "護衛",
             "FUZZY": "ファジィ推論",
         }
         actor_name = self._format_actor_name(actor)  # type: ignore[attr-defined]
@@ -499,6 +501,12 @@ class ActionHandlerMixin:
             )
         elif reason == "RANDOM":
             message = f"{actor_name}はランダムに{target.name}をターゲットに選択した"
+        elif reason in ("SUPPORT", "PROTECT"):
+            verb = "味方を援護する" if reason == "SUPPORT" else "護衛対象を守る"
+            message = (
+                f"{actor_name}は{verb}ため、味方を攻撃している"
+                f"{target.name}をターゲットに切り替えた（{details}）"
+            )
         elif reason == "FUZZY":
             message = (
                 f"{actor_name}は[{label}]で{target.name}を最優先ターゲットに決定"

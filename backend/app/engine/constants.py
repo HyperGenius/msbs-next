@@ -94,7 +94,22 @@ WEAPON_SWITCH_POLICIES = (
 )
 
 # 戦術設定の許容値 (tactics["priority"] / tactics["range"])
-TACTICS_PRIORITIES = ("CLOSEST", "WEAKEST", "RANDOM", "STRONGEST", "THREAT")
+TACTICS_PRIORITIES = (
+    "CLOSEST",
+    "WEAKEST",
+    "RANDOM",
+    "STRONGEST",
+    "THREAT",
+    "SUPPORT",
+    "PROTECT",
+)
+# 味方への脅威を重んじる priority（`TargetingMixin` の支援ターゲット選択）
+TACTICS_PRIORITY_SUPPORT = "SUPPORT"
+TACTICS_PRIORITY_PROTECT = "PROTECT"
+# 支援ターゲット選択: 味方を攻撃した敵として扱う、直近の攻撃からの経過時間 (s)。値は暫定。
+SUPPORT_THREAT_WINDOW_SEC: float = 5.0
+# 支援ターゲット選択: 味方を攻撃した敵のファジィ優先度スコアに足す値（スコアは 0〜1）。値は暫定。
+SUPPORT_TARGET_SCORE_BONUS: float = 0.4
 TACTICS_RANGES = ("MELEE", "RANGED", "BALANCED", "FLEE")
 
 # 持ち替え行動不能タイムの基礎値（秒）。REF ステータスで短縮される
