@@ -10,7 +10,14 @@ from sqlalchemy.engine import make_url
 from sqlmodel import Session, select
 
 import app.db as app_db
-from app.models.models import MobileSuit, Pilot, PlayerWeapon, Vector3, Weapon
+from app.models.models import (
+    Mission,
+    MobileSuit,
+    Pilot,
+    PlayerWeapon,
+    Vector3,
+    Weapon,
+)
 from app.services.matching_service import MatchingService
 from scripts.simulation.local_sim import readonly_db
 from scripts.simulation.local_sim.fetch import (
@@ -247,6 +254,118 @@ def test_build_roster_requires_two_entries(session: Session) -> None:
     p1 = _player(session, "user_a")
     with pytest.raises(ValueError, match="2 機以上"):
         build_roster(session, FetchOptions(pilots=[UnitSpec(str(p1.id))]), "solo")
+
+
+# --- 作戦 ---
+
+
+def test_build_roster_with_mission_builder_keeps_players_and_mission(
+    session: Session,
+) -> None:
+    """リポジトリの作戦の定義を保存し、プレイヤー機1機でも作れること。環境は作戦の環境."""
+    p1 = _player(session, "user_a")
+    p2 = _player(session, "user_b", suit_name="Gouf")
+
+    roster = build_roster(
+        session,
+        FetchOptions(pilots=[UnitSpec(str(p1.id))], mission_builder="retreat_support"),
+        "retreat",
+    )
+    assert [e.source.kind for e in roster.entries] == ["pilot"]
+    assert roster.mission is not None
+    assert (roster.mission.source, roster.mission.builder) == (
+        "builder",
+        "retreat_support",
+    )
+    assert roster.mission.master["id"] == 4
+    assert len(roster.mission.master["allies_config"]) == 3
+    assert roster.conditions.environment == "SPACE"
+
+    # 2機目以降もチームを付けずに入れる（run で先頭のプレイヤー機のチームに入る）。
+    two = build_roster(
+        session,
+        FetchOptions(
+            pilots=[UnitSpec(str(p1.id)), UnitSpec(str(p2.id))],
+            mission_builder="retreat_support",
+        ),
+        "retreat2",
+    )
+    assert [e.snapshot.get("team_id") for e in two.entries] == [None, None]
+
+
+def test_build_roster_reads_production_mission(session: Session) -> None:
+    """本番の作戦マスターを読み、戦域が無ければ作戦の環境を使うこと."""
+    p1 = _player(session, "user_a")
+    session.add(
+        Mission(
+            id=9,
+            name="森の作戦",
+            environment="FOREST",
+            enemy_config={"enemies": [{"name": "ザクII"}]},
+        )
+    )
+    session.commit()
+
+    roster = build_roster(
+        session, FetchOptions(pilots=[UnitSpec(str(p1.id))], mission_id=9), "forest"
+    )
+    assert roster.mission is not None
+    assert roster.mission.source == "production"
+    assert roster.mission.master["name"] == "森の作戦"
+    assert roster.mission.master["enemy_config"] == {"enemies": [{"name": "ザクII"}]}
+    assert roster.conditions.theater_id is None
+    assert roster.conditions.environment == "FOREST"
+    assert roster.conditions.environment_name == "森林"
+
+    with pytest.raises(ValueError, match="作戦 99"):
+        build_roster(
+            session, FetchOptions(pilots=[UnitSpec(str(p1.id))], mission_id=99), "x"
+        )
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        (FetchOptions(npc_count=1, mission_builder="retreat_support"), "--npc"),
+        (FetchOptions(ace_count=1, mission_builder="retreat_support"), "--ace"),
+        (
+            FetchOptions(
+                mobile_suits=[UnitSpec("x", team="A")],
+                mission_builder="retreat_support",
+            ),
+            "チーム",
+        ),
+        (FetchOptions(mission_builder="no_such"), "no_such"),
+        (FetchOptions(mission_id=4, mission_builder="retreat_support"), "併用"),
+        (FetchOptions(mission_builder="retreat_support"), "1 機以上"),
+    ],
+)
+def test_build_roster_rejects_invalid_mission_options(
+    session: Session, options: FetchOptions, message: str
+) -> None:
+    """作戦では NPC・エース・チームを指定できず、プレイヤー機が1機は要ること."""
+    with pytest.raises(ValueError, match=message):
+        build_roster(session, options, "invalid")
+
+
+def test_roster_v1_without_mission_still_loads(tmp_path) -> None:
+    """作戦を足す前（schema_version 1）のロスターも、作戦なしとして読めること."""
+    path = tmp_path / "old.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "name": "old",
+                "fetched_at": "2026-10-05T12:00:00Z",
+                "conditions": {},
+                "entries": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    roster = load_roster(str(path))
+    assert roster.schema_version == 1
+    assert roster.mission is None
 
 
 # --- 戦域条件 ---

@@ -86,7 +86,7 @@ blueprint  → shop
 admin      → weapon
 theater    → (なし)
 mission    → geometry, theater
-localSim   → geometry, mobileSuit, battleCore
+localSim   → geometry, mobileSuit, battleCore, mission
 ```
 
 ---

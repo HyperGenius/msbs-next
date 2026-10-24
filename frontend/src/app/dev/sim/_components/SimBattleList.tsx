@@ -1,7 +1,13 @@
 /* frontend/src/app/dev/sim/_components/SimBattleList.tsx */
 "use client";
 
-import { LocalSimBattleSummary } from "@/types/battle";
+import { LocalSimBattleSummary, LocalSimWinLoss } from "@/types/battle";
+
+const WIN_LOSS_CLASS: Record<LocalSimWinLoss, string> = {
+  WIN: "text-green-300 font-bold",
+  LOSE: "text-red-300 font-bold",
+  DRAW: "text-yellow-300 font-bold",
+};
 
 interface SimBattleListProps {
   battles: LocalSimBattleSummary[];
@@ -30,7 +36,7 @@ export default function SimBattleList({ battles, selectedIndex, onSelect }: SimB
                 }`}
               >
                 <span className="text-gray-400">#{b.index}</span>
-                <span className={b.win_loss === "WIN" ? "text-green-300 font-bold" : "text-red-300 font-bold"}>
+                <span className={WIN_LOSS_CLASS[b.win_loss]}>
                   {b.win_loss}
                 </span>
                 <span className="text-gray-300">

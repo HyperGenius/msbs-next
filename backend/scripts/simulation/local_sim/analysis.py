@@ -22,7 +22,8 @@ from scripts.simulation.sim_report import Report, ReportGenerator
 
 REPORT_FILE = "report.json"
 # 集計の項目や計算を変えたら上げる。古い report.json は読み直さずに作り直す。
-REPORT_SCHEMA_VERSION = 1
+# 2: 引き分けと作戦の集計（objective）を足した。
+REPORT_SCHEMA_VERSION = 2
 # 警告文で、判定する機体が負けた戦闘の勝者をまとめて呼ぶ名前。
 _OPPONENTS_LABEL = "相手側"
 _COMMIT_DIGITS = 7
@@ -35,6 +36,28 @@ class DurationStats(BaseModel):
     avg: float
     min: float
     max: float
+
+
+class ObjectiveStats(BaseModel):
+    """作戦の結果（世代の全戦闘の合計）."""
+
+    mission_name: str | None = None
+    battles: int = Field(description="作戦の結果がある戦闘の数")
+    success: int
+    failure: int
+    draw: int
+    required: int = Field(description="成功に必要な数。0 は達成度を数えない目標")
+    total: int = Field(description="護衛する友軍の数。0 は友軍を数えない目標")
+    progress: int = Field(description="達成した数（離脱した友軍の数）の合計")
+    lost: int = Field(description="撃破された友軍の数の合計")
+    progress_counts: dict[str, int] = Field(
+        description="達成した数 → 戦闘の数。キーは数を文字列にしたもの"
+    )
+
+    @property
+    def success_rate(self) -> float:
+        """作戦の成功率."""
+        return self.success / self.battles if self.battles else 0.0
 
 
 class UnitStats(BaseModel):
@@ -57,6 +80,7 @@ class GenerationReport(BaseModel):
     battles: int
     wins: int
     losses: int
+    draws: int = Field(default=0, description="作戦の引き分け")
     timeouts: int = Field(description="最大ステップ数で打ち切った戦闘の数")
     elapsed_time: DurationStats
     player_kills: int = Field(description="判定する機体の撃墜数の合計")
@@ -66,6 +90,9 @@ class GenerationReport(BaseModel):
     )
     weapon_usage: dict[str, int] = Field(description="武器名ごとの ATTACK の回数")
     units: list[UnitStats] = Field(description="ロスターの順。判定する機体が先頭")
+    objective: ObjectiveStats | None = Field(
+        default=None, description="作戦の結果。作戦の無い世代は null"
+    )
     warnings: list[str]
 
     @property
@@ -124,9 +151,11 @@ class GenerationAnalyzer:
         self._log_report = Report(file_count=0, total_rounds=0)
         self._durations: list[float] = []
         self._wins = 0
+        self._draws = 0
         self._timeouts = 0
         self._player_kills = 0
         self._units: dict[str, UnitStats] = {}
+        self._objective: ObjectiveStats | None = None
 
     def add(self, record: BattleRecord) -> None:
         """1戦分を積算する."""
@@ -135,8 +164,11 @@ class GenerationAnalyzer:
         )
         self._durations.append(record.elapsed_time)
         self._wins += record.win_loss == "WIN"
+        self._draws += record.win_loss == "DRAW"
         self._timeouts += record.timed_out
         self._player_kills += record.kills
+        if record.objective_status is not None:
+            self._add_objective(record)
 
         player_id = str(record.player_info.get("id"))
         for info in [record.player_info, *record.enemies_info]:
@@ -159,16 +191,54 @@ class GenerationAnalyzer:
             if victim in self._units:
                 self._units[victim].deaths += 1
 
+    def _add_objective(self, record: BattleRecord) -> None:
+        detail = record.objective_detail or {}
+        stats = self._objective
+        if stats is None:
+            stats = self._objective = ObjectiveStats(
+                mission_name=record.mission_name,
+                battles=0,
+                success=0,
+                failure=0,
+                draw=0,
+                required=record.objective_required or 0,
+                total=int(detail.get("total") or 0),
+                progress=0,
+                lost=0,
+                progress_counts={},
+            )
+        stats.battles += 1
+        stats.success += record.objective_status == "SUCCESS"
+        stats.failure += record.objective_status == "FAILURE"
+        stats.draw += record.objective_status == "DRAW"
+        progress = record.objective_progress or 0
+        stats.progress += progress
+        stats.lost += int(detail.get("lost") or 0)
+        key = str(progress)
+        stats.progress_counts[key] = stats.progress_counts.get(key, 0) + 1
+
     def result(self, generation_id: str) -> GenerationReport:
         """積算した値から集計値を作る."""
         battles = len(self._durations)
-        losses = battles - self._wins
+        losses = battles - self._wins - self._draws
+        objective = self._objective
+        if objective is not None:
+            objective = objective.model_copy(
+                update={
+                    "progress_counts": dict(
+                        sorted(
+                            objective.progress_counts.items(), key=lambda x: int(x[0])
+                        )
+                    )
+                }
+            )
         avg = sum(self._durations) / battles if battles else 0.0
         return GenerationReport(
             generation_id=generation_id,
             battles=battles,
             wins=self._wins,
             losses=losses,
+            draws=self._draws,
             timeouts=self._timeouts,
             elapsed_time=DurationStats(
                 avg=avg,
@@ -184,6 +254,7 @@ class GenerationAnalyzer:
                 sorted(self._log_report.weapon_usage.items(), key=lambda x: -x[1])
             ),
             units=list(self._units.values()),
+            objective=objective,
             # 打ち切りを bench の引き分け（最大ステップ到達）と同じ扱いにする。
             warnings=balance_warnings(
                 rounds=battles,
@@ -284,7 +355,44 @@ def _conditions(manifest: Manifest) -> dict[str, str]:
         "ファジィルール": rules_hash[:_HASH_DIGITS] if rules_hash else "-",
         "戦域": f"{manifest.theater_id or 'なし'} / {manifest.environment}"
         f" / ミノフスキー {manifest.minovsky_density}",
+        "作戦": manifest.mission_name or "なし",
     }
+
+
+def _avg_progress(stats: ObjectiveStats | None) -> float:
+    return stats.progress / stats.battles if stats and stats.battles else 0.0
+
+
+def _avg_lost(stats: ObjectiveStats | None) -> float:
+    return stats.lost / stats.battles if stats and stats.battles else 0.0
+
+
+def _objective_lines(stats: ObjectiveStats) -> list[str]:
+    """作戦の成功率と達成度の表示."""
+    n = stats.battles
+    lines = [
+        f"作戦（{stats.mission_name or '-'}）:",
+        *_table(
+            [
+                ["成功", f"{stats.success} 回", _pct(stats.success_rate)],
+                ["失敗", f"{stats.failure} 回", _pct(_per_battle(stats.failure, n))],
+                ["引き分け", f"{stats.draw} 回", _pct(_per_battle(stats.draw, n))],
+            ]
+        ),
+    ]
+    if stats.total:
+        lines += [
+            f"離脱した友軍: 平均 {_avg_progress(stats):.2f} / {stats.total} 機"
+            f"（成功に必要 {stats.required} 機）"
+            f" / 撃破された友軍: 平均 {_avg_lost(stats):.2f} 機",
+            *_table(
+                [
+                    [f"離脱 {k}/{stats.total}", f"{c} 回", _pct(_per_battle(c, n))]
+                    for k, c in stats.progress_counts.items()
+                ]
+            ),
+        ]
+    return [*lines, ""]
 
 
 def format_report(manifest: Manifest, report: GenerationReport) -> str:
@@ -300,10 +408,22 @@ def format_report(manifest: Manifest, report: GenerationReport) -> str:
             [
                 ["勝ち", f"{report.wins} 回", _pct(report.win_rate)],
                 ["負け", f"{report.losses} 回", _pct(_per_battle(report.losses, n))],
+                *(
+                    [
+                        [
+                            "引き分け",
+                            f"{report.draws} 回",
+                            _pct(_per_battle(report.draws, n)),
+                        ]
+                    ]
+                    if report.draws
+                    else []
+                ),
                 ["打ち切り", f"{report.timeouts} 回", _pct(report.timeout_rate)],
             ]
         ),
         "",
+        *(_objective_lines(report.objective) if report.objective else []),
         f"平均戦闘時間: {report.elapsed_time.avg:.1f}s"
         f" (最短 {report.elapsed_time.min:.1f}s / 最長 {report.elapsed_time.max:.1f}s)",
         f"判定する機体の撃墜数: {_per_battle(report.player_kills, n):.2f} / 戦",
@@ -418,6 +538,33 @@ def format_comparison(
         ["", "A", "B", "差 (B-A)"],
         _diff_row("勝率", ra.win_rate, rb.win_rate, _pct, _signed_pt),
         _diff_row("打ち切り率", ra.timeout_rate, rb.timeout_rate, _pct, _signed_pt),
+    ]
+    if ra.objective or rb.objective:
+        oa, ob = ra.objective, rb.objective
+        rows += [
+            _diff_row(
+                "作戦成功率",
+                oa.success_rate if oa else 0.0,
+                ob.success_rate if ob else 0.0,
+                _pct,
+                _signed_pt,
+            ),
+            _diff_row(
+                "離脱した友軍/戦",
+                _avg_progress(oa),
+                _avg_progress(ob),
+                lambda v: f"{v:.2f}",
+                lambda v: f"{v:+.2f}",
+            ),
+            _diff_row(
+                "撃破された友軍/戦",
+                _avg_lost(oa),
+                _avg_lost(ob),
+                lambda v: f"{v:.2f}",
+                lambda v: f"{v:+.2f}",
+            ),
+        ]
+    rows += [
         _diff_row(
             "平均戦闘時間",
             ra.elapsed_time.avg,

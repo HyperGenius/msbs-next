@@ -424,6 +424,7 @@ def test_objective_fields_include_viewer_data() -> None:
     from app.engine.objectives import ObjectiveResult, ObjectiveStatus
     from app.engine.unit_roles import UnitAssignment
     from app.models.models import RetreatPoint, Vector3
+    from app.services.mission_battle import objective_result_fields
 
     simulator = SimpleNamespace(
         retreat_points=[
@@ -436,7 +437,7 @@ def test_objective_fields_include_viewer_data() -> None:
     )
     result = ObjectiveResult(status=ObjectiveStatus.SUCCESS, progress=2, required=2)
 
-    fields = run_batch._objective_fields(result, simulator)  # type: ignore[arg-type]
+    fields = objective_result_fields(result, simulator)  # type: ignore[arg-type]
     detail = fields["objective_detail"]
     assert detail["retreat_points"] == [
         {"position": {"x": 1.0, "y": 0.0, "z": 2.0}, "radius": 50, "team_id": "PLAYER"}
@@ -445,6 +446,6 @@ def test_objective_fields_include_viewer_data() -> None:
     assert detail["unit_roles"] == {"a": "WITHDRAW"}
 
     # シミュレーターを渡さない・撤退ポイントもロールも無いときは従来どおり
-    assert run_batch._objective_fields(result)["objective_detail"] is None
+    assert objective_result_fields(result)["objective_detail"] is None
     empty = SimpleNamespace(retreat_points=[], unit_assignments={})
-    assert run_batch._objective_fields(result, empty)["objective_detail"] is None  # type: ignore[arg-type]
+    assert objective_result_fields(result, empty)["objective_detail"] is None  # type: ignore[arg-type]

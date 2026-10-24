@@ -11,7 +11,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-ROSTER_SCHEMA_VERSION = 1
+# 2: 作戦（mission）を足した。1 のロスターは作戦なしとして読む。
+ROSTER_SCHEMA_VERSION = 2
 
 # backend/scripts/simulation/local_sim/roster.py から見たリポジトリのルート。
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -21,6 +22,8 @@ ROSTERS_DIR = LOCAL_SIM_DIR / "rosters"
 ROSTER_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 RosterSourceKind = Literal["mobile_suit", "pilot", "npc", "generated_npc", "ace"]
+# 作戦の取得元。production は本番の作戦マスター、builder はリポジトリの定義。
+MissionSourceKind = Literal["production", "builder"]
 
 
 class RosterSource(BaseModel):
@@ -84,6 +87,21 @@ class RosterConditions(BaseModel):
     )
 
 
+class RosterMission(BaseModel):
+    """戦闘に使う作戦マスター."""
+
+    source: MissionSourceKind
+    builder: str | None = Field(
+        default=None,
+        description="source が builder のときの定義の名前（例: retreat_support）",
+    )
+    master: dict[str, Any] = Field(
+        description=(
+            "Mission の model_dump()。手で編集すると、友軍・敵機・ロール・小隊・配置を変えて試せる"
+        )
+    )
+
+
 class Roster(BaseModel):
     """ローカルシミュレーションに参加させる機体と戦域条件."""
 
@@ -95,6 +113,10 @@ class Roster(BaseModel):
     ace_pilots: list[dict[str, Any]] = Field(
         default_factory=list,
         description="参加エースの ace_pilots マスター（created_at / updated_at を除く）",
+    )
+    mission: RosterMission | None = Field(
+        default=None,
+        description="作戦。null なら entries の機体だけで戦う（殲滅戦）",
     )
 
 

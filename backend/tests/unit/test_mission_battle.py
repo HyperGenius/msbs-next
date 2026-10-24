@@ -1,5 +1,7 @@
 """作戦マスターから作戦の戦闘を組み立てる処理のテスト."""
 
+import uuid
+
 import pytest
 from pydantic import ValidationError
 
@@ -344,3 +346,21 @@ def test_retreat_support_battle_runs_and_saves_progress() -> None:
     assert (result.required, result.total) == (2, 3)
     assert 0 <= result.progress <= 3
     assert outcome.player_win == result.is_success
+
+
+def test_unit_id_namespace_fixes_mission_unit_ids() -> None:
+    """名前空間を渡すと友軍・敵機の ID が作戦マスターでの位置で決まり、渡さなければ毎回変わる."""
+    mission = build_retreat_support_mission()
+    namespace = uuid.uuid5(uuid.NAMESPACE_URL, "test")
+
+    def ids(**kwargs) -> list[str]:  # type: ignore[no-untyped-def]
+        player = _player()
+        player.team_id = "player-team"
+        setup = build_mission_battle(mission, [player], BattleConditions(), **kwargs)
+        assert set(setup.unit_assignments) <= {str(u.id) for u in setup.mission_units}
+        return [str(u.id) for u in setup.mission_units]
+
+    fixed = ids(unit_id_namespace=namespace)
+    assert fixed == ids(unit_id_namespace=namespace)
+    assert len(set(fixed)) == len(fixed)
+    assert set(ids()).isdisjoint(ids())

@@ -77,10 +77,36 @@ def test_build_battle_record_rejects_result_without_view_fields() -> None:
         build_battle_record(_result(map_bounds=None), _LOGS, None, None, None)
 
 
-def test_build_battle_record_rejects_draw() -> None:
-    """WIN / LOSE 以外の勝敗は取り込まないこと."""
-    with pytest.raises(ValueError, match="DRAW"):
-        build_battle_record(_result(win_loss="DRAW"), _LOGS, None, None, None)
+def test_build_battle_record_rejects_unknown_win_loss() -> None:
+    """WIN / LOSE / DRAW 以外の勝敗は取り込まないこと."""
+    with pytest.raises(ValueError, match="UNKNOWN"):
+        build_battle_record(_result(win_loss="UNKNOWN"), _LOGS, None, None, None)
+
+
+def test_build_battle_record_keeps_mission_result() -> None:
+    """作戦ルームの結果は、引き分けと作戦の結果も取り込むこと."""
+    detail = {"total": 3, "lost": 1, "retreat_points": [], "unit_roles": {}}
+    record = build_battle_record(
+        _result(
+            win_loss="DRAW",
+            mission_id=4,
+            objective_status="DRAW",
+            objective_progress=1,
+            objective_required=2,
+            objective_detail=detail,
+        ),
+        _LOGS,
+        None,
+        None,
+        None,
+        mission_name="撤退支援",
+    )
+
+    assert record.win_loss == "DRAW"
+    assert (record.mission_id, record.mission_name) == (4, "撤退支援")
+    assert (record.objective_status, record.objective_progress) == ("DRAW", 1)
+    assert record.objective_required == 2
+    assert record.objective_detail == detail
 
 
 def test_find_battle_result_by_result_id(session: Session) -> None:

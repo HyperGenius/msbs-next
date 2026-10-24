@@ -19,7 +19,8 @@ from scripts.simulation.local_sim.roster import (
     ROSTER_NAME_PATTERN,
 )
 
-GENERATION_SCHEMA_VERSION = 1
+# 2: 作戦の結果（DRAW と objective_*）を足した。1 の世代もそのまま読める。
+GENERATION_SCHEMA_VERSION = 2
 GENERATIONS_DIR = LOCAL_SIM_DIR / "generations"
 MANIFEST_FILE = "manifest.json"
 ROSTER_FILE = "roster.json"
@@ -29,7 +30,8 @@ GENERATION_TIME_FORMAT = "%Y%m%d-%H%M%S"
 # 書き込み中の世代はこの接頭辞の一時ディレクトリに置く。一覧と世代管理の対象外。
 _TMP_PREFIX = ".tmp-"
 
-WinLoss = Literal["WIN", "LOSE"]
+# DRAW は作戦の引き分け。作戦の無い戦闘は WIN / LOSE だけ。
+WinLoss = Literal["WIN", "LOSE", "DRAW"]
 # 世代の出どころ。local は `run` で実行した世代、production は `fetch-log` で本番から取得した世代。
 GenerationSource = Literal["local", "production"]
 
@@ -64,17 +66,18 @@ class GenerationSummary(BaseModel):
     battles: int
     wins: int
     losses: int
+    draws: int = Field(default=0, description="作戦の引き分け。古い世代には無い")
     timeouts: int
     total_kills: int
 
     @classmethod
     def of(cls, battles: list[BattleSummary]) -> "GenerationSummary":
         """戦闘ごとの勝敗を集計する."""
-        wins = sum(1 for b in battles if b.win_loss == "WIN")
         return cls(
             battles=len(battles),
-            wins=wins,
-            losses=len(battles) - wins,
+            wins=sum(1 for b in battles if b.win_loss == "WIN"),
+            losses=sum(1 for b in battles if b.win_loss == "LOSE"),
+            draws=sum(1 for b in battles if b.win_loss == "DRAW"),
             timeouts=sum(1 for b in battles if b.timed_out),
             total_kills=sum(b.kills for b in battles),
         )
@@ -117,6 +120,10 @@ class Manifest(BaseModel):
     theater_id: str | None = None
     environment: str
     minovsky_density: float
+    mission_id: int | None = Field(
+        default=None, description="作戦の ID。作戦なしは null"
+    )
+    mission_name: str | None = None
     summary: GenerationSummary
     battles: list[BattleSummary]
 
@@ -153,6 +160,20 @@ class BattleRecord(BaseModel):
     part_hit_summary: dict[str, Any] | None = None
     weapon_accuracy_summary: list[dict[str, Any]] | None = None
     detection_summary: dict[str, Any] | None = None
+    # 作戦の結果。作戦の無い戦闘と、項目を足す前に保存した世代では null。
+    mission_id: int | None = None
+    mission_name: str | None = None
+    objective_status: Literal["SUCCESS", "FAILURE", "DRAW"] | None = None
+    objective_progress: int | None = Field(
+        default=None, description="達成した数（撤退支援なら離脱した友軍の数）"
+    )
+    objective_required: int | None = Field(
+        default=None, description="成功に必要な数。0 は達成度を数えない目標"
+    )
+    objective_detail: dict[str, Any] | None = Field(
+        default=None,
+        description="達成度の内訳と、ビューア用の撤退ポイント・ロール（本番と同じ形式）",
+    )
     logs: list[dict[str, Any]] = Field(
         description="BattleLog の一覧。fuzzy_scores などのデバッグ項目を残す"
     )
