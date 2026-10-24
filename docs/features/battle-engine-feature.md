@@ -19,7 +19,7 @@
 |------|------|
 | 進行方式 | ターン制（機動性順にソートしたユニットが順番に行動） |
 | AI意思決定 | ルールベース（`tactics.priority` による固定戦術） |
-| ターゲット選択 | `CLOSEST / WEAKEST / STRONGEST / THREAT / RANDOM` の5択 |
+| ターゲット選択 | `CLOSEST / WEAKEST / STRONGEST / THREAT / RANDOM / SUPPORT / PROTECT` の7択（`SUPPORT` / `PROTECT` は 39 章） |
 | 移動 | 単純な直線移動（ポテンシャルフィールド未実装） |
 | 索敵 | `sensor_range` 内の敵を即時発見（確率要素なし） |
 | 武器選択 | `active_weapon_index` の固定選択 |
@@ -3332,3 +3332,41 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 ### 38.8 テスト
 
 * `backend/tests/unit/test_squad_formation.py`: 陣形の位置（前衛が近いと目標交戦距離・遠いと最小の距離・索敵前は胴体の向きの後方・前衛の接触中は無し・境界の内側・障害物の外）、後衛への力（前に出た後衛を下げる、敵へ向かう成分を消す、詰められたとき・逃走中・攻撃と移動以外・小隊に前衛がいないときは 0、前衛の撃破で同じステップのうちに止める、残った前衛で決め直す、小隊なしでは前衛を解決しない）、戦闘で狙撃機が前衛の後方を保って撃つ、撤退支援の追撃部隊の小隊の組み
+
+## 39. 支援ターゲット選択 SUPPORT / PROTECT（Epic #682 Sub-Issue 7）
+
+味方を攻撃している敵を優先して狙う戦術 `priority`。狙撃機が前衛と交戦している敵を撃つ形や、撤退支援で護衛対象を狙う敵を撃つ形を作る。実装は `backend/app/engine/targeting.py` の `TargetingMixin`。
+
+### 39.1 仕様
+
+| priority | 優先する敵 |
+|---|---|
+| `SUPPORT` | 同じ小隊（小隊がなければ同じチーム）の味方を、直近に攻撃した敵 |
+| `PROTECT` | 撤退ロール（`WITHDRAW`）の味方を、直近に攻撃した敵。撤退ロールの味方がいない戦場では `SUPPORT` と同じ |
+
+* 候補は自チームが索敵済みの敵だけ。見えていない敵の攻撃は使わない
+* 該当する敵がいなければ、通常の選び方（レガシー実装は `CLOSEST`、ファジィ推論はそのままのスコア）に戻る
+* ファジィ推論では、推論したスコア（0〜1）に `SUPPORT_TARGET_SCORE_BONUS`（0.4）を足してから最大の敵を選ぶ。距離や HP の評価は残るので、遠すぎる敵が無条件に選ばれることはない
+
+### 39.2 「誰が誰を狙っているか」の決め方
+
+敵の内部状態（ターゲット選択の結果）は読まない。攻撃の記録だけを使う。`_record_attack_exchange()` が `unit_resources` に `last_attack_target_id` / `last_attack_target_at` を書き、`SUPPORT_THREAT_WINDOW_SEC`（5 秒）以内の攻撃を「味方を攻撃している」とみなす。バトルログに出る攻撃から分かる情報だけで決まるため、プレイヤーにも同じ判断ができる。
+
+集計（攻撃した機体 → 攻撃された機体）は `_recent_attack_victims()` がステップごとに一度だけ行う（`_attack_victims_cache`）。ファジィのターゲット選択キャッシュ（Issue #454）は変えていない。攻撃の記録はステップ内で変わるが、集計はそのステップで最初に使われた時点の値を使い回す。
+
+### 39.3 NPC とプレイヤー
+
+* `build_npc_tactics(personality, role)`: 支援・狙撃ロールの NPC は `priority` が `SUPPORT` になる
+* 作戦の機体（`build_mission_unit()`）も、`SUPPORT` / `SNIPER` ロールなら `priority` が `SUPPORT` になる
+* プレイヤーはガレージの TACTICS タブの選択肢から選べる。機体更新 API の検証（`TACTICS_PRIORITIES`）にも追加した
+* バトルログには「〇〇は味方を援護するため、味方を攻撃している△△をターゲットに切り替えた」と出る（護衛は「護衛対象を守る」）
+
+### 39.4 値と今後
+
+`SUPPORT_THREAT_WINDOW_SEC` と `SUPPORT_TARGET_SCORE_BONUS` は暫定値。総合バランス調整は #587 で行う。射撃武器の射程と、遠くから狙撃して敵の足を止める撤退支援の成立しやすさは、この変更では調整していない。
+
+### 39.5 テスト・計測
+
+* `backend/tests/unit/test_support_targeting.py`: 小隊の前衛を攻撃する敵を優先（レガシー・ファジィ）、`CLOSEST` は影響を受けない、該当なしで元に戻る、古い攻撃は無視、未索敵の敵は候補外、別小隊の味方は対象外、`PROTECT` が撤退ロールを優先・いなければ `SUPPORT` と同じ、バトルログの文言、NPC の戦術、API 検証
+* `engine_ci_smoke.py`: 9 ラウンド完走
+* `sim_scale_bench.py --sizes 50 --steps 50`: 変更前後とも 0.0506 s/step

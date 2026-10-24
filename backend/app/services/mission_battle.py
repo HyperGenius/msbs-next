@@ -8,6 +8,11 @@ import uuid
 from dataclasses import dataclass, replace
 from typing import Any
 
+from app.engine.constants import (
+    TACTICS_PRIORITY_SUPPORT,
+    UNIT_ROLE_SNIPER,
+    UNIT_ROLE_SUPPORT,
+)
 from app.engine.objectives import (
     BattleObjective,
     ObjectiveResult,
@@ -77,6 +82,8 @@ def build_mission_unit(
         ],
         side=side,
     )
+    if config.role in (UNIT_ROLE_SUPPORT, UNIT_ROLE_SNIPER):
+        unit.tactics = {**unit.tactics, "priority": TACTICS_PRIORITY_SUPPORT}
     unit.normalize_parts()
     if unit.current_hp < unit.max_hp:
         _scale_part_hp(unit)

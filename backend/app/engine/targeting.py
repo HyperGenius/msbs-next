@@ -15,6 +15,11 @@ from app.engine.constants import (
     MINOVSKY_DENSE_LOG_THRESHOLD,
     MINOVSKY_FALLOFF_EXPONENT_BONUS,
     MINOVSKY_SENSOR_RANGE_REDUCTION,
+    SUPPORT_TARGET_SCORE_BONUS,
+    SUPPORT_THREAT_WINDOW_SEC,
+    TACTICS_PRIORITY_PROTECT,
+    TACTICS_PRIORITY_SUPPORT,
+    UNIT_ROLE_WITHDRAW,
     WEAPON_SWITCH_BALANCED_SCORE_MARGIN,
     WEAPON_SWITCH_LOCK_BASE_SEC,
     WEAPON_SWITCH_POLICY_AGGRESSIVE,
@@ -52,6 +57,7 @@ class TargetingMixin:
     unit_pilot_stats: dict[str, PilotStats]
     minovsky_density: float
     environment_profile: EnvironmentProfile | None
+    _attack_victims_cache: tuple[int, dict[str, str]] | None
 
     def _detection_phase(self) -> None:
         """索敵フェーズ: 各ユニットが索敵範囲内の敵を発見.
@@ -331,6 +337,80 @@ class TargetingMixin:
                 detected_targets.append(target)
         return detected_targets
 
+    def _recent_attack_victims(self) -> dict[str, str]:
+        """直近に攻撃したユニットごとの、攻撃した相手の ID を返す（ステップ内で一度だけ集計）.
+
+        攻撃の記録（`last_attack_target_id` / `last_attack_target_at`）だけを読む。
+        敵の内部状態（ターゲット選択の結果）は読まないので、バトルログで見える
+        情報だけで決まる。
+
+        Returns:
+            {攻撃したユニットの ID: 攻撃された相手の ID}。`SUPPORT_THREAT_WINDOW_SEC`
+            より前の攻撃と、撃破済みのユニットは含めない。
+        """
+        cached = self._attack_victims_cache
+        if cached is not None and cached[0] == self._step_count:
+            return cached[1]
+        now = self.elapsed_time  # type: ignore[attr-defined]
+        victims: dict[str, str] = {}
+        for unit in self.units:
+            if unit.current_hp <= 0:
+                continue
+            resources = self.unit_resources.get(str(unit.id), {})  # type: ignore[attr-defined]
+            victim_id = resources.get("last_attack_target_id")
+            if (
+                victim_id is not None
+                and now - resources.get("last_attack_target_at", 0.0)
+                <= SUPPORT_THREAT_WINDOW_SEC
+            ):
+                victims[str(unit.id)] = victim_id
+        self._attack_victims_cache = (self._step_count, victims)
+        return victims
+
+    def _supported_unit_ids(self, actor: MobileSuit, priority: str) -> set[str]:
+        """SUPPORT / PROTECT で、actor が守る味方のユニット ID を返す.
+
+        SUPPORT は同じ小隊（小隊がなければ同じチーム）の生存している味方。
+        PROTECT は撤退ロールの味方で、いなければ SUPPORT と同じにする。
+        """
+        squad_id = self.squad_id(actor)  # type: ignore[attr-defined]
+        allies = [
+            u
+            for u in self.units
+            if u is not actor
+            and u.current_hp > 0
+            and u.team_id == actor.team_id
+            and (squad_id is None or self.squad_id(u) == squad_id)  # type: ignore[attr-defined]
+        ]
+        if priority == TACTICS_PRIORITY_PROTECT:
+            escorted = [
+                u
+                for u in self.units
+                if u is not actor
+                and u.current_hp > 0
+                and u.team_id == actor.team_id
+                and self.unit_role(u) == UNIT_ROLE_WITHDRAW  # type: ignore[attr-defined]
+            ]
+            if escorted:
+                allies = escorted
+        return {str(u.id) for u in allies}
+
+    def _support_threat_ids(
+        self, actor: MobileSuit, candidates: list[MobileSuit]
+    ) -> set[str]:
+        """Candidates のうち、actor の守る味方を直近に攻撃した敵の ID を返す.
+
+        actor の priority が SUPPORT / PROTECT でなければ空集合。
+        """
+        priority = (actor.tactics or {}).get("priority")
+        if priority not in (TACTICS_PRIORITY_SUPPORT, TACTICS_PRIORITY_PROTECT):
+            return set()
+        supported = self._supported_unit_ids(actor, priority)
+        if not supported:
+            return set()
+        victims = self._recent_attack_victims()
+        return {str(c.id) for c in candidates if victims.get(str(c.id)) in supported}
+
     def _select_target_legacy(self, actor: MobileSuit) -> MobileSuit | None:
         """ターゲットを選択する（戦術と索敵状態に基づくレガシー実装）.
 
@@ -372,6 +452,23 @@ class TargetingMixin:
             self._log_target_selection(  # type: ignore[attr-defined]
                 actor, target, "THREAT", f"脅威度: {threat_level:.2f}"
             )
+        elif tactics_priority in (TACTICS_PRIORITY_SUPPORT, TACTICS_PRIORITY_PROTECT):
+            # 味方を攻撃している敵のうち最も近い敵。いなければ CLOSEST と同じ
+            threats = self._support_threat_ids(actor, detected_targets)
+            pool = [t for t in detected_targets if str(t.id) in threats]
+            target = min(
+                pool or detected_targets,
+                key=lambda t: np.linalg.norm(t.position.to_numpy() - pos_actor),
+            )
+            distance = np.linalg.norm(target.position.to_numpy() - pos_actor)
+            if pool:
+                self._log_target_selection(  # type: ignore[attr-defined]
+                    actor, target, tactics_priority, f"距離: {int(distance)}m"
+                )
+            else:
+                self._log_target_selection(  # type: ignore[attr-defined]
+                    actor, target, "CLOSEST", f"距離: {int(distance)}m"
+                )
         elif tactics_priority == "RANDOM":
             import random
 
@@ -445,6 +542,7 @@ class TargetingMixin:
             best_score: float = -1.0
             best_fuzzy_scores: dict | None = None
             all_scores: dict[str, float] = {}
+            support_threats = self._support_threat_ids(actor, detected_targets)
 
             for candidate in detected_targets:
                 pos_candidate = candidate.position.to_numpy()
@@ -468,6 +566,8 @@ class TargetingMixin:
 
                 result, debug = target_engine.infer_with_debug(fuzzy_inputs)
                 score = result.get("target_priority", 0.0)
+                if str(candidate.id) in support_threats:
+                    score += SUPPORT_TARGET_SCORE_BONUS
                 all_scores[str(candidate.id)] = score
 
                 if score > best_score:
@@ -503,10 +603,13 @@ class TargetingMixin:
             if best_fuzzy_scores is not None:
                 best_fuzzy_scores["all_scores"] = all_scores
 
+            supporting = str(best_target.id) in support_threats
             self._log_target_selection(  # type: ignore[attr-defined]
                 actor,
                 best_target,
-                "FUZZY",
+                (actor.tactics or {}).get("priority", "FUZZY")
+                if supporting
+                else "FUZZY",
                 f"優先度スコア: {best_score:.3f}",
                 fuzzy_scores=best_fuzzy_scores,
             )

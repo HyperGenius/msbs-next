@@ -44,7 +44,9 @@ export function useGarageEditor() {
         | "WEAKEST"
         | "RANDOM"
         | "STRONGEST"
-        | "THREAT",
+        | "THREAT"
+        | "SUPPORT"
+        | "PROTECT",
       range: "BALANCED" as "MELEE" | "RANGED" | "BALANCED" | "FLEE",
       weapon_switch_policy: "BALANCED" as
         | "NEVER"
