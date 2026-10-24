@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAdminAcePilots } from "@/hooks/useAdminAcePilots";
 import { useAdminNpcs } from "@/hooks/useAdminNpcs";
 import { useAdminPlayerMobileSuits, useAdminPlayers } from "@/hooks/useAdminPlayers";
 import { useAdminTheaters } from "@/hooks/useAdminTheaters";
@@ -15,6 +16,11 @@ const KIND_LABELS: Record<FetchUnitKind, string> = {
   npc: "NPC",
   ms: "機体ID",
 };
+
+/** `--mission-builder` で選べるリポジトリの作戦の定義（backend の MISSION_BUILDERS と同じ） */
+const MISSION_BUILDERS = [{ name: "retreat_support", label: "撤退支援（retreat_support）" }];
+
+type MissionMode = "none" | "builder" | "production";
 
 type RowChange = Partial<Omit<FetchUnitRow, "key" | "kind">>;
 
@@ -117,6 +123,13 @@ export default function LocalSimRosterForm({ rosterNames, disabled, onSubmit }: 
   const [minovsky, setMinovsky] = useState("");
   const [npc, setNpc] = useState("0");
   const [ace, setAce] = useState("0");
+  const [aceIds, setAceIds] = useState<string[]>([]);
+  const [missionMode, setMissionMode] = useState<MissionMode>("none");
+  const [missionId, setMissionId] = useState("");
+  const [missionBuilder, setMissionBuilder] = useState(MISSION_BUILDERS[0].name);
+  const { acePilots, isError: acesError } = useAdminAcePilots();
+  // 作戦では敵機を作戦マスターから出すため、NPC・エース・チームは指定できない（CLI と同じ制約）。
+  const hasMission = missionMode !== "none";
   const [rows, setRows] = useState<FetchUnitRow[]>([]);
   const [nextKey, setNextKey] = useState(1);
   const [message, setMessage] = useState<string | null>(null);
@@ -135,6 +148,14 @@ export default function LocalSimRosterForm({ rosterNames, disabled, onSubmit }: 
   async function handleSubmit() {
     setMessage(null);
     const units = rowsToUnitSpecs(rows);
+    if (hasMission && typeof units !== "string" && units.pilots.length > 0) {
+      setMessage("作戦では NPC のパイロットを指定できません。プレイヤーの機体だけを指定してください。");
+      return;
+    }
+    if (missionMode === "production" && !/^[1-9]\d*$/.test(missionId.trim())) {
+      setMessage("本番の作戦マスターの ID（正の整数）を入れてください。");
+      return;
+    }
     if (typeof units === "string") {
       setMessage(units);
       return;
@@ -145,8 +166,14 @@ export default function LocalSimRosterForm({ rosterNames, disabled, onSubmit }: 
     try {
       await onSubmit({
         ...units,
-        npc: Number(npc) || 0,
-        ace: Number(ace) || 0,
+        // 作戦のときはチームも送らない（作戦では全員同じチーム）。
+        ...(hasMission
+          ? {
+              mobile_suits: units.mobile_suits.map((u) => ({ id: u.id })),
+              mission: missionMode === "production" ? Number(missionId) : null,
+              mission_builder: missionMode === "builder" ? missionBuilder : null,
+            }
+          : { npc: Number(npc) || 0, ace: Number(ace) || 0, ace_ids: aceIds }),
         theater: theater.trim() || null,
         minovsky: minovsky.trim() === "" ? null : Number(minovsky),
         name: rosterName || null,
@@ -201,16 +228,64 @@ export default function LocalSimRosterForm({ rosterNames, disabled, onSubmit }: 
         </label>
         <label className="space-y-1">
           <span>NPC 数（本番の永続化NPC。不足分は生成）</span>
-          <input className={inputClass} type="number" min={0} value={npc} onChange={(e) => setNpc(e.target.value)} disabled={disabled} />
+          <input className={inputClass} type="number" min={0} value={npc} onChange={(e) => setNpc(e.target.value)} disabled={disabled || hasMission} />
         </label>
         <label className="space-y-1">
-          <span>エース数</span>
-          <input className={inputClass} type="number" min={0} value={ace} onChange={(e) => setAce(e.target.value)} disabled={disabled} />
+          <span>エース数（ランダム。下で選んだエースを含む）</span>
+          <input className={inputClass} type="number" min={0} value={ace} onChange={(e) => setAce(e.target.value)} disabled={disabled || hasMission} />
         </label>
+        <label className="space-y-1">
+          <span>作戦</span>
+          <select className={inputClass} value={missionMode} onChange={(e) => setMissionMode(e.target.value as MissionMode)} disabled={disabled}>
+            <option value="none">（作戦なし・通常の対戦）</option>
+            <option value="production">本番の作戦マスター（ID）</option>
+            <option value="builder">リポジトリの定義</option>
+          </select>
+        </label>
+        {missionMode === "production" && (
+          <label className="space-y-1">
+            <span>作戦マスターの ID（missions.id）</span>
+            <input className={inputClass} type="number" min={1} value={missionId} onChange={(e) => setMissionId(e.target.value)} disabled={disabled} />
+          </label>
+        )}
+        {missionMode === "builder" && (
+          <label className="space-y-1">
+            <span>作戦の定義</span>
+            <select className={inputClass} value={missionBuilder} onChange={(e) => setMissionBuilder(e.target.value)} disabled={disabled}>
+              {MISSION_BUILDERS.map((b) => (
+                <option key={b.name} value={b.name}>{b.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
+      {hasMission && (
+        <p className="text-xs text-[#00ff41]/60">
+          作戦では敵機を作戦マスターから出します。NPC・エース・チームは指定できません（プレイヤー機は全員同じチーム）。
+        </p>
+      )}
+
+      <fieldset className="space-y-1" disabled={disabled || hasMission}>
+        <legend>必ず参加させるエース（任意）</legend>
+        {acesError && <p className="text-xs text-red-400">エースの一覧を読めません。</p>}
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {(acePilots ?? []).map((a) => (
+            <label key={a.id} className="flex items-center gap-1 text-xs">
+              <input
+                type="checkbox"
+                checked={aceIds.includes(a.id)}
+                onChange={(e) =>
+                  setAceIds((current) => (e.target.checked ? [...current, a.id] : current.filter((id) => id !== a.id)))
+                }
+              />
+              {a.name}（{a.pilot_name} / {a.id}）
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       <div className="space-y-2">
-        <p>参加機体（チーム名が同じ機体は味方。空欄は個人戦）</p>
+        <p>参加機体（チーム名が同じ機体は味方。空欄は個人戦{hasMission ? "。作戦ではチーム・NPC は指定できません" : ""}）</p>
         {rows.length === 0 && <p className="text-xs text-[#00ff41]/60">参加機体を追加してください（NPC 数・エース数だけでも作れます）。</p>}
         {rows.map((row) => (
           <div key={row.key} className="grid grid-cols-1 md:grid-cols-[6rem_1fr_1fr_1fr_8rem_auto] gap-2 items-center">
@@ -235,7 +310,7 @@ export default function LocalSimRosterForm({ rosterNames, disabled, onSubmit }: 
               placeholder="チーム（省略可）"
               value={row.team}
               onChange={(e) => updateRow(row.key, { team: e.target.value })}
-              disabled={disabled}
+              disabled={disabled || hasMission}
             />
             <button
               className="text-xs text-red-400 hover:underline"
@@ -248,7 +323,13 @@ export default function LocalSimRosterForm({ rosterNames, disabled, onSubmit }: 
         ))}
         <div className="flex gap-2">
           {(Object.keys(KIND_LABELS) as FetchUnitKind[]).map((kind) => (
-            <SciFiButton key={kind} size="sm" variant="secondary" onClick={() => addRow(kind)} disabled={disabled}>
+            <SciFiButton
+              key={kind}
+              size="sm"
+              variant="secondary"
+              onClick={() => addRow(kind)}
+              disabled={disabled || (hasMission && kind === "npc")}
+            >
               + {KIND_LABELS[kind]}
             </SciFiButton>
           ))}

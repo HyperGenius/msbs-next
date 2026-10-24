@@ -229,6 +229,38 @@ def test_add_aces_does_not_pick_same_ace_twice(session: Session) -> None:
     assert len(ace_ids) == len(set(ace_ids)) == len(builder.ace_pilots)
 
 
+def test_add_aces_always_includes_specified_aces(session: Session) -> None:
+    """--ace-id のエースは必ず入り、--ace N と併用すると指定分を含めて N 機になること."""
+    from app.core.gamedata import get_ace_pilots
+
+    ids = [a["id"] for a in get_ace_pilots()]
+    assert len(ids) >= 3
+    with Session(app_db.engine, autoflush=False) as fetch_session:
+        builder = RosterBuilder(fetch_session)
+        builder.add_aces(3, [ids[0]])
+    got = [e.source.ace_id for e in builder.entries]
+    assert len(got) == len(set(got)) == 3
+    assert ids[0] in got
+
+    with Session(app_db.engine, autoflush=False) as fetch_session:
+        builder = RosterBuilder(fetch_session)
+        builder.add_aces(0, [ids[1], ids[0]])
+    assert [e.source.ace_id for e in builder.entries] == [ids[1], ids[0]]
+
+
+@pytest.mark.parametrize(
+    ("ace_ids", "message"),
+    [(["no_such_ace"], "no_such_ace"), (["dup", "dup"], "2回")],
+)
+def test_add_aces_rejects_invalid_ids(
+    session: Session, ace_ids: list[str], message: str
+) -> None:
+    """存在しないエースと重複した指定は ValueError にすること."""
+    with Session(app_db.engine, autoflush=False) as fetch_session:
+        with pytest.raises(ValueError, match=message):
+            RosterBuilder(fetch_session).add_aces(0, ace_ids)
+
+
 def test_add_mobile_suit_rejects_duplicates(session: Session) -> None:
     """同じ機体を2回指定したら ValueError にすること."""
     p1 = _player(session, "user_a")
@@ -328,6 +360,7 @@ def test_build_roster_reads_production_mission(session: Session) -> None:
     [
         (FetchOptions(npc_count=1, mission_builder="retreat_support"), "--npc"),
         (FetchOptions(ace_count=1, mission_builder="retreat_support"), "--ace"),
+        (FetchOptions(ace_ids=["x"], mission_builder="retreat_support"), "--ace-id"),
         (
             FetchOptions(
                 mobile_suits=[UnitSpec("x", team="A")],

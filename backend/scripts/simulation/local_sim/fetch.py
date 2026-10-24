@@ -81,6 +81,8 @@ class FetchOptions:
     pilots: list[UnitSpec] = field(default_factory=list)
     npc_count: int = 0
     ace_count: int = 0
+    # 必ず参加させるエースの ID。ace_count と併用すると、指定したエースを含めて ace_count 機にする。
+    ace_ids: list[str] = field(default_factory=list)
     theater_id: str | None = None
     # None なら戦域の基準濃度。戦域も無ければ 0。
     minovsky_density: float | None = None
@@ -244,14 +246,36 @@ class RosterBuilder:
                 "generated_npc", suit, pilot, build_npc_entry_snapshot(suit, pilot)
             )
 
-    def add_aces(self, count: int) -> None:
-        """エースパイロットをランダムに count 機加える。同じエースは選ばない."""
-        if count <= 0:
-            return
+    def add_aces(self, count: int, ace_ids: list[str] | None = None) -> None:
+        """エースパイロットを加える.
+
+        ace_ids のエースは必ず加え、count がそれより多ければ残りをランダムに選ぶ。
+        同じエースは選ばない。
+
+        Raises:
+            ValueError: 指定したエースが無い場合。同じエースを2回指定した場合
+        """
+        ace_ids = ace_ids or []
         aces = get_ace_pilots()
-        if count > len(aces):
-            print(f"  エースパイロットは {len(aces)} 名しかいないため、全員を加えます")
-        for ace_data in random.sample(aces, min(count, len(aces))):
+        by_id = {a["id"]: a for a in aces}
+        if len(set(ace_ids)) != len(ace_ids):
+            raise ValueError("同じエースを2回指定しています。")
+        unknown = [i for i in ace_ids if i not in by_id]
+        if unknown:
+            raise ValueError(
+                f"エース {', '.join(unknown)} が見つかりません"
+                f"（{', '.join(sorted(by_id))}）。"
+            )
+        chosen = [by_id[i] for i in ace_ids]
+        random_count = count - len(chosen)
+        if random_count > 0:
+            rest = [a for a in aces if a["id"] not in ace_ids]
+            if random_count > len(rest):
+                print(
+                    f"  エースパイロットは {len(aces)} 名しかいないため、全員を加えます"
+                )
+            chosen += random.sample(rest, min(random_count, len(rest)))
+        for ace_data in chosen:
             suit = MatchingService.build_ace_mobile_suit(ace_data)
             self._append("ace", suit, None, build_npc_entry_snapshot(suit))
             record = self.session.get(AcePilot, ace_data["id"])
@@ -357,9 +381,9 @@ def _validate_mission_options(options: FetchOptions) -> None:
     Raises:
         ValueError: NPC・エース・チームを指定した場合
     """
-    if options.npc_count or options.ace_count:
+    if options.npc_count or options.ace_count or options.ace_ids:
         raise ValueError(
-            "作戦では敵機を作戦マスターから出します。--npc / --ace は併用できません。"
+            "作戦では敵機を作戦マスターから出します。--npc / --ace / --ace-id は併用できません。"
         )
     teams = [s for s in [*options.mobile_suits, *options.pilots] if s.team]
     if teams:
@@ -393,7 +417,7 @@ def build_roster(session: Session, options: FetchOptions, name: str) -> Roster:
         builder.add_mobile_suit(spec)
     for spec in options.pilots:
         builder.add_pilot(spec)
-    builder.add_aces(options.ace_count)
+    builder.add_aces(options.ace_count, options.ace_ids)
     builder.add_npcs(options.npc_count)
 
     min_entries = MIN_MISSION_ROSTER_ENTRIES if mission else MIN_ROSTER_ENTRIES

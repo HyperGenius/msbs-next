@@ -170,6 +170,12 @@ export interface LocalSimFetchRequest {
   pilots?: LocalSimUnitSpec[];
   npc?: number;
   ace?: number;
+  /** `--ace-id`（必ず参加させるエース。`ace` と併用すると指定分を含めて `ace` 機） */
+  ace_ids?: string[];
+  /** `--mission`（本番の作戦マスター missions.id）。`mission_builder` とは併用できない */
+  mission?: number | null;
+  /** `--mission-builder`（リポジトリの作戦の定義名） */
+  mission_builder?: string | null;
   theater?: string | null;
   minovsky?: number | null;
   /** 省略すると CLI が日時から作る */

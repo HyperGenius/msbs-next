@@ -67,6 +67,17 @@ describe("buildFetchArgs", () => {
       "--force",
     ]);
   });
+  it("エースの指定を --ace-id にする", () => {
+    expect(buildFetchArgs({ ace: 3, ace_ids: ["ace_char_aznable", "ace_x"] })).toEqual([
+      "fetch", "--ace", "3", "--ace-id", "ace_char_aznable", "--ace-id", "ace_x",
+    ]);
+  });
+  it("作戦を --mission / --mission-builder にする", () => {
+    expect(buildFetchArgs({ mobile_suits: [{ id: MS_ID }], mission: 4 })).toEqual(["fetch", "--ms", MS_ID, "--mission", "4"]);
+    expect(buildFetchArgs({ pilots: [{ id: "user_1" }], mission_builder: "retreat_support" })).toEqual([
+      "fetch", "--pilot", "user_1", "--mission-builder", "retreat_support",
+    ]);
+  });
   it("省略した項目は引数にしない", () => {
     expect(buildFetchArgs({ npc: 0, ace: 0, theater: "", minovsky: null, name: "" })).toEqual(["fetch"]);
   });
@@ -82,6 +93,15 @@ describe("buildFetchArgs", () => {
     [{ theater: "../x" }],
     [{ minovsky: 1.2 }],
     [{ name: "--force" }],
+    [{ ace_ids: ["--force"] }],
+    [{ mission: 0 }],
+    [{ mission: 1.5 }],
+    [{ mission: 4, mission_builder: "retreat_support" }],
+    [{ mission_builder: "../x" }],
+    [{ mission: 4, npc: 1 }],
+    [{ mission: 4, ace: 1 }],
+    [{ mission: 4, ace_ids: ["ace_x"] }],
+    [{ mission: 4, mobile_suits: [{ id: MS_ID, team: "A" }] }],
   ])("不正なリクエストは文字列で返す %j", (request) => {
     expect(typeof buildFetchArgs(request)).toBe("string");
   });

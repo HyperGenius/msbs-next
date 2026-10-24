@@ -77,6 +77,7 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
         pilots=[parse_unit_spec(v) for v in args.pilot],
         npc_count=args.npc,
         ace_count=args.ace,
+        ace_ids=args.ace_id,
         theater_id=args.theater,
         minovsky_density=args.minovsky,
         mission_id=args.mission,
@@ -489,6 +490,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="エースパイロットをランダムに N 機参加させる",
     )
     fetch.add_argument(
+        "--ace-id",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="必ず参加させるエースの ID（複数指定可）。--ace N と併用すると、指定したエースを含めて N 機にする",
+    )
+    fetch.add_argument(
         "--theater",
         default=None,
         metavar="ID",
@@ -507,7 +515,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="ID",
-        help="本番の作戦マスター（missions.id）で戦う。--npc / --ace とチームの指定は使えない",
+        help="本番の作戦マスター（missions.id）で戦う。--npc / --ace / --ace-id とチームの指定は使えない",
     )
     mission.add_argument(
         "--mission-builder",
