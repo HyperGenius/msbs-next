@@ -45,9 +45,11 @@ export default function GenerationList({ generations, selectedId, onSelect }: Ge
                 </div>
                 <div className="text-xs text-gray-400">
                   {new Date(g.created_at).toLocaleString("ja-JP")}
+                  {g.mission_name && <span className="text-amber-400"> · 作戦: {g.mission_name}</span>}
                 </div>
                 <div className="text-xs text-gray-300 mt-1">
                   {g.summary.battles}戦 {g.summary.wins}勝{g.summary.losses}敗
+                  {(g.summary.draws ?? 0) > 0 && `${g.summary.draws}分`}
                   {g.summary.timeouts > 0 && ` (打ち切り${g.summary.timeouts})`} · 撃墜{g.summary.total_kills}
                 </div>
                 <div className="text-[10px] text-gray-500 truncate">

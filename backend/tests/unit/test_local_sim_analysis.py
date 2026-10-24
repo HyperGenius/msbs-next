@@ -45,6 +45,7 @@ def _record(
     elapsed_time: float = 60.0,
     timed_out: bool = False,
     enemies: list[dict[str, Any]] | None = None,
+    **kwargs: Any,
 ) -> BattleRecord:
     return BattleRecord(
         index=index,
@@ -61,6 +62,22 @@ def _record(
         obstacles_info=[],
         map_bounds=[0.0, 1000.0],
         logs=logs,
+        **kwargs,
+    )
+
+
+def _mission_record(index: int, status: str, progress: int, lost: int) -> BattleRecord:
+    win_loss = {"SUCCESS": "WIN", "FAILURE": "LOSE", "DRAW": "DRAW"}[status]
+    return _record(
+        index,
+        win_loss,
+        [],
+        mission_id=4,
+        mission_name="撤退支援",
+        objective_status=status,
+        objective_progress=progress,
+        objective_required=2,
+        objective_detail={"total": 3, "lost": lost},
     )
 
 
@@ -277,3 +294,59 @@ def _manifest_stub() -> Manifest:
         ),
         battles=[],
     )
+
+
+# --- 作戦 ---
+
+
+def test_analyzer_aggregates_mission_results() -> None:
+    """作戦の成功・失敗・引き分けと、離脱した友軍の数を集計すること."""
+    report = _report(
+        _mission_record(1, "SUCCESS", 3, 0),
+        _mission_record(2, "SUCCESS", 2, 1),
+        _mission_record(3, "FAILURE", 1, 2),
+        _mission_record(4, "DRAW", 0, 0),
+    )
+
+    assert (report.wins, report.losses, report.draws) == (2, 1, 1)
+    objective = report.objective
+    assert objective is not None
+    assert objective.mission_name == "撤退支援"
+    assert (objective.success, objective.failure, objective.draw) == (2, 1, 1)
+    assert objective.success_rate == 0.5
+    assert (objective.required, objective.total) == (2, 3)
+    assert (objective.progress, objective.lost) == (6, 3)
+    assert objective.progress_counts == {"0": 1, "1": 1, "2": 1, "3": 1}
+
+    text = format_report(_manifest_stub(), report)
+    assert "作戦（撤退支援）:" in text
+    assert "離脱した友軍: 平均 1.50 / 3 機（成功に必要 2 機）" in text
+    assert "引き分け" in text
+
+
+def test_report_without_mission_has_no_objective() -> None:
+    """作戦の無い戦闘だけなら、作戦の集計を持たないこと."""
+    report = _report(_record(1, "WIN", []))
+
+    assert report.objective is None
+    assert report.draws == 0
+    assert "作戦（" not in format_report(_manifest_stub(), report)
+
+
+def test_comparison_shows_mission_rates() -> None:
+    """比較は、作戦の成功率と離脱した友軍の数の差を表示すること."""
+    report_a = _report(_mission_record(1, "FAILURE", 1, 2))
+    report_b = _report(_mission_record(1, "SUCCESS", 3, 0))
+    manifest = _manifest_stub().model_copy(update={"mission_name": "撤退支援"})
+
+    comparison = format_comparison((manifest, report_a), (manifest, report_b))
+
+    rows = {
+        line.split()[0]: line.split()[1:]
+        for line in comparison.splitlines()
+        if line.strip()
+    }
+    assert rows["作戦成功率"] == ["0.0%", "100.0%", "+100.0pt"]
+    assert rows["離脱した友軍/戦"] == ["1.00", "3.00", "+2.00"]
+    assert rows["撃破された友軍/戦"] == ["2.00", "0.00", "-2.00"]
+    assert rows["作戦"] == ["撤退支援", "撤退支援"]

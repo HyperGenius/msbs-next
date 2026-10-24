@@ -4,9 +4,17 @@
 どの関数も DB セッションを使わない。
 """
 
+import uuid
 from dataclasses import dataclass, replace
+from typing import Any
 
-from app.engine.objectives import BattleObjective, build_objective
+from app.engine.objectives import (
+    BattleObjective,
+    ObjectiveResult,
+    ObjectiveStatus,
+    build_objective,
+)
+from app.engine.simulation import BattleSimulator
 from app.engine.unit_roles import UnitAssignment
 from app.models.models import (
     ALL_PART_NAMES,
@@ -34,12 +42,15 @@ class MissionBattleSetup:
     objective: BattleObjective
 
 
-def build_mission_unit(config: MissionUnitConfig, side: str) -> MobileSuit:
-    """作戦マスターの1機の定義から機体を作る."""
+def build_mission_unit(
+    config: MissionUnitConfig, side: str, unit_id: uuid.UUID | None = None
+) -> MobileSuit:
+    """作戦マスターの1機の定義から機体を作る. `unit_id` を省くと ID はランダムにする."""
     unknown_parts = set(config.missing_parts) - set(ALL_PART_NAMES)
     if unknown_parts:
         raise ValueError(f"unknown parts: {sorted(unknown_parts)}")
     unit = MobileSuit(
+        id=unit_id or uuid.uuid4(),
         name=config.name,
         max_hp=config.max_hp,
         current_hp=(
@@ -85,7 +96,10 @@ def enemy_team_id(mission: Mission) -> str:
 
 
 def build_mission_battle(
-    mission: Mission, player_units: list[MobileSuit], conditions: BattleConditions
+    mission: Mission,
+    player_units: list[MobileSuit],
+    conditions: BattleConditions,
+    unit_id_namespace: uuid.UUID | None = None,
 ) -> MissionBattleSetup:
     """作戦マスターから戦闘に渡すものを組み立てる.
 
@@ -96,6 +110,9 @@ def build_mission_battle(
         mission: 作戦マスター。
         player_units: 出撃するプレイヤー機。先頭の `team_id` が設定済みであること。
         conditions: その日の戦域の条件。戦域が無いときは作戦の環境を使う。
+        unit_id_namespace: 指定すると、友軍・敵機の ID を作戦マスターでの位置から決める。
+            ローカルシミュレータで、戦闘をまたいで同じ機体として数えるために使う。
+            省くと ID はランダムにする。
 
     Raises:
         ValueError: 作戦目標の種類やロールが無いとき。
@@ -116,8 +133,13 @@ def build_mission_battle(
         (mission.ally_unit_configs(), "PLAYER", MISSION_TEAM_PLAYER),
         (mission.enemy_unit_configs(), "ENEMY", MISSION_TEAM_ENEMY),
     ):
-        for config in configs:
-            unit = build_mission_unit(config, side)
+        for index, config in enumerate(configs):
+            unit_id = (
+                uuid.uuid5(unit_id_namespace, f"{team_key}-{index}")
+                if unit_id_namespace is not None
+                else None
+            )
+            unit = build_mission_unit(config, side, unit_id)
             unit.team_id = team_ids[team_key]
             mission_units.append(unit)
             if config.role is not None or config.squad_id is not None:
@@ -165,3 +187,51 @@ def build_mission_battle(
             objective_config.type, objective_config.params, ally_ids
         ),
     )
+
+
+WIN_LOSS_BY_OBJECTIVE_STATUS = {
+    ObjectiveStatus.SUCCESS: "WIN",
+    ObjectiveStatus.FAILURE: "LOSE",
+    ObjectiveStatus.DRAW: "DRAW",
+}
+"""作戦の結果から `BattleResult.win_loss` への対応."""
+
+
+def objective_result_fields(
+    result: ObjectiveResult, simulator: BattleSimulator | None = None
+) -> dict[str, Any]:
+    """`BattleResult` の作戦の結果のカラムを組み立てる.
+
+    `simulator` を渡すと、BattleViewer が撤退ポイントとロールを描くための
+    `retreat_points` / `unit_roles` を `objective_detail` に含める。
+    """
+    detail: dict[str, Any] | None = None
+    if result.total > 0:
+        detail = {
+            "total": result.total,
+            "lost": result.lost,
+            "player_survived": result.player_survived,
+        }
+    if simulator is not None and (
+        simulator.retreat_points or simulator.unit_assignments
+    ):
+        detail = detail or {}
+        detail["retreat_points"] = [
+            {
+                "position": rp.position.model_dump(),
+                "radius": rp.radius,
+                "team_id": rp.team_id,
+            }
+            for rp in simulator.retreat_points
+        ]
+        detail["unit_roles"] = {
+            unit_id: assignment.role
+            for unit_id, assignment in simulator.unit_assignments.items()
+            if assignment.role is not None
+        }
+    return {
+        "objective_status": result.status.value,
+        "objective_progress": result.progress,
+        "objective_required": result.required,
+        "objective_detail": detail,
+    }

@@ -3,7 +3,7 @@
 ## 概要
 
 本番の参加機体を使って、バトルをローカルで実行する開発用のツール。
-Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609〜#613）の範囲を書く。
+Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609〜#613）と 7（Issue #699）の範囲を書く。
 
 * 戦闘処理は本番バッチと同じモジュール（`app/services/battle_execution.py`）を使う
 * `fetch` で本番DBから参加機体・NPC・エースと戦域条件を読み、手元の JSON（ロスター）に保存する
@@ -15,6 +15,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609�
 * `log-bench` / `log-compare` で、シード固定の50機の戦闘のログのサイズと端末の負荷を、保存形式ごとに測って比べられる（Epic #631 の計測基準。Issue #632）
 * `replay-fixture` で、旧形式と配信用ログの一致テストに使う戦闘のログを作れる（Issue #634）
 * `fetch-log` で、本番の戦闘の解析用ログ（GCS）を取得し、`/dev/sim` でファジィスコア付きで再生できる（Issue #637）
+* `fetch --mission` で作戦（友軍・敵機・ロール・小隊・撤退ポイント・作戦目標）をロスターに入れ、本番の作戦ルームと同じ手順で戦い、`/dev/sim` で撤退ポイントとロールを描いて再生できる（Issue #699）
 * Admin Tool の `/local-sim` から `run` を実行し、世代の一覧・集計を確認できる（Issue #701）
 
 ### 今後の予定（Epic #608）
@@ -27,6 +28,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609�
 | 4 | 開発用バトルビューア `/dev/sim`（Issue #612、実装済み。本ドキュメントの「[/dev/sim: 開発用バトルビューア](#devsim-開発用バトルビューア)」） |
 | 5 | 世代間の比較とバランス分析表示（Issue #613、実装済み。本ドキュメントの「[report / compare: 世代の集計と比較](#report--compare-世代の集計と比較)」「[世代の比較とAIの判断の表示](#devsim-世代の比較とaiの判断の表示)」） |
 | 6 | エースパイロットの参加必須指定（Issue #614） |
+| 7 | 作戦の戦闘の実行と再生（Issue #699、実装済み。本ドキュメントの「[作戦の戦闘](#作戦の戦闘)」） |
 
 ---
 
@@ -55,6 +57,7 @@ DB の読み書きとフェーズ制御だけを持つ。本番バッチの挙�
 | 環境変数 `MAX_SIMULATION_STEPS` の読み込み | `run_batch.py`（既定値は `battle_execution.DEFAULT_MAX_STEPS`） |
 | 戦域の条件（`TheaterService.battle_conditions()`） | `run_batch.py`（DB を読むため） |
 | バトルログ・`BattleResult` の保存、報酬・戦利品・NPC 成長 | `run_batch.py` の `_save_battle_results()` |
+| 作戦の友軍・敵機・配置・目標の組み立て（`build_mission_battle()`）と、作戦の結果のカラム（`objective_result_fields()`・`WIN_LOSS_BY_OBJECTIVE_STATUS`） | `app/services/mission_battle.py`。本番バッチとローカルシミュレータの両方が呼ぶ（Issue #699 で `run_batch._objective_fields()` を移した） |
 
 ### 注意点
 
@@ -136,10 +139,12 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | `--ace N` | エースパイロットをランダムに N 機参加させる。同じエースは重ねない |
 | `--theater <戦域ID>` | 戦域。省略すると戦域なし（宇宙） |
 | `--minovsky <0〜1>` | ミノフスキー濃度。省略すると戦域の `base_minovsky`（戦域なしなら 0） |
+| `--mission <作戦ID>` | 本番の作戦マスター（`missions`）で戦う。[作戦の戦闘](#作戦の戦闘)を参照 |
+| `--mission-builder <名前>` | 本番に反映する前の作戦を、リポジトリの定義から作る（`retreat_support`）。`--mission` とは併用できない |
 | `--name <名前>` | ロスター名。省略すると日時（例: `20261005-213000`） |
 | `--force` | 同名のロスターを上書きする |
 
-参加機体が2機未満のときはエラーにする。
+参加機体が2機未満のときはエラーにする（作戦では1機以上）。
 
 ### 機体の選び方とスナップショット
 
@@ -165,7 +170,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "solomon_test",
   "fetched_at": "2026-10-05T12:30:00Z",
   "conditions": {
@@ -191,7 +196,8 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
       "snapshot": { "name": "Zaku II", "team_id": null, "...": "BattleEntry.mobile_suit_snapshot と同じ" }
     }
   ],
-  "ace_pilots": [ { "id": "ace_char_aznable", "mobile_suit": { "...": "..." }, "skills": { "flanking": 3 } } ]
+  "ace_pilots": [ { "id": "ace_char_aznable", "mobile_suit": { "...": "..." }, "skills": { "flanking": 3 } } ],
+  "mission": null
 }
 ```
 
@@ -202,6 +208,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | `entries[].source.kind` | `mobile_suit` / `pilot` / `npc` / `generated_npc` / `ace` |
 | `entries[].snapshot` | 本番の `BattleEntry.mobile_suit_snapshot` と同じ形式 |
 | `ace_pilots` | 参加エースの `ace_pilots` マスター。エンジンは戦闘中に `get_ace_pilot_by_id()` でエースのスキルを読むため、`run` はこの値を使って DB を読まずに実行する |
+| `mission` | 作戦（[作戦の戦闘](#作戦の戦闘)）。`null` なら `entries` の機体だけで戦う。`schema_version` 1 のロスターは作戦なしとして読む |
 
 ### 本番マッチングとの共通化
 
@@ -247,6 +254,7 @@ python -m scripts.simulation.local_sim run --roster ../battle_logs/local_sim/ros
 * 判定する機体を `prepare_battle_units()` のプレイヤー機にし、残りを敵機にする。チームは `team_id` で決まる
 * 勝敗は判定する機体のチームが生き残ったか。最大ステップ数で打ち切ったときも、生き残っていれば `WIN`（本番と同じ）
 * スナップショットは戦闘ごとにコピーしてから渡す（`snapshot_to_mobile_suit()` が dict を書き換えるため）
+* ロスターに作戦があれば、作戦ルームと同じ手順で戦い、勝敗を作戦の結果で決める（[作戦の戦闘](#作戦の戦闘)）
 
 ### DB に接続しない仕組み
 
@@ -316,7 +324,9 @@ battle_logs/local_sim/
   "theater_id": "solomon",
   "environment": "SPACE",
   "minovsky_density": 0.35,
-  "summary": { "battles": 20, "wins": 8, "losses": 12, "timeouts": 1, "total_kills": 15 },
+  "mission_id": null,
+  "mission_name": null,
+  "summary": { "battles": 20, "wins": 8, "losses": 12, "draws": 0, "timeouts": 1, "total_kills": 15 },
   "battles": [
     { "index": 1, "file": "battle_001.json", "seed": 611, "win_loss": "LOSE", "kills": 2,
       "elapsed_time": 128.9, "steps_used": 1289, "timed_out": false }
@@ -330,7 +340,8 @@ battle_logs/local_sim/
 | `seed` | 1戦目のシード。N 戦目は `seed + N - 1`（`battles[].seed`） |
 | `git.commit` / `git.dirty` | 実行時の HEAD と、未コミットの変更（未追跡のファイルを含む）の有無。git が無ければ `null` |
 | `fuzzy_rules_hash` | `backend/data/fuzzy_rules/` の全ファイルの相対パスと中身から作った SHA-256 |
-| `summary` | 戦闘数・勝ち・負け・打ち切り（`timed_out`）の数・判定する機体の撃墜数の合計 |
+| `summary` | 戦闘数・勝ち・負け・引き分け（作戦だけ）・打ち切り（`timed_out`）の数・判定する機体の撃墜数の合計 |
+| `mission_id` / `mission_name` | 作戦の ID と名前。作戦の無い世代は `null` |
 | `battles[].timed_out` | 最大ステップ数で打ち切ったか |
 
 #### battle_NNN.json
@@ -340,19 +351,118 @@ battle_logs/local_sim/
 | 項目 | 内容 |
 |---|---|
 | `index` / `seed` | 戦闘番号（1 始まり）とシード |
-| `win_loss` / `kills` | 判定する機体の勝敗（`WIN` / `LOSE`）と撃墜数 |
+| `win_loss` / `kills` | 判定する機体の勝敗（`WIN` / `LOSE`。作戦では `DRAW` もある）と撃墜数 |
 | `elapsed_time` / `steps_used` / `timed_out` | 戦闘の経過時間（秒）・使ったステップ数・打ち切ったか |
 | `environment` / `theater_id` / `theater_name` / `environment_name` / `viewer_preset` / `minovsky_density` | 戦域条件と表示名 |
 | `player_info` | エントリー時点の判定する機体（本番と同じく戦闘前の状態） |
 | `enemies_info` | 判定する機体以外の全ユニット（戦闘後の状態） |
 | `obstacles_info` / `map_bounds` | 障害物と、戦闘終了時のフィールド範囲 |
 | `part_hit_summary` / `weapon_accuracy_summary` / `detection_summary` | 結果画面の戦果サマリー。本番の `BattleResult` と同じ `compute_result_summary_fields()` で集計する。項目を足す前（Issue #633 より前）の世代では null |
+| `mission_id` / `mission_name` / `objective_status` / `objective_progress` / `objective_required` / `objective_detail` | 作戦の結果。本番の `BattleResult` と同じ項目・同じ関数（`objective_result_fields()`）で作る。作戦の無い戦闘と、項目を足す前（Issue #699 より前）の世代では null |
 | `logs` | `BattleLog` の一覧。`strip_debug_fields()` を通さず、`fuzzy_scores` などのデバッグ項目を残す |
 
 1戦のサイズはログの行数に比例する。5機・約1300ステップの戦闘で約1.5万行・約14MB だった
 （Issue の見積もりの 650KB は 601行の `battle_logs/sample.json` の値）。
 20戦×5世代では 1GB を超えうるため、不要な世代は消すかピン留めを外す。
 ログはインデントを付けずに保存し、`manifest.json` だけ整形する。
+
+---
+
+## 作戦の戦闘
+
+作戦（`missions`）の戦闘を、本番バッチの作戦ルームと同じ手順でローカル実行し、`/dev/sim` で再生する（Issue #699）。
+小隊の陣形（#688）や支援ターゲット選択（#689）など、ロールと小隊で動きが変わる機能を本番と同じ画面で確かめ、
+作戦マスター（敵の編成・配置・小隊）の調整を本番に反映する前に試すために使う。
+
+```bash
+cd backend
+# 本番の作戦マスター（撤退支援は作戦ID 4）
+python -m scripts.simulation.local_sim fetch --pilot user_xxx --mission 4 --name retreat
+# 本番に反映する前の作戦（リポジトリの build_retreat_support_mission()）
+python -m scripts.simulation.local_sim fetch --pilot user_xxx --mission-builder retreat_support --name retreat_dev
+python -m scripts.simulation.local_sim run --roster retreat --rounds 20 --seed 1
+python -m scripts.simulation.local_sim report retreat
+```
+
+### fetch
+
+* `--mission <作戦ID>` は本番の作戦マスターを Read Only の接続で読む。`--mission-builder <名前>` は DB の `missions` を読まず、
+  `fetch.MISSION_BUILDERS` に登録したリポジトリの定義で作る（プレイヤー機の取得には DB を使う）
+* 本番の作戦ルームと同じく、参加機体は `--ms` / `--pilot` のプレイヤー機だけ。`--npc` / `--ace`、チームの指定（`:<チーム>`）はエラーにする。
+  プレイヤー機は全員、先頭のプレイヤー機のチームに入る
+* 戦域を指定しないときは、作戦の環境（`missions.environment`）で戦う。戦域を指定したときは戦域の環境（本番と同じ）
+* 作戦はロスターの `mission` に保存する。友軍・敵機の機体は `run` で作戦マスターから組み立てる
+
+```json
+"mission": {
+  "source": "builder",
+  "builder": "retreat_support",
+  "master": {
+    "id": 4, "name": "撤退支援", "environment": "SPACE",
+    "enemy_config": { "enemies": [ { "name": "追撃格闘機 #1", "role": "VANGUARD", "squad_id": "pursuit-1", "...": "..." } ] },
+    "allies_config": [ { "name": "撤退機 #1", "current_hp": 35, "role": "WITHDRAW", "...": "..." } ],
+    "objective": { "type": "RETREAT_SUPPORT", "params": { "required": 2 } },
+    "layout": { "spawn_zones": [ "..." ], "retreat_points": [ "..." ] }
+  }
+}
+```
+
+| 項目 | 内容 |
+|---|---|
+| `source` | `production`（本番の作戦マスター）か `builder`（リポジトリの定義） |
+| `builder` | `source` が `builder` のときの定義の名前 |
+| `master` | `Mission` の `model_dump()`。手で編集すると、友軍・敵機・ロール・小隊・配置・作戦目標を変えて試せる |
+
+### run
+
+本番バッチの作戦ルーム（`run_batch._process_room()` の `room.mission_id` の分岐）と同じ手順で戦う。
+
+1. `prepare_battle_units()` で判定する機体と他のプレイヤー機を組み立て、他のプレイヤー機の `side` を `PLAYER` にする
+2. `build_mission_battle()` で友軍・敵機・スポーン領域・撤退ポイント・ロールと小隊・作戦目標を組み立てる
+3. `run_battle(objective=..., retreat_points=..., unit_assignments=...)` で戦う
+4. 勝敗は判定する機体のチームから見た作戦の結果（`SUCCESS` / `FAILURE` / `DRAW` → `WIN` / `LOSE` / `DRAW`）。作戦の結果のカラムは本番と同じ `objective_result_fields()` で作る
+
+* 友軍機は `enemies_info` に入るが、`side` が `PLAYER` のため BattleViewer では味方として描かれる
+* 友軍・敵機の ID は `build_mission_battle(unit_id_namespace=...)` で、作戦マスターでの位置から決める（本番は省略してランダム）。
+  戦闘ごとに ID が変わると、`report` の機体ごとの集計が戦闘の数だけ分かれるため
+* 作戦の無いロスターは今までどおり戦う。main と同じロスター・同じシードで `battle_NNN.json` のログが一致することを確認した（違いは `schema_version` だけ）
+* 1戦ごとの表示に離脱数を足した（例: `[1/10] seed=1 WIN 撃墜 2 / 11.0s / 離脱 2/3`）
+
+### report / compare
+
+作戦の世代では、`report` に作戦の成功率と離脱した友軍の数を出す。
+
+```text
+作戦（撤退支援）:
+  成功      9 回  90.0%
+  失敗      1 回  10.0%
+  引き分け  0 回   0.0%
+離脱した友軍: 平均 2.50 / 3 機（成功に必要 2 機） / 撃破された友軍: 平均 0.50 機
+  離脱 1/3  1 回  10.0%
+  離脱 2/3  3 回  30.0%
+  離脱 3/3  6 回  60.0%
+```
+
+`compare` と `/dev/sim` の世代の比較は、作戦成功率・離脱した友軍/戦・撃破された友軍/戦の差を出す。
+
+### /dev/sim
+
+* `localSimBattleToResult()` が `mission_id` と作戦の結果（`objective_*`）を `BattleResult` に移す。
+  `BattleReplayPanel` が `objective_detail` の `retreat_points` / `unit_roles` を BattleViewer に渡し、撤退ポイントと友軍（撤退中）を描く
+* `SimReplay` のヘッダーに作戦名（`撤退支援 · <ラベル> #<戦闘番号>`）と、作戦の結果（作戦成功・離脱 2/3（必要 2）・撃破された友軍）を出す。
+  表示は本番の戦歴一覧と同じ `getObjectiveSummary()` / `OBJECTIVE_STATUS_LABELS` を使う
+* 世代の一覧に作戦名、バトルの一覧に `DRAW`（黄）を出す
+* `fetch-log` で本番の作戦ルームの戦闘を取り込んだときも、作戦の結果と作戦名を引き継ぐ（`DRAW` も取り込める）
+
+### 検証（作戦の戦闘）
+
+* `tests/unit/test_local_sim_fetch.py`: 作戦の保存（リポジトリの定義・本番の作戦マスター）、作戦の環境、NPC・エース・チームの指定の拒否、`schema_version` 1 のロスターの読み込み
+* `tests/unit/test_local_sim_run.py`: 作戦の戦闘（友軍・敵機・撤退ポイント・ロール・勝敗の対応）、同じシードでの再現、ロスターの作戦マスターの手での編集、作戦の無いロスター
+* `tests/unit/test_local_sim_analysis.py`: 作戦の成功率・離脱数の集計とテキスト表示、比較の差
+* `tests/unit/test_mission_battle.py`: `unit_id_namespace` による ID の固定
+* `frontend/tests/unit/localSimAnalysis.test.ts`: 比較表の作戦の行、`localSimBattleToResult()` の作戦の結果
+* 本番の機体1機（Hambrabi）と `retreat_support` の作戦で `run --rounds 10` を実行し（9 勝 1 敗）、`/dev/sim` で撤退ポイント・友軍のリング・作戦の結果が表示されることを確認した。
+  追撃部隊の狙撃機は、射撃時に標的から最も近い格闘機より 100〜200m 遠い位置にいた（#688 の陣形）
 
 ---
 
@@ -404,7 +514,8 @@ python -m scripts.simulation.local_sim compare 20261005-2130 after --format json
 
 | 項目 | 内容 |
 |---|---|
-| 勝敗 | 判定する機体の勝ち・負けの数と勝率 |
+| 勝敗 | 判定する機体の勝ち・負け・引き分け（作戦だけ）の数と勝率 |
+| 作戦 | 作戦の成功・失敗・引き分けの数と成功率、離脱した友軍・撃破された友軍の数（平均）と離脱数ごとの戦闘の数（作戦の世代だけ） |
 | 打ち切り | 最大ステップ数で打ち切った戦闘の数と割合 |
 | 戦闘時間 | 経過時間（秒）の平均・最短・最長 |
 | 判定する機体の撃墜数 | 合計と1戦あたり |
@@ -416,7 +527,8 @@ python -m scripts.simulation.local_sim compare 20261005-2130 after --format json
 
 `compare` は戦闘数が違っても比べられるよう、回数を1戦あたりか割合で並べる。
 機体は ID で対応させる。片方の世代にしかいない機体（ロスターが違うとき）は `-` になる。
-実行条件（ロスター・判定する機体・シード・最大ステップ数・コミット・ファジィルールのハッシュ・戦域）も並べ、違う項目に `≠` を付ける。
+実行条件（ロスター・判定する機体・シード・最大ステップ数・コミット・ファジィルールのハッシュ・戦域・作戦）も並べ、違う項目に `≠` を付ける。
+どちらかの世代に作戦があれば、作戦成功率・離脱した友軍/戦・撃破された友軍/戦も並べる。
 
 ### 異常検出
 
@@ -466,11 +578,12 @@ python -m scripts.simulation.local_sim compare 20261005-2130 after --format json
 | 項目 | 内容 |
 |---|---|
 | `schema_version` | `REPORT_SCHEMA_VERSION`。集計の項目や計算を変えたら上げる。`compare` と `/dev/sim` は違う値のファイルを使わない |
-| `battles` / `wins` / `losses` / `timeouts` | 戦闘数・勝ち・負け・打ち切り |
+| `battles` / `wins` / `losses` / `draws` / `timeouts` | 戦闘数・勝ち・負け・引き分け・打ち切り |
 | `elapsed_time` | `{avg, min, max}`（秒） |
 | `player_kills` | 判定する機体の撃墜数の合計 |
 | `action_counts` / `strategy_transitions` / `weapon_usage` | 行動・戦略遷移・武器ごとの回数 |
 | `units[]` | `unit_id`・`name`・`pilot_name`・`is_player`（判定する機体か）・`battles`・`kills`・`deaths`。ロスターの順で、判定する機体が先頭 |
+| `objective` | 作戦の結果（`mission_name`・`battles`・`success`・`failure`・`draw`・`required`・`total`・`progress`・`lost`・`progress_counts`）。作戦の無い世代は `null` |
 | `warnings` | 警告文 |
 
 ### 集計を CLI で行う理由
@@ -874,7 +987,7 @@ Admin Tool（`admin-tool/`、`npm run dev` で手元だけ起動）から `run` 
 
 * 世代の一覧: ラベル・日時・戦闘数・勝敗・打ち切り・ピン留め。2つ選んで「比較」で `/dev/sim?view=compare&a=&b=` を開く
 * 世代の詳細: 勝率・打ち切り・平均戦闘時間・判定機の撃墜数・機体ごとの撃墜数/被撃墜率（`report.json`）、戦闘の一覧（勝敗・撃墜・経過時間・シード）と「再生」（`/dev/sim?gen=&battle=`）
-* 作戦名・作戦の成功率・離脱した友軍の数は、`manifest.json` / `report.json` にまだ項目が無いため表示していない（保存形式に項目が増えた時点で追加する）
+* 作戦の世代（`fetch --mission`）: 一覧に作戦名、詳細に作戦の成功率（成功/失敗/引き分け）・離脱した友軍の1戦平均・撃破された友軍の合計を出す（`report.json` の `objective`）。引き分けは勝敗に「分」で出す
 
 ### 検証（Admin Tool）
 

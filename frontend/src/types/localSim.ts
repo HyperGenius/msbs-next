@@ -1,10 +1,14 @@
 /* frontend/src/types/localSim.ts */
 import { DetectionSummary, PartHitSummary, WeaponAccuracyRecord } from "./battleCore";
 import { Obstacle } from "./geometry";
+import { ObjectiveDetail, ObjectiveStatus } from "./mission";
 import { MobileSuit } from "./mobileSuit";
 
 // ローカルシミュレーションの保存形式。
 // backend/scripts/simulation/local_sim/generations.py・analysis.py の Pydantic モデルと項目を揃える。
+
+/** 1戦の勝敗。DRAW は作戦の引き分けで、作戦の無い戦闘は WIN / LOSE だけ */
+export type LocalSimWinLoss = "WIN" | "LOSE" | "DRAW";
 
 /** 1戦の勝敗。`manifest.json` の `battles` の1件 */
 export interface LocalSimBattleSummary {
@@ -13,7 +17,7 @@ export interface LocalSimBattleSummary {
     file: string;
     /** 戦闘のシード。本番から取得した戦闘では null */
     seed: number | null;
-    win_loss: "WIN" | "LOSE";
+    win_loss: LocalSimWinLoss;
     kills: number;
     /** 戦闘の経過時間（秒） */
     elapsed_time: number;
@@ -27,6 +31,8 @@ export interface LocalSimGenerationSummary {
     battles: number;
     wins: number;
     losses: number;
+    /** 作戦の引き分け。古い世代には無い */
+    draws?: number;
     timeouts: number;
     total_kills: number;
 }
@@ -62,6 +68,9 @@ export interface LocalSimManifest {
     theater_id: string | null;
     environment: string;
     minovsky_density: number;
+    /** 作戦の ID と名前。作戦の無い世代と古い世代では null か無い */
+    mission_id?: number | null;
+    mission_name?: string | null;
     summary: LocalSimGenerationSummary;
     battles: LocalSimBattleSummary[];
 }
@@ -70,7 +79,7 @@ export interface LocalSimManifest {
 export interface LocalSimBattle {
     index: number;
     seed: number | null;
-    win_loss: "WIN" | "LOSE";
+    win_loss: LocalSimWinLoss;
     kills: number;
     elapsed_time: number;
     steps_used: number;
@@ -89,6 +98,16 @@ export interface LocalSimBattle {
     part_hit_summary?: PartHitSummary | null;
     weapon_accuracy_summary?: WeaponAccuracyRecord[] | null;
     detection_summary?: DetectionSummary | null;
+    /** 作戦の結果。作戦の無い戦闘と、項目を足す前に保存した世代では null か無い */
+    mission_id?: number | null;
+    mission_name?: string | null;
+    objective_status?: ObjectiveStatus | null;
+    /** 達成した数（撤退支援なら離脱した友軍の数） */
+    objective_progress?: number | null;
+    /** 成功に必要な数。0 は達成度を数えない目標 */
+    objective_required?: number | null;
+    /** 達成度の内訳と、ビューア用の撤退ポイント・ロール（本番の BattleResult と同じ形式） */
+    objective_detail?: ObjectiveDetail | null;
     log_count: number;
 }
 
@@ -101,7 +120,7 @@ export interface LocalSimGenerationList {
 }
 
 /** analysis.py の REPORT_SCHEMA_VERSION。違う report.json は CLI の report で作り直す */
-export const LOCAL_SIM_REPORT_SCHEMA_VERSION = 1;
+export const LOCAL_SIM_REPORT_SCHEMA_VERSION = 2;
 
 /** 1機の撃墜数と被撃墜数（世代の全戦闘の合計） */
 export interface LocalSimUnitStats {
@@ -115,6 +134,26 @@ export interface LocalSimUnitStats {
     deaths: number;
 }
 
+/** 作戦の結果（世代の全戦闘の合計） */
+export interface LocalSimObjectiveStats {
+    mission_name: string | null;
+    /** 作戦の結果がある戦闘の数 */
+    battles: number;
+    success: number;
+    failure: number;
+    draw: number;
+    /** 成功に必要な数。0 は達成度を数えない目標 */
+    required: number;
+    /** 護衛する友軍の数。0 は友軍を数えない目標 */
+    total: number;
+    /** 達成した数（離脱した友軍の数）の合計 */
+    progress: number;
+    /** 撃破された友軍の数の合計 */
+    lost: number;
+    /** 達成した数 → 戦闘の数 */
+    progress_counts: Record<string, number>;
+}
+
 /** 世代の集計値（`report.json`） */
 export interface LocalSimReport {
     schema_version: number;
@@ -122,6 +161,8 @@ export interface LocalSimReport {
     battles: number;
     wins: number;
     losses: number;
+    /** 作戦の引き分け */
+    draws: number;
     /** 最大ステップ数で打ち切った戦闘の数 */
     timeouts: number;
     /** 戦闘の経過時間（秒） */
@@ -134,6 +175,8 @@ export interface LocalSimReport {
     weapon_usage: Record<string, number>;
     /** ロスターの順。判定する機体が先頭 */
     units: LocalSimUnitStats[];
+    /** 作戦の結果。作戦の無い世代は null */
+    objective: LocalSimObjectiveStats | null;
     warnings: string[];
 }
 

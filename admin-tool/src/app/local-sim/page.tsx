@@ -208,7 +208,7 @@ export default function LocalSimPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="text-left text-[#00ff41]/60">
-                <th>比較</th><th>ラベル</th><th>日時</th><th>戦闘数</th><th>勝敗</th><th>打ち切り</th><th>ピン</th><th />
+                <th>比較</th><th>ラベル</th><th>作戦</th><th>日時</th><th>戦闘数</th><th>勝敗</th><th>打ち切り</th><th>ピン</th><th />
               </tr>
             </thead>
             <tbody>
@@ -216,9 +216,10 @@ export default function LocalSimPage() {
                 <tr key={g.generation_id} className={g.generation_id === selectedId ? "bg-[#00ff41]/10" : ""}>
                   <td><input type="checkbox" checked={compareIds.includes(g.generation_id)} onChange={() => toggleCompare(g.generation_id)} /></td>
                   <td>{g.label}{g.source === "production" ? "（本番）" : ""}</td>
+                  <td>{g.mission_name ?? "-"}</td>
                   <td>{formatDate(g.created_at)}</td>
                   <td>{g.summary.battles}</td>
-                  <td>{g.summary.wins}勝 {g.summary.losses}敗</td>
+                  <td>{g.summary.wins}勝 {g.summary.losses}敗{g.summary.draws ? ` ${g.summary.draws}分` : ""}</td>
                   <td>{g.summary.timeouts}</td>
                   <td><button onClick={() => handlePin(g)}>{g.pinned ? "📌 外す" : "留める"}</button></td>
                   <td><button className="underline" onClick={() => setPicked({ id: g.generation_id, runKey: run?.started_at ?? null })}>詳細</button></td>
@@ -238,11 +239,33 @@ export default function LocalSimPage() {
           {report ? (
             <>
               <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div><dt className="text-[#00ff41]/60">勝率</dt><dd>{percent(report.wins, report.battles)}（{report.wins}/{report.battles}）</dd></div>
+                <div><dt className="text-[#00ff41]/60">勝率</dt><dd>{percent(report.wins, report.battles)}（{report.wins}/{report.battles}{report.draws ? `、引き分け ${report.draws}` : ""}）</dd></div>
                 <div><dt className="text-[#00ff41]/60">打ち切り</dt><dd>{report.timeouts}</dd></div>
                 <div><dt className="text-[#00ff41]/60">平均戦闘時間</dt><dd>{report.elapsed_time.avg.toFixed(1)}s</dd></div>
                 <div><dt className="text-[#00ff41]/60">判定機の撃墜数</dt><dd>{report.player_kills}</dd></div>
               </dl>
+              {report.objective && (
+                <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div><dt className="text-[#00ff41]/60">作戦</dt><dd>{report.objective.mission_name ?? "-"}</dd></div>
+                  <div>
+                    <dt className="text-[#00ff41]/60">作戦の成功率</dt>
+                    <dd>
+                      {percent(report.objective.success, report.objective.battles)}（成功 {report.objective.success} / 失敗 {report.objective.failure} / 引き分け {report.objective.draw}）
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[#00ff41]/60">離脱した友軍（1戦平均）</dt>
+                    <dd>
+                      {report.objective.battles > 0 ? (report.objective.progress / report.objective.battles).toFixed(1) : "-"}
+                      {report.objective.total > 0 ? ` / ${report.objective.total}` : ""}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-[#00ff41]/60">撃破された友軍（合計）</dt>
+                    <dd>{report.objective.lost}</dd>
+                  </div>
+                </dl>
+              )}
               {report.warnings.length > 0 && (
                 <ul className="text-xs text-[#ffb000] list-disc pl-4">
                   {report.warnings.map((w) => <li key={w}>{w}</li>)}

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { LocalSimManifest, LocalSimReport, LocalSimUnitStats } from "@/types/battle";
+import type {
+  LocalSimBattle,
+  LocalSimManifest,
+  LocalSimObjectiveStats,
+  LocalSimReport,
+  LocalSimUnitStats,
+} from "@/types/battle";
+import { localSimBattleToResult } from "@/services/localSim";
+import { getObjectiveSummary } from "@/utils/missionName";
 import {
   chosenAction,
   compareConditions,
@@ -20,11 +28,12 @@ const unit = (id: string, overrides: Partial<LocalSimUnitStats> = {}): LocalSimU
 });
 
 const report = (overrides: Partial<LocalSimReport> = {}): LocalSimReport => ({
-  schema_version: 1,
+  schema_version: 2,
   generation_id: "gen",
   battles: 4,
   wins: 2,
   losses: 2,
+  draws: 0,
   timeouts: 1,
   elapsed_time: { avg: 60, min: 30, max: 90 },
   player_kills: 2,
@@ -32,7 +41,22 @@ const report = (overrides: Partial<LocalSimReport> = {}): LocalSimReport => ({
   strategy_transitions: {},
   weapon_usage: {},
   units: [],
+  objective: null,
   warnings: [],
+  ...overrides,
+});
+
+const objective = (overrides: Partial<LocalSimObjectiveStats> = {}): LocalSimObjectiveStats => ({
+  mission_name: "撤退支援",
+  battles: 4,
+  success: 2,
+  failure: 1,
+  draw: 1,
+  required: 2,
+  total: 3,
+  progress: 6,
+  lost: 3,
+  progress_counts: { "0": 1, "1": 1, "2": 1, "3": 1 },
   ...overrides,
 });
 
@@ -84,6 +108,23 @@ describe("compareReports", () => {
   });
 });
 
+describe("compareReports（作戦）", () => {
+  it("どちらかに作戦があれば、作戦の成功率と離脱・撃破された友軍の数を並べる", () => {
+    const a = report({ objective: objective() });
+    const b = report({ objective: objective({ battles: 2, success: 2, failure: 0, draw: 0, progress: 6, lost: 0 }) });
+
+    expect(compareReports(a, b).slice(2, 5)).toEqual([
+      { label: "作戦成功率", a: "50.0%", b: "100.0%", diff: "+50.0pt" },
+      { label: "離脱した友軍/戦", a: "1.50", b: "3.00", diff: "+1.50" },
+      { label: "撃破された友軍/戦", a: "0.75", b: "0.00", diff: "-0.75" },
+    ]);
+  });
+
+  it("作戦の無い世代どうしでは作戦の行を出さない", () => {
+    expect(compareReports(report(), report()).map((r) => r.label)).not.toContain("作戦成功率");
+  });
+});
+
 describe("compareUnits", () => {
   it("機体を ID で対応させ、片方にしかいない機体は - にする", () => {
     const a = report({ units: [unit("p", { is_player: true, kills: 2, deaths: 1 }), unit("e", { deaths: 4 })] });
@@ -106,6 +147,70 @@ describe("compareConditions", () => {
     expect(rows.find((r) => r.label === "seed")).toEqual({ label: "seed", a: "611", b: "700", differs: true });
     expect(rows.find((r) => r.label === "コミット")).toMatchObject({ a: "0123456", b: "0123456 (dirty)", differs: true });
     expect(rows.find((r) => r.label === "ファジィルール")).toMatchObject({ a: "ae1c1073", differs: false });
+  });
+
+  it("作戦の名前を並べ、作戦の無い世代は「なし」にする", () => {
+    const rows = compareConditions(manifest(), manifest({ mission_name: "撤退支援" }));
+
+    expect(rows.find((r) => r.label === "作戦")).toEqual({ label: "作戦", a: "なし", b: "撤退支援", differs: true });
+  });
+});
+
+const battle = (overrides: Partial<LocalSimBattle> = {}): LocalSimBattle => ({
+  index: 1,
+  seed: 611,
+  win_loss: "WIN",
+  kills: 1,
+  elapsed_time: 30,
+  steps_used: 300,
+  timed_out: false,
+  environment: "SPACE",
+  theater_id: null,
+  theater_name: null,
+  environment_name: null,
+  viewer_preset: null,
+  minovsky_density: 0,
+  player_info: { id: "p" } as LocalSimBattle["player_info"],
+  enemies_info: [],
+  obstacles_info: [],
+  map_bounds: [0, 2000],
+  log_count: 10,
+  ...overrides,
+});
+
+describe("localSimBattleToResult", () => {
+  it("作戦の戦闘は、作戦の結果と撤退ポイント・ロールを BattleResult に移す", () => {
+    const detail = {
+      total: 3,
+      lost: 1,
+      retreat_points: [{ position: { x: -900, y: 0, z: 0 }, radius: 120, team_id: "t" }],
+      unit_roles: { a1: "WITHDRAW" },
+    };
+    const result = localSimBattleToResult(
+      manifest(),
+      battle({
+        win_loss: "DRAW",
+        mission_id: 4,
+        mission_name: "撤退支援",
+        objective_status: "DRAW",
+        objective_progress: 1,
+        objective_required: 2,
+        objective_detail: detail,
+      }),
+    );
+
+    expect(result.win_loss).toBe("DRAW");
+    expect(result.mission_id).toBe(4);
+    expect(result.objective_detail).toEqual(detail);
+    expect(getObjectiveSummary(result)).toEqual({ status: "DRAW", progress: 1, required: 2, total: 3, lost: 1 });
+  });
+
+  it("作戦の無い戦闘と古い世代は、作戦の結果を持たない", () => {
+    const result = localSimBattleToResult(manifest(), battle());
+
+    expect(result.mission_id).toBeNull();
+    expect(result.objective_detail).toBeNull();
+    expect(getObjectiveSummary(result)).toBeNull();
   });
 });
 

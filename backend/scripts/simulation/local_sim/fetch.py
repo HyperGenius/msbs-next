@@ -6,7 +6,8 @@ import する前に `readonly_db.use_readonly_database()` を呼ぶこと。
 
 import random
 import uuid
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 
 from sqlmodel import Session, select
@@ -16,6 +17,7 @@ from app.models.models import (
     AcePilot,
     MasterEnvironment,
     MasterTheater,
+    Mission,
     MobileSuit,
     Pilot,
 )
@@ -26,6 +28,7 @@ from app.services.matching_service import (
 )
 from app.services.mobile_suit_service import MobileSuitService
 from app.services.pilot_service import PilotService
+from app.services.retreat_support_mission import build_retreat_support_mission
 from app.services.theater_service import BattleConditions, TheaterService
 from app.services.weapon_service import WeaponService
 from scripts.simulation.local_sim.roster import (
@@ -33,12 +36,21 @@ from scripts.simulation.local_sim.roster import (
     RosterConditions,
     RosterEntry,
     RosterEnvironmentProfile,
+    RosterMission,
     RosterSource,
     RosterSourceKind,
     validate_roster_name,
 )
 
 MIN_ROSTER_ENTRIES = 2
+# 作戦では敵機を作戦マスターから出すため、プレイヤー機は1機でよい。
+MIN_MISSION_ROSTER_ENTRIES = 1
+
+# --mission-builder で選べる、リポジトリの作戦マスターの定義。
+# 本番の missions に反映する前の作戦を試すときに使う。
+MISSION_BUILDERS: dict[str, Callable[[], Mission]] = {
+    "retreat_support": build_retreat_support_mission,
+}
 
 
 @dataclass(frozen=True)
@@ -72,12 +84,26 @@ class FetchOptions:
     theater_id: str | None = None
     # None なら戦域の基準濃度。戦域も無ければ 0。
     minovsky_density: float | None = None
+    # 本番の作戦マスター（missions.id）。mission_builder とは併用できない。
+    mission_id: int | None = None
+    # MISSION_BUILDERS の名前。
+    mission_builder: str | None = None
+
+    @property
+    def has_mission(self) -> bool:
+        """作戦の戦闘か."""
+        return self.mission_id is not None or self.mission_builder is not None
 
 
 def resolve_conditions(
-    session: Session, theater_id: str | None, minovsky_density: float | None
+    session: Session,
+    theater_id: str | None,
+    minovsky_density: float | None,
+    environment: str | None = None,
 ) -> RosterConditions:
     """戦域と濃度から、ロスターに保存する戦域条件を作る.
+
+    戦域が無いときは environment（省略時は宇宙）で戦う。作戦では作戦の環境を渡す。
 
     Raises:
         ValueError: 戦域、または戦域の環境タイプがマスターに無い場合
@@ -87,6 +113,8 @@ def resolve_conditions(
     theater: MasterTheater | None = None
     if theater_id is None:
         conditions = BattleConditions(minovsky_density=minovsky_density or 0.0)
+        if environment is not None:
+            conditions = replace(conditions, environment=environment)
     else:
         theater = session.get(MasterTheater, theater_id)
         if theater is None:
@@ -292,15 +320,73 @@ class RosterBuilder:
         )
 
 
+def load_mission(session: Session, options: FetchOptions) -> RosterMission | None:
+    """作戦マスターを本番の missions か、リポジトリの定義から読む.
+
+    Raises:
+        ValueError: 作戦が無い場合。作戦IDと定義の名前を両方指定した場合
+    """
+    if options.mission_id is not None and options.mission_builder is not None:
+        raise ValueError("--mission と --mission-builder は併用できません。")
+    if options.mission_id is not None:
+        mission = session.get(Mission, options.mission_id)
+        if mission is None:
+            raise ValueError(f"作戦 {options.mission_id} が見つかりません。")
+        source, builder = "production", None
+    elif options.mission_builder is not None:
+        build = MISSION_BUILDERS.get(options.mission_builder)
+        if build is None:
+            names = ", ".join(sorted(MISSION_BUILDERS))
+            raise ValueError(
+                f"作戦の定義 '{options.mission_builder}' はありません（{names}）。"
+            )
+        mission = build()
+        source, builder = "builder", options.mission_builder
+    else:
+        return None
+    return RosterMission(
+        source=source,
+        builder=builder,
+        master=mission.model_dump(mode="json", exclude={"created_at", "updated_at"}),
+    )
+
+
+def _validate_mission_options(options: FetchOptions) -> None:
+    """本番の作戦ルームと同じく、プレイヤー機だけを同じチームで出す指定か確かめる.
+
+    Raises:
+        ValueError: NPC・エース・チームを指定した場合
+    """
+    if options.npc_count or options.ace_count:
+        raise ValueError(
+            "作戦では敵機を作戦マスターから出します。--npc / --ace は併用できません。"
+        )
+    teams = [s for s in [*options.mobile_suits, *options.pilots] if s.team]
+    if teams:
+        raise ValueError(
+            "作戦ではプレイヤー機は全員同じチームで出ます。"
+            f"チームの指定（{', '.join(f'{s.id}:{s.team}' for s in teams)}）を外してください。"
+        )
+
+
 def build_roster(session: Session, options: FetchOptions, name: str) -> Roster:
     """指定した機体・NPC・エースと戦域条件からロスターを作る.
 
+    作戦を指定したときは、プレイヤー機と作戦マスターを保存する。
+    友軍・敵機は `run` で作戦マスターから組み立てる。
+
     Raises:
-        ValueError: 指定が不正な場合。参加機体が2機未満の場合
+        ValueError: 指定が不正な場合。参加機体が足りない場合
     """
     validate_roster_name(name)
+    if options.has_mission:
+        _validate_mission_options(options)
+    mission = load_mission(session, options)
     conditions = resolve_conditions(
-        session, options.theater_id, options.minovsky_density
+        session,
+        options.theater_id,
+        options.minovsky_density,
+        environment=mission.master["environment"] if mission else None,
     )
     builder = RosterBuilder(session)
     for spec in options.mobile_suits:
@@ -310,9 +396,10 @@ def build_roster(session: Session, options: FetchOptions, name: str) -> Roster:
     builder.add_aces(options.ace_count)
     builder.add_npcs(options.npc_count)
 
-    if len(builder.entries) < MIN_ROSTER_ENTRIES:
+    min_entries = MIN_MISSION_ROSTER_ENTRIES if mission else MIN_ROSTER_ENTRIES
+    if len(builder.entries) < min_entries:
         raise ValueError(
-            f"参加機体が {len(builder.entries)} 機です。{MIN_ROSTER_ENTRIES} 機以上を指定してください。"
+            f"参加機体が {len(builder.entries)} 機です。{min_entries} 機以上を指定してください。"
         )
     return Roster(
         name=name,
@@ -320,6 +407,7 @@ def build_roster(session: Session, options: FetchOptions, name: str) -> Roster:
         conditions=conditions,
         entries=builder.entries,
         ace_pilots=builder.ace_pilots,
+        mission=mission,
     )
 
 

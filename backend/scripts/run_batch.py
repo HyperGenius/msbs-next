@@ -21,7 +21,6 @@ from sqlmodel import Session, select
 
 from app.db import engine
 from app.engine.battle_digest import compute_unit_kills
-from app.engine.objectives import ObjectiveResult, ObjectiveStatus
 from app.engine.replay_log import to_replay_logs
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -47,7 +46,11 @@ from app.services.battle_log_storage_service import save_analysis_log
 from app.services.battle_room_service import BattleRoomService
 from app.services.drop_service import DropScope, DropService
 from app.services.matching_service import MatchingService
-from app.services.mission_battle import build_mission_battle
+from app.services.mission_battle import (
+    WIN_LOSS_BY_OBJECTIVE_STATUS,
+    build_mission_battle,
+    objective_result_fields,
+)
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
 from app.services.theater_service import BattleConditions, TheaterService
@@ -117,53 +120,6 @@ def run_simulation_phase(session: Session) -> None:
             traceback.print_exc()
             # エラーが発生してもルームの処理を継続
             continue
-
-
-_WIN_LOSS_BY_STATUS = {
-    ObjectiveStatus.SUCCESS: "WIN",
-    ObjectiveStatus.FAILURE: "LOSE",
-    ObjectiveStatus.DRAW: "DRAW",
-}
-
-
-def _objective_fields(
-    result: ObjectiveResult, simulator: BattleSimulator | None = None
-) -> dict:
-    """`BattleResult` の作戦の結果のカラムを組み立てる.
-
-    `simulator` を渡すと、BattleViewer が撤退ポイントとロールを描くための
-    `retreat_points` / `unit_roles` を `objective_detail` に含める。
-    """
-    detail: dict | None = None
-    if result.total > 0:
-        detail = {
-            "total": result.total,
-            "lost": result.lost,
-            "player_survived": result.player_survived,
-        }
-    if simulator is not None and (
-        simulator.retreat_points or simulator.unit_assignments
-    ):
-        detail = detail or {}
-        detail["retreat_points"] = [
-            {
-                "position": rp.position.model_dump(),
-                "radius": rp.radius,
-                "team_id": rp.team_id,
-            }
-            for rp in simulator.retreat_points
-        ]
-        detail["unit_roles"] = {
-            unit_id: assignment.role
-            for unit_id, assignment in simulator.unit_assignments.items()
-            if assignment.role is not None
-        }
-    return {
-        "objective_status": result.status.value,
-        "objective_progress": result.progress,
-        "objective_required": result.required,
-        "objective_detail": detail,
-    }
 
 
 def _save_battle_results(
@@ -238,7 +194,7 @@ def _save_battle_results(
             else resolve_team_id(entry_unit)
         )
         objective_result = simulator.evaluate_objective(entry_team_id)
-        individual_win_loss = _WIN_LOSS_BY_STATUS[objective_result.status]
+        individual_win_loss = WIN_LOSS_BY_OBJECTIVE_STATUS[objective_result.status]
         # 勝敗に関わらず自機の撃破数をそのまま使う（main.py のソロミッション経路と
         # 揃える）。敗北時に0へ丸めると、LOSE時のダイジェストタグ判定
         # （kills>=1 なら「力戦及ばず」）が常に「完敗」にしかならず、報酬の
@@ -339,7 +295,7 @@ def _save_battle_results(
             level_up=level_up,
             is_read=False,
             loot=[item.model_dump() for item in loot],
-            **_objective_fields(objective_result, simulator),
+            **objective_result_fields(objective_result, simulator),
             **unit_fields,
             **battlefield_fields,
             **digest_fields,

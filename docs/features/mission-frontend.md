@@ -45,7 +45,7 @@ Epic #682 の Sub-Issue 5（Issue #687）。プレイヤーが次回バトルの
 }
 ```
 
-`run_batch._objective_fields()` が、シミュレーターの撤退ポイントとロールから組み立てる。撤退ポイントもロールも無いバトルロイヤルは従来どおり（殲滅で友軍を数えないので null）。
+`mission_battle.objective_result_fields()`（Issue #699 で `run_batch._objective_fields()` から移した。ローカルシミュレータも使う）が、シミュレーターの撤退ポイントとロールから組み立てる。撤退ポイントもロールも無いバトルロイヤルは従来どおり（殲滅で友軍を数えないので null）。
 友軍かどうかは `enemies_info` の `team_id` が自機と同じかで判断する。
 
 ## テスト

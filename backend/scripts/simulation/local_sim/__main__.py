@@ -2,6 +2,7 @@
 
 backend/ で実行する:
     python -m scripts.simulation.local_sim fetch --pilot <パイロットID> --npc 7
+    python -m scripts.simulation.local_sim fetch --pilot <パイロットID> --mission 4
     python -m scripts.simulation.local_sim run --roster <ロスター名> --rounds 20
     python -m scripts.simulation.local_sim fetch-log --result <バトル結果ID>
     python -m scripts.simulation.local_sim list
@@ -76,6 +77,8 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
         ace_count=args.ace,
         theater_id=args.theater,
         minovsky_density=args.minovsky,
+        mission_id=args.mission,
+        mission_builder=args.mission_builder,
     )
     name = args.name or default_roster_name()
     print(f"本番DBから参加機体を取得します（ロスター: {name}）")
@@ -90,6 +93,18 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
         f"  戦域: {conditions.theater_id or 'なし'} / 環境: {conditions.environment}"
         f" / ミノフスキー濃度: {conditions.minovsky_density}"
     )
+    if roster.mission is not None:
+        master = roster.mission.master
+        source = (
+            "本番の作戦マスター"
+            if roster.mission.source == "production"
+            else f"リポジトリの定義 {roster.mission.builder}"
+        )
+        print(
+            f"  作戦: {master['name']} (ID {master['id']}, {source})"
+            f" / 友軍 {len(master.get('allies_config') or [])} 機"
+            f" / 敵機 {len(master.get('enemy_config', {}).get('enemies', []))} 機"
+        )
     for entry in roster.entries:
         source = entry.source
         team = entry.snapshot.get("team_id") or "個人"
@@ -135,8 +150,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
     result = run_generation(roster, roster_path, options)
     manifest = result.manifest
     summary = manifest.summary
+    draws = f" {summary.draws} 分" if summary.draws else ""
     print(
-        f"{summary.wins} 勝 {summary.losses} 敗（打ち切り {summary.timeouts}）"
+        f"{summary.wins} 勝 {summary.losses} 敗{draws}（打ち切り {summary.timeouts}）"
         f" / 判定する機体: {manifest.player_name} / seed: {manifest.seed}"
     )
     print(f"保存しました: {result.path}")
@@ -221,6 +237,8 @@ def _format_generation(manifest: Manifest) -> str:
         f" {manifest.created_at:%Y-%m-%d %H:%M:%S}"
         f" {manifest.label:<20} {summary.battles:>4} 戦"
         f" {summary.wins:>3} 勝 {summary.losses:>3} 敗"
+        + (f" {summary.draws} 分" if summary.draws else "")
+        + (f"  作戦: {manifest.mission_name}" if manifest.mission_name else "")
     )
 
 
@@ -423,6 +441,12 @@ def build_parser() -> argparse.ArgumentParser:
   python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 7
   python -m scripts.simulation.local_sim fetch --ms <機体ID>:A --ms <機体ID>:A --ace 1 --npc 4
   python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater solomon --minovsky 0.6 --name solomon_test
+  python -m scripts.simulation.local_sim fetch --pilot user_xxx --mission 4 --name retreat
+  python -m scripts.simulation.local_sim fetch --pilot user_xxx --mission-builder retreat_support --name retreat_dev
+
+作戦（--mission / --mission-builder）を付けると、本番の作戦ルームと同じく --ms / --pilot の
+プレイヤー機だけを同じチームで出し、友軍・敵機は run で作戦マスターから組み立てる。
+ロスターの mission.master を手で編集すると、ロール・小隊・配置を変えて試せる。
 """,
     )
     fetch.add_argument(
@@ -457,7 +481,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--theater",
         default=None,
         metavar="ID",
-        help="戦域ID。省略すると戦域なし（宇宙）",
+        help="戦域ID。省略すると戦域なし（宇宙。作戦では作戦の環境）",
     )
     fetch.add_argument(
         "--minovsky",
@@ -465,6 +489,20 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="0-1",
         help="ミノフスキー濃度。省略すると戦域の基準濃度（戦域なしなら 0）",
+    )
+    mission = fetch.add_mutually_exclusive_group()
+    mission.add_argument(
+        "--mission",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="本番の作戦マスター（missions.id）で戦う。--npc / --ace とチームの指定は使えない",
+    )
+    mission.add_argument(
+        "--mission-builder",
+        default=None,
+        metavar="NAME",
+        help="本番に反映する前の作戦を、リポジトリの定義から作る（retreat_support）",
     )
     fetch.add_argument(
         "--name",
