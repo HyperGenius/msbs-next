@@ -3,7 +3,7 @@
 ## 概要
 
 本番の参加機体を使って、バトルをローカルで実行する開発用のツール。
-Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609〜#613）と 7（Issue #699）の範囲を書く。
+Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609〜#613）、7（Issue #699）、10（Issue #703）の範囲を書く。
 
 * 戦闘処理は本番バッチと同じモジュール（`app/services/battle_execution.py`）を使う
 * `fetch` で本番DBから参加機体・NPC・エースと戦域条件を読み、手元の JSON（ロスター）に保存する
@@ -18,6 +18,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609�
 * `fetch --mission` で作戦（友軍・敵機・ロール・小隊・撤退ポイント・作戦目標）をロスターに入れ、本番の作戦ルームと同じ手順で戦い、`/dev/sim` で撤退ポイントとロールを描いて再生できる（Issue #699）
 * Admin Tool の `/local-sim` から `run` を実行し、世代の一覧・集計を確認できる（Issue #701）
 * Admin Tool の `/local-sim` から `fetch` でロスターを作れる。プレイヤーは所有機から出撃機体を選ぶ（Issue #705）
+* Admin Tool の `/local-sim/rosters/[name]` でロスターの機体・戦域・作戦の値を編集し、本番DBを変えずに別名のロスターとして保存できる（Issue #703）
 
 ### 今後の予定（Epic #608）
 
@@ -464,6 +465,67 @@ python -m scripts.simulation.local_sim report retreat
 * `frontend/tests/unit/localSimAnalysis.test.ts`: 比較表の作戦の行、`localSimBattleToResult()` の作戦の結果
 * 本番の機体1機（Hambrabi）と `retreat_support` の作戦で `run --rounds 10` を実行し（9 勝 1 敗）、`/dev/sim` で撤退ポイント・友軍のリング・作戦の結果が表示されることを確認した。
   追撃部隊の狙撃機は、射撃時に標的から最も近い格闘機より 100〜200m 遠い位置にいた（#688 の陣形）
+
+---
+
+## ロスターの編集: roster-save（Issue #703）
+
+調整したい値（機体の HP・装甲・機動性・武装、戦域の条件、作戦の敵の編成）を、本番DBのマスターに書かずに試す。
+ロスターを編集して別名で保存し、元のロスターと同じシードで `run` して、世代の比較で効果を確かめる。
+確かめた値を本番に反映するときは、今までどおり Admin Tool のマスター編集で行う（本機能の対象外）。
+
+### CLI
+
+```bash
+cd backend
+python -m scripts.simulation.local_sim roster-save --name <名前> [--force] < roster.json
+```
+
+| オプション | 説明 |
+|---|---|
+| `--name <名前>` | 保存するロスター名。標準入力の JSON の `name` は無視してこの名前にする |
+| `--force` | 同名のロスターを上書きする。既定では上書きしない |
+
+標準入力のロスターを `Roster`（Pydantic）で検証してから保存する。形式が合わない、またはロスター名が使えないときは、保存せず終了コード 1 で終わる。
+Admin Tool に形式の定義を重ねて書かないため、形式のチェックはこの CLI に任せている。保存は DB に接続しない。
+
+### Admin Tool
+
+`/local-sim` の「実行」でロスターを選び、「このロスターを編集」から `/local-sim/rosters/[name]` を開く。
+
+| 区分 | 編集できる項目 |
+|---|---|
+| 機体（`entries[].snapshot`） | HP・装甲・機動性・索敵範囲・耐性・EN・適性/補正・戦術・欠損部位・武器スロット数・武装・地形適正。機体の複製・取り外し |
+| 戦域の条件（`conditions`） | 環境（環境タイプの効果の写しも取り替える）・ミノフスキー濃度・障害物の密度 |
+| 作戦（`mission.master`） | 友軍・敵機の機体名・HP・装甲・機動性・ロール・小隊・武器の威力/射程/命中率、機体の複製・取り外し、作戦目標の必要数（`params.required`） |
+
+* 機体の入力欄は NPC 機・エース機の編集と同じ部品（`MobileSuitSpecSection`・`WeaponListSection`・`TerrainAdaptabilityFields`）と同じ検証（武装数はスロット数以下・武器 ID の重複なし）を使う。
+  フォームで扱わない項目（位置・`team_id`・武器の `weapon_type` など）は元の値を引き継ぐ（`mergeWeaponSources()` と同じ考え方）。
+  最大 HP を変えると現在 HP も揃える
+* フォームを通しても値が変わらなかった機体は、元のスナップショットをそのまま保存する（狙う部位配分の丸めなどを変更として扱わない）
+* 元のロスターから変えた値は、琥珀色の枠と「元: …」で強調する。機体ごとに変更点の一覧も出す。複製した機体は「追加した機体」として扱う
+* 「名前を付けて保存」は既定で `<元の名前>-edit` に保存する。同名があると 409 になり、「上書きする」にチェックを入れたときだけ上書きする
+* 入力が不正なとき（赤い項目、ミノフスキー濃度が 0〜1 の外、作戦の機体の値が数でない）は保存を押せない。最終的な形式のチェックは CLI の `Roster` が行う
+
+### Route Handler
+
+| ルート | 説明 |
+|---|---|
+| `GET /api/local-sim/rosters/{名前}` | ロスターの JSON を返す。無ければ 404 |
+| `POST /api/local-sim/rosters/{名前}/save` | body `{ roster, force? }` を `roster-save` で `{名前}` として保存する。同名があり force でなければ 409、形式が不正なら 422 |
+
+どちらも開発環境（`next dev`）でだけ動く。
+
+### 比較の流れ
+
+1. `/local-sim/rosters/<元>` で値を変えて `<元>-edit` に保存する
+2. `/local-sim` で両方のロスターを同じシードで実行する（ラベルを分けると世代を見分けやすい）
+3. `/dev/sim` で2つの世代を比較する（[世代の比較](#devsim-世代の比較とaiの判断の表示)）
+
+### 検証（roster-save）
+
+* `backend/tests/unit/test_local_sim_roster_save.py`: 名前の付け替え、`--force` なしでは上書きしないこと、形式・ロスター名が不正なときは保存しないこと
+* `admin-tool/tests/unit/rosterEdit.test.ts`: フォーム値とスナップショットの変換（引き継ぎ・最大 HP・狙う部位配分）、変更点の比較、機体の複製
 
 ---
 

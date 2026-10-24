@@ -2,7 +2,7 @@
 // battle_logs/local_sim の読み込み。frontend の localSimStore.ts と同じ規則でパスを検証する。
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { LocalSimManifest, LocalSimReport, LocalSimRosterInfo } from "@/types/localSim";
+import type { LocalSimManifest, LocalSimReport, LocalSimRoster, LocalSimRosterInfo } from "@/types/localSim";
 import { isValidName } from "./shared";
 
 const GENERATIONS_DIR = "generations";
@@ -111,4 +111,12 @@ export async function listRosters(root: string): Promise<LocalSimRosterInfo[]> {
 export async function rosterExists(root: string, name: string): Promise<boolean> {
   if (!isValidName(name)) return false;
   return (await resolveInside(root, ROSTERS_DIR, `${name}.json`)) !== null;
+}
+
+/** ロスターの中身を返す。無いときは null。 */
+export async function readRoster(root: string, name: string): Promise<LocalSimRoster | null> {
+  if (!isValidName(name)) return null;
+  const file = await resolveInside(root, ROSTERS_DIR, `${name}.json`);
+  if (!file) return null;
+  return JSON.parse(await fs.readFile(file, "utf-8")) as LocalSimRoster;
 }

@@ -4,6 +4,7 @@ backend/ で実行する:
     python -m scripts.simulation.local_sim fetch --pilot <パイロットID> --npc 7
     python -m scripts.simulation.local_sim fetch --pilot <パイロットID> --mission 4
     python -m scripts.simulation.local_sim run --roster <ロスター名> --rounds 20
+    python -m scripts.simulation.local_sim roster-save --name <ロスター名> < roster.json
     python -m scripts.simulation.local_sim fetch-log --result <バトル結果ID>
     python -m scripts.simulation.local_sim list
     python -m scripts.simulation.local_sim report <世代>
@@ -43,6 +44,7 @@ from scripts.simulation.local_sim.readonly_db import (  # noqa: E402
 )
 from scripts.simulation.local_sim.roster import (  # noqa: E402
     ROSTERS_DIR,
+    Roster,
     load_roster,
     resolve_roster_path,
     save_roster,
@@ -112,6 +114,15 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
             f"  [{source.kind}] {entry.snapshot.get('name')}"
             f" / {source.pilot_name or '-'} / チーム: {team}"
         )
+    print(f"{len(roster.entries)} 機を保存しました: {path}")
+    return 0
+
+
+def _cmd_roster_save(args: argparse.Namespace) -> int:
+    """標準入力のロスターを `Roster` で検証し、`--name` の名前で保存する."""
+    roster = Roster.model_validate_json(sys.stdin.read())
+    roster = roster.model_copy(update={"name": args.name})
+    path = save_roster(roster, overwrite=args.force)
     print(f"{len(roster.entries)} 機を保存しました: {path}")
     return 0
 
@@ -513,6 +524,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="同名のロスターを上書きする"
     )
     fetch.set_defaults(func=_cmd_fetch)
+
+    roster_save = sub.add_parser(
+        "roster-save",
+        help="標準入力のロスターを検証して保存する（Admin Tool の編集画面が使う）",
+    )
+    roster_save.add_argument("--name", required=True, help="保存するロスター名")
+    roster_save.add_argument(
+        "--force", action="store_true", help="同名のロスターを上書きする"
+    )
+    roster_save.set_defaults(func=_cmd_roster_save)
 
     run = sub.add_parser(
         "run",

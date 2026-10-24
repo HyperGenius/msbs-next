@@ -166,3 +166,33 @@ export function setPinned(generationId: string, pinned: boolean): Promise<void> 
     );
   });
 }
+
+/**
+ * 編集したロスターを CLI の `roster-save` で保存する。形式の検証（Pydantic の `Roster`）は CLI が行う。
+ * 同名があり force でないとき、または形式が不正なときは RunValidationError。
+ */
+export function saveRoster(name: string, roster: unknown, force: boolean): Promise<void> {
+  if (!isValidName(name)) {
+    return Promise.reject(new RunValidationError("ロスター名は英数字で始め、英数字と _ . - だけを使ってください。"));
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn("uv", ["run", "python", "-m", MODULE, "roster-save", "--name", name, ...(force ? ["--force"] : [])], {
+      cwd: backendDir(),
+      stdio: ["pipe", "ignore", "pipe"],
+    });
+    let stderr = "";
+    child.stderr?.setEncoding("utf-8");
+    child.stderr?.on("data", (chunk: string) => {
+      stderr = (stderr + chunk).slice(-MAX_STDERR_CHARS);
+    });
+    child.on("error", (err) => reject(new Error(`uv を起動できません: ${err.message}`)));
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new RunValidationError(stderr.trim() || `終了コード ${code}`));
+    });
+    child.stdin?.on("error", () => {
+      // CLI が先に終了したときの EPIPE は close の結果で扱う。
+    });
+    child.stdin?.end(JSON.stringify(roster));
+  });
+}

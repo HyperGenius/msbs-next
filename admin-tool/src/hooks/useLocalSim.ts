@@ -7,6 +7,7 @@ import type {
   LocalSimFetchRun,
   LocalSimGenerationDetail,
   LocalSimManifest,
+  LocalSimRoster,
   LocalSimRosterInfo,
   LocalSimRun,
   LocalSimRunRequest,
@@ -91,4 +92,19 @@ export function useLocalSimRun() {
   }
 
   return { run, isRunning: run?.status === "running", start, startFetch, cancel };
+}
+
+/** 編集画面で開くロスター。編集中に読み直して上書きしないよう、フォーカス時の再取得はしない */
+export function useLocalSimRoster(name: string) {
+  const { data, error, isLoading } = useSWR<{ roster: LocalSimRoster }>(
+    `${BASE}/rosters/${encodeURIComponent(name)}`,
+    localFetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  );
+  return { roster: data?.roster, error, isLoading };
+}
+
+/** 編集したロスターを `name` の名前で保存する。同名があり force でなければ 409 のエラーになる */
+export async function saveLocalSimRoster(name: string, roster: LocalSimRoster, force: boolean): Promise<void> {
+  await localRequest(`${BASE}/rosters/${encodeURIComponent(name)}/save`, "POST", { roster, force });
 }
