@@ -16,6 +16,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609�
 * `replay-fixture` で、旧形式と配信用ログの一致テストに使う戦闘のログを作れる（Issue #634）
 * `fetch-log` で、本番の戦闘の解析用ログ（GCS）を取得し、`/dev/sim` でファジィスコア付きで再生できる（Issue #637）
 * `fetch --mission` で作戦（友軍・敵機・ロール・小隊・撤退ポイント・作戦目標）をロスターに入れ、本番の作戦ルームと同じ手順で戦い、`/dev/sim` で撤退ポイントとロールを描いて再生できる（Issue #699）
+* Admin Tool の `/local-sim` から `run` を実行し、世代の一覧・集計を確認できる（Issue #701）
 
 ### 今後の予定（Epic #608）
 
@@ -133,7 +134,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | オプション | 説明 |
 |---|---|
 | `--ms <機体ID>[:<チーム>]` | 指定した機体を参加させる（複数指定可） |
-| `--pilot <パイロットID>[:<チーム>]` | パイロットの出撃機体（`active_mobile_suit_id`）を参加させる。ID は `pilots.id` か `user_id`（複数指定可） |
+| `--pilot <パイロットID>[:<チーム>]` | パイロットの出撃機体（`active_mobile_suit_id`）を参加させる。ID は `pilots.id` か `user_id`（複数指定可）。プレイヤーの出撃機体はエントリーごとに選ぶため `active_mobile_suit_id` が未設定のことがある。その場合はエラーになるので `--ms` で機体を直接指定する（戦域ごとにビルドが異なるため、所有機の先頭へのフォールバックはしない） |
 | `--npc N` | 本番の永続化NPCから N 機を選ぶ。足りない分は本番と同様に NPC を生成して補う |
 | `--ace N` | エースパイロットをランダムに N 機参加させる。同じエースは重ねない |
 | `--theater <戦域ID>` | 戦域。省略すると戦域なし（宇宙） |
@@ -948,3 +949,48 @@ python -m scripts.simulation.local_sim fetch-log --room <ルームID> --user-id 
 
 * `tests/unit/test_local_sim_fetch_log.py`: 結果とログからの記録の組み立て、バトル結果IDとルームIDでの選択、`manifest.json` / `battle_001.json` / `report.json` の保存、世代管理とピン留め、不正なラベルで世代を残さないこと、解析用ログ（gzip した NDJSON）の取得と、無いときのエラー
 * 実際の本番DBと GCS への接続は、このリポジトリのテストでは行っていない。本番の戦闘での動作確認は、オーナーの認証情報が必要なため、マージ後に `fetch-log` で行う
+
+---
+
+## Admin Tool: `/local-sim`（Issue #701）
+
+Admin Tool（`admin-tool/`、`npm run dev` で手元だけ起動）から `run` を実行し、世代の一覧・集計を見る。再生と比較は frontend の `/dev/sim` を別タブで開く（BattleViewer は frontend にしか無いため）。
+
+* backend のサーバーも Cloud Run・GCS も使わない。Route Handler（Node）が `uv run python -m scripts.simulation.local_sim run ...` を子プロセスで起動する（作業ディレクトリは `backend/`、引数は配列で渡しシェルを通さない）
+* `run` はグローバルの乱数やエースのデータを書き換えるため、backend のリクエスト内ではなく別プロセスで実行する
+* 開発環境（`NODE_ENV=development`）以外では全 Route Handler が 404 を返す
+
+### Route Handler
+
+| メソッド・パス | 内容 |
+|---|---|
+| `GET /api/local-sim/rosters` | ロスターの一覧（`rosters/*.json`） |
+| `GET /api/local-sim/generations` | 世代の一覧（新しい順。戦闘ごとの内訳は省く） |
+| `GET /api/local-sim/generations/{世代ID}` | `manifest.json` と `report.json` |
+| `PATCH /api/local-sim/generations/{世代ID}` | ピン留めの切り替え（`{"pinned": bool}`。CLI の `pin` / `unpin`） |
+| `POST /api/local-sim/runs` | 実行開始。実行中なら 409、入力が不正なら 422 |
+| `GET /api/local-sim/runs/current` | 現在（直近）の実行の進捗 |
+| `DELETE /api/local-sim/runs/current` | 実行の中止 |
+
+* ジョブの状態はサーバーのメモリ（`globalThis`）に持つ。同時に実行するのは1つだけ
+* 進捗は CLI の出力 `[i/N] seed=…` から読む。子プロセスは `PYTHONUNBUFFERED=1` で起動する。UI は実行中だけ1秒ごとにポーリングする（SWR）
+* 終了コードが 0 以外なら、標準エラーを表示する
+* ロスター名・ラベル・世代ID は CLI と同じ規則（英数字で始まり英数字と `_.-` だけ）でサーバー側でも確かめる。パスの検証は frontend の `localSimStore.ts` と同じ（実パスが保存先の外に出ないこと）
+* 読み込み元は `LOCAL_SIM_DIR`（既定はリポジトリ直下の `battle_logs/local_sim`）。`run` 自体は CLI の既定の保存先に書くため、`LOCAL_SIM_DIR` を変えるときは CLI 側と一致させること
+* 再生・比較の URL の基準は `NEXT_PUBLIC_DEV_SIM_URL`（既定 `http://localhost:3000`）
+
+### 中止
+
+「中止」は子プロセスへの SIGTERM。`run` は SIGTERM を受けると `SystemExit(143)` を送出し、`run_generation()` の `except BaseException` を通って `GenerationWriter.discard()` が書きかけの世代（`.tmp-<世代ID>`）を消す。
+
+### 表示する項目
+
+* 世代の一覧: ラベル・日時・戦闘数・勝敗・打ち切り・ピン留め。2つ選んで「比較」で `/dev/sim?view=compare&a=&b=` を開く
+* 世代の詳細: 勝率・打ち切り・平均戦闘時間・判定機の撃墜数・機体ごとの撃墜数/被撃墜率（`report.json`）、戦闘の一覧（勝敗・撃墜・経過時間・シード）と「再生」（`/dev/sim?gen=&battle=`）
+* 作戦の世代（`fetch --mission`）: 一覧に作戦名、詳細に作戦の成功率（成功/失敗/引き分け）・離脱した友軍の1戦平均・撃破された友軍の合計を出す（`report.json` の `objective`）。引き分けは勝敗に「分」で出す
+
+### 検証（Admin Tool）
+
+* `backend/tests/unit/test_local_sim_run.py::test_sigterm_during_run_leaves_no_generation`: SIGTERM で書きかけの世代が残らないこと
+* `admin-tool/tests/unit/localSim.test.ts`: 名前の検証、`run` の引数の組み立て、CLI 出力の解析、`/dev/sim` の URL
+* `next dev` で Route Handler を確認済み（一覧・不正な入力の 422・存在しないロスターで失敗した際の標準エラー表示・実行中でないときの中止が 409）。ロスターの作成には本番DBへの接続が必要なため、実際の戦闘の実行と画面の操作は未確認

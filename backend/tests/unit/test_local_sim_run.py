@@ -468,3 +468,25 @@ def test_pin_and_unpin_update_manifest(
     assert read_manifest(result.path).pinned is True
     set_pinned("g", False, generations_dir)
     assert read_manifest(result.path).pinned is False
+
+
+def test_sigterm_during_run_leaves_no_generation(
+    roster_path: Path, generations_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SIGTERM（Admin Tool の中止）を受けても、書きかけの世代を残さないこと."""
+    from scripts.simulation.local_sim.__main__ import (
+        SIGTERM_EXIT_CODE,
+        _raise_on_sigterm,
+    )
+
+    def terminate(*_args, **_kwargs) -> BattleRecord:
+        _raise_on_sigterm(15, None)
+        raise AssertionError("unreachable")
+
+    monkeypatch.setattr(local_run, "run_one_battle", terminate)
+    with pytest.raises(SystemExit) as exc_info:
+        _run(roster_path, generations_dir, seed=1)
+
+    assert exc_info.value.code == SIGTERM_EXIT_CODE
+    assert list(generations_dir.iterdir()) == []
+    assert gamedata._static_ace_pilots is None

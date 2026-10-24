@@ -50,6 +50,11 @@ export default function HomePage() {
               環境タイプ管理
             </SciFiButton>
           </Link>
+          <Link href="/local-sim">
+            <SciFiButton className="w-full" variant="accent">
+              ローカルシミュレータ
+            </SciFiButton>
+          </Link>
         </div>
       </SciFiPanel>
     </main>

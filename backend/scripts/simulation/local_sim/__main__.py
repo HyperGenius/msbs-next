@@ -17,6 +17,7 @@ backend/ で実行する:
 import argparse
 import contextlib
 import json
+import signal
 import sys
 import uuid
 from pathlib import Path
@@ -115,6 +116,14 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
+SIGTERM_EXIT_CODE = 128 + signal.SIGTERM
+
+
+def _raise_on_sigterm(_signum: int, _frame: object) -> None:
+    """SIGTERM を例外にして、`run_generation()` が書きかけの世代を消せるようにする."""
+    raise SystemExit(SIGTERM_EXIT_CODE)
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     roster = load_roster(args.roster)
     roster_path = resolve_roster_path(args.roster)
@@ -123,6 +132,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     forbid_database()
     from scripts.simulation.local_sim.run import run_generation
+
+    # Admin Tool の「中止」は子プロセスへの SIGTERM で行う。
+    signal.signal(signal.SIGTERM, _raise_on_sigterm)
 
     options = RunOptions(
         rounds=args.rounds,
