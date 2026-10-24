@@ -63,9 +63,11 @@ def test_blueprint_id_for() -> None:
 
 
 def test_every_master_has_standard_blueprint(session: Session) -> None:
-    """全ての機体・武器マスターに標準配備の設計図マスターがあること."""
+    """練習機を除く全ての機体・武器マスターに標準配備の設計図マスターがあること."""
     blueprints = {b.id: b for b in session.exec(select(MasterBlueprint)).all()}
-    ms_ids = [m.id for m in session.exec(select(MasterMobileSuit)).all()]
+    ms_ids = [
+        m.id for m in session.exec(select(MasterMobileSuit)).all() if not m.is_trainer
+    ]
     weapon_ids = [w.id for w in session.exec(select(MasterWeapon)).all()]
 
     expected_ids = {f"mobile_suit:{i}" for i in ms_ids} | {
@@ -332,7 +334,10 @@ def test_get_unlock_states_query_count_is_constant(
     session: Session, pilot: Pilot
 ) -> None:
     """必要な技術Lvが無ければ、解放状態の取得が商品数によらず5回のクエリで済むこと."""
-    target_ids = [m.id for m in session.exec(select(MasterMobileSuit)).all()]
+    # 練習機は設計図マスターを持たない
+    target_ids = [
+        m.id for m in session.exec(select(MasterMobileSuit)).all() if not m.is_trainer
+    ]
     for target_id in target_ids:
         _make_restricted(session, f"mobile_suit:{target_id}")
     with _recorded_queries(session) as statements:

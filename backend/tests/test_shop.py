@@ -410,3 +410,23 @@ def test_purchase_mobile_suit_blueprint_checked_before_credits(client, session):
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json()["detail"] == "この機体の設計図を所持していません"
+
+
+def test_shop_excludes_trainers(client, session):
+    """練習機はショップに並ばず、購入もできないこと."""
+    test_user_id = "test_user_trainer_shop"
+    _create_pilot(session, test_user_id, credits=1000)
+    app.dependency_overrides[get_current_user] = lambda: test_user_id
+
+    try:
+        response = client.get("/api/shop/listings")
+        assert response.status_code == status.HTTP_200_OK
+        ids = {item["id"] for item in response.json()}
+        assert "zaku_ii" in ids
+        assert "gm_trainer" not in ids
+        assert "zaku_ii_trainer" not in ids
+
+        response = client.post("/api/shop/purchase/gm_trainer")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)

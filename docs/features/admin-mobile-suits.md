@@ -64,6 +64,8 @@ X-API-Key: <ADMIN_API_KEY>
 - `blueprint.tech_requirements`: 購入に必要な技術Lvの一覧。存在しない技術・最大Lv超え・1未満・重複は `422`。指定するとその内容で置き換え、省略すると変更しない（Issue #569）
 - `specs.max_en` / `specs.en_recovery`: 0以上の整数。最大 EN と毎秒の EN 回復量。省略すると `1000` / `100`（`MobileSuit` と同じ既定値）。PUT で `specs` に含めなければ変更しない（Issue #675）
 - `specs.terrain_adaptability`: 環境タイプID → 地形適正ランク（`S`〜`D`）。それ以外のランクは `422`。キーが無い環境は環境タイプの既定ランクを使う。PUT で `specs` に含めるとその内容で置き換え、含めなければ変更しない（Issue #579）
+- `starter_faction`: `FEDERATION` / `ZEON` / `null`。練習機（`is_trainer: true`）以外に設定すると `422`（Issue #680）
+- `is_trainer`: 作成時だけ指定できる。PUT では変更できない（設計図マスターの有無が変わるため）
 - DELETE 時: 同名機体がプレイヤー所有の mobile_suits テーブルに存在する場合は `409`
 
 ### リクエスト例
@@ -238,6 +240,8 @@ CREATE TABLE master_mobile_suits (
     weapon_slot_count  INTEGER NOT NULL DEFAULT 1,  -- 武器スロット数、1以上（Issue #383）
     beam_generator_lv  INTEGER NOT NULL DEFAULT 0,  -- ビームジェネレータLv、0以上（Issue #383）
     flavor_text        TEXT,                   -- 購入画面用フレーバーテキスト（1〜2行程度、nullable。Issue #483）
+    is_trainer         BOOLEAN NOT NULL DEFAULT false,  -- 練習機か（Issue #680）
+    starter_faction    TEXT,                   -- パイロット登録時に配る勢力 FEDERATION/ZEON（nullable。Issue #680）
     specs              JSONB NOT NULL,         -- MasterMobileSuitSpec の全フィールド
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -269,20 +273,44 @@ NPC 機の作成時に `mobile_suits` の同名カラムへコピーされる。
 GitHub Actions の `Sync Mobile Suit EN`（`.github/workflows/sync-mobile-suit-en.yml`）からも手動で実行できる。
 使い方は `backend/scripts/maintenance/README.md` を参照。
 
-コピー元は次の順に引く。`master_mobile_suit_id` は Issue #545 で追加したカラムで、それより前に購入した機体と練習機は NULL のため。
+コピー元は次の順に引く。`master_mobile_suit_id` は Issue #545 で追加したカラムで、それより前に購入した機体と、Issue #680 より前に配った練習機は NULL のため。
+練習機も機体マスターにある（「練習機（初期支給機体）」を参照）。
 
 1. `master_mobile_suit_id` が指す機体マスター
 2. 機体名が一致する機体マスター（地形適正・武器スロット数の解決と同じ。機体名を変えた機体は引けない）
-3. 機体名が一致する練習機（`app/core/gamedata.py` の `STARTER_KITS`。機体マスターに無い）
 
 | 同期先 | 扱い |
 |---|---|
 | プレイヤー機 | 同期する |
 | NPC 機（`user_id` が `npc-` で始まる） | 管理画面で機体ごとに調整するため、`--include-npc` を付けたときだけ同期する |
 | エース機（`ace_pilots.mobile_suit`） | 同期しない。エース専用の値を [admin-ace-pilots.md](admin-ace-pilots.md) の画面で設定する |
-| 練習機 | `STARTER_KITS` の値（`max_en` 200 / `en_recovery` 10）へ同期する。練習機はビーム兵器を使う前提にしないため低くしている |
+| 練習機 | プレイヤー機と同じく、練習機の機体マスターの値へ同期する。投入時の値は `max_en` 200 / `en_recovery` 10（練習機はビーム兵器を使う前提にしないため低くしている） |
 
 EN は機体強化（`/api/engineering/*`）の対象ではないため、機体マスターの値でそのまま上書きしてよい。
+
+### 練習機（初期支給機体）（Issue #680）
+
+パイロット登録（`POST /api/pilots/register`）で配る練習機は、機体マスターの行として管理する。
+以前は `app/core/gamedata.py` の `STARTER_KITS` にハードコードしていた。
+
+| カラム | 内容 |
+|---|---|
+| `is_trainer` | 練習機か。作成後は変更できない |
+| `starter_faction` | パイロット登録時にこの練習機を配る勢力。1勢力に1機。設定すると、同じ勢力に配っていた練習機の `starter_faction` は `NULL` になる |
+
+- マイグレーション（`r3f4a5b6c7d8`）で、`STARTER_KITS` の値の練習機を2機投入した（`gm_trainer` → 連邦、`zaku_ii_trainer` → ジオン）。
+  武器スロット数は 2。機体マスターに無かったころ、所持している練習機のスロット数は `MAX_WEAPON_SLOTS`（2）で解決していたため
+- 練習機は**ショップに並べない**。`SHOP_LISTINGS` に含めず、`POST /api/shop/purchase/{id}` は `404` になる
+- 練習機は**設計図マスターを持たない**。そのため設計図のドロップ（ドロップテーブル）・設計図コレクションに出ない。API の `blueprint` は `null`、`blueprint` を送っても無視する
+- パイロット登録で作る機体には `master_mobile_suit_id` に練習機の機体マスターIDを設定する。これで地形適正・武器スロット数・EN 同期は、ほかの機体と同じ経路で練習機の機体マスターを引く
+- 勢力に配る練習機が未設定の場合、パイロット登録は `500`（`Starter kit not found for the specified faction`）にする。パイロットも作らない。
+  既定の機体で代用すると、管理画面の設定漏れに気づけないため。パイロットを作ってから失敗すると、設定後に登録し直せない（既存パイロットで `400`）ため、練習機の取得はパイロット作成より前に行う
+- `PilotService.get_or_create_pilot()`（勢力を持たないパイロットを作る旧経路。`main.py` のソロ出撃と `run_batch.py` から呼ばれる）は、従来どおり機体マスター `zaku_ii` を配る。勢力が無く、配る練習機を決められないため変更していない
+- 機体名で照合している箇所（`frontend` の登録画面の表示名など）があるため、練習機の機体名を変えるときは注意する
+
+既存の練習機（`master_mobile_suit_id` が NULL で、機体名が練習機と一致する行）は
+`backend/scripts/maintenance/backfill_trainer_master_id.py` で機体マスターIDを設定する（既定は件数の表示のみ。`--apply` で書き込む）。
+本番では読み取りのみの実行結果を確認・承認してから `--apply` を付ける。
 
 ### キャッシュ
 
@@ -372,7 +400,8 @@ admin-tool/src/
 - ID・型番・名前・勢力・価格・設計図・換金額・HP・装甲・機動性を表示（型番列は Issue #383、設計図・換金額列は Issue #554 で追加）
 - 各列ヘッダークリックでソート（昇順/降順）
 - テキストフィルタ（name / name_ja / model_number / id / faction で絞り込み、Issue #383 で name_ja / model_number を追加）
-- 設計図の種別（すべて / 標準配備のみ / 要設計図のみ）で絞り込み（Issue #554）
+- 設計図の種別（すべて / 標準配備のみ / 要設計図のみ）で絞り込み（Issue #554）。練習機は設計図を持たないため「すべて」のときだけ出る
+- 名前の横に練習機のバッジ（配る勢力があれば「練習機・連邦に配布」など）を表示し、種別（すべて / ショップ機体のみ / 練習機のみ）で絞り込める。練習機の設計図・換金額列は「—」（Issue #680）
 - 編集中の機体は行がハイライト表示
 
 #### 詳細編集フォーム (`MobileSuitEditForm`)
@@ -382,6 +411,9 @@ admin-tool/src/
 - スペック欄で最大 EN・EN 回復量（/秒）を編集（Issue #675）。NPC 機・エース機の編集画面で機体マスターを取り込むと、EN もマスターの値で上書きする。取り込み後はラベルにマスターの値を併記し、異なる値は色を変える
 - 購入画面用フレーバーテキスト（`flavor_text`、1〜2行推奨）入力欄を追加（`WeaponEditForm` と同様、未入力は `null` に正規化して送信、Issue #483）
 - 「設計図」欄で標準配備フラグと重複時の換金額を編集（Issue #554）。換金額の空欄は、新規作成では初期値（価格の20%）、編集では変更なしとして送る
+- 「練習機（初期支給機体）」欄で練習機フラグとパイロット登録時に配る勢力を編集（Issue #680）。練習機フラグは新規作成時だけ変えられる。練習機では「設計図」欄を出さず、`blueprint` を送らない
+- 配る勢力を設定して保存すると、同じ勢力に配っていた練習機の設定も外れるため、一覧を取り直す（`useAdminMobileSuits`）
+- Clone & Edit では配る勢力を引き継がない（1勢力に1機のため）
 - 「地形適正」欄で、環境タイプのマスター（`GET /api/admin/environments`）ごとに `S`〜`D` か「既定」を選ぶ（Issue #579）
   - 「既定」はキーを保存しない。戦闘時は環境タイプの既定ランク（`default_terrain_grade`）を使うため、既定ランクを変えると追従する
   - 環境タイプのマスターに無いキー（初期データの `GROUND`・`COLONY`・`UNDERWATER` など）は入力欄を出さず、値をそのまま保存する

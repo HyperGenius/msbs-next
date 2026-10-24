@@ -250,5 +250,89 @@
         "FOREST": "B"
       }
     }
+  },
+  {
+    "id": "gm_trainer",
+    "name": "RGM-79T GM Trainer",
+    "price": 0,
+    "faction": "FEDERATION",
+    "description": "テスト用の練習機。",
+    "weapon_slot_count": 2,
+    "is_trainer": true,
+    "starter_faction": "FEDERATION",
+    "specs": {
+      "max_hp": 600,
+      "armor": 30,
+      "mobility": 0.9,
+      "sensor_range": 450.0,
+      "beam_resistance": 0.0,
+      "physical_resistance": 0.0,
+      "max_en": 150,
+      "en_recovery": 8,
+      "melee_aptitude": 1.0,
+      "shooting_aptitude": 1.0,
+      "accuracy_bonus": 0.0,
+      "evasion_bonus": 0.0,
+      "acceleration_bonus": 1.0,
+      "turning_bonus": 1.0,
+      "weapons": [
+        {
+          "id": "trainer_spray_gun",
+          "name": "Beam Spray Gun(Trainer)",
+          "type": "BEAM",
+          "power": 70,
+          "range": 350,
+          "accuracy": 55,
+          "optimal_range": 250.0,
+          "decay_rate": 0.1,
+          "is_melee": false
+        }
+      ],
+      "terrain_adaptability": {
+        "GROUND": "B"
+      }
+    }
+  },
+  {
+    "id": "zaku_ii_trainer",
+    "name": "MS-06T Zaku II Trainer",
+    "price": 0,
+    "faction": "ZEON",
+    "description": "テスト用の練習機。",
+    "weapon_slot_count": 2,
+    "is_trainer": true,
+    "starter_faction": "ZEON",
+    "specs": {
+      "max_hp": 600,
+      "armor": 30,
+      "mobility": 0.9,
+      "sensor_range": 450.0,
+      "beam_resistance": 0.0,
+      "physical_resistance": 0.0,
+      "max_en": 150,
+      "en_recovery": 8,
+      "melee_aptitude": 1.0,
+      "shooting_aptitude": 1.0,
+      "accuracy_bonus": 0.0,
+      "evasion_bonus": 0.0,
+      "acceleration_bonus": 1.0,
+      "turning_bonus": 1.0,
+      "weapons": [
+        {
+          "id": "trainer_machine_gun",
+          "name": "Zaku Machine Gun(Trainer)",
+          "type": "PHYSICAL",
+          "power": 70,
+          "range": 350,
+          "accuracy": 55,
+          "optimal_range": 250.0,
+          "decay_rate": 0.1,
+          "is_melee": false
+        }
+      ],
+      "terrain_adaptability": {
+        "GROUND": "B"
+      }
+    }
   }
 ]

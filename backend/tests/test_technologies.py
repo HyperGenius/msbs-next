@@ -351,7 +351,10 @@ def test_unlock_states_query_count_with_requirements(
     session: Session, pilot: Pilot
 ) -> None:
     """必要な技術Lvがあっても、解放状態の取得が商品数によらず6回のクエリで済むこと."""
-    target_ids = [m.id for m in session.exec(select(MasterMobileSuit)).all()]
+    # 練習機は設計図マスターを持たない
+    target_ids = [
+        m.id for m in session.exec(select(MasterMobileSuit)).all() if not m.is_trainer
+    ]
     for target_id in target_ids:
         _require(session, f"mobile_suit:{target_id}", [(BEAM, 1), (PSYCOMMU, 2)])
     _set_fragments(session, BEAM, 3)

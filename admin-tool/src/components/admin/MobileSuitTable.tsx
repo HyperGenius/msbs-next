@@ -25,6 +25,35 @@ type SortKey =
   | "mobility";
 type SortDir = "asc" | "desc";
 
+/** 練習機（初期支給機体）で絞り込む */
+type KindFilter = "all" | "shop" | "trainer";
+
+const KIND_FILTER_LABELS: Record<KindFilter, string> = {
+  all: "種別: すべて",
+  shop: "ショップ機体のみ",
+  trainer: "練習機のみ",
+};
+
+function matchesKindFilter(ms: MasterMobileSuit, filter: KindFilter): boolean {
+  if (filter === "shop") return !ms.is_trainer;
+  if (filter === "trainer") return ms.is_trainer;
+  return true;
+}
+
+const STARTER_FACTION_LABELS: Record<string, string> = {
+  FEDERATION: "連邦",
+  ZEON: "ジオン",
+};
+
+/** 練習機のバッジ。配る勢力が設定されていれば併記する */
+function TrainerBadge({ ms }: { ms: MasterMobileSuit }) {
+  return (
+    <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold border border-cyan-500/50 text-cyan-300 bg-cyan-900/20">
+      練習機{ms.starter_faction ? `・${STARTER_FACTION_LABELS[ms.starter_faction]}に配布` : ""}
+    </span>
+  );
+}
+
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) return <span className="text-[#00ff41]/30 ml-1">⇅</span>;
   return <span className="text-[#ffb000] ml-1">{dir === "asc" ? "↑" : "↓"}</span>;
@@ -40,6 +69,7 @@ export default function MobileSuitTable({
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filter, setFilter] = useState("");
   const [blueprintFilter, setBlueprintFilter] = useState<BlueprintFilter>("all");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -52,7 +82,9 @@ export default function MobileSuitTable({
 
   const filtered = mobileSuits.filter(
     (ms) =>
-      matchesBlueprintFilter(ms.blueprint, blueprintFilter) &&
+      matchesKindFilter(ms, kindFilter) &&
+      // 練習機は設計図を持たないため、設計図で絞り込んだときは出さない
+      (ms.blueprint ? matchesBlueprintFilter(ms.blueprint, blueprintFilter) : blueprintFilter === "all") &&
       (ms.name.toLowerCase().includes(filter.toLowerCase()) ||
         ms.name_ja?.toLowerCase().includes(filter.toLowerCase()) ||
         ms.model_number?.toLowerCase().includes(filter.toLowerCase()) ||
@@ -64,8 +96,8 @@ export default function MobileSuitTable({
     let av: string | number;
     let bv: string | number;
     if (sortKey === "duplicate_credit_value") {
-      av = a.blueprint.duplicate_credit_value;
-      bv = b.blueprint.duplicate_credit_value;
+      av = a.blueprint?.duplicate_credit_value ?? -1;
+      bv = b.blueprint?.duplicate_credit_value ?? -1;
     } else if (sortKey === "max_hp") {
       av = a.specs.max_hp;
       bv = b.specs.max_hp;
@@ -98,6 +130,18 @@ export default function MobileSuitTable({
           onChange={(e) => setFilter(e.target.value)}
           className="flex-1 min-w-0 bg-[#0a0a0a] border border-[#00ff41]/30 text-[#00ff41] placeholder-[#00ff41]/40 px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#00ff41]"
         />
+        <select
+          value={kindFilter}
+          onChange={(e) => setKindFilter(e.target.value as KindFilter)}
+          aria-label="種別で絞り込む"
+          className="bg-[#0a0a0a] border border-[#00ff41]/30 text-[#00ff41] px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#00ff41]"
+        >
+          {(Object.keys(KIND_FILTER_LABELS) as KindFilter[]).map((key) => (
+            <option key={key} value={key}>
+              {KIND_FILTER_LABELS[key]}
+            </option>
+          ))}
+        </select>
         <BlueprintFilterSelect value={blueprintFilter} onChange={setBlueprintFilter} />
       </div>
       <div className="overflow-x-auto border border-[#00ff41]/20">
@@ -152,6 +196,7 @@ export default function MobileSuitTable({
                   <td className={`${tdClass} text-[#00ff41]/60`}>{ms.model_number || "—"}</td>
                   <td className={`${tdClass} font-bold ${isSelected ? "text-[#ffb000]" : ""}`}>
                     {ms.name}
+                    {ms.is_trainer && <TrainerBadge ms={ms} />}
                   </td>
                   <td className={tdClass}>
                     <span
@@ -168,9 +213,11 @@ export default function MobileSuitTable({
                   </td>
                   <td className={tdClass}>{ms.price.toLocaleString()} C</td>
                   <td className={tdClass}>
-                    <BlueprintBadge blueprint={ms.blueprint} />
+                    {ms.blueprint ? <BlueprintBadge blueprint={ms.blueprint} /> : <span className="text-[#00ff41]/40">—</span>}
                   </td>
-                  <td className={tdClass}>{ms.blueprint.duplicate_credit_value.toLocaleString()} C</td>
+                  <td className={tdClass}>
+                    {ms.blueprint ? `${ms.blueprint.duplicate_credit_value.toLocaleString()} C` : "—"}
+                  </td>
                   <td className={tdClass}>{ms.specs.max_hp}</td>
                   <td className={tdClass}>{ms.specs.armor}</td>
                   <td className={tdClass}>{ms.specs.mobility.toFixed(2)}</td>

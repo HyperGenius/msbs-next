@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useAdminMobileSuits } from "@/hooks/useAdminMobileSuits";
 import { MasterMobileSuit, MasterMobileSuitCreate } from "@/types/admin";
 import MobileSuitTable from "@/components/admin/MobileSuitTable";
-import MobileSuitEditForm, { MobileSuitFormValues } from "@/components/admin/MobileSuitEditForm";
+import MobileSuitEditForm, { MobileSuitSubmitValues } from "@/components/admin/MobileSuitEditForm";
 import MobileSuitRadarChart from "@/components/admin/MobileSuitRadarChart";
 import CombatSimulationPanel from "@/components/admin/CombatSimulationPanel";
 import CloneDialog from "@/components/admin/CloneDialog";
@@ -48,7 +48,7 @@ export default function AdminMobileSuitsPage() {
     setMode("idle");
   }
 
-  async function handleSubmit(values: MobileSuitFormValues) {
+  async function handleSubmit(values: MobileSuitSubmitValues) {
     setIsSubmitting(true);
     try {
       if (mode === "create") {
@@ -90,7 +90,13 @@ export default function AdminMobileSuitsPage() {
 
   async function handleCloneConfirm(newId: string) {
     if (!cloneSource) return;
-    await createMobileSuit({ ...cloneSource, id: newId });
+    // 配る勢力は1勢力に1機のため、クローンには引き継がない
+    await createMobileSuit({
+      ...cloneSource,
+      id: newId,
+      starter_faction: null,
+      blueprint: cloneSource.blueprint ?? undefined,
+    });
     showToast(`${cloneSource.name} を ID "${newId}" でクローンしました`, "success");
     setCloneSource(null);
   }

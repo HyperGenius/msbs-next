@@ -192,7 +192,12 @@ export default function DropTableForm({ initialData, onSubmit, isSubmitting = fa
           </table>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <MasterMobileSuitSelect buttonLabel="機体を追加" onApply={(ms) => addEntry(entryFromMobileSuit(ms))} />
+          <MasterMobileSuitSelect
+            buttonLabel="機体を追加"
+            onApply={(ms) => addEntry(entryFromMobileSuit(ms))}
+            // 練習機は設計図を持たないため、ドロップの対象にしない
+            filter={(ms) => !ms.is_trainer}
+          />
           <MasterWeaponSelect buttonLabel="武器を追加" onApply={(w) => addEntry(entryFromWeapon(w))} />
           <MasterTechnologySelect
             buttonLabel="技術断片を追加"

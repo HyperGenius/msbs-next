@@ -671,8 +671,11 @@ class MasterMobileSuitEntry(SQLModel):
     weapon_slot_count: int = 1
     beam_generator_lv: int = 0
     flavor_text: str | None = None
+    is_trainer: bool = False
+    starter_faction: str | None = None
     specs: MasterMobileSuitSpec
-    blueprint: MasterBlueprintSettings
+    # 練習機は設計図マスターを持たないため None
+    blueprint: MasterBlueprintSettings | None
 
 
 class MasterMobileSuitCreate(SQLModel):
@@ -688,12 +691,17 @@ class MasterMobileSuitCreate(SQLModel):
     weapon_slot_count: int = Field(default=1, ge=1)
     beam_generator_lv: int = Field(default=0, ge=0)
     flavor_text: str | None = None
+    is_trainer: bool = False
+    starter_faction: str | None = None
     specs: MasterMobileSuitSpec
     blueprint: MasterBlueprintSettingsInput | None = None
 
 
 class MasterMobileSuitUpdate(SQLModel):
-    """マスター機体更新リクエスト."""
+    """マスター機体更新リクエスト.
+
+    練習機かどうか（`is_trainer`）は作成後に変えられない。設計図マスターの有無が変わるため。
+    """
 
     name: str | None = None
     name_ja: str | None = None
@@ -704,6 +712,7 @@ class MasterMobileSuitUpdate(SQLModel):
     weapon_slot_count: int | None = Field(default=None, ge=1)
     beam_generator_lv: int | None = Field(default=None, ge=0)
     flavor_text: str | None = None
+    starter_faction: str | None = None
     specs: MasterMobileSuitSpec | None = None
     blueprint: MasterBlueprintSettingsInput | None = None
 
@@ -826,6 +835,14 @@ class MasterMobileSuit(SQLModel, table=True):
     )
     flavor_text: str | None = Field(
         default=None, description="購入画面用フレーバーテキスト（1〜2行程度）"
+    )
+    is_trainer: bool = Field(
+        default=False,
+        description="練習機か。練習機はショップに並ばず、設計図マスターを持たない",
+    )
+    starter_faction: str | None = Field(
+        default=None,
+        description="パイロット登録時にこの練習機を配る勢力 (FEDERATION/ZEON)。1勢力に1機",
     )
     specs: dict = Field(
         sa_column=Column(JSON),

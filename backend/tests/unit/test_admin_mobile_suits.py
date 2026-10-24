@@ -716,3 +716,124 @@ def test_create_negative_en_recovery_returns_422(client_admin):
         "/api/admin/mobile-suits", json=payload, headers=HEADERS
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+# ===================== 練習機 =====================
+
+SAMPLE_TRAINER = {
+    **SAMPLE_MS,
+    "id": "test_trainer",
+    "name": "Test Trainer",
+    "price": 0,
+    "is_trainer": True,
+    "starter_faction": "FEDERATION",
+}
+
+
+def test_list_master_mobile_suits_includes_trainers(client_admin):
+    """一覧に練習機フラグ・配る勢力が含まれ、練習機の設計図は null であること."""
+    response = client_admin.get("/api/admin/mobile-suits", headers=HEADERS)
+    data = {ms["id"]: ms for ms in response.json()}
+    assert data["gm_trainer"]["is_trainer"] is True
+    assert data["gm_trainer"]["starter_faction"] == "FEDERATION"
+    assert data["gm_trainer"]["blueprint"] is None
+    assert data["zaku_ii"]["is_trainer"] is False
+    assert data["zaku_ii"]["starter_faction"] is None
+    assert data["zaku_ii"]["blueprint"] is not None
+
+
+def test_create_trainer_does_not_create_blueprint(client_admin, session):
+    """練習機を作っても設計図マスターを作らないこと."""
+    from app.models.models import MasterBlueprint
+
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=SAMPLE_TRAINER, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["blueprint"] is None
+    assert session.get(MasterBlueprint, "mobile_suit:test_trainer") is None
+
+
+def test_create_trainer_takes_over_starter_faction(client_admin, session):
+    """配る勢力を設定すると、同じ勢力に配っていた練習機から勢力が外れること."""
+    from app.core.gamedata import get_starter_kit_by_faction
+    from app.models.models import MasterMobileSuit
+
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=SAMPLE_TRAINER, headers=HEADERS
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+
+    session.expire_all()
+    assert session.get(MasterMobileSuit, "gm_trainer").starter_faction is None
+    assert get_starter_kit_by_faction(session, "FEDERATION").id == "test_trainer"
+    assert get_starter_kit_by_faction(session, "ZEON").id == "zaku_ii_trainer"
+
+
+def test_update_trainer_starter_faction(client_admin, session):
+    """練習機の配る勢力を変更・解除できること."""
+    from app.core.gamedata import get_starter_kit_by_faction
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/gm_trainer",
+        json={"starter_faction": "ZEON"},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["starter_faction"] == "ZEON"
+    session.expire_all()
+    assert get_starter_kit_by_faction(session, "ZEON").id == "gm_trainer"
+    assert get_starter_kit_by_faction(session, "FEDERATION") is None
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/gm_trainer",
+        json={"starter_faction": None},
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["starter_faction"] is None
+
+
+def test_update_trainer_specs_does_not_create_blueprint(client_admin, session):
+    """練習機のスペックを更新しても設計図マスターを作らないこと."""
+    from app.models.models import MasterBlueprint
+
+    response = client_admin.put(
+        "/api/admin/mobile-suits/gm_trainer",
+        json={
+            "specs": {**SAMPLE_MS["specs"], "max_en": 300, "en_recovery": 15},
+            "blueprint": {"is_standard_issue": False},
+        },
+        headers=HEADERS,
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["specs"]["max_en"] == 300
+    assert data["specs"]["en_recovery"] == 15
+    assert data["blueprint"] is None
+    assert session.get(MasterBlueprint, "mobile_suit:gm_trainer") is None
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {**SAMPLE_MS, "id": "test_not_trainer", "starter_faction": "FEDERATION"},
+        {**SAMPLE_TRAINER, "starter_faction": "NEUTRAL"},
+    ],
+)
+def test_create_invalid_starter_faction_returns_422(client_admin, payload):
+    """練習機ではない機体や不正な勢力に配る勢力を設定すると 422 になること."""
+    response = client_admin.post(
+        "/api/admin/mobile-suits", json=payload, headers=HEADERS
+    )
+    assert response.status_code == 422
+
+
+def test_update_starter_faction_on_non_trainer_returns_422(client_admin):
+    """練習機ではない機体に配る勢力を設定すると 422 になること."""
+    response = client_admin.put(
+        "/api/admin/mobile-suits/zaku_ii",
+        json={"starter_faction": "ZEON"},
+        headers=HEADERS,
+    )
+    assert response.status_code == 422

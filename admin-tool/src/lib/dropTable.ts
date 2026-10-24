@@ -155,7 +155,8 @@ export function entryFromMobileSuit(ms: MasterMobileSuit): DropTableEntryDetail 
     target_id: ms.id,
     target_name: ms.name_ja || ms.name,
     faction: ms.faction,
-    is_standard_issue: ms.blueprint.is_standard_issue,
+    // 練習機は設計図を持たない。DropTableForm では練習機を選べないようにしている
+    is_standard_issue: ms.blueprint?.is_standard_issue ?? true,
   });
 }
 

@@ -184,9 +184,14 @@ def seed_session(session: Session, data: MasterData, force: bool) -> dict[str, i
         )
         for item in data[name]
     }
+    # 練習機は設計図マスターを持たない
+    trainer_ids = {item["id"] for item in data[MOBILE_SUITS] if item.get("is_trainer")}
     created_by_default = 0
     for target_type, ids in (
-        (BlueprintTargetType.MOBILE_SUIT, new_suits),
+        (
+            BlueprintTargetType.MOBILE_SUIT,
+            [i for i in new_suits if i not in trainer_ids],
+        ),
         (BlueprintTargetType.WEAPON, new_weapons),
     ):
         for target_id in ids:

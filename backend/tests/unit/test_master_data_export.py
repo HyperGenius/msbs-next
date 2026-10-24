@@ -86,14 +86,16 @@ def test_seed_skips_existing_records() -> None:
 
 
 def test_seed_without_blueprints_creates_standard_issue() -> None:
-    """blueprints.json が無いとき、機体・武器ごとに標準配備の設計図を作る."""
+    """blueprints.json が無いとき、練習機を除く機体・武器ごとに標準配備の設計図を作る."""
     data = read_master_dir(FIXTURE_DIR)
     assert data[BLUEPRINTS] == []
     with Session(_empty_engine()) as session:
         result = seed_session(session, data, force=False)
         session.commit()
         blueprints = collect_master_data(session)[BLUEPRINTS]
-    assert len(blueprints) == len(data["mobile_suits"]) + len(data["weapons"])
+    suits = [ms for ms in data["mobile_suits"] if not ms.get("is_trainer")]
+    assert len(suits) < len(data["mobile_suits"])
+    assert len(blueprints) == len(suits) + len(data["weapons"])
     assert result[f"{BLUEPRINTS}_inserted"] == len(blueprints)
     assert all(b["is_standard_issue"] for b in blueprints)
 

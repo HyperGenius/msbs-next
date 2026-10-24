@@ -81,9 +81,17 @@ export interface MasterMobileSuit {
     beam_generator_lv: number;
     /** 購入画面用フレーバーテキスト（1〜2行程度）。未設定の場合は null */
     flavor_text: string | null;
+    /** 練習機か。練習機はショップに並ばず、設計図を持たない。作成後は変更できない */
+    is_trainer: boolean;
+    /** パイロット登録時にこの練習機を配る勢力。1勢力に1機。配らない場合は null */
+    starter_faction: StarterFaction | null;
     specs: MasterMobileSuitSpec;
-    blueprint: MasterBlueprintSettings;
+    /** 練習機は設計図を持たないため null */
+    blueprint: MasterBlueprintSettings | null;
 }
+
+/** 練習機を配れる勢力 */
+export type StarterFaction = "FEDERATION" | "ZEON";
 
 /** マスター機体の新規追加リクエスト */
 export type MasterMobileSuitCreate = Omit<MasterMobileSuit, "blueprint"> & {
@@ -101,6 +109,8 @@ export interface MasterMobileSuitUpdate {
     weapon_slot_count?: number;
     beam_generator_lv?: number;
     flavor_text?: string | null;
+    /** null で配る勢力を外す */
+    starter_faction?: StarterFaction | null;
     specs?: MasterMobileSuitSpec;
     blueprint?: MasterBlueprintSettingsInput;
 }

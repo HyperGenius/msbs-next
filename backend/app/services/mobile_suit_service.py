@@ -51,8 +51,12 @@ _MASTER_SPEC_FIELDS = (
 )
 
 
+# 練習機を配れる勢力
+STARTER_FACTIONS = ("FEDERATION", "ZEON")
+
+
 def _master_mobile_suit_to_dict(
-    record: MasterMobileSuit, blueprint: MasterBlueprintSettings
+    record: MasterMobileSuit, blueprint: MasterBlueprintSettings | None
 ) -> dict:
     return {
         "id": record.id,
@@ -65,8 +69,10 @@ def _master_mobile_suit_to_dict(
         "weapon_slot_count": record.weapon_slot_count,
         "beam_generator_lv": record.beam_generator_lv,
         "flavor_text": record.flavor_text,
+        "is_trainer": record.is_trainer,
+        "starter_faction": record.starter_faction,
         "specs": record.specs,
-        "blueprint": blueprint.model_dump(),
+        "blueprint": blueprint.model_dump() if blueprint else None,
     }
 
 
@@ -346,7 +352,9 @@ class MobileSuitService:
         return [
             _master_mobile_suit_to_dict(
                 record,
-                BlueprintService.settings_of(
+                None
+                if record.is_trainer
+                else BlueprintService.settings_of(
                     blueprint,
                     record.price,
                     requirements.get(blueprint.id) if blueprint else None,
@@ -369,7 +377,8 @@ class MobileSuitService:
             dict: 追加された機体データ
 
         Raises:
-            ValueError: idが重複している / idの形式が不正 / weaponsが空の場合
+            ValueError: idの形式が不正 / weaponsが空 / 配る勢力が不正な場合
+            LookupError: idが重複している場合
         """
         from app.core import gamedata as gd
 
@@ -385,6 +394,9 @@ class MobileSuitService:
 
         MobileSuitService._validate_weapon_constraints(
             data.specs.weapons, data.weapon_slot_count, data.beam_generator_lv
+        )
+        MobileSuitService._validate_starter_faction(
+            data.starter_faction, data.is_trainer
         )
 
         # 重複チェック
@@ -408,15 +420,23 @@ class MobileSuitService:
             weapon_slot_count=data.weapon_slot_count,
             beam_generator_lv=data.beam_generator_lv,
             flavor_text=data.flavor_text,
+            is_trainer=data.is_trainer,
+            starter_faction=data.starter_faction,
             specs=specs_dict,
         )
         session.add(record)
-        blueprint = BlueprintService.save_master_blueprint_settings(
-            session,
-            BlueprintTargetType.MOBILE_SUIT,
-            data.id,
-            data.price,
-            data.blueprint,
+        MobileSuitService._release_starter_faction(session, record)
+        # 練習機は設計図のドロップ・設計図コレクションに出さないため、設計図マスターを作らない
+        blueprint = (
+            None
+            if record.is_trainer
+            else BlueprintService.save_master_blueprint_settings(
+                session,
+                BlueprintTargetType.MOBILE_SUIT,
+                data.id,
+                data.price,
+                data.blueprint,
+            )
         )
         session.commit()
 
@@ -425,8 +445,49 @@ class MobileSuitService:
         gd._cache_expires_at = None
 
         return _master_mobile_suit_to_dict(
-            record, BlueprintService.saved_settings(session, blueprint, record.price)
+            record,
+            BlueprintService.saved_settings(session, blueprint, record.price)
+            if blueprint
+            else None,
         )
+
+    @staticmethod
+    def _validate_starter_faction(
+        starter_faction: str | None, is_trainer: bool
+    ) -> None:
+        """練習機を配る勢力を検証する.
+
+        Raises:
+            ValueError: 勢力が不正、または練習機ではない機体に勢力を設定した場合
+        """
+        if starter_faction is None:
+            return
+        if starter_faction not in STARTER_FACTIONS:
+            raise ValueError(
+                f"Invalid starter_faction: '{starter_faction}'. "
+                f"Must be one of {STARTER_FACTIONS}."
+            )
+        if not is_trainer:
+            raise ValueError("starter_faction can be set only on trainers.")
+
+    @staticmethod
+    def _release_starter_faction(session: Session, record: MasterMobileSuit) -> None:
+        """同じ勢力に配っていたほかの練習機から、配る勢力を外す.
+
+        1勢力に配る練習機を1機にするため。コミットは呼び出し側で行う。
+        """
+        if record.starter_faction is None:
+            return
+        others = session.exec(
+            select(MasterMobileSuit).where(
+                MasterMobileSuit.starter_faction == record.starter_faction,
+                MasterMobileSuit.id != record.id,
+            )
+        ).all()
+        for other in others:
+            other.starter_faction = None
+            other.updated_at = datetime.now(UTC)
+            session.add(other)
 
     @staticmethod
     def _validate_weapon_constraints(
@@ -478,7 +539,7 @@ class MobileSuitService:
             dict | None: 更新された機体データ。見つからない場合はNone
 
         Raises:
-            ValueError: weaponsが空になる場合
+            ValueError: weaponsが空になる / 配る勢力が不正な場合
         """
         from datetime import UTC, datetime
 
@@ -515,19 +576,28 @@ class MobileSuitService:
         MobileSuitService._validate_weapon_constraints(
             record.specs.get("weapons", []), weapon_slot_count, beam_generator_lv
         )
+        MobileSuitService._validate_starter_faction(
+            update_dict.get("starter_faction", record.starter_faction),
+            record.is_trainer,
+        )
 
         for key, value in update_dict.items():
             setattr(record, key, value)
 
         record.updated_at = datetime.now(UTC)
         session.add(record)
+        MobileSuitService._release_starter_faction(session, record)
         # 換金額は価格に追従させない。運用者が明示的に決める値のため。
-        blueprint = BlueprintService.save_master_blueprint_settings(
-            session,
-            BlueprintTargetType.MOBILE_SUIT,
-            ms_id,
-            record.price,
-            data.blueprint,
+        blueprint = (
+            None
+            if record.is_trainer
+            else BlueprintService.save_master_blueprint_settings(
+                session,
+                BlueprintTargetType.MOBILE_SUIT,
+                ms_id,
+                record.price,
+                data.blueprint,
+            )
         )
         session.commit()
 
@@ -536,7 +606,10 @@ class MobileSuitService:
         gd._cache_expires_at = None
 
         return _master_mobile_suit_to_dict(
-            record, BlueprintService.saved_settings(session, blueprint, record.price)
+            record,
+            BlueprintService.saved_settings(session, blueprint, record.price)
+            if blueprint
+            else None,
         )
 
     @staticmethod
