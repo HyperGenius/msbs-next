@@ -1970,6 +1970,26 @@ class NpcPilotDetail(NpcPilotEntry):
     mobile_suits: list[NpcMobileSuitEntry] = Field(default_factory=list)
 
 
+class AdminPlayerPilotEntry(SQLModel):
+    """プレイヤーのパイロット（管理者用レスポンス。ローカルシミュレータのロスター作成で選ぶ）."""
+
+    id: uuid.UUID
+    user_id: str
+    name: str
+    level: int
+    mobile_suit_count: int = 0
+
+
+class AdminOwnedMobileSuitEntry(SQLModel):
+    """パイロットの所有機（管理者用レスポンス。ローカルシミュレータの出撃機体の選択肢）."""
+
+    id: uuid.UUID
+    name: str
+    master_mobile_suit_id: str | None = None
+    # pilots.active_mobile_suit_id の機体か。プレイヤーは設定されないことが多い（Issue #705）
+    is_active: bool = False
+
+
 class NpcPilotUpdate(SQLModel):
     """NPCパイロット更新リクエスト."""
 

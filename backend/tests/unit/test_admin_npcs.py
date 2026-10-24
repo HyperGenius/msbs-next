@@ -504,7 +504,7 @@ def test_create_npc_mobile_suit_from_master(
     assert data["pilot_name"] == npc_pilot.name
     assert data["tactics"]["range"] == "MELEE"
 
-    owned = PilotService.get_npc_owned_mobile_suits(session, npc_pilot.user_id)
+    owned = PilotService.get_owned_mobile_suits(session, npc_pilot.user_id)
     assert len(owned) == 1
     assert owned[0].side == "ENEMY"
 

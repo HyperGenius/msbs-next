@@ -2,7 +2,8 @@
 
 マスター機体データ・マスター武器データ・NPC(Pilot)データ・エースパイロット・
 技術マスター・環境タイプ・戦域の CRUD エンドポイントと、
-ドロップテーブルの取得・保存エンドポイントを提供する。
+ドロップテーブルの取得・保存エンドポイント、プレイヤーのパイロットと所有機の
+読み取り専用エンドポイントを提供する。
 全エンドポイントは ADMIN_API_KEY ヘッダー (X-API-Key) による認証が必要。
 """
 
@@ -17,6 +18,8 @@ from app.models.models import (
     AcePilotCreate,
     AcePilotEntry,
     AcePilotUpdate,
+    AdminOwnedMobileSuitEntry,
+    AdminPlayerPilotEntry,
     CombatSimulationRequest,
     CombatSimulationResponse,
     DropTableDetail,
@@ -84,6 +87,12 @@ simulation_router = APIRouter(
 npc_router = APIRouter(
     prefix="/api/admin/npcs",
     tags=["admin-npcs"],
+    dependencies=[Depends(verify_admin_api_key)],
+)
+
+player_router = APIRouter(
+    prefix="/api/admin/players",
+    tags=["admin-players"],
     dependencies=[Depends(verify_admin_api_key)],
 )
 
@@ -445,7 +454,7 @@ def get_npc(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"NPC pilot '{pilot_id}' not found.",
         )
-    mobile_suits = PilotService.get_npc_owned_mobile_suits(session, pilot.user_id)
+    mobile_suits = PilotService.get_owned_mobile_suits(session, pilot.user_id)
     entry = _pilot_to_entry(pilot)
     return NpcPilotDetail(
         **entry.model_dump(exclude={"mobile_suit_count"}),
@@ -531,7 +540,7 @@ def update_npc_mobile_suit(
     ms = next(
         (
             owned
-            for owned in PilotService.get_npc_owned_mobile_suits(session, pilot.user_id)
+            for owned in PilotService.get_owned_mobile_suits(session, pilot.user_id)
             if owned.id == ms_id
         ),
         None,
@@ -549,6 +558,68 @@ def update_npc_mobile_suit(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         ) from e
     return _mobile_suit_to_npc_entry(updated)
+
+
+# ===========================================================
+# プレイヤーのパイロットと所有機（読み取り専用、Issue #705）
+# ===========================================================
+# ローカルシミュレータの fetch で出撃機体を選ぶために使う。書き込みは作らない
+# （pilots.active_mobile_suit_id も設定しない）。
+
+PLAYER_LIST_MAX_LIMIT = 200
+
+
+@player_router.get("", response_model=list[AdminPlayerPilotEntry])
+def list_player_pilots(
+    name: str | None = None,
+    limit: int = Query(default=50, ge=1, le=PLAYER_LIST_MAX_LIMIT),
+    session: Session = Depends(get_session),
+) -> list[AdminPlayerPilotEntry]:
+    """プレイヤー（is_npc=False）のパイロットを名前順に返す.
+
+    - `name`: 名前の部分一致（大文字小文字を区別しない）で絞り込む
+    - `limit`: 最大件数
+    """
+    pilots = PilotService.list_player_pilots(session, name=name, limit=limit)
+    counts = PilotService.count_owned_mobile_suits_by_user_id(
+        session, [pilot.user_id for pilot in pilots]
+    )
+    return [
+        AdminPlayerPilotEntry(
+            id=pilot.id,
+            user_id=pilot.user_id,
+            name=pilot.name,
+            level=pilot.level,
+            mobile_suit_count=counts.get(pilot.user_id, 0),
+        )
+        for pilot in pilots
+    ]
+
+
+@player_router.get(
+    "/{pilot_id}/mobile-suits", response_model=list[AdminOwnedMobileSuitEntry]
+)
+def list_player_mobile_suits(
+    pilot_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> list[AdminOwnedMobileSuitEntry]:
+    """プレイヤーのパイロットの所有機を名前順に返す."""
+    pilot = PilotService.get_player_pilot_by_id(session, pilot_id)
+    if pilot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Player pilot '{pilot_id}' not found.",
+        )
+    suits = PilotService.get_owned_mobile_suits(session, pilot.user_id)
+    return [
+        AdminOwnedMobileSuitEntry(
+            id=suit.id,
+            name=suit.name,
+            master_mobile_suit_id=suit.master_mobile_suit_id,
+            is_active=suit.id == pilot.active_mobile_suit_id,
+        )
+        for suit in sorted(suits, key=lambda suit: suit.name)
+    ]
 
 
 # ===========================================================

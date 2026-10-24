@@ -2,6 +2,9 @@
 
 import useSWR from "swr";
 import type {
+  LocalSimBattleRun,
+  LocalSimFetchRequest,
+  LocalSimFetchRun,
   LocalSimGenerationDetail,
   LocalSimManifest,
   LocalSimRosterInfo,
@@ -31,11 +34,11 @@ async function localRequest<T>(url: string, method: string, body?: unknown): Pro
 
 /** ロスターの一覧 */
 export function useLocalSimRosters() {
-  const { data, error, isLoading } = useSWR<{ root: string; rosters: LocalSimRosterInfo[] }>(
+  const { data, error, isLoading, mutate } = useSWR<{ root: string; rosters: LocalSimRosterInfo[] }>(
     `${BASE}/rosters`,
     localFetcher
   );
-  return { root: data?.root, rosters: data?.rosters ?? [], error, isLoading };
+  return { root: data?.root, rosters: data?.rosters ?? [], error, isLoading, refresh: mutate };
 }
 
 /** 世代の一覧（新しい順）と、ピン留めの切り替え */
@@ -63,8 +66,8 @@ export function useLocalSimGeneration(generationId: string | null) {
 }
 
 /**
- * 実行の開始・中止と、進捗のポーリング。
- * 実行中だけ 1 秒ごとに取り直す。
+ * run（シミュレーション）と fetch（ロスター作成）の開始・中止と、進捗のポーリング。
+ * どちらも `runs/current` の 1 つのジョブとして扱い、実行中だけ 1 秒ごとに取り直す。
  */
 export function useLocalSimRun() {
   const { data, mutate } = useSWR<{ run: LocalSimRun | null }>(`${BASE}/runs/current`, localFetcher, {
@@ -73,7 +76,12 @@ export function useLocalSimRun() {
   const run = data?.run ?? null;
 
   async function start(request: LocalSimRunRequest) {
-    const started = await localRequest<LocalSimRun>(`${BASE}/runs`, "POST", request);
+    const started = await localRequest<LocalSimBattleRun>(`${BASE}/runs`, "POST", request);
+    await mutate({ run: started }, { revalidate: false });
+  }
+
+  async function startFetch(request: LocalSimFetchRequest) {
+    const started = await localRequest<LocalSimFetchRun>(`${BASE}/rosters`, "POST", request);
     await mutate({ run: started }, { revalidate: false });
   }
 
@@ -82,5 +90,5 @@ export function useLocalSimRun() {
     await mutate(result, { revalidate: false });
   }
 
-  return { run, isRunning: run?.status === "running", start, cancel };
+  return { run, isRunning: run?.status === "running", start, startFetch, cancel };
 }
