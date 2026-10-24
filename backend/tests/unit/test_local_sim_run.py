@@ -177,6 +177,128 @@ def test_different_seed_changes_logs(roster_path: Path, generations_dir: Path) -
     assert _battle(a.path, 1).logs != _battle(b.path, 1).logs
 
 
+@pytest.fixture(name="mission_roster_path")
+def mission_roster_path_fixture(session: Session, tmp_path: Path) -> Path:
+    """プレイヤー2機と撤退支援の作戦（リポジトリの定義）のロスターを保存する."""
+    p1 = _player(session, "user_a")
+    p2 = _player(session, "user_b", suit_name="Gouf")
+    with Session(app_db.engine, autoflush=False) as fetch_session:
+        roster = build_roster(
+            fetch_session,
+            FetchOptions(
+                pilots=[UnitSpec(str(p1.id)), UnitSpec(str(p2.id))],
+                mission_builder="retreat_support",
+            ),
+            "mission_test",
+        )
+    return save_roster(roster, rosters_dir=tmp_path / "rosters")
+
+
+def test_mission_roster_runs_mission_battle(
+    mission_roster_path: Path, generations_dir: Path, offline: None
+) -> None:
+    """作戦のロスターは、作戦マスターの友軍・敵機・撤退ポイント・ロールで戦い、作戦の結果を保存すること."""
+    result = _run(mission_roster_path, generations_dir, rounds=2, seed=611)
+
+    manifest = result.manifest
+    assert (manifest.mission_id, manifest.mission_name) == (4, "撤退支援")
+    for index in (1, 2):
+        battle = _battle(result.path, index)
+        assert (battle.mission_id, battle.mission_name) == (4, "撤退支援")
+        # 2機目のプレイヤー・友軍3機・敵機4機。
+        assert len(battle.enemies_info) == 8
+        sides = [u["side"] for u in battle.enemies_info]
+        assert sides.count("PLAYER") == 4
+        assert sides.count("ENEMY") == 4
+        player_team = battle.player_info["team_id"] or battle.enemies_info[0]["team_id"]
+        assert {u["team_id"] for u in battle.enemies_info if u["side"] == "PLAYER"} == {
+            player_team
+        }
+        assert battle.objective_status in ("SUCCESS", "FAILURE", "DRAW")
+        assert (
+            battle.win_loss
+            == {"SUCCESS": "WIN", "FAILURE": "LOSE", "DRAW": "DRAW"}[
+                battle.objective_status
+            ]
+        )
+        assert battle.objective_required == 2
+        detail = battle.objective_detail
+        assert detail is not None
+        assert detail["total"] == 3
+        [retreat_point] = detail["retreat_points"]
+        assert retreat_point["team_id"] == player_team
+        unit_ids = {u["id"] for u in battle.enemies_info}
+        assert set(detail["unit_roles"]) <= unit_ids
+        assert sorted(detail["unit_roles"].values()) == [
+            "SNIPER",
+            "SNIPER",
+            "VANGUARD",
+            "VANGUARD",
+            "WITHDRAW",
+            "WITHDRAW",
+            "WITHDRAW",
+        ]
+
+    # 友軍・敵機の ID は戦闘をまたいで同じ。機体ごとの集計が戦闘の数だけ分かれない。
+    assert {u["id"] for u in _battle(result.path, 1).enemies_info} == {
+        u["id"] for u in _battle(result.path, 2).enemies_info
+    }
+    report = json.loads((result.path / REPORT_FILE).read_text(encoding="utf-8"))
+    assert len(report["units"]) == 9
+    assert all(u["battles"] == 2 for u in report["units"])
+    assert report["objective"]["battles"] == 2
+    assert report["objective"]["mission_name"] == "撤退支援"
+
+
+def test_mission_roster_same_seed_reproduces_same_logs(
+    mission_roster_path: Path, generations_dir: Path
+) -> None:
+    """作戦のロスターでも、同じシードなら戦闘のファイルが一致すること."""
+    first = _run(mission_roster_path, generations_dir, seed=611, label="a")
+    second = _run(mission_roster_path, generations_dir, minutes=1, seed=611, label="b")
+
+    name = "battle_001.json"
+    assert (first.path / name).read_bytes() == (second.path / name).read_bytes()
+
+
+def test_mission_master_edited_in_roster_is_used(
+    mission_roster_path: Path, generations_dir: Path
+) -> None:
+    """ロスターの作戦マスターを手で編集すると、その内容で戦うこと."""
+    data = json.loads(mission_roster_path.read_text(encoding="utf-8"))
+    enemies = data["mission"]["master"]["enemy_config"]["enemies"]
+    data["mission"]["master"]["enemy_config"]["enemies"] = enemies[:1]
+    data["mission"]["master"]["allies_config"] = []
+    data["mission"]["master"]["objective"] = None
+    mission_roster_path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _run(mission_roster_path, generations_dir, seed=611, max_steps=1)
+
+    battle = _battle(result.path, 1)
+    assert len(battle.enemies_info) == 2
+    # 殲滅目標は友軍を数えず、撤退ポイントとロールだけを objective_detail に入れる。
+    assert battle.objective_required == 0
+    assert battle.objective_detail is not None
+    assert "total" not in battle.objective_detail
+    assert battle.objective_detail["unit_roles"] == {
+        battle.enemies_info[1]["id"]: "VANGUARD"
+    }
+
+
+def test_roster_without_mission_has_no_objective_fields(
+    roster_path: Path, generations_dir: Path
+) -> None:
+    """作戦の無いロスターは、作戦の結果を持たず WIN / LOSE で判定すること."""
+    result = _run(roster_path, generations_dir, seed=611)
+
+    battle = _battle(result.path, 1)
+    assert battle.win_loss in ("WIN", "LOSE")
+    assert battle.mission_id is None
+    assert battle.objective_status is None
+    assert battle.objective_detail is None
+    assert result.manifest.mission_name is None
+
+
 def test_seed_is_chosen_and_recorded_when_omitted(
     roster_path: Path, generations_dir: Path
 ) -> None:

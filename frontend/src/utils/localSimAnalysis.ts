@@ -1,5 +1,10 @@
 /* frontend/src/utils/localSimAnalysis.ts */
-import type { LocalSimManifest, LocalSimReport, LocalSimUnitStats } from "@/types/battle";
+import type {
+  LocalSimManifest,
+  LocalSimObjectiveStats,
+  LocalSimReport,
+  LocalSimUnitStats,
+} from "@/types/battle";
 
 // 2つの世代の比較表と、再生位置での AI の判断を引く処理。
 // 比較表の項目と書式は CLI の compare（backend/scripts/simulation/local_sim/analysis.py）に揃える。
@@ -41,6 +46,16 @@ const perBattle = (count: number, battles: number) => (battles ? count / battles
 /** 判定する機体の勝率 */
 export const winRate = (r: LocalSimReport) => perBattle(r.wins, r.battles);
 
+/** 作戦の成功率。作戦の無い世代は 0 */
+export const objectiveSuccessRate = (o: LocalSimObjectiveStats | null) =>
+  o ? perBattle(o.success, o.battles) : 0;
+
+/** 1戦あたりの離脱した友軍の数 */
+const avgProgress = (o: LocalSimObjectiveStats | null) => (o ? perBattle(o.progress, o.battles) : 0);
+
+/** 1戦あたりの撃破された友軍の数 */
+const avgLost = (o: LocalSimObjectiveStats | null) => (o ? perBattle(o.lost, o.battles) : 0);
+
 /** 行動の総数に占める割合 */
 export function actionRatio(r: LocalSimReport, action: string): number {
   const total = Object.values(r.action_counts).reduce((sum, c) => sum + c, 0);
@@ -75,6 +90,7 @@ export function compareConditions(a: LocalSimManifest, b: LocalSimManifest): Con
     ["コミット", `${m.git.commit?.slice(0, COMMIT_DIGITS) ?? "-"}${m.git.dirty ? " (dirty)" : ""}`],
     ["ファジィルール", m.fuzzy_rules_hash?.slice(0, HASH_DIGITS) ?? "-"],
     ["戦域", `${m.theater_id ?? "なし"} / ${m.environment} / ミノフスキー ${m.minovsky_density}`],
+    ["作戦", m.mission_name ?? "なし"],
   ];
   const rowsB = conditions(b);
   return conditions(a).map(([label, valueA], i) => {
@@ -88,6 +104,19 @@ export function compareReports(a: LocalSimReport, b: LocalSimReport): Comparison
   return [
     row("勝率", winRate(a), winRate(b), pct, signedPt),
     row("打ち切り率", perBattle(a.timeouts, a.battles), perBattle(b.timeouts, b.battles), pct, signedPt),
+    ...(a.objective || b.objective
+      ? [
+          row(
+            "作戦成功率",
+            objectiveSuccessRate(a.objective),
+            objectiveSuccessRate(b.objective),
+            pct,
+            signedPt,
+          ),
+          row("離脱した友軍/戦", avgProgress(a.objective), avgProgress(b.objective), fixed2, signed2),
+          row("撃破された友軍/戦", avgLost(a.objective), avgLost(b.objective), fixed2, signed2),
+        ]
+      : []),
     row(
       "平均戦闘時間",
       a.elapsed_time.avg,

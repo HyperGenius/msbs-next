@@ -8,6 +8,7 @@ import copy
 import secrets
 import sys
 import types
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -19,7 +20,7 @@ from app.engine.constants import FUZZY_RULES_DIR
 from app.engine.environment import EnvironmentProfile
 from app.engine.result_summary import compute_result_summary_fields
 from app.engine.rng import seed_numpy_rngs
-from app.models.models import BattleField
+from app.models.models import BattleField, Mission
 from app.services.battle_execution import (
     DEFAULT_MAX_STEPS,
     build_battlefield_view_fields,
@@ -28,6 +29,11 @@ from app.services.battle_execution import (
     run_battle,
     seed_battle_rngs,
     snapshot_to_mobile_suit,
+)
+from app.services.mission_battle import (
+    WIN_LOSS_BY_OBJECTIVE_STATUS,
+    build_mission_battle,
+    objective_result_fields,
 )
 from app.services.theater_service import BattleConditions
 from scripts.simulation.local_sim.analysis import GenerationAnalyzer, write_report
@@ -48,6 +54,9 @@ from scripts.simulation.local_sim.roster import Roster, RosterConditions
 
 # 2**31 未満にしておくと、シードを他のツールの引数にそのまま渡せる。
 _MAX_RANDOM_SEED = 2**31
+# 作戦の友軍・敵機の ID を作戦マスターでの位置から決める。
+# 戦闘ごとに ID が変わると、report の機体ごとの集計が戦闘の数だけ分かれる。
+_MISSION_UNIT_ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "msbs-local-sim/mission")
 
 
 class OfflineDatabaseError(RuntimeError):
@@ -116,6 +125,13 @@ def roster_to_conditions(conditions: RosterConditions) -> BattleConditions:
     )
 
 
+def roster_mission(roster: Roster) -> Mission | None:
+    """ロスターの作戦マスターを `Mission` に戻す。作戦が無ければ None."""
+    if roster.mission is None:
+        return None
+    return Mission.model_validate(roster.mission.master)
+
+
 def player_entry_index(roster: Roster) -> int:
     """勝敗と撃墜数を判定する機体を選ぶ.
 
@@ -134,9 +150,12 @@ def run_one_battle(
     index: int,
     seed: int,
     max_steps: int,
+    mission: Mission | None = None,
 ) -> BattleRecord:
     """ロスターの機体で1戦を実行する.
 
+    作戦があれば、本番バッチの作戦ルームと同じ手順で友軍・敵機・配置・目標を組み立て、
+    勝敗を作戦の結果で決める。
     `snapshot_to_mobile_suit()` が dict を書き換えるため、スナップショットはコピーして渡す。
     """
     snapshots = [entry.snapshot for entry in roster.entries]
@@ -147,7 +166,39 @@ def run_one_battle(
     player_unit, enemy_units = prepare_battle_units(
         copy.deepcopy(player_snapshot), copy.deepcopy(others)
     )
-    outcome = run_battle(player_unit, enemy_units, conditions, max_steps=max_steps)
+    mission_fields: dict = {}
+    if mission is None:
+        outcome = run_battle(player_unit, enemy_units, conditions, max_steps=max_steps)
+        win_loss = "WIN" if outcome.player_win else "LOSE"
+    else:
+        # 作戦ルームと同じく、プレイヤーは全員同じチームで出る。
+        other_players = enemy_units
+        for unit in other_players:
+            unit.side = "PLAYER"
+        setup = build_mission_battle(
+            mission,
+            [player_unit, *other_players],
+            conditions,
+            unit_id_namespace=_MISSION_UNIT_ID_NAMESPACE,
+        )
+        conditions = setup.conditions
+        enemy_units = [*other_players, *setup.mission_units]
+        outcome = run_battle(
+            player_unit,
+            enemy_units,
+            conditions,
+            max_steps=max_steps,
+            objective=setup.objective,
+            retreat_points=setup.retreat_points,
+            unit_assignments=setup.unit_assignments,
+        )
+        assert outcome.objective_result is not None
+        win_loss = WIN_LOSS_BY_OBJECTIVE_STATUS[outcome.objective_result.status]
+        mission_fields = {
+            "mission_id": mission.id,
+            "mission_name": mission.name,
+            **objective_result_fields(outcome.objective_result, outcome.simulator),
+        }
     simulator = outcome.simulator
 
     # 本番と同じく、player_info はエントリー時点、enemies_info は戦闘後の状態にする。
@@ -157,7 +208,7 @@ def run_one_battle(
     return BattleRecord(
         index=index,
         seed=seed,
-        win_loss="WIN" if outcome.player_win else "LOSE",
+        win_loss=win_loss,
         kills=outcome.kills,
         elapsed_time=simulator.elapsed_time,
         steps_used=outcome.steps_used,
@@ -174,7 +225,16 @@ def run_one_battle(
         **compute_result_summary_fields(
             player_unit, simulator.logs, len(unit_fields["enemies_info"])
         ),
+        **mission_fields,
     )
+
+
+def _objective_progress_label(record: BattleRecord) -> str:
+    """作戦の達成度の表示（例: ` / 離脱 2/3`）。友軍を数えない目標では空にする."""
+    total = (record.objective_detail or {}).get("total")
+    if not total:
+        return ""
+    return f" / 離脱 {record.objective_progress}/{total}"
 
 
 @contextmanager
@@ -219,6 +279,7 @@ def run_generation(
     created_at = now or datetime.now().astimezone()
 
     conditions = roster_to_conditions(roster.conditions)
+    mission = roster_mission(roster)
     player_index = player_entry_index(roster)
     writer = GenerationWriter(label, created_at, generations_dir)
     try:
@@ -234,6 +295,7 @@ def run_generation(
                     index,
                     seed + index - 1,
                     options.max_steps,
+                    mission,
                 )
                 summary = writer.write_battle(record)
                 analyzer.add(record)
@@ -242,6 +304,7 @@ def run_generation(
                     f"  [{index}/{options.rounds}] seed={summary.seed}"
                     f" {summary.win_loss} 撃墜 {summary.kills}"
                     f" / {summary.elapsed_time:.1f}s"
+                    + _objective_progress_label(record)
                     + (" (打ち切り)" if summary.timed_out else "")
                 )
 
@@ -261,6 +324,8 @@ def run_generation(
             theater_id=conditions.theater_id,
             environment=conditions.environment,
             minovsky_density=conditions.minovsky_density,
+            mission_id=mission.id if mission else None,
+            mission_name=mission.name if mission else None,
             summary=GenerationSummary.of(battles),
             battles=battles,
         )

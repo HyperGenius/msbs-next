@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
-from app.models.models import BattleResult
+from app.models.models import BattleResult, Mission
 from app.services.theater_service import TheaterService
 from scripts.simulation.local_sim.analysis import GenerationAnalyzer, write_report
 from scripts.simulation.local_sim.generations import (
@@ -93,13 +93,16 @@ def build_battle_record(
     theater_name: str | None,
     environment_name: str | None,
     viewer_preset: str | None,
+    mission_name: str | None = None,
 ) -> BattleRecord:
     """バトル結果と解析用ログから `battle_001.json` の中身を作る.
 
+    作戦ルームの結果は、作戦の結果（`objective_*`）も引き継ぐ。
+
     Raises:
-        ValueError: 表示に必要な項目が結果に無い場合。勝敗が WIN / LOSE 以外の場合
+        ValueError: 表示に必要な項目が結果に無い場合。勝敗が WIN / LOSE / DRAW 以外の場合
     """
-    if result.win_loss not in ("WIN", "LOSE"):
+    if result.win_loss not in ("WIN", "LOSE", "DRAW"):
         raise ValueError(f"勝敗 '{result.win_loss}' は取り込めません。")
     if (
         result.player_info is None
@@ -134,6 +137,12 @@ def build_battle_record(
         part_hit_summary=result.part_hit_summary,
         weapon_accuracy_summary=result.weapon_accuracy_summary,
         detection_summary=result.detection_summary,
+        mission_id=result.mission_id,
+        mission_name=mission_name,
+        objective_status=result.objective_status,  # type: ignore[arg-type]
+        objective_progress=result.objective_progress,
+        objective_required=result.objective_required,
+        objective_detail=result.objective_detail,
         logs=logs,
     )
 
@@ -156,12 +165,18 @@ def save_production_generation(
     label = validate_label(label or f"prod-{str(result.id)[:8]}")
     created_at = now or datetime.now().astimezone()
     labels = TheaterService.labels_for(session, [result])[0]
+    mission = (
+        session.get(Mission, result.mission_id)
+        if result.mission_id is not None
+        else None
+    )
     record = build_battle_record(
         result,
         logs,
         theater_name=labels.theater_name,
         environment_name=labels.environment_name,
         viewer_preset=labels.viewer_preset,
+        mission_name=mission.name if mission else None,
     )
 
     writer = GenerationWriter(label, created_at, generations_dir)
@@ -186,6 +201,8 @@ def save_production_generation(
             theater_id=result.theater_id,
             environment=result.environment,
             minovsky_density=record.minovsky_density,
+            mission_id=record.mission_id,
+            mission_name=record.mission_name,
             summary=GenerationSummary.of([summary]),
             battles=[summary],
         )

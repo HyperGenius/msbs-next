@@ -87,6 +87,7 @@ export function useLocalSimDecisionLogs(generationId: string, index: number, uni
 /**
  * ローカルシミュレーションの1戦を、履歴詳細の部品に渡せる BattleResult にする。
  * 報酬・ダイジェストなど本番のバッチでだけ作る項目は持たない。
+ * 作戦の戦闘は、作戦の結果と BattleViewer 用の撤退ポイント・ロール（objective_detail）も渡す。
  */
 export function localSimBattleToResult(
   manifest: LocalSimManifest,
@@ -95,7 +96,7 @@ export function localSimBattleToResult(
   return {
     id: `${manifest.generation_id}/${battle.index}`,
     user_id: null,
-    mission_id: null,
+    mission_id: battle.mission_id ?? null,
     win_loss: battle.win_loss,
     environment: battle.environment,
     player_info: battle.player_info,
@@ -111,6 +112,10 @@ export function localSimBattleToResult(
     part_hit_summary: battle.part_hit_summary,
     weapon_accuracy_summary: battle.weapon_accuracy_summary,
     detection_summary: battle.detection_summary,
+    objective_status: battle.objective_status ?? null,
+    objective_progress: battle.objective_progress ?? null,
+    objective_required: battle.objective_required ?? null,
+    objective_detail: battle.objective_detail ?? null,
     created_at: manifest.created_at,
   };
 }
