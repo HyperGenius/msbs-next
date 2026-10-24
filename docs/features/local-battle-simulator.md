@@ -17,6 +17,7 @@ Epic #608 で作る。このドキュメントは Sub-Issue 1〜5（Issue #609�
 * `fetch-log` で、本番の戦闘の解析用ログ（GCS）を取得し、`/dev/sim` でファジィスコア付きで再生できる（Issue #637）
 * `fetch --mission` で作戦（友軍・敵機・ロール・小隊・撤退ポイント・作戦目標）をロスターに入れ、本番の作戦ルームと同じ手順で戦い、`/dev/sim` で撤退ポイントとロールを描いて再生できる（Issue #699）
 * Admin Tool の `/local-sim` から `run` を実行し、世代の一覧・集計を確認できる（Issue #701）
+* Admin Tool の `/local-sim` から `fetch` でロスターを作れる。プレイヤーは所有機から出撃機体を選ぶ（Issue #705）
 
 ### 今後の予定（Epic #608）
 
@@ -134,7 +135,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | オプション | 説明 |
 |---|---|
 | `--ms <機体ID>[:<チーム>]` | 指定した機体を参加させる（複数指定可） |
-| `--pilot <パイロットID>[:<チーム>]` | パイロットの出撃機体（`active_mobile_suit_id`）を参加させる。ID は `pilots.id` か `user_id`（複数指定可）。プレイヤーの出撃機体はエントリーごとに選ぶため `active_mobile_suit_id` が未設定のことがある。その場合はエラーになるので `--ms` で機体を直接指定する（戦域ごとにビルドが異なるため、所有機の先頭へのフォールバックはしない） |
+| `--pilot <パイロットID>[:<チーム>]` | パイロットの出撃機体（`active_mobile_suit_id`）を参加させる。ID は `pilots.id` か `user_id`（複数指定可）。プレイヤーの出撃機体はエントリーごとに選ぶため `active_mobile_suit_id` が未設定のことがある。その場合はエラーになるので `--ms` で機体を直接指定する（戦域ごとにビルドが異なるため、所有機の先頭へのフォールバックはしない）。Admin Tool ではプレイヤーを選ぶと所有機の一覧が出るので、そこから選ぶ（[ロスター作成](#ロスター作成fetchissue-705)） |
 | `--npc N` | 本番の永続化NPCから N 機を選ぶ。足りない分は本番と同様に NPC を生成して補う |
 | `--ace N` | エースパイロットをランダムに N 機参加させる。同じエースは重ねない |
 | `--theater <戦域ID>` | 戦域。省略すると戦域なし（宇宙） |
@@ -952,11 +953,12 @@ python -m scripts.simulation.local_sim fetch-log --room <ルームID> --user-id 
 
 ---
 
-## Admin Tool: `/local-sim`（Issue #701）
+## Admin Tool: `/local-sim`（Issue #701・#705）
 
-Admin Tool（`admin-tool/`、`npm run dev` で手元だけ起動）から `run` を実行し、世代の一覧・集計を見る。再生と比較は frontend の `/dev/sim` を別タブで開く（BattleViewer は frontend にしか無いため）。
+Admin Tool（`admin-tool/`、`npm run dev` で手元だけ起動）から `fetch` でロスターを作り、`run` を実行し、世代の一覧・集計を見る。再生と比較は frontend の `/dev/sim` を別タブで開く（BattleViewer は frontend にしか無いため）。
 
-* backend のサーバーも Cloud Run・GCS も使わない。Route Handler（Node）が `uv run python -m scripts.simulation.local_sim run ...` を子プロセスで起動する（作業ディレクトリは `backend/`、引数は配列で渡しシェルを通さない）
+* Cloud Run・GCS は使わない。Route Handler（Node）が `uv run python -m scripts.simulation.local_sim run ...`（`fetch ...`）を子プロセスで起動する（作業ディレクトリは `backend/`、引数は配列で渡しシェルを通さない）
+* backend のサーバーは、ロスター作成フォームの選択肢（戦域・NPC・プレイヤーと所有機）を引くときだけ使う。`run` と結果の確認には要らない
 * `run` はグローバルの乱数やエースのデータを書き換えるため、backend のリクエスト内ではなく別プロセスで実行する
 * 開発環境（`NODE_ENV=development`）以外では全 Route Handler が 404 を返す
 
@@ -965,23 +967,56 @@ Admin Tool（`admin-tool/`、`npm run dev` で手元だけ起動）から `run` 
 | メソッド・パス | 内容 |
 |---|---|
 | `GET /api/local-sim/rosters` | ロスターの一覧（`rosters/*.json`） |
+| `POST /api/local-sim/rosters` | `fetch` でロスターを作る（Issue #705）。実行中なら 409、同名のロスターがあり `force` でなければ 409、入力が不正なら 422 |
 | `GET /api/local-sim/generations` | 世代の一覧（新しい順。戦闘ごとの内訳は省く） |
 | `GET /api/local-sim/generations/{世代ID}` | `manifest.json` と `report.json` |
 | `PATCH /api/local-sim/generations/{世代ID}` | ピン留めの切り替え（`{"pinned": bool}`。CLI の `pin` / `unpin`） |
 | `POST /api/local-sim/runs` | 実行開始。実行中なら 409、入力が不正なら 422 |
-| `GET /api/local-sim/runs/current` | 現在（直近）の実行の進捗 |
-| `DELETE /api/local-sim/runs/current` | 実行の中止 |
+| `GET /api/local-sim/runs/current` | 現在（直近）の `run` / `fetch` の進捗。`kind` で見分ける |
+| `DELETE /api/local-sim/runs/current` | 実行中の `run` / `fetch` の中止 |
 
-* ジョブの状態はサーバーのメモリ（`globalThis`）に持つ。同時に実行するのは1つだけ
+* ジョブの状態はサーバーのメモリ（`globalThis`）に持つ。`run` と `fetch` は1つのジョブとして扱い、同時に実行するのは1つだけ（`runner.ts` の `launch()` を共通で使う）
 * 進捗は CLI の出力 `[i/N] seed=…` から読む。子プロセスは `PYTHONUNBUFFERED=1` で起動する。UI は実行中だけ1秒ごとにポーリングする（SWR）
 * 終了コードが 0 以外なら、標準エラーを表示する
 * ロスター名・ラベル・世代ID は CLI と同じ規則（英数字で始まり英数字と `_.-` だけ）でサーバー側でも確かめる。パスの検証は frontend の `localSimStore.ts` と同じ（実パスが保存先の外に出ないこと）
 * 読み込み元は `LOCAL_SIM_DIR`（既定はリポジトリ直下の `battle_logs/local_sim`）。`run` 自体は CLI の既定の保存先に書くため、`LOCAL_SIM_DIR` を変えるときは CLI 側と一致させること
 * 再生・比較の URL の基準は `NEXT_PUBLIC_DEV_SIM_URL`（既定 `http://localhost:3000`）
 
+### ロスター作成（fetch、Issue #705）
+
+`/local-sim` の「ロスター作成」フォームで `fetch` の引数を組み立てる。
+
+| フォーム | CLI の引数 |
+|---|---|
+| ロスター名（省略すると CLI が日時から作る） | `--name` |
+| 戦域（管理 API `GET /api/admin/theaters` の一覧。読めないときは ID を手で入れる） | `--theater` |
+| ミノフスキー濃度（省略すると戦域の基準） | `--minovsky` |
+| NPC 数・エース数 | `--npc` / `--ace` |
+| 参加機体「プレイヤー」: 名前で引いたパイロットの所有機から選ぶ | `--ms <機体ID>[:チーム]` |
+| 参加機体「NPC」: NPC のパイロットを選ぶ（出撃機体が未設定なら CLI が所有機の先頭にする） | `--pilot <pilots.id>[:チーム]` |
+| 参加機体「機体ID」: 手で入れる | `--ms <機体ID>[:チーム]` |
+| 同名のロスターがあれば上書きを確認する | `--force` |
+
+* プレイヤーの出撃機体は本番ではエントリーごとに決まり、`pilots.active_mobile_suit_id` は設定されないことが多い。そのため `--pilot` は使わず、所有機を毎回選んで `--ms` で渡す（戦域ごとにビルドが異なるため、所有機の先頭へのフォールバックはしない）。`active_mobile_suit_id` を Admin Tool から設定する機能は作らない
+* プレイヤーと所有機の一覧は、読み取り専用の管理 API で引く（下表）。backend の接続先DB（`NEON_DATABASE_URL`）を読む。ロスターの中身は `fetch` が本番DBから Read Only の接続で読み直す
+* 引数はサーバー側でも CLI と同じ規則で確かめる（`shared.ts` の `buildFetchArgs()`）。機体ID は UUID、パイロットID は英数字で始まり英数字と `_-` だけ、ロスター名・チーム名・戦域ID は英数字で始まり英数字と `_.-` だけ、NPC 数・エース数は 0〜100 の整数、ミノフスキー濃度は 0〜1。`-` で始まる値はオプションと取り違えるため弾く
+* 同名のロスターは、フォームで上書きを確認してから `force`（`--force`）を付ける。Route Handler も `force` でなければ先に 409 を返す（CLI は本番DBから読み終えた後に拒むため）
+* 終わったらロスター一覧を取り直し、作ったロスターを「実行」のロスターに選ぶ。ロスター名は CLI の出力 `N 機を保存しました: <パス>` から読む
+* 失敗したときは CLI の標準エラーを出す。`NEON_READONLY_DATABASE_URL` が未設定なら `エラー: NEON_READONLY_DATABASE_URL が設定されていません。…` がそのまま出る
+* 参加機体が2機未満（作戦以外）や、同じ機体の2回指定は CLI が拒む。作戦（`--mission` / `--mission-builder`）はフォームに無い。CLI で作る
+
+#### 管理 API（読み取り専用）
+
+| メソッド・パス | 内容 |
+|---|---|
+| `GET /api/admin/players?name=&limit=` | プレイヤー（`is_npc = false`）のパイロットを名前順に返す。`name` は部分一致（大文字小文字を区別しない。`%`・`_` はワイルドカードにしない）、`limit` は既定 50・最大 200。所有機の数を付ける |
+| `GET /api/admin/players/{pilot_id}/mobile-suits` | プレイヤーの所有機（機体名・ID・機体マスターID・`active_mobile_suit_id` の機体か）を名前順に返す。NPC のパイロットは 404 |
+
+どちらも `X-API-Key` が要り、DB には書き込まない。
+
 ### 中止
 
-「中止」は子プロセスへの SIGTERM。`run` は SIGTERM を受けると `SystemExit(143)` を送出し、`run_generation()` の `except BaseException` を通って `GenerationWriter.discard()` が書きかけの世代（`.tmp-<世代ID>`）を消す。
+「中止」は子プロセスへの SIGTERM。`fetch` は DB を読むだけなので、そのまま終わる（ロスターは最後に書くため、取得中に止めればロスターは残らない）。`run` は SIGTERM を受けると `SystemExit(143)` を送出し、`run_generation()` の `except BaseException` を通って `GenerationWriter.discard()` が書きかけの世代（`.tmp-<世代ID>`）を消す。
 
 ### 表示する項目
 
@@ -992,5 +1027,7 @@ Admin Tool（`admin-tool/`、`npm run dev` で手元だけ起動）から `run` 
 ### 検証（Admin Tool）
 
 * `backend/tests/unit/test_local_sim_run.py::test_sigterm_during_run_leaves_no_generation`: SIGTERM で書きかけの世代が残らないこと
-* `admin-tool/tests/unit/localSim.test.ts`: 名前の検証、`run` の引数の組み立て、CLI 出力の解析、`/dev/sim` の URL
+* `admin-tool/tests/unit/localSim.test.ts`: 名前の検証、`run` / `fetch` の引数の組み立て、フォームの参加機体から `--ms` / `--pilot` への変換、CLI 出力の解析（進捗・世代ID・ロスター名）、`/dev/sim` の URL
+* `backend/tests/unit/test_admin_players.py`: プレイヤーだけを返すこと、名前の絞り込み（大文字小文字・ワイルドカード）、件数の上限、所有機の名前順と出撃機体の印、NPC は 404、取得で DB を書き換えないこと
 * `next dev` で Route Handler を確認済み（一覧・不正な入力の 422・存在しないロスターで失敗した際の標準エラー表示・実行中でないときの中止が 409）。ロスターの作成には本番DBへの接続が必要なため、実際の戦闘の実行と画面の操作は未確認
+* `fetch`（Issue #705）: `next dev` で、不正な機体ID の 422、実行中の `run` 開始が 409、同名のロスターで 409、`NEON_READONLY_DATABASE_URL` 未設定で失敗した際の標準エラー表示をフォームと API で確認した。本番DBへの接続と、選択肢（管理 API）を引いた状態での画面の操作は未確認

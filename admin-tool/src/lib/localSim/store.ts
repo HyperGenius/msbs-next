@@ -106,3 +106,9 @@ export async function listRosters(root: string): Promise<LocalSimRosterInfo[]> {
   }
   return rosters;
 }
+
+/** 同名のロスターがあるか。 */
+export async function rosterExists(root: string, name: string): Promise<boolean> {
+  if (!isValidName(name)) return false;
+  return (await resolveInside(root, ROSTERS_DIR, `${name}.json`)) !== null;
+}

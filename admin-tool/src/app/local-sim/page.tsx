@@ -9,8 +9,9 @@ import {
   useLocalSimRun,
 } from "@/hooks/useLocalSim";
 import { battleViewerUrl, compareViewerUrl } from "@/lib/localSim/viewerUrl";
-import type { LocalSimManifest } from "@/types/localSim";
+import type { LocalSimManifest, LocalSimRun } from "@/types/localSim";
 import { SciFiButton, SciFiHeading, SciFiPanel } from "@/components/ui";
+import LocalSimRosterForm from "@/components/admin/LocalSimRosterForm";
 
 const MAX_COMPARE = 2;
 const inputClass = "w-full bg-black/60 border border-[#00ff41]/40 px-2 py-1 text-sm text-[#00ff41]";
@@ -23,12 +24,51 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP");
 }
 
-export default function LocalSimPage() {
-  const { root, rosters, error: rostersError } = useLocalSimRosters();
-  const { generations, error: generationsError, refresh, setPinned } = useLocalSimGenerations();
-  const { run, isRunning, start, cancel } = useLocalSimRun();
+const STATUS_LABELS: Record<LocalSimRun["status"], string> = {
+  running: "実行中",
+  succeeded: "完了",
+  failed: "失敗",
+  cancelled: "中止しました",
+};
 
-  const [roster, setRoster] = useState("");
+/** 実行中・直近のジョブの状態。失敗したときは CLI の標準エラーを出す。 */
+function RunStatus({ run, summary, onCancel }: { run: LocalSimRun; summary: string; onCancel: () => void }) {
+  const isRunning = run.status === "running";
+  const total = run.kind === "run" ? run.request.rounds : 0;
+  return (
+    <div className="space-y-2 text-xs">
+      <div className="flex items-center gap-3">
+        <p>
+          {summary} — {STATUS_LABELS[run.status]}
+        </p>
+        {isRunning && (
+          <SciFiButton size="sm" variant="danger" onClick={onCancel}>
+            中止
+          </SciFiButton>
+        )}
+      </div>
+      {isRunning && run.kind === "run" && (
+        <div className="h-2 bg-black/60 border border-[#00ff41]/40">
+          <div className="h-full bg-[#00ff41]" style={{ width: `${(run.completed / Math.max(total, 1)) * 100}%` }} />
+        </div>
+      )}
+      {run.status === "failed" && run.error && (
+        <pre className="whitespace-pre-wrap text-red-400 max-h-48 overflow-auto">{run.error}</pre>
+      )}
+      <pre className="whitespace-pre-wrap text-[#00ff41]/60 max-h-48 overflow-auto">
+        {run.lines.slice(run.kind === "fetch" ? -20 : -8).join("\n")}
+      </pre>
+    </div>
+  );
+}
+
+export default function LocalSimPage() {
+  const { root, rosters, error: rostersError, refresh: refreshRosters } = useLocalSimRosters();
+  const { generations, error: generationsError, refresh, setPinned } = useLocalSimGenerations();
+  const { run, isRunning, start, startFetch, cancel } = useLocalSimRun();
+
+  // 手で選んだロスター。世代と同じく、その後に作ったロスターを優先して選ぶ。
+  const [rosterPick, setRosterPick] = useState<{ name: string; runKey: string | null } | null>(null);
   const [rounds, setRounds] = useState("20");
   const [seed, setSeed] = useState("");
   const [steps, setSteps] = useState("");
@@ -39,22 +79,29 @@ export default function LocalSimPage() {
   const [picked, setPicked] = useState<{ id: string; runKey: string | null } | null>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
 
-  // 実行が終わったら世代の一覧を取り直す。
+  // 実行が終わったら世代（fetch ならロスター）の一覧を取り直す。
   const handledRunRef = useRef<string | null>(null);
   useEffect(() => {
     if (!run || run.status === "running" || handledRunRef.current === run.started_at) return;
     handledRunRef.current = run.started_at;
-    void refresh();
-  }, [run, refresh]);
+    void (run.kind === "fetch" ? refreshRosters() : refresh());
+  }, [run, refresh, refreshRosters]);
 
-  const finishedGenerationId = run && run.status !== "running" ? run.generation_id : null;
+  const runKey = run?.started_at ?? null;
+  const finishedGenerationId = run?.kind === "run" && run.status !== "running" ? run.generation_id : null;
   const selectedId =
-    picked && picked.runKey === (run?.started_at ?? null)
+    picked && picked.runKey === runKey
       ? picked.id
       : (finishedGenerationId ?? picked?.id ?? null);
   const { detail } = useLocalSimGeneration(selectedId);
 
-  const selectedRoster = roster || rosters[0]?.name || "";
+  const createdRoster = run?.kind === "fetch" && run.status === "succeeded" ? run.roster_name : null;
+  const selectedRoster =
+    (rosterPick && rosterPick.runKey === runKey ? rosterPick.name : null) ??
+    createdRoster ??
+    rosterPick?.name ??
+    rosters[0]?.name ??
+    "";
 
   async function handleStart() {
     setMessage(null);
@@ -101,7 +148,6 @@ export default function LocalSimPage() {
 
   const report = detail?.report;
   const manifest = detail?.manifest;
-  const totalRounds = run?.request.rounds ?? 0;
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -122,6 +168,26 @@ export default function LocalSimPage() {
       {message && <p className="text-sm text-red-400">{message}</p>}
 
       <SciFiPanel className="p-4 space-y-3">
+        <SciFiHeading level={2}>ロスター作成（fetch）</SciFiHeading>
+        <p className="text-xs text-[#00ff41]/60">
+          本番DBへは `NEON_READONLY_DATABASE_URL`（Read Only のロール）で読むだけです。プレイヤーの出撃機体はエントリーごとに決まるため、所有機から毎回選びます。
+          選択肢は管理API（backend の接続先DB）から引きます。
+        </p>
+        <LocalSimRosterForm rosterNames={rosters.map((r) => r.name)} disabled={isRunning} onSubmit={startFetch} />
+        {run?.kind === "fetch" && (
+          <RunStatus
+            run={run}
+            summary={
+              run.roster_name
+                ? `ロスター ${run.roster_name}`
+                : `ロスター ${run.request.name || "（日時から作る）"}`
+            }
+            onCancel={handleCancel}
+          />
+        )}
+      </SciFiPanel>
+
+      <SciFiPanel className="p-4 space-y-3">
         <SciFiHeading level={2}>実行</SciFiHeading>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
           <label className="space-y-1">
@@ -129,7 +195,7 @@ export default function LocalSimPage() {
             <select
               className={inputClass}
               value={selectedRoster}
-              onChange={(e) => setRoster(e.target.value)}
+              onChange={(e) => setRosterPick({ name: e.target.value, runKey })}
               disabled={isRunning}
             >
               {rosters.length === 0 && <option value="">（ロスターがありません）</option>}
@@ -161,32 +227,15 @@ export default function LocalSimPage() {
             <span>ピン留めする</span>
           </label>
         </div>
-        <div className="flex gap-3">
-          <SciFiButton onClick={handleStart} disabled={isRunning || !selectedRoster}>
-            {isRunning ? "実行中…" : "実行"}
-          </SciFiButton>
-          {isRunning && (
-            <SciFiButton variant="danger" onClick={handleCancel}>
-              中止
-            </SciFiButton>
-          )}
-        </div>
-        {run && (
-          <div className="space-y-2 text-xs">
-            <p>
-              {run.request.roster}: {run.completed}/{totalRounds} 戦 —{" "}
-              {{ running: "実行中", succeeded: "完了", failed: "失敗", cancelled: "中止しました" }[run.status]}
-            </p>
-            {isRunning && (
-              <div className="h-2 bg-black/60 border border-[#00ff41]/40">
-                <div className="h-full bg-[#00ff41]" style={{ width: `${(run.completed / Math.max(totalRounds, 1)) * 100}%` }} />
-              </div>
-            )}
-            {run.status === "failed" && run.error && (
-              <pre className="whitespace-pre-wrap text-red-400 max-h-48 overflow-auto">{run.error}</pre>
-            )}
-            <pre className="whitespace-pre-wrap text-[#00ff41]/60 max-h-32 overflow-auto">{run.lines.slice(-8).join("\n")}</pre>
-          </div>
+        <SciFiButton onClick={handleStart} disabled={isRunning || !selectedRoster}>
+          {isRunning ? "実行中…" : "実行"}
+        </SciFiButton>
+        {run?.kind === "run" && (
+          <RunStatus
+            run={run}
+            summary={`${run.request.roster}: ${run.completed}/${run.request.rounds} 戦`}
+            onCancel={handleCancel}
+          />
         )}
       </SciFiPanel>
 
@@ -222,7 +271,7 @@ export default function LocalSimPage() {
                   <td>{g.summary.wins}勝 {g.summary.losses}敗{g.summary.draws ? ` ${g.summary.draws}分` : ""}</td>
                   <td>{g.summary.timeouts}</td>
                   <td><button onClick={() => handlePin(g)}>{g.pinned ? "📌 外す" : "留める"}</button></td>
-                  <td><button className="underline" onClick={() => setPicked({ id: g.generation_id, runKey: run?.started_at ?? null })}>詳細</button></td>
+                  <td><button className="underline" onClick={() => setPicked({ id: g.generation_id, runKey })}>詳細</button></td>
                 </tr>
               ))}
             </tbody>

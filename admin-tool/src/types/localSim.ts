@@ -99,22 +99,60 @@ export interface LocalSimRunRequest {
   pin?: boolean;
 }
 
+/** `fetch` の `--ms` / `--pilot` 1 つ分（`ID[:TEAM]`） */
+export interface LocalSimUnitSpec {
+  id: string;
+  /** 同じチーム名の機体と味方になる。省略すると個人戦 */
+  team?: string | null;
+}
+
+export interface LocalSimFetchRequest {
+  /** `--ms`（機体ID） */
+  mobile_suits?: LocalSimUnitSpec[];
+  /** `--pilot`（pilots.id か user_id。出撃機体を使う） */
+  pilots?: LocalSimUnitSpec[];
+  npc?: number;
+  ace?: number;
+  theater?: string | null;
+  minovsky?: number | null;
+  /** 省略すると CLI が日時から作る */
+  name?: string | null;
+  /** 同名のロスターを上書きする */
+  force?: boolean;
+}
+
 export type LocalSimRunStatus = "running" | "succeeded" | "failed" | "cancelled";
 
-export interface LocalSimRun {
-  request: LocalSimRunRequest;
+interface LocalSimJobBase {
   status: LocalSimRunStatus;
-  /** 完了した戦闘数 */
-  completed: number;
-  /** 直近の進捗行 */
+  /** 直近の出力行 */
   lines: string[];
   /** 終了コードが 0 以外のときの標準エラー */
   error: string | null;
-  /** 成功したときの世代ID */
-  generation_id: string | null;
   started_at: string;
   finished_at: string | null;
 }
+
+/** `local_sim run` の実行 */
+export interface LocalSimBattleRun extends LocalSimJobBase {
+  kind: "run";
+  request: LocalSimRunRequest;
+  /** 完了した戦闘数 */
+  completed: number;
+  /** 成功したときの世代ID */
+  generation_id: string | null;
+}
+
+/** `local_sim fetch` の実行（ロスター作成） */
+export interface LocalSimFetchRun extends LocalSimJobBase {
+  kind: "fetch";
+  request: LocalSimFetchRequest;
+  /** 成功したときのロスター名 */
+  roster_name: string | null;
+}
+
+/** 子プロセスのジョブ。run と fetch は同時に 1 つだけ動かす */
+export type LocalSimRun = LocalSimBattleRun | LocalSimFetchRun;
 
 export interface LocalSimGenerationDetail {
   manifest: LocalSimManifest;

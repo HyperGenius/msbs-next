@@ -170,11 +170,11 @@ class PilotService:
     def count_owned_mobile_suits_by_user_id(
         session: Session, user_ids: list[str]
     ) -> dict[str, int]:
-        """複数NPCの所有機体数を一括取得する（管理者用、一覧表示のN+1回避）.
+        """複数パイロットの所有機体数を一括取得する（管理者用、一覧表示のN+1回避）.
 
         Args:
             session: データベースセッション
-            user_ids: NPC の合成 user_id (npc-{uuid} 形式) のリスト
+            user_ids: パイロットの user_id のリスト（NPC は npc-{uuid} 形式）
 
         Returns:
             dict[str, int]: user_id -> 所有機体数。0件のuser_idはキーに含まれない
@@ -189,12 +189,42 @@ class PilotService:
         return dict(session.exec(statement).all())  # type: ignore[arg-type]
 
     @staticmethod
-    def get_npc_owned_mobile_suits(session: Session, user_id: str) -> list[MobileSuit]:
-        """NPCパイロットが所有する機体一覧を取得する（管理者用）.
+    def list_player_pilots(
+        session: Session, name: str | None = None, limit: int = 50
+    ) -> list[Pilot]:
+        """プレイヤー（is_npc=False）のパイロットを名前順に取得する（管理者用）.
 
         Args:
             session: データベースセッション
-            user_id: NPC の合成 user_id (npc-{uuid} 形式)
+            name: 名前の部分一致（大文字小文字を区別しない）で絞り込む
+            limit: 最大件数
+
+        Returns:
+            list[Pilot]: プレイヤーのパイロットのリスト
+        """
+        statement = select(Pilot).where(Pilot.is_npc == False)  # noqa: E712
+        if name:
+            statement = statement.where(
+                func.lower(Pilot.name).contains(name.lower(), autoescape=True)
+            )
+        return list(session.exec(statement.order_by(Pilot.name).limit(limit)).all())
+
+    @staticmethod
+    def get_player_pilot_by_id(session: Session, pilot_id: uuid.UUID) -> Pilot | None:
+        """プレイヤー（is_npc=False）のパイロットを id で取得する（管理者用）."""
+        statement = select(Pilot).where(
+            Pilot.id == pilot_id,
+            Pilot.is_npc == False,  # noqa: E712
+        )
+        return session.exec(statement).first()
+
+    @staticmethod
+    def get_owned_mobile_suits(session: Session, user_id: str) -> list[MobileSuit]:
+        """パイロットが所有する機体一覧を取得する（管理者用。NPC・プレイヤー共通）.
+
+        Args:
+            session: データベースセッション
+            user_id: パイロットの user_id（NPC は npc-{uuid} 形式）
 
         Returns:
             list[MobileSuit]: 所有機体のリスト

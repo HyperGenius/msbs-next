@@ -227,6 +227,24 @@ export interface NpcMobileSuit {
 }
 
 /** NPCパイロット一覧エントリー（管理者用レスポンス） */
+/** プレイヤーのパイロット（`GET /api/admin/players`、読み取り専用） */
+export interface AdminPlayerPilot {
+    id: string;
+    user_id: string;
+    name: string;
+    level: number;
+    mobile_suit_count: number;
+}
+
+/** パイロットの所有機（`GET /api/admin/players/{id}/mobile-suits`、読み取り専用） */
+export interface AdminOwnedMobileSuit {
+    id: string;
+    name: string;
+    master_mobile_suit_id: string | null;
+    /** pilots.active_mobile_suit_id の機体か。プレイヤーは設定されないことが多い */
+    is_active: boolean;
+}
+
 export interface NpcPilot {
     id: string;
     user_id: string;
