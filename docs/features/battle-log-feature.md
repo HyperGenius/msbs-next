@@ -52,6 +52,20 @@ NPC エース同士の1vs1（20戦）の実測では、ログ1件あたりの平
 
 ---
 
+## 射撃の制圧の記録（Issue #716）
+
+作戦の戦闘では、射撃で狙われた機体に制圧値がたまる（`battle-engine-feature.md` 40 章）。
+制圧が無効な戦闘（デイリーバトルロイヤルなど）は、次のどれも記録しない。
+
+| action_type | 条件 | `actor_id` / `target_id` | `details` |
+|---|---|---|---|
+| `ATTACK` / `MISS` | 射撃（格闘武器を除く） | 撃った機体 / 狙われた機体 | 上の EN 残量に加えて `{"target_suppression": 加えた後の相手の制圧値}` |
+| `SUPPRESSED` | 制圧値が `SUPPRESSION_LOG_ENTER_VALUE` 以上になった（射撃のログの直後） | 制圧された機体 / 撃った機体 | `{"suppression": 制圧値, "speed_multiplier": 最高速度の倍率}` |
+| `SUPPRESSION_END` | 制圧値が `SUPPRESSION_LOG_EXIT_VALUE` を下回った（リソース更新フェーズ） | 制圧が解けた機体 / なし | 同上 |
+
+- 制圧値は `round()` した整数、倍率は小数 2 桁。倍率は向きを考えない値で、近づく向きに動くときに掛かる。
+- `SUPPRESSED` と `SUPPRESSION_END` は配信用ログでも `message` を残す（行の選び方の対象外）。
+
 ## 配信用ログ（replay）（Issue #634）
 
 Epic #631 で、プレイヤーに配信するログを描画に必要な項目だけの形式にする。エンジンのログ（`simulator.logs`）は変えず、

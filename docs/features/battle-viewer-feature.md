@@ -1117,6 +1117,19 @@ BattleDetailModal
 * 色は既存パレット（`HIT_EFFECT_COLORS`）の着弾フラッシュの黄（`flashRing`、`#ffd84a`）と白（`flashCore`）を使う
 * 火花と文字のアニメーションは `globals.css` の `bv-clash-spark` / `bv-clash-text`
 
+### 射撃の制圧（SUPPRESSED）の表示（Issue #716）
+
+作戦の戦闘でバックエンドが記録する `SUPPRESSED` / `SUPPRESSION_END` ログ（`battle-engine-feature.md` 40 章）を、次の場所で表示する。
+
+| 場所 | 表示 |
+|---|---|
+| 3D シーン（`MobileSuitMesh.tsx` の `isSuppressed`） | 制圧中の機体の足元に点線のリングを出し、その下に「制圧」ラベルを出す。自機・敵機・友軍のすべてに出す |
+| ログ一覧（`formatBattleLog()`） | 細字の橙（`border-orange-300` / `text-orange-200`）。射撃の ATTACK / MISS より目立たせない |
+
+* 制圧中かどうかは `getBattleSnapshot()` の `isSuppressed` で決める。その機体の `SUPPRESSED` から `SUPPRESSION_END`（または `DESTROYED`）までの間が制圧中
+* 色は既存パレット（`HIT_EFFECT_COLORS`）の実弾の射線の橙（`tracerBullet`、`#ffb36b`）。ラベルは友軍のラベル（機体の上）と重ならないよう足元に置く
+* 制圧値の推移は描かない。ログ一覧の `SUPPRESSED` の行と、射撃の行の `details.target_suppression` で読める
+
 ### 敵機HPパネルの複数機対応（`BattleOverlay.tsx`）
 
 テキストログ廃止に伴い3Dビューアが唯一の状況把握手段になったため、敵HPパネルを拡張した:

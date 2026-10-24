@@ -250,3 +250,39 @@ describe("EN不足イベントの検出（Issue #534）", () => {
         expect(findLatestEnShortageEvent([], 0, 10)).toBeNull();
     });
 });
+
+describe("getBattleSnapshot: 制圧", () => {
+    function suppressionLog(timestamp: number, actionType: BattleLog["action_type"]): BattleLog {
+        return {
+            timestamp,
+            actor_id: "unit-1",
+            action_type: actionType,
+            message: actionType,
+            position_snapshot: { x: 10, y: 0, z: 10 },
+        };
+    }
+
+    it("SUPPRESSED から SUPPRESSION_END までの間だけ制圧中になる", () => {
+        const logs = [suppressionLog(1.0, "SUPPRESSED"), suppressionLog(3.0, "SUPPRESSION_END")];
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 0.5).isSuppressed).toBe(false);
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 2.0).isSuppressed).toBe(true);
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 3.0).isSuppressed).toBe(false);
+    });
+
+    it("撃破されたら制圧中でなくなる", () => {
+        const logs = [suppressionLog(1.0, "SUPPRESSED"), suppressionLog(2.0, "DESTROYED")];
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 2.5).isSuppressed).toBe(false);
+    });
+
+    it("他の機体の SUPPRESSED では制圧中にならない", () => {
+        const logs = [{ ...suppressionLog(1.0, "SUPPRESSED"), actor_id: "unit-2" }];
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 2.0).isSuppressed).toBe(false);
+    });
+
+    it("シークで巻き戻すと制圧の状態も戻る", () => {
+        const cache: SnapshotCache = new Map();
+        const logs = [suppressionLog(1.0, "SUPPRESSED")];
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 2.0, cache).isSuppressed).toBe(true);
+        expect(getBattleSnapshot("unit-1", baseMs, logs, 0.5, cache).isSuppressed).toBe(false);
+    });
+});

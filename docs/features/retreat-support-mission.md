@@ -90,11 +90,16 @@ uv run python scripts/maintenance/upsert_retreat_support_mission.py --apply  # �
 
 ## 検証
 
-`backend/scripts/simulation/retreat_support_bench.py`（DB 不要）で、同程度の戦力の3ビルド（殲滅向け・中間・機動/索敵寄り）を、撤退支援と、同じ友軍・敵小隊の殲滅戦で比べる。
+`backend/scripts/simulation/retreat_support_bench.py`（DB 不要）で、同程度の戦力の4ビルド（殲滅向け・中間・機動/索敵寄り・足止め/護衛）を、撤退支援と、同じ友軍・敵小隊の殲滅戦で比べる。
+足止め/護衛（`escort`）は射程 600m の武器を持ち、撤退機を攻撃する敵を優先して撃つ（`PROTECT`）。
+
+射撃の制圧（[battle-engine-feature.md 40 章](battle-engine-feature.md#40-射撃の制圧issue-716)）は、既定で作戦と同じ係数で有効にする。
+`--suppression off` で無効に、`--suppression penalty=0.3,dirs=all` のように係数を変えて比べられる。`--workers` で並列数を変える（既定は CPU コア数）。
 
 ```bash
 cd backend
 uv run python scripts/simulation/retreat_support_bench.py --rounds 60
+uv run python scripts/simulation/retreat_support_bench.py --rounds 60 --suppression off
 ```
 
 ## 計測結果
@@ -122,3 +127,17 @@ uv run python scripts/simulation/retreat_support_bench.py --rounds 60
 * `backend/tests/unit/test_objectives.py`: 終了条件（友軍が残る間は続く、全員離脱か撃破で終える、敵の全滅で終える）、成功・失敗、プレイヤー機が撃破されても成功、敵が全滅したとき残る友軍の数え方、不正な引数の拒否、`build_objective()`
 * `backend/tests/unit/test_mission_battle.py`: 撤退支援のマスターから組み立てる（損傷した友軍・欠損部位・ロール・専用の撤退ポイント・目標）、無い部位の拒否、最後まで実行できる
 * `backend/tests/unit/test_pilot_service.py`: 段階的な報酬、プレイヤー機の撃破による減額と撃墜ボーナス、殲滅の結果を渡しても変わらない
+
+### 射撃の制圧ありの計測（Issue #716）
+
+4 ビルド・120 ラウンドで、制圧なし（off）と制圧あり（on、作戦の既定）を比べた。
+
+| ビルド | 撤退支援 off | 撤退支援 on | 殲滅戦 off | 殲滅戦 on |
+|---|---|---|---|---|
+| 殲滅向け | 87% | 88% | 6% | 9% |
+| 中間 | 88% | 86% | 0% | 7% |
+| 機動・索敵寄り | 87% | 89% | 1% | 0% |
+| 足止め/護衛 | 84% | 86% | 1% | 1% |
+
+* 制圧で機動・護衛ビルドの成功率が上がる結果は出ていない（差は誤差の範囲）。係数を変えても同じだった（[battle-engine-feature.md 40.5](battle-engine-feature.md#405-計測)）
+* 撤退機の被害はすべて敵の狙撃機のロングライフルによるもので、撃墜は開始から平均 2.6 秒で起きる。追ってくる機体を遅くしても損失は減らない。狙撃機の配置・射程の調整は #587 で行う

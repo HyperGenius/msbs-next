@@ -392,6 +392,7 @@ def _process_room(session: Session, room: BattleRoom) -> None:
             objective=setup.objective,
             retreat_points=setup.retreat_points,
             unit_assignments=setup.unit_assignments,
+            suppression=setup.suppression,
         )
 
     print(f"  プレイヤー: {player_unit.name}")

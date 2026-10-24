@@ -191,6 +191,7 @@ def run_one_battle(
             objective=setup.objective,
             retreat_points=setup.retreat_points,
             unit_assignments=setup.unit_assignments,
+            suppression=setup.suppression,
         )
         assert outcome.objective_result is not None
         win_loss = WIN_LOSS_BY_OBJECTIVE_STATUS[outcome.objective_result.status]

@@ -6,7 +6,7 @@ import { ObjectiveDetail } from "./mission";
 export interface BattleLog {
     timestamp: number;
     actor_id: string;
-    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT" | "MELEE_COMBO" | "BOOST_START" | "BOOST_END" | "DISENGAGE" | "MELEE_CLASH" | "RETREAT_COMPLETE";
+    action_type: "MOVE" | "ATTACK" | "DAMAGE" | "DESTROYED" | "MISS" | "DETECTION" | "TARGET_SELECTION" | "WAIT" | "MELEE_COMBO" | "BOOST_START" | "BOOST_END" | "DISENGAGE" | "MELEE_CLASH" | "RETREAT_COMPLETE" | "SUPPRESSED" | "SUPPRESSION_END";
     target_id?: string;
     damage?: number;
     /** 配信用ログの MOVE・WAIT・TARGET_SELECTION の行には無い。表示するときは `describeBattleLog()` で作る */
@@ -39,7 +39,11 @@ export interface BattleLog {
     hit_part?: string;
     /** 使用武器のスロット部位ロール "RIGHT_ARM" | "LEFT_ARM" | "RACK"（Issue #504） */
     weapon_slot_role?: string;
-    /** ログ種別ごとの追加情報。EN 消費ログの `en`（消費後の EN 残量）や `reason_code` など（Issue #533） */
+    /**
+     * ログ種別ごとの追加情報。EN 消費ログの `en`（消費後の EN 残量）や `reason_code` など（Issue #533）。
+     * 作戦の射撃の ATTACK / MISS は `target_suppression`（相手の制圧値）、
+     * SUPPRESSED / SUPPRESSION_END は `suppression`（制圧値）と `speed_multiplier`（最高速度の倍率）を持つ
+     */
     details?: Record<string, unknown> | null;
 }
 

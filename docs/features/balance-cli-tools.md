@@ -346,6 +346,7 @@ python scripts/simulation/engagement_bench.py diff \
 | `--strategies` | `AGGRESSIVE,DEFENSIVE,SNIPER,ASSAULT` | 両機に設定する戦略モード |
 | `--ranges` | シナリオごとの組 | 両機に同じ `tactics.range` を設定する |
 | `--pilot` | `sht=1,mel=1,intel=1,ref=1,tou=1,luk=1` | 両機のパイロット能力（`PilotStats` のフィールド名）。書かない能力は 0。`--pilot ""` で全能力 0 |
+| `--suppression` | `off` | 射撃の制圧（`battle-engine-feature.md` 40 章）。`off` / `on` / 係数の上書き（例: `penalty=0.3,dirs=all`）。書き方は `scripts/simulation/suppression_args.py`。既定はバトルロイヤルと同じ制圧なし |
 | `--output` | なし | 結果 JSON の保存先 |
 
 ### シナリオ
