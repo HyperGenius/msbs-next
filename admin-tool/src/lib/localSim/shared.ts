@@ -104,6 +104,33 @@ export function buildFetchArgs(request: LocalSimFetchRequest): string[] | string
     }
     args.push(option, String(value));
   }
+  const aceIds = request.ace_ids ?? [];
+  if (!Array.isArray(aceIds) || aceIds.length > MAX_FETCH_UNITS) return "エースIDの指定が不正です。";
+  for (const id of aceIds) {
+    if (typeof id !== "string" || !isValidName(id)) return `エースID ${String(id)} が不正です。`;
+    args.push("--ace-id", id);
+  }
+  const hasMission = request.mission != null || !!request.mission_builder;
+  if (request.mission != null && request.mission_builder) {
+    return "作戦マスターのIDとリポジトリの定義は同時に指定できません。";
+  }
+  if (request.mission != null) {
+    if (!isPositiveInt(request.mission)) return "作戦IDは正の整数で指定してください。";
+    args.push("--mission", String(request.mission));
+  }
+  if (request.mission_builder) {
+    if (typeof request.mission_builder !== "string" || !isValidName(request.mission_builder)) {
+      return "作戦の定義名が不正です。";
+    }
+    args.push("--mission-builder", request.mission_builder);
+  }
+  if (hasMission) {
+    // CLI も拒むが、本番DBへ接続する前にここで止める。
+    if (request.npc || request.ace || aceIds.length) return "作戦では NPC・エースを指定できません。";
+    if ([...(request.mobile_suits ?? []), ...(request.pilots ?? [])].some((u) => u.team)) {
+      return "作戦ではチームを指定できません（プレイヤー機は全員同じチームで出ます）。";
+    }
+  }
   if (request.theater) {
     if (typeof request.theater !== "string" || !isValidName(request.theater)) return "戦域IDが不正です。";
     args.push("--theater", request.theater);

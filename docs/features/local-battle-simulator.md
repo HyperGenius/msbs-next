@@ -139,6 +139,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | `--pilot <パイロットID>[:<チーム>]` | パイロットの出撃機体（`active_mobile_suit_id`）を参加させる。ID は `pilots.id` か `user_id`（複数指定可）。プレイヤーの出撃機体はエントリーごとに選ぶため `active_mobile_suit_id` が未設定のことがある。その場合はエラーになるので `--ms` で機体を直接指定する（戦域ごとにビルドが異なるため、所有機の先頭へのフォールバックはしない）。Admin Tool ではプレイヤーを選ぶと所有機の一覧が出るので、そこから選ぶ（[ロスター作成](#ロスター作成fetchissue-705)） |
 | `--npc N` | 本番の永続化NPCから N 機を選ぶ。足りない分は本番と同様に NPC を生成して補う |
 | `--ace N` | エースパイロットをランダムに N 機参加させる。同じエースは重ねない |
+| `--ace-id <エースID>` | 必ず参加させるエース（複数指定可）。`--ace N` と併用すると、指定したエースを含めて N 機にする。存在しない ID と重複はエラー（Issue #702、#614） |
 | `--theater <戦域ID>` | 戦域。省略すると戦域なし（宇宙） |
 | `--minovsky <0〜1>` | ミノフスキー濃度。省略すると戦域の `base_minovsky`（戦域なしなら 0） |
 | `--mission <作戦ID>` | 本番の作戦マスター（`missions`）で戦う。[作戦の戦闘](#作戦の戦闘)を参照 |
@@ -158,7 +159,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | `--ms` / `--pilot`（NPC のパイロット） | 指定どおり。出撃機体が未設定なら所有機の先頭 | マッチングと同じ `build_npc_entry_snapshot()`（`npc_pilot_level` 付き）。初期位置をランダムにし、HP を全快にする |
 | `--npc` | `MatchingService.choose_npcs()`。本番の `select_npcs_for_room()` と同じ選び方で、出撃機体を保存しない | 同上。ロスターに入っている機体は選ばない |
 | `--npc` の不足分 | `MatchingService._create_npc_mobile_suit()` で生成 | 同上（レベル1） |
-| `--ace` | エースのマスターから重複なしでランダムに選ぶ | `MatchingService.build_ace_mobile_suit()` で作り、`build_npc_entry_snapshot()` |
+| `--ace` / `--ace-id` | `--ace-id` のエースを先に入れ、`--ace` の残りをエースのマスターから重複なしでランダムに選ぶ | `MatchingService.build_ace_mobile_suit()` で作り、`build_npc_entry_snapshot()` |
 
 * チームを付けた機体は、スナップショットの `team_id` にチーム名を入れ、`side` を `PLAYER` にする（本番のチームエントリーと同じ）
 * チームを付けない機体と NPC・エースは `team_id` が `null`。本番と同様に個人戦扱い（実行時に `team_id` = 機体ID）
@@ -390,7 +391,7 @@ python -m scripts.simulation.local_sim report retreat
 
 * `--mission <作戦ID>` は本番の作戦マスターを Read Only の接続で読む。`--mission-builder <名前>` は DB の `missions` を読まず、
   `fetch.MISSION_BUILDERS` に登録したリポジトリの定義で作る（プレイヤー機の取得には DB を使う）
-* 本番の作戦ルームと同じく、参加機体は `--ms` / `--pilot` のプレイヤー機だけ。`--npc` / `--ace`、チームの指定（`:<チーム>`）はエラーにする。
+* 本番の作戦ルームと同じく、参加機体は `--ms` / `--pilot` のプレイヤー機だけ。`--npc` / `--ace` / `--ace-id`、チームの指定（`:<チーム>`）はエラーにする。
   プレイヤー機は全員、先頭のプレイヤー機のチームに入る
 * 戦域を指定しないときは、作戦の環境（`missions.environment`）で戦う。戦域を指定したときは戦域の環境（本番と同じ）
 * 作戦はロスターの `mission` に保存する。友軍・敵機の機体は `run` で作戦マスターから組み立てる
@@ -1054,6 +1055,9 @@ Admin Tool（`admin-tool/`、`npm run dev` で手元だけ起動）から `fetch
 | 戦域（管理 API `GET /api/admin/theaters` の一覧。読めないときは ID を手で入れる） | `--theater` |
 | ミノフスキー濃度（省略すると戦域の基準） | `--minovsky` |
 | NPC 数・エース数 | `--npc` / `--ace` |
+| 必ず参加させるエース（管理 API `GET /api/admin/ace-pilots` の一覧からチェック） | `--ace-id`（複数） |
+| 作戦「本番の作戦マスター」: `missions.id` を入れる | `--mission <ID>` |
+| 作戦「リポジトリの定義」: `retreat_support` など | `--mission-builder <名前>` |
 | 参加機体「プレイヤー」: 名前で引いたパイロットの所有機から選ぶ | `--ms <機体ID>[:チーム]` |
 | 参加機体「NPC」: NPC のパイロットを選ぶ（出撃機体が未設定なら CLI が所有機の先頭にする） | `--pilot <pilots.id>[:チーム]` |
 | 参加機体「機体ID」: 手で入れる | `--ms <機体ID>[:チーム]` |
@@ -1062,6 +1066,7 @@ Admin Tool（`admin-tool/`、`npm run dev` で手元だけ起動）から `fetch
 * プレイヤーの出撃機体は本番ではエントリーごとに決まり、`pilots.active_mobile_suit_id` は設定されないことが多い。そのため `--pilot` は使わず、所有機を毎回選んで `--ms` で渡す（戦域ごとにビルドが異なるため、所有機の先頭へのフォールバックはしない）。`active_mobile_suit_id` を Admin Tool から設定する機能は作らない
 * プレイヤーと所有機の一覧は、読み取り専用の管理 API で引く（下表）。backend の接続先DB（`NEON_DATABASE_URL`）を読む。ロスターの中身は `fetch` が本番DBから Read Only の接続で読み直す
 * 引数はサーバー側でも CLI と同じ規則で確かめる（`shared.ts` の `buildFetchArgs()`）。機体ID は UUID、パイロットID は英数字で始まり英数字と `_-` だけ、ロスター名・チーム名・戦域ID は英数字で始まり英数字と `_.-` だけ、NPC 数・エース数は 0〜100 の整数、ミノフスキー濃度は 0〜1。`-` で始まる値はオプションと取り違えるため弾く
+* 作戦を選ぶと、NPC 数・エース数・エースの選択・チーム・NPC の行を無効にする（CLI と同じ制約。Issue #702）。`buildFetchArgs()` も、作戦と NPC・エース・チームの併用、`--mission` と `--mission-builder` の併用を本番DBへ接続する前に拒む。本番の作戦マスターの一覧を引く管理 API は無いため、ID を直接入れる
 * 同名のロスターは、フォームで上書きを確認してから `force`（`--force`）を付ける。Route Handler も `force` でなければ先に 409 を返す（CLI は本番DBから読み終えた後に拒むため）
 * 終わったらロスター一覧を取り直し、作ったロスターを「実行」のロスターに選ぶ。ロスター名は CLI の出力 `N 機を保存しました: <パス>` から読む
 * 失敗したときは CLI の標準エラーを出す。`NEON_READONLY_DATABASE_URL` が未設定なら `エラー: NEON_READONLY_DATABASE_URL が設定されていません。…` がそのまま出る
