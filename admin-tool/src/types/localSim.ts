@@ -90,6 +90,63 @@ export interface LocalSimRosterInfo {
   fetched_at: string | null;
 }
 
+/** ロスターの編集対象。backend の `Roster`（roster.py）のうち、編集画面が読み書きする項目 */
+export interface LocalSimRoster {
+  schema_version: number;
+  name: string;
+  fetched_at: string;
+  conditions: {
+    theater_id: string | null;
+    environment: string;
+    environment_profile: Record<string, unknown> | null;
+    environment_name?: string | null;
+    minovsky_density: number;
+    battlefield: { obstacle_density?: string; [key: string]: unknown };
+    [key: string]: unknown;
+  };
+  entries: LocalSimRosterEntry[];
+  mission: { source: string; builder: string | null; master: LocalSimMissionMaster } | null;
+  [key: string]: unknown;
+}
+
+export interface LocalSimRosterEntry {
+  source: { kind: string; mobile_suit_id: string; pilot_name?: string | null; [key: string]: unknown };
+  is_npc: boolean;
+  snapshot: Record<string, unknown>;
+}
+
+/** 作戦マスター（`Mission` の model_dump()）のうち、編集する項目 */
+export interface LocalSimMissionMaster {
+  name?: string;
+  allies_config: LocalSimMissionUnit[] | null;
+  enemy_config: { enemies: LocalSimMissionUnit[]; [key: string]: unknown };
+  objective: { type: string; params: Record<string, unknown> } | null;
+  [key: string]: unknown;
+}
+
+/** 作戦の友軍・敵機1機（`MissionUnitConfig`） */
+export interface LocalSimMissionUnit {
+  name: string;
+  max_hp: number;
+  armor: number;
+  mobility: number;
+  terrain_adaptability?: Record<string, string>;
+  weapon: {
+    id: string;
+    name: string;
+    power: number;
+    range: number;
+    accuracy: number;
+    weapon_type: string;
+    is_melee: boolean;
+    fire_arc_deg: number;
+    [key: string]: unknown;
+  };
+  role: string | null;
+  squad_id: string | null;
+  [key: string]: unknown;
+}
+
 export interface LocalSimRunRequest {
   roster: string;
   rounds: number;

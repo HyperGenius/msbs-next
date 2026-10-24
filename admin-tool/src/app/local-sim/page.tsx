@@ -205,6 +205,11 @@ export default function LocalSimPage() {
                 </option>
               ))}
             </select>
+            {selectedRoster && (
+              <Link href={`/local-sim/rosters/${encodeURIComponent(selectedRoster)}`} className="text-xs text-[#00ff41]/70 hover:underline">
+                このロスターを編集
+              </Link>
+            )}
           </label>
           <label className="space-y-1">
             <span>戦闘数</span>
