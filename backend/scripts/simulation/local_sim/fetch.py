@@ -180,7 +180,11 @@ class RosterBuilder:
                 .where(MobileSuit.side == "ENEMY")
             ).first()
         if suit is None:
-            raise ValueError(f"パイロット {pilot.name} の出撃機体が見つかりません。")
+            raise ValueError(
+                f"パイロット {pilot.name} の出撃機体（pilots.active_mobile_suit_id）が"
+                "見つかりません。プレイヤーの出撃機体はエントリーごとに選ぶため、"
+                "この項目は設定されないことがあります。--ms <機体ID> で機体を直接指定してください。"
+            )
         self._add_owned_suit("pilot", suit, pilot, spec.team)
 
     def add_npcs(self, count: int) -> None:

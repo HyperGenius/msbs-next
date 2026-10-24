@@ -131,7 +131,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | オプション | 説明 |
 |---|---|
 | `--ms <機体ID>[:<チーム>]` | 指定した機体を参加させる（複数指定可） |
-| `--pilot <パイロットID>[:<チーム>]` | パイロットの出撃機体（`active_mobile_suit_id`）を参加させる。ID は `pilots.id` か `user_id`（複数指定可） |
+| `--pilot <パイロットID>[:<チーム>]` | パイロットの出撃機体（`active_mobile_suit_id`）を参加させる。ID は `pilots.id` か `user_id`（複数指定可）。プレイヤーの出撃機体はエントリーごとに選ぶため `active_mobile_suit_id` が未設定のことがある。その場合はエラーになるので `--ms` で機体を直接指定する（戦域ごとにビルドが異なるため、所有機の先頭へのフォールバックはしない） |
 | `--npc N` | 本番の永続化NPCから N 機を選ぶ。足りない分は本番と同様に NPC を生成して補う |
 | `--ace N` | エースパイロットをランダムに N 機参加させる。同じエースは重ねない |
 | `--theater <戦域ID>` | 戦域。省略すると戦域なし（宇宙） |
