@@ -127,10 +127,19 @@ VALID_STRATEGY_MODES: frozenset[str] = frozenset(
 )
 
 # ユニットのロール。戦略モード・NPC の性格とは別の値。
-# 振る舞いを持つのは撤退（UNIT_ROLE_WITHDRAW）だけ。
+# 振る舞いを持つのは撤退と、小隊の陣形（前衛・支援・狙撃）。
+UNIT_ROLE_VANGUARD: str = "VANGUARD"
+UNIT_ROLE_SUPPORT: str = "SUPPORT"
+UNIT_ROLE_SNIPER: str = "SNIPER"
 UNIT_ROLE_WITHDRAW: str = "WITHDRAW"
 VALID_UNIT_ROLES: frozenset[str] = frozenset(
-    {"VANGUARD", "SUPPORT", "SNIPER", "COMMANDER", UNIT_ROLE_WITHDRAW}
+    {
+        UNIT_ROLE_VANGUARD,
+        UNIT_ROLE_SUPPORT,
+        UNIT_ROLE_SNIPER,
+        "COMMANDER",
+        UNIT_ROLE_WITHDRAW,
+    }
 )
 
 # ユニット種別ごとの慣性パラメータデフォルト値 (Phase 3-1)
@@ -228,6 +237,16 @@ MELEE_ENGAGEMENT_RANGE_MIN: float = 20.0  # 格闘武器の目標交戦距離の
 # 敵ユニット同士の最小間隔 (m)。これより近いと強い斥力が働く。
 ENEMY_MIN_SEPARATION: float = 10.0
 ENEMY_SEPARATION_COEFF: float = 10.0  # 最小間隔の斥力係数（距離 0 での大きさ）
+
+# 小隊の陣形。後衛は同じ小隊の前衛の後方に位置取る。値はすべて暫定。
+FORMATION_REAR_ROLES: frozenset[str] = frozenset({UNIT_ROLE_SUPPORT, UNIT_ROLE_SNIPER})
+# 陣形の位置への引力の最大値。MOVE 中の最寄りの敵への引力より強くする。
+FORMATION_ATTRACTION_COEFF: float = 3.0
+FORMATION_ANCHOR_SLACK: float = 150.0  # 引力が最大になる陣形の位置からの距離 (m)
+FORMATION_MIN_GAP: float = 100.0  # 後衛が前衛の後方にあける最小の距離 (m)
+# 前衛と敵がこの距離 (m) より近いと、後衛は位置取りをやめて今の場所から撃つ。
+# 格闘中の前衛は敵の周りを速く回るため、遠くの後衛は前衛の後方に追いつけない。
+FORMATION_VANGUARD_CONTACT_RANGE: float = 100.0
 
 # 戦略評価インターバル (Phase 4-2)
 STRATEGY_UPDATE_INTERVAL: int = 10  # 何ステップごとに戦略評価を行うか
