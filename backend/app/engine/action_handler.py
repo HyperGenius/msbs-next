@@ -85,10 +85,14 @@ class ActionHandlerMixin:
         """撤退ロールの行動処理: 撤退ポイントへ向かい、射程内の敵には撃ち返す.
 
         ターゲットへは寄らない。格闘武器は敵に寄らないと届かないため使わない。
-        武装の持ち替え中は撃たずに移動だけする。
+        武装の持ち替え中と、撃ち返さない設定（`hold_fire`）のときは移動だけする。
         """
         pos_actor = actor.position.to_numpy()
-        target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
+        target = (
+            None
+            if self._holds_fire_while_withdrawing(actor)  # type: ignore[attr-defined]
+            else self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
+        )
         unit_id = str(actor.id)
         if (
             target is not None

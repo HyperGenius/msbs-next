@@ -85,6 +85,8 @@ def build_mission_unit(
         ],
         side=side,
     )
+    if config.max_speed is not None:
+        unit.max_speed = config.max_speed
     if config.role in (UNIT_ROLE_SUPPORT, UNIT_ROLE_SNIPER):
         unit.tactics = {**unit.tactics, "priority": TACTICS_PRIORITY_SUPPORT}
     unit.normalize_parts()
@@ -152,31 +154,36 @@ def build_mission_battle(
             unit = build_mission_unit(config, side, unit_id)
             unit.team_id = team_ids[team_key]
             mission_units.append(unit)
-            if config.role is not None or config.squad_id is not None:
+            if (
+                config.role is not None
+                or config.squad_id is not None
+                or config.hold_fire
+            ):
                 unit_assignments[str(unit.id)] = UnitAssignment(
-                    role=config.role, squad_id=config.squad_id
+                    role=config.role,
+                    squad_id=config.squad_id,
+                    hold_fire=config.hold_fire,
                 )
 
     if conditions.theater_id is None:
         conditions = replace(conditions, environment=mission.environment)
 
     layout = mission.layout_config()
+    # エリア収縮はバトルロイヤルで接敵させる仕組みなので、作戦では使わない。
+    battlefield_update: dict = {"area_shrink": False, "field_size": layout.field_size}
     if layout.spawn_zones:
-        conditions = replace(
-            conditions,
-            battlefield=conditions.battlefield.model_copy(
-                update={
-                    "spawn_zones": [
-                        SpawnZone(
-                            team_id=team_ids[zone.team_id],
-                            center=zone.center.model_copy(),
-                            radius=zone.radius,
-                        )
-                        for zone in layout.spawn_zones
-                    ]
-                }
-            ),
-        )
+        battlefield_update["spawn_zones"] = [
+            SpawnZone(
+                team_id=team_ids[zone.team_id],
+                center=zone.center.model_copy(),
+                radius=zone.radius,
+            )
+            for zone in layout.spawn_zones
+        ]
+    conditions = replace(
+        conditions,
+        battlefield=conditions.battlefield.model_copy(update=battlefield_update),
+    )
     retreat_points = [
         RetreatPoint(
             position=point.position.model_copy(),

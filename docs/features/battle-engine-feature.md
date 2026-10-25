@@ -1200,6 +1200,9 @@ self.map_bounds: tuple[float, float] = (0.0, side_len)
 
 > **注意**: グローバル定数 `constants.MAP_BOUNDS` への上書きは行わない。
 
+`BattleField.field_size` を指定すると、この計算と 21.2 の拡張をせず、その辺長を使う（Issue #711）。
+作戦の配置（`MissionLayout.field_size`）から渡す。スポーン領域と撤退ポイントの座標がその辺長を前提にしているため。null（既定）なら今までどおり計算する。
+
 ### 16.5 影響範囲
 
 `self.map_bounds` に移行したメソッド:
@@ -2211,6 +2214,9 @@ Python ループが「200点 × 発火集合数」から「発火集合数」（
 保持する形で `map_bounds` の推移を再構成できる。停止イベントは状態が変わらない限り
 重複記録しないよう `self._shrink_paused` フラグで一度だけに制限している
 （`STRATEGY_CHANGED` ログ（4章）が状態遷移時のみ記録するパターンを踏襲）。
+
+`BattleField.area_shrink` が false のときは収縮しない（Issue #711）。作戦の戦闘（`build_mission_battle()`）は常に false にする。
+エリア収縮はバトルロイヤルで接敵させる仕組みで、撤退ポイントまで逃げる作戦では戦場が縮む理由が無いため。既定は true。
 
 ### 27.3 今回スコープ外とした事項
 
@@ -3224,11 +3230,12 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 | `BattleSimulator.__init__()` | `strategy_mode` を `RETREAT` にする |
 | `_strategy_phase()` | チームの戦略が変わっても `strategy_mode` を書き換えない（`TeamStrategyController.apply()` に渡すユニットから外す） |
 | `_ai_decision_phase()` | ファジィ推論をせず、敵の索敵の有無によらず `RETREAT` を選ぶ |
-| `_update_body_heading()` | 射程内に敵がいれば敵を向く。いなければ移動方向を向く |
-| `_action_phase()`（`_withdraw_action()`） | 射程内の敵には射撃武器で撃ち返す。敵へは寄らず、撤退ポイントへ移動する。格闘武器は使わない。武装の持ち替え中は撃たない |
+| `_update_body_heading()` | 射程内に敵がいれば敵を向く。いなければ移動方向を向く。撃ち返さない設定のときは常に移動方向を向く |
+| `_action_phase()`（`_withdraw_action()`） | 射程内の敵には射撃武器で撃ち返す。敵へは寄らず、撤退ポイントへ移動する。格闘武器は使わない。武装の持ち替え中と、撃ち返さない設定のときは撃たない |
 | `_retreat_check_phase()` | 撤退ポイントの半径に入ると、今と同じく `RETREATED` になり戦場から離れる |
 
 * 撃ち返すために敵を向くと後退の移動になり（`FACING_SPEED_MODIFIER_BACK`）、撤退は遅くなる
+* 撃ち返さない設定は `UnitAssignment.hold_fire`（作戦マスターの機体の `hold_fire`、Issue #711）。撤退ロールのときだけ効く。撃ち返すと敵の支援ロール（`SUPPORT` の加点、39 章）が撤退機を狙うため、護衛に狙いを引きつけさせる作戦で使う
 * 使える撤退ポイントが無い戦場では、ロールを無視する。チームの戦略モードの切り替えを受け、ファジィ推論で行動を決める
 * `TeamMetrics`（生存率・平均 HP）には撤退ロールのユニットも数える
 
@@ -3238,7 +3245,7 @@ Issue #601（Epic #594 Sub-Issue 7）。ガレージの戦術設定 `tactics.ran
 
 ### 37.5 テスト
 
-* `backend/tests/unit/test_unit_roles.py`: 許容値に無いロールの拒否、割り当ての引き当て、撤退ロールの開始時の戦略、撤退ポイントが無い・他チーム専用のときにロールを無視する、チームの戦略変更を受けない、索敵前でも `RETREAT` を選ぶ、チームが `AGGRESSIVE` のまま撤退ポイントで `RETREATED` になる、射程内の敵に撃ち返しつつ撤退ポイントへ向かう
+* `backend/tests/unit/test_unit_roles.py`: 許容値に無いロールの拒否、割り当ての引き当て、撤退ロールの開始時の戦略、撤退ポイントが無い・他チーム専用のときにロールを無視する、チームの戦略変更を受けない、索敵前でも `RETREAT` を選ぶ、チームが `AGGRESSIVE` のまま撤退ポイントで `RETREATED` になる、射程内の敵に撃ち返しつつ撤退ポイントへ向かう、撃ち返さない設定では撃たず敵を向かない、撃ち返さない設定は撤退ロールにだけ効く
 
 ## 38. 小隊の陣形（Epic #682 Sub-Issue 6）
 

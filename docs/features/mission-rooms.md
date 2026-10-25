@@ -46,10 +46,11 @@ Epic #682「作戦（ミッション）と敵小隊のロール」の Sub-Issue 
 JSON 列は Pydantic モデルで読む（`Mission.objective_config()` / `enemy_unit_configs()` / `ally_unit_configs()` / `layout_config()`）。
 
 * `MissionObjectiveConfig`: `type`（既定 `ANNIHILATION`）と `params`（種類ごとの引数）。種類から作戦目標を作るのは `build_objective()`（`backend/app/engine/objectives.py`）。今ある種類は `ANNIHILATION` と `RETREAT_SUPPORT`（[retreat-support-mission.md](retreat-support-mission.md)）。無い種類は組み立て時に `ValueError` になる
-* `MissionUnitConfig`: `name` / `max_hp` / `armor` / `mobility` / `position` / `terrain_adaptability` / `weapon`（`id` / `name` / `power` / `range` / `accuracy`）/ `role` / `squad_id`。省略した項目は既存の作戦と同じ既定値になる。`role` は `VALID_UNIT_ROLES` のいずれかで、無い値は組み立て時に `ValueError` になる
-* `MissionLayout`: `spawn_zones`（`SpawnZone` のリスト）と `retreat_points`（`RetreatPoint` のリスト）。`team_id` には `PLAYER`（プレイヤーと友軍）か `ENEMY` を書く。撤退ポイントの `team_id` が null なら全チームが使える。それ以外の値は読み込み時にエラーにする
+* `MissionUnitConfig`: `name` / `max_hp` / `armor` / `mobility` / `position` / `terrain_adaptability` / `weapon`（`id` / `name` / `power` / `range` / `accuracy`）/ `role` / `squad_id`。省略した項目は既存の作戦と同じ既定値になる。`role` は `VALID_UNIT_ROLES` のいずれかで、無い値は組み立て時に `ValueError` になる。撤退支援で足した項目（`current_hp` / `missing_parts` / `max_speed` / `hold_fire` など）は [retreat-support-mission.md](retreat-support-mission.md#作戦マスターの定義の拡張)
+* `MissionLayout`: `field_size`（フィールドの辺長 (m)。null は参加機数から決める）、`spawn_zones`（`SpawnZone` のリスト）と `retreat_points`（`RetreatPoint` のリスト）。`team_id` には `PLAYER`（プレイヤーと友軍）か `ENEMY` を書く。撤退ポイントの `team_id` が null なら全チームが使える。それ以外の値は読み込み時にエラーにする
 
-配置の座標はフィールドの最小辺長（`MIN_FIELD_SIZE`）の内側に置く。フィールドの広さは参加機数で変わり、それより外は場外になりうる。
+配置の座標は 0 から `field_size` の内側に置く。`field_size` が null のときはフィールドの最小辺長（`MIN_FIELD_SIZE`）の内側に置く。フィールドの広さが参加機数で変わり、それより外は場外になりうるため。
+作戦の戦闘ではエリア収縮をしない（Issue #711）。
 スポーン領域を書くときは `PLAYER` と `ENEMY` の両方を書く。書かなかったチームはスポーン領域で配置されない。
 
 既存の3件（殲滅戦）は `objective` が null なので殲滅として読める。`is_active` は false のままなので、定期バトルでは選べない（作戦ルームの対象は #686 の撤退支援から）。

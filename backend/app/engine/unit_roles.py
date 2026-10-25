@@ -18,6 +18,8 @@ class UnitAssignment:
     """`VALID_UNIT_ROLES` のいずれか。None はロールなし。"""
     squad_id: str | None = None
     """同じチームの中で組んで動く機体の組。None は小隊なし。"""
+    hold_fire: bool = False
+    """撤退ロールのとき、敵に撃ち返さずに撤退ポイントへ向かう。"""
 
     def __post_init__(self) -> None:
         """ロールの値を検証する."""

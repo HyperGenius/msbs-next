@@ -1037,6 +1037,14 @@ class BattleField(SQLModel):
     obstacle_density: str = (
         "MEDIUM"  # 障害物密度: "NONE" / "SPARSE" / "MEDIUM" / "DENSE" (Phase 6-3)
     )
+    field_size: float | None = Field(
+        default=None,
+        gt=0,
+        description="フィールドの辺長 (m)。null はユニット数から決める",
+    )
+    area_shrink: bool = Field(
+        default=True, description="時間経過でフィールドを縮めるか"
+    )
 
 
 class BattleTeam(SQLModel):
@@ -1196,6 +1204,12 @@ class MissionUnitConfig(SQLModel):
         default_factory=list,
         description="開始時に欠けている部位 (ALL_PART_NAMES のいずれか)",
     )
+    max_speed: float | None = Field(
+        default=None, gt=0, description="最高速度 (m/s)。null は機体の既定値"
+    )
+    hold_fire: bool = Field(
+        default=False, description="撤退ロールのとき、敵に撃ち返さない"
+    )
 
 
 class MissionLayout(SQLModel):
@@ -1203,10 +1217,16 @@ class MissionLayout(SQLModel):
 
     `team_id` には MISSION_TEAM_PLAYER か MISSION_TEAM_ENEMY を書く。
     撤退ポイントの `team_id` が null なら全チームが使える。
-    座標はフィールドの最小辺長 (MIN_FIELD_SIZE) の内側に置く。
-    フィールドの広さは参加機数で変わるため、それより外は場外になりうる。
+    座標は 0 から `field_size` の内側に置く。
+    `field_size` が null のときは MIN_FIELD_SIZE の内側に置く。
+    フィールドの広さが参加機数で変わり、それより外は場外になりうるため。
     """
 
+    field_size: float | None = Field(
+        default=None,
+        gt=0,
+        description="フィールドの辺長 (m)。null は参加機数から決める",
+    )
     spawn_zones: list[SpawnZone] = Field(
         default_factory=list, description="空なら既定のスポーン領域を自動生成する"
     )

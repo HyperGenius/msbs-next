@@ -5,11 +5,13 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
+from app.engine.constants import SHRINK_START_STEP
 from app.engine.objectives import (
     AnnihilationObjective,
     RetreatSupportObjective,
     build_objective,
 )
+from app.engine.simulation import BattleSimulator
 from app.models.models import (
     MISSION_TEAM_ENEMY,
     MISSION_TEAM_PLAYER,
@@ -215,6 +217,58 @@ def test_layout_maps_team_keys() -> None:
     assert shared.team_id is None
 
 
+def test_mission_battlefield_has_no_area_shrink_and_uses_layout_field_size() -> None:
+    """作戦ではエリア収縮を止める。配置にフィールドの辺長があれば、それを使う."""
+    with_size = build_mission_battle(
+        _mission(layout={"field_size": 3500}), [_player()], BattleConditions()
+    )
+    without_size = build_mission_battle(_mission(), [_player()], BattleConditions())
+
+    assert with_size.conditions.battlefield.field_size == 3500
+    assert with_size.conditions.battlefield.area_shrink is False
+    assert without_size.conditions.battlefield.field_size is None
+    assert without_size.conditions.battlefield.area_shrink is False
+
+
+def test_simulator_uses_battlefield_field_size_without_shrink() -> None:
+    """フィールドの辺長を指定すると、その大きさで戦い、収縮を止めると縮まない."""
+
+    def bounds_after_shrink_start(area_shrink: bool) -> tuple[float, float]:
+        # 決着すると収縮しないため、敵は倒れない HP にする。
+        enemy = build_mission_unit(MissionUnitConfig(max_hp=100000), "ENEMY")
+        enemy.position = Vector3(x=3400, y=0, z=3400)
+        sim = BattleSimulator(
+            _player(),
+            [enemy],
+            battlefield=BattleField(
+                obstacle_density="NONE", field_size=3500, area_shrink=area_shrink
+            ),
+        )
+        for _ in range(SHRINK_START_STEP + 1):
+            sim.step()
+        return sim.map_bounds
+
+    assert bounds_after_shrink_start(False) == (0.0, 3500.0)
+    assert bounds_after_shrink_start(True) != (0.0, 3500.0)
+
+
+def test_mission_unit_max_speed_and_hold_fire() -> None:
+    """作戦の機体の最高速度と、撃ち返さない設定を戦闘に渡す."""
+    mission = _mission(
+        allies_config=[
+            {"name": "負傷機", "role": "WITHDRAW", "max_speed": 30, "hold_fire": True}
+        ]
+    )
+    player = _player()
+
+    setup = build_mission_battle(mission, [player], BattleConditions())
+
+    [ally, enemy] = setup.mission_units
+    assert ally.max_speed == 30
+    assert enemy.max_speed == MobileSuit.model_fields["max_speed"].default
+    assert setup.unit_assignments[str(ally.id)].hold_fire is True
+
+
 def test_environment_falls_back_to_mission_without_theater() -> None:
     """戦域の無い開催では作戦の環境で戦い、戦域があれば戦域の環境で戦う."""
     mission = _mission()
@@ -314,6 +368,15 @@ def test_retreat_support_mission_master_builds_a_battle() -> None:
     assert any(e.weapons[0].is_melee for e in enemies)
     [retreat_point] = setup.retreat_points
     assert retreat_point.team_id == "player-team"
+    # 撤退機は撃ち返さず、追撃部隊より遅い。
+    assert all(setup.unit_assignments[str(a.id)].hold_fire for a in allies)
+    assert all(a.max_speed < e.max_speed for a in allies for e in enemies)
+    # 配置はすべてフィールドの内側にある。
+    field_size = setup.conditions.battlefield.field_size
+    assert field_size is not None
+    positions = [z.center for z in setup.conditions.battlefield.spawn_zones]
+    for pos in [*positions, retreat_point.position]:
+        assert 0 < pos.x < field_size and 0 < pos.z < field_size
     assert isinstance(setup.objective, RetreatSupportObjective)
     assert setup.objective.protected_unit_ids == {str(a.id) for a in allies}
 
