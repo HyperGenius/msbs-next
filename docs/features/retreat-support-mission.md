@@ -151,7 +151,8 @@ uv run python scripts/maintenance/upsert_retreat_support_mission.py --apply  # �
 ```
 
 `--inactive` を付けると `is_active` を false で入れる。先にマイグレーション（`alembic upgrade head`）を当てること。
-機体マスター参照に書き換えた定義（Issue #719）は、本番 DB に `gm` / `gouf` / `gelgoog` の機体マスターが要る（2026-10-25 に Read Only で確認済み）。
+機体マスター参照に書き換えた定義（Issue #719）は、本番 DB に `gm` / `gouf` / `zaku_ii` の機体マスターが要る。
+2026-10-25 に難易度を調整した定義（Issue #711）を本番に反映した（`description` / `enemy_config` / `allies_config` を更新）。反映後に、本番の作戦マスターと機体マスターから戦闘を組み立てられることを Read Only で確かめた。
 
 ## 検証
 
@@ -278,7 +279,7 @@ uv run python scripts/simulation/retreat_support_bench.py --rounds 60 --master-d
 
 * 本番の機体マスターでは、どのビルドでも撤退支援に成功しない。撤退機の全滅は平均 24〜34 秒（出撃なしは 14 秒）
 * 固定データでは成功するが、殲滅向けが最も高く、機動・索敵寄りが最も低い。#711 の狙い（機動・索敵寄りが有利）とは逆
-* 難易度の調整は #711 で行う。本番の `missions.id = 4` は直書きの定義のまま動くので、調整を終えるまで `upsert_retreat_support_mission.py --apply` を当てない
+* 難易度の調整は #711 で行った（[難易度の調整](#難易度の調整issue-711)）。この表の定義は本番に反映していない
 
 ### 作戦の長さと配置を変えた後（Issue #711）
 
