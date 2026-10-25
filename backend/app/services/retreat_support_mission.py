@@ -32,17 +32,21 @@ ALLY_MAX_SPEED = 35.0
 DESCRIPTION = (
     "損傷した友軍 3 機を撤退ポイントまで逃がせ。友軍は撃ち返せない。"
     "2 機以上が離脱すれば成功、3 機とも逃がせば報酬が増える。"
-    "追撃部隊は格闘機 2 機と狙撃機 2 機。敵を全滅させなくてもよい。"
-    "狙撃機を倒すか、追撃部隊を攻撃して狙いを自機に引きつけろ。"
+    "追撃部隊はザク II の前衛 2 機と狙撃機 2 機。敵を全滅させなくてもよい。"
+    "撤退機を狙う敵を射程の外から撃ち、狙いを自機に引きつけろ。"
 )
 
 
 ALLY_MASTER_ID = "gm"
 """撤退機の機体マスター。"""
-VANGUARD_MASTER_ID = "gouf"
-"""追撃部隊の前衛の機体マスター。格闘武器（ヒートロッド）を持つ。"""
-SNIPER_MASTER_ID = "gelgoog"
-"""追撃部隊の後衛の機体マスター。射程の長いビームライフルを持つ。"""
+VANGUARD_MASTER_ID = "zaku_ii"
+"""追撃部隊の前衛の機体マスター。"""
+SNIPER_MASTER_ID = "zaku_ii"
+"""追撃部隊の後衛の機体マスター。
+
+追撃部隊の武器より射程の長い武器で撃つと、有利になる。
+グフ（格闘）やゲルググ（射程の長いビームライフル）にすると、どのビルドでもほぼ成功しない。
+"""
 
 
 def _ally(index: int, hp_ratio: float, missing_parts: list[str]) -> MissionUnitConfig:
@@ -66,7 +70,7 @@ def _pursuit_squad(index: int) -> str:
 def _pursuer_vanguard(index: int) -> MissionUnitConfig:
     return MissionUnitConfig(
         master_mobile_suit_id=VANGUARD_MASTER_ID,
-        name=f"追撃格闘機 #{index}",
+        name=f"追撃前衛機 #{index}",
         role=UNIT_ROLE_VANGUARD,
         squad_id=_pursuit_squad(index),
     )

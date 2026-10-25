@@ -405,7 +405,8 @@ def test_retreat_support_mission_master_builds_a_battle() -> None:
         "VANGUARD",
         "SNIPER",
     }
-    assert any(e.weapons[0].is_melee for e in enemies)
+    # 追撃部隊より射程の長い武器で撃てば有利になるよう、追撃部隊は同じ機体で揃える。
+    assert {e.master_mobile_suit_id for e in enemies} == {"zaku_ii"}
     [retreat_point] = setup.retreat_points
     assert retreat_point.team_id == "player-team"
     # 撤退機は撃ち返さず、追撃部隊より遅い。

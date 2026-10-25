@@ -388,11 +388,7 @@ def test_build_roster_saves_masters_referenced_by_mission(session: Session) -> N
         FetchOptions(pilots=[UnitSpec(str(p1.id))], mission_builder="retreat_support"),
         "retreat",
     )
-    assert {m["id"] for m in builder_roster.master_mobile_suits} == {
-        "gm",
-        "gouf",
-        "gelgoog",
-    }
+    assert {m["id"] for m in builder_roster.master_mobile_suits} == {"gm", "zaku_ii"}
 
 
 def test_build_roster_rejects_mission_with_missing_master(session: Session) -> None:

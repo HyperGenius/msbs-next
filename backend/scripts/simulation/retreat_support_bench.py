@@ -10,6 +10,8 @@ DB に繋がない。作戦の機体が参照する機体マスターは `--mast
 * mobile: 低 HP・高機動・長い索敵。友軍の近くで敵を引きつける「機動・索敵寄り」
 * balanced: 中間
 * escort: 中間より少し軽く、長い射程で撤退機を狙う敵を優先して撃つ（`PROTECT`）「足止め・護衛」
+* annihilator_protect / escort_closest: 殲滅向けに `PROTECT` を、足止め・護衛に `CLOSEST` を付けたもの。
+  成功率の差が機体・武器から来るのか、戦術から来るのかを分けて見る（Issue #711）
 * absent: 出撃なし（開始時に HP 0）。何もしなければ失敗する難易度かを確かめる。撤退支援だけで回す
 
 殲滅戦は同じ友軍・敵小隊で、撤退ポイントなし・友軍も戦う・殲滅目標で戦う。
@@ -92,6 +94,18 @@ BUILDS = [
     Build("balanced", 950, 65, 1.2, 600, 180, 450, 72),
     Build("mobile", 750, 45, 1.6, 800, 120, 400, 68),
     Build("escort", 850, 55, 1.3, 700, 150, 600, 70, 450.0, TACTICS_PRIORITY_PROTECT),
+    Build(
+        "annihilator_protect",
+        1200,
+        90,
+        0.9,
+        500,
+        240,
+        450,
+        75,
+        priority=TACTICS_PRIORITY_PROTECT,
+    ),
+    Build("escort_closest", 850, 55, 1.3, 700, 150, 600, 70, 450.0),
     Build("absent", 950, 65, 1.2, 600, 180, 450, 72, absent=True),
 ]
 
@@ -240,7 +254,7 @@ def main() -> None:
         f"rounds={args.rounds} suppression={suppression} master_dir={args.master_dir}"
     )
     print(
-        f"{'mode':<16}{'build':<13}{'success (95% CI)':>20}{'timeout':>9}"
+        f"{'mode':<16}{'build':<21}{'success (95% CI)':>20}{'timeout':>9}"
         f"{'avg_escaped':>13}{'avg_lost':>10}{'player_alive':>14}{'avg_sec':>9}"
     )
     runners = (
@@ -264,7 +278,7 @@ def main() -> None:
             low, high = wilson_interval(successes, n)
             success = f"{successes / n:.0%} ({low:.0%}-{high:.0%})"
             print(
-                f"{mode:<16}{label:<13}{success:>20}"
+                f"{mode:<16}{label:<21}{success:>20}"
                 f"{sum(r['timeout'] for r in results) / n:>9.0%}"
                 f"{sum(r['escaped'] for r in results) / n:>13.2f}"
                 f"{sum(r['lost'] for r in results) / n:>10.2f}"
