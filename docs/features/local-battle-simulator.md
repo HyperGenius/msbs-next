@@ -422,7 +422,7 @@ python -m scripts.simulation.local_sim report retreat
 
 1. `prepare_battle_units()` で判定する機体と他のプレイヤー機を組み立て、他のプレイヤー機の `side` を `PLAYER` にする
 2. `build_mission_battle()` で友軍・敵機・スポーン領域・撤退ポイント・ロールと小隊・作戦目標を組み立てる
-3. `run_battle(objective=..., retreat_points=..., unit_assignments=...)` で戦う
+3. `run_battle(objective=..., retreat_points=..., unit_assignments=..., suppression=...)` で戦う。射撃の制圧（`battle-engine-feature.md` 40 章）は本番と同じく作戦の係数（`MissionBattleSetup.suppression`）で有効になる
 4. 勝敗は判定する機体のチームから見た作戦の結果（`SUCCESS` / `FAILURE` / `DRAW` → `WIN` / `LOSE` / `DRAW`）。作戦の結果のカラムは本番と同じ `objective_result_fields()` で作る
 
 * 友軍機は `enemies_info` に入るが、`side` が `PLAYER` のため BattleViewer では味方として描かれる

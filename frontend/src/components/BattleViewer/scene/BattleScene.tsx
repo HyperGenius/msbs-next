@@ -122,6 +122,8 @@ interface UnitState {
     heading?: number;
     /** 現在のターゲットMS ID — 照準線・ハイライトに使用 */
     targetId?: string;
+    /** 射撃の制圧を受けているとき true */
+    isSuppressed?: boolean;
 }
 
 /** LOS 計算結果（1本の視線ライン分） */
@@ -389,6 +391,7 @@ export function BattleScene({
                     heading={playerState.heading}
                     isAttacking={attackingUnitIds?.has(String(player.id))}
                     isFlashing={criticalTargetIds.has(String(player.id))}
+                    isSuppressed={playerState.isSuppressed}
                     isSelf={true}
                 />
             )}
@@ -409,6 +412,7 @@ export function BattleScene({
                     isTargeted={enemy.id === playerState.targetId}
                     isAttacking={attackingUnitIds?.has(String(enemy.id))}
                     isFlashing={criticalTargetIds.has(String(enemy.id))}
+                    isSuppressed={state.isSuppressed}
                     allyLabel={allyLabels?.get(String(enemy.id))}
                 />
             ))}

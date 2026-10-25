@@ -15,6 +15,7 @@ from app.engine.battle_utils import serialize_obstacles
 from app.engine.objectives import BattleObjective, ObjectiveResult
 from app.engine.rng import seed_numpy_rngs
 from app.engine.simulation import BattleSimulator
+from app.engine.suppression import SuppressionConfig
 from app.engine.unit_roles import UnitAssignment
 from app.models.models import MobileSuit, RetreatPoint, Vector3, Weapon
 from app.services.theater_service import BattleConditions
@@ -112,6 +113,7 @@ def run_battle(
     objective: BattleObjective | None = None,
     retreat_points: list[RetreatPoint] | None = None,
     unit_assignments: dict[str, UnitAssignment] | None = None,
+    suppression: SuppressionConfig | None = None,
 ) -> BattleOutcome:
     """戦闘を決着まで実行する.
 
@@ -125,6 +127,7 @@ def run_battle(
         objective: 作戦目標。省略時は殲滅とする。
         retreat_points: 撤退ポイント。省略時は無し。
         unit_assignments: ユニット ID（str）→ ロールと所属小隊。省略時は全機ロールなし。
+        suppression: 射撃の制圧の係数。省略時は制圧なし。
 
     Returns:
         プレイヤー機のチームから見て作戦が成功すれば `player_win` が真になる。
@@ -136,6 +139,7 @@ def run_battle(
         objective=objective,
         retreat_points=retreat_points,
         unit_assignments=unit_assignments,
+        suppression=suppression,
         **conditions.simulator_kwargs(),
     )
 

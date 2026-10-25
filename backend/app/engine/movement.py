@@ -858,6 +858,10 @@ class MovementMixin:
                 actor, "boost_speed_multiplier", DEFAULT_BOOST_SPEED_MULTIPLIER
             )
 
+        effective_max_speed *= self._suppression_speed_multiplier(  # type: ignore[attr-defined]
+            resources, new_heading
+        )
+
         # 上限を超えた分は減速度で落とす。向きを変えた瞬間に止まらないようにするため。
         if current_speed < effective_max_speed:
             new_speed = min(

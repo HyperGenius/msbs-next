@@ -33,6 +33,8 @@ export interface UnitSnapshot {
     heading?: number;
     /** 現在のターゲットMS ID — BattleViewer照準線・ハイライト表示用 */
     targetId?: string;
+    /** 射撃の制圧を受けている（SUPPRESSED〜SUPPRESSION_END の間）とき true */
+    isSuppressed: boolean;
 }
 
 /**
@@ -55,6 +57,8 @@ interface SnapshotCacheEntry {
     enRecord: { en: number; timestamp: number } | null;
     /** BOOST_START〜BOOST_END の間は true（EN が回復せず boost_en_cost で減る） */
     isBoosting: boolean;
+    /** SUPPRESSED〜SUPPRESSION_END の間は true。撃破されたら false に戻す */
+    isSuppressed: boolean;
     ammo: Record<string, number>;
     heading?: number;
     prevHeadingTs?: number;
@@ -85,6 +89,7 @@ function createInitialEntry(initialMs: MobileSuit, logs: BattleLog[]): SnapshotC
         en: initialMs.max_en || DEFAULT_MAX_EN,
         enRecord: null,
         isBoosting: false,
+        isSuppressed: false,
         ammo,
         // 未攻撃時に 0 を使うと、戦闘開始直後（currentTimestamp が小さい）でも
         // 「直近0秒に攻撃した」とみなされクールダウン警告が誤表示されるため、
@@ -179,6 +184,8 @@ export function getBattleSnapshot(
             }
             if (log.action_type === "BOOST_START") entry.isBoosting = true;
             if (log.action_type === "BOOST_END") entry.isBoosting = false;
+            if (log.action_type === "SUPPRESSED") entry.isSuppressed = true;
+            if (log.action_type === "SUPPRESSION_END" || log.action_type === "DESTROYED") entry.isSuppressed = false;
         }
 
         // リソース消費・クールダウン基準時刻の更新: log.weapon_id から実際に使用した武器を特定する
@@ -262,6 +269,7 @@ export function getBattleSnapshot(
         warnings,
         heading,
         targetId: entry.unitTargetId,
+        isSuppressed: entry.isSuppressed,
     };
 }
 
