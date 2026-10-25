@@ -14,6 +14,7 @@ import app.db as app_db
 from app.core import gamedata
 from app.core.gamedata import get_ace_pilots
 from app.engine.rng import new_numpy_rng
+from scripts.master_data import FIXTURE_DIR, read_master_dir
 from scripts.simulation.local_sim import run as local_run
 from scripts.simulation.local_sim.analysis import REPORT_FILE
 from scripts.simulation.local_sim.fetch import FetchOptions, UnitSpec, build_roster
@@ -283,6 +284,34 @@ def test_mission_master_edited_in_roster_is_used(
     assert battle.objective_detail["unit_roles"] == {
         battle.enemies_info[1]["id"]: "VANGUARD"
     }
+
+
+def test_mission_roster_uses_masters_saved_in_roster(
+    mission_roster_path: Path, generations_dir: Path, offline: None
+) -> None:
+    """作戦の機体は、DB ではなくロスターに保存した機体マスターとエースから作ること."""
+    data = json.loads(mission_roster_path.read_text(encoding="utf-8"))
+    gouf = next(m for m in data["master_mobile_suits"] if m["id"] == "gouf")
+    gouf["specs"]["max_hp"] = 4321
+    data["mission"]["master"]["enemy_config"]["enemies"] = [
+        {"master_mobile_suit_id": "gouf", "name": "改造グフ"},
+        {"ace_id": "ace_char_aznable"},
+    ]
+    ace = next(
+        a
+        for a in read_master_dir(FIXTURE_DIR)["ace_pilots"]
+        if a["id"] == "ace_char_aznable"
+    )
+    data["ace_pilots"] = [ace]
+    mission_roster_path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = _run(mission_roster_path, generations_dir, seed=611, max_steps=1)
+
+    units = {u["name"]: u for u in _battle(result.path, 1).enemies_info}
+    assert units["改造グフ"]["max_hp"] == 4321
+    ace_unit = units[ace["mobile_suit"]["name"]]
+    assert ace_unit["is_ace"] is True
+    assert ace_unit["pilot_name"] == ace["pilot_name"]
 
 
 def test_roster_without_mission_has_no_objective_fields(

@@ -20,7 +20,7 @@ from sqlmodel import Session, desc, select
 # DB関連
 from app.core.auth import get_current_user, get_current_user_optional
 from app.db import get_session
-from app.engine.battle_digest import compute_unit_kills
+from app.engine.battle_digest import compute_unit_kill_ids
 from app.engine.battle_utils import serialize_obstacles
 from app.engine.replay_log import to_replay_logs
 from app.engine.simulation import BattleSimulator
@@ -60,7 +60,8 @@ from app.services.battle_log_storage_service import (
 )
 from app.services.drop_service import DropScope, DropService
 from app.services.loot_service import LootService
-from app.services.mission_battle import build_mission_unit
+from app.services.mission_battle import MissionMasters, build_mission_unit
+from app.services.mission_master_loader import load_mission_masters
 
 app = FastAPI(title="MSBS-Next API", redirect_slashes=False)
 
@@ -179,12 +180,25 @@ def _resolve_npc_pilot_stats(enemies: list[MobileSuit]) -> "dict[str, PilotStats
     return result
 
 
-def _build_enemies_from_config(enemy_configs: list[dict]) -> list[MobileSuit]:
-    """ミッション設定から敵ユニットリストを生成する."""
-    return [
-        build_mission_unit(MissionUnitConfig.model_validate(config), "ENEMY")
-        for config in enemy_configs
-    ]
+def _build_enemies_from_config(
+    enemy_configs: list[dict], masters: MissionMasters | None = None
+) -> list[MobileSuit]:
+    """ミッション設定から敵ユニットリストを生成する.
+
+    Raises:
+        HTTPException: 作戦の機体を組み立てられないとき（参照先のマスターが無いなど）
+    """
+    try:
+        return [
+            build_mission_unit(
+                MissionUnitConfig.model_validate(config), "ENEMY", masters=masters
+            )
+            for config in enemy_configs
+        ]
+    except ValueError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Mission is misconfigured: {e}"
+        ) from e
 
 
 def _snapshot_spawn_positions(
@@ -284,7 +298,9 @@ async def simulate_battle(
 
     # 4. ミッション設定から敵機を生成
     enemy_configs = mission.enemy_config.get("enemies", [])
-    enemies = _build_enemies_from_config(enemy_configs)
+    enemies = _build_enemies_from_config(
+        enemy_configs, load_mission_masters(session, mission)
+    )
 
     # 4.5. エース NPC のパイロットステータスを npc_data マスターから解決 (Phase E-2)
     npc_pilot_stats = _resolve_npc_pilot_stats(enemies)
@@ -312,7 +328,8 @@ async def simulate_battle(
     # 6. 勝者判定と撃墜数カウント
     winner_id = None
     win_loss = "DRAW"
-    kills = compute_unit_kills(sim.logs, player.id)
+    kill_ids = compute_unit_kill_ids(sim.logs, player.id)
+    kills = len(kill_ids)
 
     if player.current_hp > 0 and all(e.current_hp <= 0 for e in enemies):
         # プレイヤー勝利
@@ -345,6 +362,11 @@ async def simulate_battle(
             win=win_loss == "WIN",
             kills=kills,
         )
+        bounty_exp, bounty_credits = PilotService.calculate_bounty(
+            e for e in enemies if e.id in kill_ids
+        )
+        exp_gained += bounty_exp
+        credits_gained += bounty_credits
 
         # 報酬を付与
         pilot, reward_logs = pilot_service.add_rewards(

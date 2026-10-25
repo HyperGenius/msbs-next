@@ -2,6 +2,7 @@
 import re
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlmodel import Session, and_, col, select
 
@@ -49,6 +50,21 @@ _MASTER_SPEC_FIELDS = (
     "turning_bonus",
     "missing_parts",
 )
+
+
+def master_mobile_suit_fields(master: MasterMobileSuit) -> dict[str, Any]:
+    """機体マスターから、`MobileSuit` の性能・武器の項目を作る. DB は使わない.
+
+    HP は満タンにする。武器の `master_weapon_id` は specs に書かれた値のまま使う。
+    """
+    specs = master.specs
+    return {
+        **{k: specs[k] for k in _MASTER_SPEC_FIELDS if k in specs},
+        "current_hp": specs["max_hp"],
+        "weapons": [Weapon(**w) for w in specs["weapons"]],
+        "weapon_slot_count": master.weapon_slot_count,
+        "master_mobile_suit_id": master.id,
+    }
 
 
 # 練習機を配れる勢力
@@ -281,6 +297,23 @@ class MobileSuitService:
         return ms
 
     @staticmethod
+    def link_master_weapons(session: Session, weapons: list[Weapon]) -> None:
+        """武器マスターにある武器に `master_weapon_id` を書く.
+
+        機体マスターの武器は武器マスターにない ID も持てるため、存在する ID だけ記録する。
+        """
+        existing_weapon_ids = set(
+            session.exec(
+                select(MasterWeapon.id).where(
+                    col(MasterWeapon.id).in_([w.id for w in weapons])
+                )
+            ).all()
+        )
+        for weapon in weapons:
+            if weapon.id in existing_weapon_ids:
+                weapon.master_weapon_id = weapon.id
+
+    @staticmethod
     def create_npc_mobile_suit_from_master(
         session: Session, pilot: Pilot, master_id: str
     ) -> MobileSuit | None:
@@ -295,27 +328,12 @@ class MobileSuitService:
         if master is None:
             return None
 
-        specs = master.specs
-        weapons = [Weapon(**w) for w in specs["weapons"]]
-        # 機体マスターの武器は武器マスターにない ID も持てるため、存在する ID だけ記録する。
-        existing_weapon_ids = set(
-            session.exec(
-                select(MasterWeapon.id).where(
-                    col(MasterWeapon.id).in_([w.id for w in weapons])
-                )
-            ).all()
-        )
-        for weapon in weapons:
-            if weapon.id in existing_weapon_ids:
-                weapon.master_weapon_id = weapon.id
+        fields = master_mobile_suit_fields(master)
+        MobileSuitService.link_master_weapons(session, fields["weapons"])
         personality = pilot.npc_personality or "AGGRESSIVE"
         ms = MobileSuit(
-            **{k: specs[k] for k in _MASTER_SPEC_FIELDS if k in specs},
+            **fields,
             name=f"{master.name} (NPC)",
-            current_hp=specs["max_hp"],
-            weapons=weapons,
-            weapon_slot_count=master.weapon_slot_count,
-            master_mobile_suit_id=master.id,
             user_id=pilot.user_id,
             side="ENEMY",
             tactics=build_npc_tactics(personality),

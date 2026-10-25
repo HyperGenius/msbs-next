@@ -17,7 +17,6 @@ from app.models.models import (
     Mission,
     MissionLayout,
     MissionUnitConfig,
-    MissionWeaponConfig,
     RetreatPoint,
     SpawnZone,
     Vector3,
@@ -38,23 +37,22 @@ DESCRIPTION = (
 )
 
 
-def _ally(index: int, current_hp: int, missing_parts: list[str]) -> MissionUnitConfig:
+ALLY_MASTER_ID = "gm"
+"""撤退機の機体マスター。"""
+VANGUARD_MASTER_ID = "gouf"
+"""追撃部隊の前衛の機体マスター。格闘武器（ヒートロッド）を持つ。"""
+SNIPER_MASTER_ID = "gelgoog"
+"""追撃部隊の後衛の機体マスター。射程の長いビームライフルを持つ。"""
+
+
+def _ally(index: int, hp_ratio: float, missing_parts: list[str]) -> MissionUnitConfig:
     return MissionUnitConfig(
+        master_mobile_suit_id=ALLY_MASTER_ID,
         name=f"撤退機 #{index}",
-        max_hp=90,
-        current_hp=current_hp,
-        armor=5,
-        mobility=1.1,
+        current_hp_ratio=hp_ratio,
         missing_parts=missing_parts,
         max_speed=ALLY_MAX_SPEED,
         hold_fire=True,
-        weapon=MissionWeaponConfig(
-            id=f"retreat_ally_mg_{index}",
-            name="ザクマシンガン",
-            power=12,
-            range=350,
-            accuracy=60,
-        ),
         role=UNIT_ROLE_WITHDRAW,
         squad_id="retreat",
     )
@@ -67,20 +65,8 @@ def _pursuit_squad(index: int) -> str:
 
 def _pursuer_vanguard(index: int) -> MissionUnitConfig:
     return MissionUnitConfig(
+        master_mobile_suit_id=VANGUARD_MASTER_ID,
         name=f"追撃格闘機 #{index}",
-        max_hp=90,
-        armor=6,
-        mobility=1.9,
-        weapon=MissionWeaponConfig(
-            id=f"pursuer_saber_{index}",
-            name="ヒートサーベル",
-            power=30,
-            range=60,
-            accuracy=80,
-            weapon_type="MELEE",
-            is_melee=True,
-            fire_arc_deg=360,
-        ),
         role=UNIT_ROLE_VANGUARD,
         squad_id=_pursuit_squad(index),
     )
@@ -88,28 +74,24 @@ def _pursuer_vanguard(index: int) -> MissionUnitConfig:
 
 def _pursuer_sniper(index: int) -> MissionUnitConfig:
     return MissionUnitConfig(
+        master_mobile_suit_id=SNIPER_MASTER_ID,
         name=f"追撃狙撃機 #{index}",
-        max_hp=70,
-        armor=4,
-        mobility=1.0,
-        weapon=MissionWeaponConfig(
-            id=f"pursuer_rifle_{index}",
-            name="ロングライフル",
-            power=28,
-            range=600,
-            accuracy=75,
-        ),
         role=UNIT_ROLE_SNIPER,
         squad_id=_pursuit_squad(index),
     )
 
 
+def _unit_config_json(config: MissionUnitConfig) -> dict:
+    # 機体マスターを参照する機体に、使わない直書きの値を残さない。
+    return config.model_dump(mode="json", exclude_defaults=True)
+
+
 def build_retreat_support_mission() -> Mission:
     """撤退支援の作戦マスターを組み立てる（DB には入れない）."""
     allies = [
-        _ally(1, 35, ["LEFT_ARM"]),
-        _ally(2, 50, []),
-        _ally(3, 30, ["RIGHT_LEG"]),
+        _ally(1, 0.4, ["LEFT_ARM"]),
+        _ally(2, 0.55, []),
+        _ally(3, 0.35, ["RIGHT_LEG"]),
     ]
     enemies = [
         _pursuer_vanguard(1),
@@ -148,12 +130,12 @@ def build_retreat_support_mission() -> Mission:
         difficulty=2,
         description=DESCRIPTION,
         environment="SPACE",
-        enemy_config={"enemies": [e.model_dump(mode="json") for e in enemies]},
+        enemy_config={"enemies": [_unit_config_json(e) for e in enemies]},
         objective={
             "type": MISSION_OBJECTIVE_RETREAT_SUPPORT,
             "params": {"required": RETREAT_SUPPORT_REQUIRED},
         },
-        allies_config=[a.model_dump(mode="json") for a in allies],
+        allies_config=[_unit_config_json(a) for a in allies],
         layout=layout.model_dump(mode="json"),
         is_active=True,
     )

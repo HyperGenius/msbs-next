@@ -4,8 +4,9 @@
 どの関数も DB セッションを使わない。
 """
 
+import copy
 import uuid
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.engine.constants import (
@@ -26,6 +27,8 @@ from app.models.models import (
     ALL_PART_NAMES,
     MISSION_TEAM_ENEMY,
     MISSION_TEAM_PLAYER,
+    MISSION_UNIT_DEFAULT_NAME,
+    MasterMobileSuit,
     Mission,
     MissionUnitConfig,
     MobileSuit,
@@ -33,6 +36,8 @@ from app.models.models import (
     SpawnZone,
     Weapon,
 )
+from app.services.matching_service import MatchingService
+from app.services.mobile_suit_service import master_mobile_suit_fields
 from app.services.theater_service import BattleConditions
 
 
@@ -50,26 +55,81 @@ class MissionBattleSetup:
     """射撃の制圧。作戦の戦闘でだけ有効にする。"""
 
 
+@dataclass(frozen=True)
+class MissionMasters:
+    """作戦の機体が参照する機体マスターとエース.
+
+    呼び出し側が DB かロスターから読んで渡す。
+    """
+
+    mobile_suits: dict[str, MasterMobileSuit] = field(default_factory=dict)
+    """機体マスター ID → 機体マスター。武器の `master_weapon_id` は書き込み済みであること。"""
+    aces: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """エース ID → `get_ace_pilots()` が返す形のエースのマスター。"""
+
+
+def referenced_master_ids(mission: Mission) -> tuple[list[str], list[str]]:
+    """作戦の機体が参照する機体マスター ID とエース ID を、出てくる順に重複なく返す."""
+    configs = [*mission.ally_unit_configs(), *mission.enemy_unit_configs()]
+    mobile_suit_ids = [
+        c.master_mobile_suit_id for c in configs if c.master_mobile_suit_id is not None
+    ]
+    ace_ids = [c.ace_id for c in configs if c.ace_id is not None]
+    return list(dict.fromkeys(mobile_suit_ids)), list(dict.fromkeys(ace_ids))
+
+
 def build_mission_unit(
-    config: MissionUnitConfig, side: str, unit_id: uuid.UUID | None = None
+    config: MissionUnitConfig,
+    side: str,
+    unit_id: uuid.UUID | None = None,
+    masters: MissionMasters | None = None,
 ) -> MobileSuit:
-    """作戦マスターの1機の定義から機体を作る. `unit_id` を省くと ID はランダムにする."""
+    """作戦マスターの1機の定義から機体を作る. `unit_id` を省くと ID はランダムにする.
+
+    Raises:
+        ValueError: 無い部位を書いたとき。参照先のマスターが `masters` に無いとき。
+            エースを敵機以外に置いたとき。
+    """
     unknown_parts = set(config.missing_parts) - set(ALL_PART_NAMES)
     if unknown_parts:
         raise ValueError(f"unknown parts: {sorted(unknown_parts)}")
-    unit = MobileSuit(
-        id=unit_id or uuid.uuid4(),
-        name=config.name,
+    if config.ace_id is not None and side != "ENEMY":
+        raise ValueError(f"ace must be an enemy: {config.ace_id}")
+    unit = (
+        _build_referenced_unit(config, masters or MissionMasters())
+        if config.references_master
+        else _build_inline_unit(config)
+    )
+    unit.id = unit_id or uuid.uuid4()
+    unit.side = side
+    unit.position = config.position.model_copy()
+    if config.name is not None:
+        unit.name = config.name
+    unit.missing_parts = list(
+        dict.fromkeys([*unit.missing_parts, *config.missing_parts])
+    )
+    if config.current_hp_ratio is not None:
+        unit.current_hp = max(1, round(unit.max_hp * config.current_hp_ratio))
+    elif config.current_hp is not None:
+        unit.current_hp = min(config.current_hp, unit.max_hp)
+    if config.max_speed is not None:
+        unit.max_speed = config.max_speed
+    if config.role in (UNIT_ROLE_SUPPORT, UNIT_ROLE_SNIPER):
+        unit.tactics = {**unit.tactics, "priority": TACTICS_PRIORITY_SUPPORT}
+    unit.normalize_parts()
+    if unit.current_hp < unit.max_hp:
+        _scale_part_hp(unit)
+    return unit
+
+
+def _build_inline_unit(config: MissionUnitConfig) -> MobileSuit:
+    """作戦マスターに直書きした性能と武器から機体を作る."""
+    return MobileSuit(
+        name=MISSION_UNIT_DEFAULT_NAME,
         max_hp=config.max_hp,
-        current_hp=(
-            config.max_hp
-            if config.current_hp is None
-            else min(config.current_hp, config.max_hp)
-        ),
-        missing_parts=list(config.missing_parts),
+        current_hp=config.max_hp,
         armor=config.armor,
         mobility=config.mobility,
-        position=config.position.model_copy(),
         terrain_adaptability=dict(config.terrain_adaptability),
         weapons=[
             Weapon(
@@ -83,15 +143,42 @@ def build_mission_unit(
                 fire_arc_deg=config.weapon.fire_arc_deg,
             )
         ],
-        side=side,
     )
-    if config.max_speed is not None:
-        unit.max_speed = config.max_speed
-    if config.role in (UNIT_ROLE_SUPPORT, UNIT_ROLE_SNIPER):
-        unit.tactics = {**unit.tactics, "priority": TACTICS_PRIORITY_SUPPORT}
-    unit.normalize_parts()
-    if unit.current_hp < unit.max_hp:
-        _scale_part_hp(unit)
+
+
+def _build_referenced_unit(
+    config: MissionUnitConfig, masters: MissionMasters
+) -> MobileSuit:
+    """機体マスターかエースから機体を作る.
+
+    エースに機体マスターを重ねたときは、性能・武器・地形適性だけを機体マスターにする。
+    パイロット・性格・戦術・懸賞金はエースのまま残す。
+    """
+    master: MasterMobileSuit | None = None
+    if config.master_mobile_suit_id is not None:
+        master = masters.mobile_suits.get(config.master_mobile_suit_id)
+        if master is None:
+            raise ValueError(
+                f"unknown master mobile suit: {config.master_mobile_suit_id}"
+            )
+    if config.ace_id is None:
+        assert master is not None
+        unit = MobileSuit(name=master.name, **master_mobile_suit_fields(master))
+    else:
+        ace = masters.aces.get(config.ace_id)
+        if ace is None:
+            raise ValueError(f"unknown ace: {config.ace_id}")
+        # build_ace_mobile_suit() は武器と戦術をそのまま機体に渡す。
+        # マスターは戦闘をまたいで使い回すため、機体と共有しない。
+        unit = MatchingService.build_ace_mobile_suit(
+            copy.deepcopy(ace), position=config.position.model_copy()
+        )
+        if master is not None:
+            for key, value in master_mobile_suit_fields(master).items():
+                setattr(unit, key, value)
+            unit.name = master.name
+    if master is not None:
+        unit.terrain_adaptability = dict(master.specs.get("terrain_adaptability") or {})
     return unit
 
 
@@ -112,6 +199,7 @@ def build_mission_battle(
     player_units: list[MobileSuit],
     conditions: BattleConditions,
     unit_id_namespace: uuid.UUID | None = None,
+    masters: MissionMasters | None = None,
 ) -> MissionBattleSetup:
     """作戦マスターから戦闘に渡すものを組み立てる.
 
@@ -125,9 +213,10 @@ def build_mission_battle(
         unit_id_namespace: 指定すると、友軍・敵機の ID を作戦マスターでの位置から決める。
             ローカルシミュレータで、戦闘をまたいで同じ機体として数えるために使う。
             省くと ID はランダムにする。
+        masters: 作戦の機体が参照する機体マスターとエース。
 
     Raises:
-        ValueError: 作戦目標の種類やロールが無いとき。
+        ValueError: 作戦目標の種類やロールが無いとき。参照先のマスターが無いとき。
     """
     player_team_id = player_units[0].team_id
     if player_team_id is None:
@@ -151,7 +240,7 @@ def build_mission_battle(
                 if unit_id_namespace is not None
                 else None
             )
-            unit = build_mission_unit(config, side, unit_id)
+            unit = build_mission_unit(config, side, unit_id, masters)
             unit.team_id = team_ids[team_key]
             mission_units.append(unit)
             if (

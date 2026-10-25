@@ -19,16 +19,16 @@
 
 | 項目 | 内容 |
 |---|---|
-| 友軍 | 3 機（撤退ロール `WITHDRAW`）。HP 35 / 50 / 30（最大 90）で開始し、1 機は左腕、1 機は右脚が欠けている。撃ち返さない（`hold_fire`）。最高速度は 35 m/s（追撃部隊は機体の既定の 80 m/s） |
-| 追撃部隊 | 敵チーム 4 機。前衛（`VANGUARD`、格闘）1 機と後衛（`SNIPER`、射程 600、威力 28）1 機で 1 小隊を組み、2 小隊（`pursuit-1` / `pursuit-2`）。狙撃機は前衛の後方に位置取る（陣形、[battle-engine-feature.md 38章](battle-engine-feature.md#38-小隊の陣形epic-682-sub-issue-6)）。狙撃機の `priority` は `SUPPORT` で、同じ小隊の機体を直近に攻撃した機体を優先して狙う（支援ターゲット選択、[39章](battle-engine-feature.md#39-支援ターゲット選択-support--protectepic-682-sub-issue-7)） |
+| 友軍 | 3 機（撤退ロール `WITHDRAW`）。機体マスター `gm`。HP の 40% / 55% / 35% で開始し、1 機は左腕、1 機は右脚が欠けている。撃ち返さない（`hold_fire`）。最高速度は 35 m/s（追撃部隊は機体の既定の 80 m/s） |
+| 追撃部隊 | 敵チーム 4 機。前衛（`VANGUARD`、機体マスター `gouf`、格闘武器のヒートロッド）1 機と後衛（`SNIPER`、機体マスター `gelgoog`、ビームライフル）1 機で 1 小隊を組み、2 小隊（`pursuit-1` / `pursuit-2`）。狙撃機は前衛の後方に位置取る（陣形、[battle-engine-feature.md 38章](battle-engine-feature.md#38-小隊の陣形epic-682-sub-issue-6)）。狙撃機の `priority` は `SUPPORT` で、同じ小隊の機体を直近に攻撃した機体を優先して狙う（支援ターゲット選択、[39章](battle-engine-feature.md#39-支援ターゲット選択-support--protectepic-682-sub-issue-7)） |
 | 戦場 | 辺長 4000m（`layout.field_size`）。エリア収縮なし |
 | 撤退ポイント | プレイヤーのチーム専用。友軍のスポーン位置から約 2500m 離す。撤退機の速さで約 70 秒かかる |
 | 作戦目標 | `RETREAT_SUPPORT`、`params.required = 2` |
 | 説明文 | 目的（2 機以上の離脱で成功、全員で報酬増）と、友軍が撃ち返せないこと、勝ち方のヒント（狙撃機を倒すか、狙いを引きつける）を出す |
 
 プレイヤー機は友軍と同じスポーン領域（中心 x=2800、半径 150）に出る。追撃部隊は x=3700 付近（半径 100）から追ってくる。
-2 つの領域の縁どうしは 650m 離れていて、狙撃機の射程（600m）と既定の索敵範囲（500m）の外から始まる。
-数値は暫定。値の大きさを機体マスターに揃えた後（#719）に、#711 で調整する。
+2 つの領域の縁どうしは 650m 離れていて、狙撃機（`gelgoog`）の射程と索敵範囲（本番はどちらも 600m 未満）の外から始まる。
+機体の値は機体マスターに揃えた（[機体マスター・エースの参照](#機体マスターエースの参照issue-719)）。難易度の調整は #711 で行う。
 
 ### 作戦マスターの定義の拡張
 
@@ -44,6 +44,37 @@
 
 `MissionLayout`（配置）には `field_size`（フィールドの辺長 (m)。null は参加機数から決める）を足した（Issue #711）。
 スポーン領域と撤退ポイントは 0 から `field_size` の内側に置く。
+
+### 機体マスター・エースの参照（Issue #719）
+
+作戦の機体を、機体マスター（`master_mobile_suits`）かエースパイロット（`ace_pilots`）の ID で指定できるようにした。
+作戦の機体を、プレイヤーの機体と同じ値の大きさ・同じ武器で出すため。機体マスターを直せば、作戦の機体にも反映される。
+`MissionUnitConfig` に次を足した。`Mission` は JSON 列なので、マイグレーションは無い。
+
+| 項目 | 説明 |
+|---|---|
+| `master_mobile_suit_id` | 機体マスター ID。`specs` の性能（HP・装甲・機動性・索敵・耐性・適性・補正・EN）・武器・地形適性と `weapon_slot_count` から機体を作る |
+| `ace_id` | エースパイロット ID。敵機だけに置ける（友軍に置くと `ValueError`）。機体とパイロット（パイロット名・性格・戦術・懸賞金）を、`MatchingService.build_ace_mobile_suit()` と同じ値で作る |
+| `current_hp_ratio` | 開始時の HP の最大 HP に対する割合（0 より大きく 1 以下）。部位の HP も同じ割合まで減らす。`current_hp` とは併用できない |
+| `name` | 表示名。省くと参照先の機体名（機体マスターの `name`、エースは搭乗機の名前）。参照の無い機体は今までどおり「ザクII」 |
+
+* `ace_id` と `master_mobile_suit_id` を両方書くと、機体だけを機体マスターに差し替える。パイロット・性格・戦術・懸賞金はエースのまま
+* 作戦側で上書きできるのは、表示名・開始時の HP（割合）・欠損部位・ロール・小隊・最高速度・`hold_fire`。欠損部位は、機体マスターで欠けている部位に足す
+* 機体マスターの武器は `MobileSuitService.create_npc_mobile_suit_from_master()` と同じ扱いにする（共通の `master_mobile_suit_fields()`）。武器マスターにある武器だけ `master_weapon_id` を持つ
+* 参照を書いた機体では、直書きの値（`max_hp` / `armor` / `mobility` / `terrain_adaptability` / `weapon`）を使わない。直書きの値は、参照の無い既存の作戦（ID 1〜3）の読み込みにだけ残す。新しく作る作戦では使わない
+* 参照先が無いときは、既定の機体にせず組み立てを `ValueError` で失敗させる
+
+`app/services/mission_battle.py` は DB を使わないまま。参照先は呼び出し側が読み、`MissionMasters`（機体マスター ID → 機体マスター、エース ID → エースのマスター）として `build_mission_battle(masters=...)` に渡す。
+
+| 呼び出し側 | 読み方 |
+|---|---|
+| 定期バッチ（`run_batch._process_room()`） | `load_mission_masters()`（`app/services/mission_master_loader.py`）で DB から読む。組み立てに失敗した作戦ルームは、警告を出して飛ばす |
+| ソロミッション（`POST /api/battle/simulate`） | 同じく DB から読む。組み立てに失敗すると 500 |
+| ローカルシミュレータ | `fetch` で読んでロスターの `master_mobile_suits` / `ace_pilots` に保存し、`run` はロスターから作る（[local-battle-simulator.md](local-battle-simulator.md#作戦の戦闘)） |
+| `retreat_support_bench.py` | `--master-dir` の JSON（既定はテスト用の固定データ）から `mission_masters_from_data()` で作る |
+
+撤退支援（`missions.id = 4`）は、友軍・敵機をすべて機体マスター参照に書き換えた（[作戦マスター](#作戦マスター)）。保存する定義は既定値を省いて書き出すので、直書きの値を持たない。
+BattleViewer は作戦の機体を ID で描くため、表示名が機体マスターの名前のまま（同じ名前が並ぶ）でも描ける。
 
 ## 作戦の長さと配置（Issue #711）
 
@@ -106,6 +137,7 @@ BattleViewer 用に、撤退ポイントと友軍のロールも同じ列に入�
 
 * 成功してもプレイヤー機が撃破・離脱していたら、基本報酬を 0.7 倍にする（`ESCORT_PLAYER_DOWN_RATIO`）
 * 撃墜ボーナスは殲滅戦の半分（`ESCORT_KILL_REWARD_RATIO`）
+* 作戦に置いたエースを撃破すると、エースの懸賞金（`bounty_exp` / `bounty_credits`）を足す（`PilotService.calculate_bounty()`）。撃破の数え方は撃墜数と同じ（`compute_unit_kill_ids()`）。定期バッチとソロミッションの両方で払う。バトルロイヤルのエースには払わない（今までどおり）
 * ドロップ（`DropScope.mission(作戦ID)`）は、成功したときだけ抽選する（既存の `is_win` の扱いのまま）
 
 ## 本番への反映
@@ -119,6 +151,7 @@ uv run python scripts/maintenance/upsert_retreat_support_mission.py --apply  # �
 ```
 
 `--inactive` を付けると `is_active` を false で入れる。先にマイグレーション（`alembic upgrade head`）を当てること。
+機体マスター参照に書き換えた定義（Issue #719）は、本番 DB に `gm` / `gouf` / `gelgoog` の機体マスターが要る（2026-10-25 に Read Only で確認済み）。
 
 ## 検証
 
@@ -127,7 +160,8 @@ uv run python scripts/maintenance/upsert_retreat_support_mission.py --apply  # �
 出撃なし（`absent`、開始時に HP 0）は撤退支援だけで回し、何もしなければ失敗する難易度かを確かめる。
 成功率には 95% 信頼区間（Wilson）を付ける。既定は 100 ラウンド。
 
-ベンチのビルドは作戦の直書きの機体と同じ大きさの値（HP 90〜160、威力 14〜30）で、機体マスター（HP 600〜1200、威力 100 前後）とは揃っていない。
+作戦の機体が参照する機体マスターは `--master-dir` の JSON から読む。既定はテスト用の固定データ（`tests/fixtures/master`）で、本番の値は `scripts/maintenance/export_master_data.py` で書き出して渡す。
+ベンチのビルドの値は機体マスターと同じ大きさ（HP 750〜1200、威力 120〜240）にした（Issue #719）。
 また `mobility` は回避にしか効かず、移動の速さは `max_speed`（既定 80 m/s）で決まる。機動・索敵寄りのビルドも、移動は他のビルドと同じ速さになる。
 
 射撃の制圧（[battle-engine-feature.md 40 章](battle-engine-feature.md#40-射撃の制圧issue-716)）は、既定で作戦と同じ係数で有効にする。
@@ -137,9 +171,29 @@ uv run python scripts/maintenance/upsert_retreat_support_mission.py --apply  # �
 cd backend
 uv run python scripts/simulation/retreat_support_bench.py --rounds 60
 uv run python scripts/simulation/retreat_support_bench.py --rounds 60 --suppression off
+uv run python scripts/simulation/retreat_support_bench.py --rounds 60 --master-dir scripts/maintenance/output/master_data
 ```
 
 ## 計測結果
+
+### 機体マスター参照に書き換えた後（Issue #719）
+
+3000 ステップ、60 ラウンド、`seed` 1〜60、射撃の制圧あり。ビルドは機体マスターと同じ大きさの値。括弧内は 95% 信頼区間。
+本番の機体マスターは、2026-10-25 に `export_master_data.py`（Read Only）で書き出したもの。
+
+| 目標 | ビルド | 成功率（固定データ） | 平均離脱数（固定データ） | 成功率（本番） | 平均離脱数（本番） |
+|---|---|---|---|---|---|
+| 撤退支援 | 殲滅向け | 42%（30〜54%） | 1.22 | 0%（0〜6%） | 0.00 |
+| 撤退支援 | 中間 | 15%（8〜26%） | 0.57 | 0%（0〜6%） | 0.00 |
+| 撤退支援 | 機動・索敵寄り | 3%（1〜11%） | 0.28 | 0%（0〜6%） | 0.00 |
+| 撤退支援 | 足止め/護衛 | 23%（14〜35%） | 0.73 | 0%（0〜6%） | 0.00 |
+| 撤退支援 | 出撃なし | 0%（0〜6%） | 0.02 | 0%（0〜6%） | 0.00 |
+| 殲滅戦 | 殲滅向け | 2%（0〜9%） | - | 2%（0〜9%） | - |
+| 殲滅戦 | 中間 / 機動・索敵寄り / 足止め/護衛 | 0%（0〜6%） | - | 0%（0〜6%） | - |
+
+* 本番の機体マスターでは、どのビルドでも撤退支援に成功しない。撤退機の全滅は平均 24〜34 秒（出撃なしは 14 秒）
+* 固定データでは成功するが、殲滅向けが最も高く、機動・索敵寄りが最も低い。#711 の狙い（機動・索敵寄りが有利）とは逆
+* 難易度の調整は #711 で行う。本番の `missions.id = 4` は直書きの定義のまま動くので、調整を終えるまで `upsert_retreat_support_mission.py --apply` を当てない
 
 ### 作戦の長さと配置を変えた後（Issue #711）
 
@@ -213,6 +267,9 @@ uv run python scripts/simulation/retreat_support_bench.py --rounds 60 --suppress
 ## テスト
 
 * `backend/tests/unit/test_objectives.py`: 終了条件（友軍が残る間は続く、全員離脱か撃破で終える、敵の全滅で終える）、成功・失敗、プレイヤー機が撃破されても成功、敵が全滅したとき残る友軍の数え方、不正な引数の拒否、`build_objective()`
-* `backend/tests/unit/test_mission_battle.py`: 撤退支援のマスターから組み立てる（損傷した友軍・欠損部位・ロール・専用の撤退ポイント・目標・撃ち返さない・追撃部隊より遅い・配置がフィールドの内側）、無い部位の拒否、最後まで実行できる、作戦ではエリア収縮を止めて配置の辺長を使う、フィールドの辺長と収縮の停止がシミュレータに効く、作戦の機体の最高速度と撃ち返さない設定
+* `backend/tests/unit/test_mission_battle.py`: 撤退支援のマスターから組み立てる（損傷した友軍・欠損部位・ロール・専用の撤退ポイント・目標・撃ち返さない・追撃部隊より遅い・配置がフィールドの内側）、無い部位の拒否、最後まで実行できる、作戦ではエリア収縮を止めて配置の辺長を使う、フィールドの辺長と収縮の停止がシミュレータに効く、作戦の機体の最高速度と撃ち返さない設定。
+  機体マスター参照（性能・武器・地形適性・`master_weapon_id`）、表示名・HP の割合・欠損部位・ロールの上書き、HP の割合の範囲と `current_hp` との併用の拒否、エース（機体・パイロット・懸賞金）、エースの機体だけの差し替え、友軍のエースの拒否、参照先が無いときの失敗、DB からの読み込み、ソロミッションの敵機、撤退支援が直書きの値を持たないこと
+* `backend/tests/test_mission_rooms.py`: マスター参照の作戦ルームをバッチで実行する、参照先が無い作戦ルームを飛ばす、作戦のエースの懸賞金、バトルロイヤルでは払わない
+* `backend/tests/unit/test_battle_digest.py` / `test_pilot_service.py`: 撃破したユニットの ID、懸賞金の合計
 * `backend/tests/unit/test_unit_roles.py`: 撃ち返さない設定の撤退ロールは撃たず敵を向かない、撤退ロールでなければ効かない
 * `backend/tests/unit/test_pilot_service.py`: 段階的な報酬、プレイヤー機の撃破による減額と撃墜ボーナス、殲滅の結果を渡しても変わらない

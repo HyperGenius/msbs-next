@@ -124,14 +124,23 @@ export interface LocalSimMissionMaster {
   [key: string]: unknown;
 }
 
-/** 作戦の友軍・敵機1機（`MissionUnitConfig`） */
+/**
+ * 作戦の友軍・敵機1機（`MissionUnitConfig`）。
+ * `master_mobile_suit_id` か `ace_id` があれば参照先から作り、直書きの性能（`max_hp` 〜 `weapon`）は使わない。
+ * 参照する機体は直書きの性能を持たないことがある。
+ */
 export interface LocalSimMissionUnit {
-  name: string;
-  max_hp: number;
-  armor: number;
-  mobility: number;
+  master_mobile_suit_id?: string | null;
+  ace_id?: string | null;
+  /** null・省略は参照先の機体名 */
+  name?: string | null;
+  /** 開始時の HP の最大 HP に対する割合（0 より大きく 1 以下） */
+  current_hp_ratio?: number | null;
+  max_hp?: number;
+  armor?: number;
+  mobility?: number;
   terrain_adaptability?: Record<string, string>;
-  weapon: {
+  weapon?: {
     id: string;
     name: string;
     power: number;
@@ -142,8 +151,8 @@ export interface LocalSimMissionUnit {
     fire_arc_deg: number;
     [key: string]: unknown;
   };
-  role: string | null;
-  squad_id: string | null;
+  role?: string | null;
+  squad_id?: string | null;
   [key: string]: unknown;
 }
 

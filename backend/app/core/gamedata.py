@@ -192,10 +192,10 @@ def _load_ace_pilots_from_db() -> list[dict]:
 
     with Session(_app_db.engine) as db_session:
         records = db_session.exec(select(AcePilot)).all()
-    return [_ace_pilot_to_data(record.model_dump()) for record in records]
+    return [ace_pilot_to_data(record.model_dump()) for record in records]
 
 
-def _ace_pilot_to_data(raw: dict) -> dict:
+def ace_pilot_to_data(raw: dict) -> dict:
     """`ace_pilots` の1行を `get_ace_pilots()` が返す形にする."""
     ms_raw = raw["mobile_suit"]
     weapons = [Weapon(**w) for w in ms_raw.get("weapons", [])]
@@ -279,7 +279,7 @@ def use_static_ace_pilots(raw_aces: list[dict] | None) -> None:
     """
     global _static_ace_pilots
     _static_ace_pilots = (
-        None if raw_aces is None else [_ace_pilot_to_data(raw) for raw in raw_aces]
+        None if raw_aces is None else [ace_pilot_to_data(raw) for raw in raw_aces]
     )
 
 

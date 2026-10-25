@@ -431,3 +431,18 @@ def test_allocate_status_points_zero_allocation() -> None:
     updated_pilot = service.allocate_status_points(pilot)  # all zeros
 
     assert updated_pilot.status_points == 5  # unchanged
+
+
+def test_calculate_bounty_sums_killed_aces_only() -> None:
+    """撃破したエース機の懸賞金だけを合計する."""
+    ace = MobileSuit(
+        name="Ace", max_hp=1, is_ace=True, bounty_exp=500, bounty_credits=900
+    )
+    other_ace = MobileSuit(
+        name="Ace2", max_hp=1, is_ace=True, bounty_exp=10, bounty_credits=20
+    )
+    grunt = MobileSuit(name="Grunt", max_hp=1, bounty_exp=99, bounty_credits=99)
+
+    assert PilotService.calculate_bounty([ace, other_ace, grunt]) == (510, 920)
+    assert PilotService.calculate_bounty([grunt]) == (0, 0)
+    assert PilotService.calculate_bounty([]) == (0, 0)

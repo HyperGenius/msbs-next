@@ -1,6 +1,7 @@
 """パイロット関連のビジネスロジック."""
 
 import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from sqlmodel import Session, func, select
@@ -469,6 +470,19 @@ class PilotService:
         total_credits = base_credits + kill_credits
 
         return total_exp, total_credits
+
+    @staticmethod
+    def calculate_bounty(killed_units: Iterable[MobileSuit]) -> tuple[int, int]:
+        """撃破したエース機の懸賞金を合計する.
+
+        Returns:
+            tuple[int, int]: (経験値, クレジット)。エースを撃破していなければ (0, 0)
+        """
+        aces = [unit for unit in killed_units if unit.is_ace]
+        return (
+            sum(unit.bounty_exp for unit in aces),
+            sum(unit.bounty_credits for unit in aces),
+        )
 
     @staticmethod
     def _calculate_escort_rewards(

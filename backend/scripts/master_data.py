@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sqlmodel import Session
 
+    from app.models.models import Mission
+    from app.services.mission_battle import MissionMasters
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 FIXTURE_DIR = BACKEND_DIR / "tests" / "fixtures" / "master"
 EXPORT_DIR = BACKEND_DIR / "scripts" / "maintenance" / "output" / "master_data"
@@ -150,3 +153,34 @@ def load_master_data(data_dir: Path | None) -> MasterData:
     if data_dir is None:
         return load_master_data_from_readonly_db()
     return read_master_dir(data_dir)
+
+
+def mission_masters_from_data(data: MasterData, mission: "Mission") -> "MissionMasters":
+    """マスターデータから、作戦の機体が参照する機体マスターとエースを取り出す.
+
+    `load_mission_masters()` と同じく、武器マスターにある武器に `master_weapon_id` を書く。
+    無い参照は入れない。
+    """
+    from app.core.gamedata import ace_pilot_to_data
+    from app.models.models import MasterMobileSuit
+    from app.services.mission_battle import MissionMasters, referenced_master_ids
+
+    mobile_suit_ids, ace_ids = referenced_master_ids(mission)
+    weapon_ids = {w["id"] for w in data[WEAPONS]}
+    mobile_suits = {}
+    for raw in data[MOBILE_SUITS]:
+        if raw["id"] not in mobile_suit_ids:
+            continue
+        weapons = [
+            {**w, "master_weapon_id": w["id"]} if w["id"] in weapon_ids else w
+            for w in raw["specs"]["weapons"]
+        ]
+        mobile_suits[raw["id"]] = MasterMobileSuit.model_validate(
+            {**raw, "specs": {**raw["specs"], "weapons": weapons}}
+        )
+    aces = {
+        raw["id"]: ace_pilot_to_data(raw)
+        for raw in data[ACE_PILOTS]
+        if raw["id"] in ace_ids
+    }
+    return MissionMasters(mobile_suits=mobile_suits, aces=aces)

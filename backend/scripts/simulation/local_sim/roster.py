@@ -12,7 +12,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 # 2: 作戦（mission）を足した。1 のロスターは作戦なしとして読む。
-ROSTER_SCHEMA_VERSION = 2
+# 3: 作戦の機体が参照する機体マスター（master_mobile_suits）を足した。2 以前は空として読む。
+ROSTER_SCHEMA_VERSION = 3
 
 # backend/scripts/simulation/local_sim/roster.py から見たリポジトリのルート。
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -112,7 +113,17 @@ class Roster(BaseModel):
     entries: list[RosterEntry]
     ace_pilots: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="参加エースの ace_pilots マスター（created_at / updated_at を除く）",
+        description=(
+            "参加エースと作戦に置いたエースの ace_pilots マスター"
+            "（created_at / updated_at を除く）"
+        ),
+    )
+    master_mobile_suits: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "作戦の機体が参照する master_mobile_suits（created_at / updated_at を除く）。"
+            "武器の master_weapon_id は書き込み済み"
+        ),
     )
     mission: RosterMission | None = Field(
         default=None,
