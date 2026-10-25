@@ -374,6 +374,10 @@ class BattleSimulator(
                     MAX_FIELD_SIZE,
                 )
             side_len = max(side_len, min(MAX_FIELD_SIZE, required_field_size))
+        # 指定した辺長は、スポーン領域と撤退ポイントの座標の前提になっている。
+        # そのためユニット数による拡大・縮小より優先する。
+        if battlefield is not None and battlefield.field_size is not None:
+            side_len = battlefield.field_size
 
         self.map_bounds: tuple[float, float] = (0.0, side_len)
         # エリア収縮の基準中心（固定・以後変化しない。Issue #474）
@@ -381,6 +385,7 @@ class BattleSimulator(
         # いずれかのチームの生存数が SHRINK_PAUSE_ALIVE_THRESHOLD 以下になり
         # 収縮を停止した状態を一度だけログに記録するためのフラグ
         self._shrink_paused: bool = False
+        self._area_shrink_enabled: bool = battlefield is None or battlefield.area_shrink
         # 収縮の停止判定基準となる初期チーム人数 (Issue #474)。
         # 1vs1ソロミッション等、開始時点でチーム人数が SHRINK_PAUSE_ALIVE_THRESHOLD
         # 以下のチームは「消耗して少なくなった」わけではないため停止判定の対象外とする
@@ -398,10 +403,8 @@ class BattleSimulator(
         )
         if obstacles is not None:
             # 後方互換: obstacles 引数が明示的に渡された場合は battlefield を上書き
-            self.battlefield = BattleField(
-                obstacles=obstacles,
-                spawn_zones=self.battlefield.spawn_zones,
-                obstacle_density=self.battlefield.obstacle_density,
+            self.battlefield = self.battlefield.model_copy(
+                update={"obstacles": obstacles}
             )
         self.obstacles: list[Obstacle] = self.battlefield.obstacles
 
@@ -545,10 +548,8 @@ class BattleSimulator(
         # 障害物の自動生成（obstacles が空かつ obstacle_density != "NONE" のとき）
         if not self.obstacles and self.battlefield.obstacle_density != "NONE":
             generated = self._generate_obstacles()
-            self.battlefield = BattleField(
-                obstacles=generated,
-                spawn_zones=self.battlefield.spawn_zones,
-                obstacle_density=self.battlefield.obstacle_density,
+            self.battlefield = self.battlefield.model_copy(
+                update={"obstacles": generated}
             )
             self.obstacles = self.battlefield.obstacles
 
@@ -564,10 +565,8 @@ class BattleSimulator(
             else self.obstacles
         )
 
-        self.battlefield = BattleField(
-            obstacles=cleared_obstacles,
-            spawn_zones=spawn_zones,
-            obstacle_density=self.battlefield.obstacle_density,
+        self.battlefield = self.battlefield.model_copy(
+            update={"obstacles": cleared_obstacles, "spawn_zones": spawn_zones}
         )
         self.obstacles = self.battlefield.obstacles
 
@@ -1011,6 +1010,15 @@ class BattleSimulator(
         """撤退ロールに従って撤退ポイントへ向かうユニットか."""
         return str(unit.id) in self._withdrawing_unit_ids
 
+    def _holds_fire_while_withdrawing(self, unit: MobileSuit) -> bool:
+        """撤退中に敵へ撃ち返さないユニットか."""
+        assignment = self.unit_assignments.get(str(unit.id))
+        return (
+            self._is_withdrawing(unit)
+            and assignment is not None
+            and assignment.hold_fire
+        )
+
     def _resolve_strategy_mode(self, unit: MobileSuit) -> str:
         """ユニットの戦略モードを解決する.
 
@@ -1148,7 +1156,7 @@ class BattleSimulator(
         SHRINK_PAUSE_ALIVE_THRESHOLD 以下の場合は収縮を停止する（決着直前の
         不自然な圧縮を避けるため）。
         """
-        if self._step_count < SHRINK_START_STEP:
+        if not self._area_shrink_enabled or self._step_count < SHRINK_START_STEP:
             return
         if (self._step_count - SHRINK_START_STEP) % SHRINK_INTERVAL_STEPS != 0:
             return

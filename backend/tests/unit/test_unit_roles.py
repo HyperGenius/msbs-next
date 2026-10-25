@@ -234,3 +234,47 @@ def test_withdraw_role_fires_back_without_chasing() -> None:
         for log in sim.logs
     )
     assert player.position.x < -300
+
+
+def test_withdraw_role_with_hold_fire_does_not_fire_back() -> None:
+    """撃ち返さない設定の撤退ロールは、射程内の敵を撃たず、敵の方を向かない."""
+    player = _make_unit("Player", "TEAM_P", Vector3(x=-300, y=0, z=0))
+    enemy = _make_unit("Enemy", "TEAM_E", Vector3(x=100, y=0, z=0), hp=100000)
+    rp = RetreatPoint(position=Vector3(x=-3000, y=0, z=0), radius=100.0)
+    sim = BattleSimulator(
+        player,
+        [enemy],
+        retreat_points=[rp],
+        unit_assignments={
+            str(player.id): UnitAssignment(role="WITHDRAW", hold_fire=True)
+        },
+    )
+    for _ in range(50):
+        sim.step()
+
+    assert not any(
+        log.action_type in ("ATTACK", "MISS") and log.actor_id == player.id
+        for log in sim.logs
+    )
+    assert player.position.x < -300
+    # 撤退ポイント（-x 方向）を向いたまま動く。
+    heading = sim.unit_resources[str(player.id)]["body_heading_deg"] % 360
+    assert abs(heading - 180) < 30
+
+
+def test_hold_fire_is_ignored_without_withdraw_role() -> None:
+    """撃ち返さない設定は撤退ロールにだけ効く."""
+    player = _make_unit("Player", "TEAM_P", Vector3(x=-300, y=0, z=0))
+    enemy = _make_unit("Enemy", "TEAM_E", Vector3(x=100, y=0, z=0), hp=100000)
+    sim = BattleSimulator(
+        player,
+        [enemy],
+        unit_assignments={str(player.id): UnitAssignment(hold_fire=True)},
+    )
+    for _ in range(50):
+        sim.step()
+
+    assert any(
+        log.action_type in ("ATTACK", "MISS") and log.actor_id == player.id
+        for log in sim.logs
+    )

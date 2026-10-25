@@ -2,14 +2,17 @@
 # backend/scripts/simulation/retreat_support_bench.py
 """撤退支援と殲滅戦で、ビルドごとの成功率と時間切れの割合を比べる（Issue #686）.
 
-DB に繋がない。プレイヤー機は合成した 3 種のビルド（同程度の戦力）で出す。
+DB に繋がない。プレイヤー機は合成したビルド（同程度の戦力）で出す。
+作戦の直書きの機体と同じ大きさの値で、機体マスター（HP 数百〜千）とは揃っていない。
 
 * annihilator: 高 HP・高火力・低機動。敵を倒して勝つ「殲滅向け」
 * mobile: 低 HP・高機動・長い索敵。友軍の近くで敵を引きつける「機動・索敵寄り」
 * balanced: 中間
 * escort: 中間より少し軽く、長い射程で撤退機を狙う敵を優先して撃つ（`PROTECT`）「足止め・護衛」
+* absent: 出撃なし（開始時に HP 0）。何もしなければ失敗する難易度かを確かめる。撤退支援だけで回す
 
 殲滅戦は同じ友軍・敵小隊で、撤退ポイントなし・友軍も戦う・殲滅目標で戦う。
+成功率の括弧内は 95% 信頼区間（Wilson）。
 射撃の制圧は、どちらの目標でも `--suppression` の係数で有効にする（既定は作戦と同じ）。
 
 Usage:
@@ -22,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 import uuid
@@ -69,6 +73,7 @@ class Build:
     accuracy: float
     optimal_range: float = 300.0
     priority: str = "CLOSEST"
+    absent: bool = False
 
 
 BUILDS = [
@@ -76,6 +81,7 @@ BUILDS = [
     Build("balanced", 120, 7, 1.2, 600, 22, 450, 72),
     Build("mobile", 90, 5, 1.6, 800, 14, 400, 68),
     Build("escort", 110, 6, 1.3, 700, 18, 600, 70, 450.0, TACTICS_PRIORITY_PROTECT),
+    Build("absent", 120, 7, 1.2, 600, 22, 450, 72, absent=True),
 ]
 
 
@@ -115,6 +121,8 @@ def run_retreat_support(
     seed_battle_rngs(seed)
     mission = build_retreat_support_mission()
     player = make_player(build, "player-team")
+    if build.absent:
+        player.current_hp = 0
     setup = build_mission_battle(mission, [player], BattleConditions())
     outcome = run_battle(
         player,
@@ -134,6 +142,7 @@ def run_retreat_support(
         "lost": result.lost,
         "timeout": not outcome.simulator.is_finished,
         "player_survived": bool(result.player_survived),
+        "elapsed": outcome.simulator.elapsed_time,
     }
 
 
@@ -168,7 +177,17 @@ def run_annihilation(
         "lost": sum(ally.current_hp <= 0 for ally in allies),
         "timeout": not outcome.simulator.is_finished,
         "player_survived": player.current_hp > 0,
+        "elapsed": outcome.simulator.elapsed_time,
     }
+
+
+def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """成功率の信頼区間（Wilson）を返す. 既定は 95%."""
+    p = successes / n
+    denom = 1 + z**2 / n
+    center = (p + z**2 / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
+    return max(0.0, center - half), min(1.0, center + half)
 
 
 def main() -> None:
@@ -176,7 +195,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--rounds", type=int, default=60)
+    parser.add_argument("--rounds", type=int, default=100)
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     parser.add_argument(
         "--suppression",
@@ -191,8 +210,8 @@ def main() -> None:
 
     print(f"rounds={args.rounds} suppression={suppression}")
     print(
-        f"{'mode':<16}{'build':<13}{'success':>8}{'timeout':>9}"
-        f"{'avg_escaped':>13}{'avg_lost':>10}{'player_alive':>14}"
+        f"{'mode':<16}{'build':<13}{'success (95% CI)':>20}{'timeout':>9}"
+        f"{'avg_escaped':>13}{'avg_lost':>10}{'player_alive':>14}{'avg_sec':>9}"
     )
     runners = (
         ("retreat_support", run_retreat_support),
@@ -206,17 +225,21 @@ def main() -> None:
             ]
             for mode, runner in runners
             for build in BUILDS
+            if not (build.absent and mode == "annihilation")
         }
         for (mode, label), fs in futures.items():
             results = [f.result() for f in fs]
             n = len(results)
+            successes = sum(r["success"] for r in results)
+            low, high = wilson_interval(successes, n)
+            success = f"{successes / n:.0%} ({low:.0%}-{high:.0%})"
             print(
-                f"{mode:<16}{label:<13}"
-                f"{sum(r['success'] for r in results) / n:>8.0%}"
+                f"{mode:<16}{label:<13}{success:>20}"
                 f"{sum(r['timeout'] for r in results) / n:>9.0%}"
                 f"{sum(r['escaped'] for r in results) / n:>13.2f}"
                 f"{sum(r['lost'] for r in results) / n:>10.2f}"
                 f"{sum(r['player_survived'] for r in results) / n:>14.0%}"
+                f"{sum(r['elapsed'] for r in results) / n:>9.1f}"
             )
 
 

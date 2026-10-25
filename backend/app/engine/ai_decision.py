@@ -828,7 +828,9 @@ class AiDecisionMixin:
         # 仕切り直しはターゲットを向いたまま下がる。背を向けると背面から撃たれるため。
         if current_action in ("ATTACK", "ENGAGE_MELEE", "DISENGAGE"):
             target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
-        elif current_action == "MOVE" or self._is_withdrawing(actor):  # type: ignore[attr-defined]
+        elif (
+            current_action == "MOVE" or self._is_withdrawing(actor)  # type: ignore[attr-defined]
+        ) and not self._holds_fire_while_withdrawing(actor):  # type: ignore[attr-defined]
             target = self._select_target_fuzzy(actor)  # type: ignore[attr-defined]
             if target is not None and not self._is_within_weapon_range(actor, target):
                 target = None

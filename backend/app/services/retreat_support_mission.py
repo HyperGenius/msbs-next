@@ -26,11 +26,15 @@ from app.models.models import (
 RETREAT_SUPPORT_MISSION_ID = 4
 RETREAT_SUPPORT_REQUIRED = 2
 """成功に必要な離脱数。友軍は 3 機。"""
+FIELD_SIZE = 4000.0
+ALLY_MAX_SPEED = 35.0
+"""撤退機の最高速度 (m/s)。追撃部隊（既定の 80 m/s）に追いつかれる速さにする。"""
 
 DESCRIPTION = (
-    "損傷した友軍 3 機を撤退ポイントまで逃がせ。2 機以上が離脱すれば成功、"
-    "3 機とも逃がせば報酬が増える。追撃部隊は格闘機 2 機と狙撃機 2 機。"
-    "敵を全滅させなくてもよい。足止め・護衛・索敵に向いた機体が有利。"
+    "損傷した友軍 3 機を撤退ポイントまで逃がせ。友軍は撃ち返せない。"
+    "2 機以上が離脱すれば成功、3 機とも逃がせば報酬が増える。"
+    "追撃部隊は格闘機 2 機と狙撃機 2 機。敵を全滅させなくてもよい。"
+    "狙撃機を倒すか、追撃部隊を攻撃して狙いを自機に引きつけろ。"
 )
 
 
@@ -42,6 +46,8 @@ def _ally(index: int, current_hp: int, missing_parts: list[str]) -> MissionUnitC
         armor=5,
         mobility=1.1,
         missing_parts=missing_parts,
+        max_speed=ALLY_MAX_SPEED,
+        hold_fire=True,
         weapon=MissionWeaponConfig(
             id=f"retreat_ally_mg_{index}",
             name="ザクマシンガン",
@@ -111,22 +117,26 @@ def build_retreat_support_mission() -> Mission:
         _pursuer_sniper(1),
         _pursuer_sniper(2),
     ]
+    # 撤退ポイントまで約 2400m。撤退機の速さで 70 秒ほどかかる。
+    # 追撃部隊は、狙撃機の射程と索敵範囲の外から追い始める。
+    mid = FIELD_SIZE / 2
     layout = MissionLayout(
+        field_size=FIELD_SIZE,
         spawn_zones=[
             SpawnZone(
                 team_id=MISSION_TEAM_PLAYER,
-                center=Vector3(x=-250, y=0, z=0),
+                center=Vector3(x=2800, y=0, z=mid),
                 radius=150,
             ),
             SpawnZone(
                 team_id=MISSION_TEAM_ENEMY,
-                center=Vector3(x=300, y=0, z=0),
-                radius=150,
+                center=Vector3(x=3700, y=0, z=mid),
+                radius=100,
             ),
         ],
         retreat_points=[
             RetreatPoint(
-                position=Vector3(x=-900, y=0, z=0),
+                position=Vector3(x=300, y=0, z=mid),
                 radius=120,
                 team_id=MISSION_TEAM_PLAYER,
             )
