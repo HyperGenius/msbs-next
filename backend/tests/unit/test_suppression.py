@@ -25,6 +25,7 @@ from app.models.models import MobileSuit, Vector3, Weapon
 from app.services.mission_battle import build_mission_battle
 from app.services.retreat_support_mission import build_retreat_support_mission
 from app.services.theater_service import BattleConditions
+from scripts.master_data import FIXTURE_DIR, mission_masters_from_data, read_master_dir
 
 _CONFIG = SuppressionConfig(
     per_cooldown_sec=20.0,
@@ -321,8 +322,8 @@ def test_suppression_also_slows_boost() -> None:
 def test_mission_battle_enables_suppression() -> None:
     """作戦の戦闘は既定の係数で制圧を有効にする."""
     player = _unit("Player", "PLAYER", 0.0, _rifle())
-    setup = build_mission_battle(
-        build_retreat_support_mission(), [player], BattleConditions()
-    )
+    mission = build_retreat_support_mission()
+    masters = mission_masters_from_data(read_master_dir(FIXTURE_DIR), mission)
+    setup = build_mission_battle(mission, [player], BattleConditions(), masters=masters)
 
     assert setup.suppression == SuppressionConfig()

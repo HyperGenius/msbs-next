@@ -26,6 +26,8 @@ from app.services.matching_service import (
     build_npc_entry_snapshot,
     reset_npc_for_battle,
 )
+from app.services.mission_battle import referenced_master_ids
+from app.services.mission_master_loader import load_mission_masters
 from app.services.mobile_suit_service import MobileSuitService
 from app.services.pilot_service import PilotService
 from app.services.retreat_support_mission import build_retreat_support_mission
@@ -375,6 +377,47 @@ def load_mission(session: Session, options: FetchOptions) -> RosterMission | Non
     )
 
 
+@dataclass
+class MissionReferences:
+    """作戦の機体が参照するマスター。ロスターにそのまま保存する形."""
+
+    master_mobile_suits: list[dict] = field(default_factory=list)
+    ace_pilots: list[dict] = field(default_factory=list)
+
+
+def load_mission_references(
+    session: Session, mission: RosterMission
+) -> MissionReferences:
+    """作戦の機体が参照する機体マスターとエースを読む.
+
+    Raises:
+        ValueError: 参照先がマスターに無い場合
+    """
+    master = Mission.model_validate(mission.master)
+    mobile_suit_ids, ace_ids = referenced_master_ids(master)
+    masters = load_mission_masters(session, master)
+    missing = [
+        *(i for i in mobile_suit_ids if i not in masters.mobile_suits),
+        *(i for i in ace_ids if i not in masters.aces),
+    ]
+    if missing:
+        raise ValueError(
+            f"作戦 {master.id} が参照するマスター {', '.join(missing)} が見つかりません。"
+        )
+    aces = [session.get(AcePilot, ace_id) for ace_id in ace_ids]
+    return MissionReferences(
+        master_mobile_suits=[
+            m.model_dump(mode="json", exclude={"created_at", "updated_at"})
+            for m in masters.mobile_suits.values()
+        ],
+        ace_pilots=[
+            a.model_dump(mode="json", exclude={"created_at", "updated_at"})
+            for a in aces
+            if a is not None
+        ],
+    )
+
+
 def _validate_mission_options(options: FetchOptions) -> None:
     """本番の作戦ルームと同じく、プレイヤー機だけを同じチームで出す指定か確かめる.
 
@@ -406,6 +449,9 @@ def build_roster(session: Session, options: FetchOptions, name: str) -> Roster:
     if options.has_mission:
         _validate_mission_options(options)
     mission = load_mission(session, options)
+    references = (
+        load_mission_references(session, mission) if mission else MissionReferences()
+    )
     conditions = resolve_conditions(
         session,
         options.theater_id,
@@ -430,7 +476,9 @@ def build_roster(session: Session, options: FetchOptions, name: str) -> Roster:
         fetched_at=datetime.now(UTC),
         conditions=conditions,
         entries=builder.entries,
-        ace_pilots=builder.ace_pilots,
+        # 作戦では --ace を併用できないため、エースは重ならない。
+        ace_pilots=[*builder.ace_pilots, *references.ace_pilots],
+        master_mobile_suits=references.master_mobile_suits,
         mission=mission,
     )
 

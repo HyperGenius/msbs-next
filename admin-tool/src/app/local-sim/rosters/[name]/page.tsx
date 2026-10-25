@@ -9,7 +9,8 @@ import type { LocalSimMissionMaster, LocalSimRoster, LocalSimRosterEntry } from 
 import { SciFiButton, SciFiHeading, SciFiPanel } from "@/components/ui";
 import RosterConditionsEditor from "@/components/admin/RosterConditionsEditor";
 import RosterEntryEditor from "@/components/admin/RosterEntryEditor";
-import RosterMissionEditor, { missionMasterError } from "@/components/admin/RosterMissionEditor";
+import RosterMissionEditor from "@/components/admin/RosterMissionEditor";
+import { missionMasterError } from "@/lib/localSim/missionEdit";
 
 type Snapshot = Record<string, unknown>;
 

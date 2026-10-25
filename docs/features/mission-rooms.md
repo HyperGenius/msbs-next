@@ -46,7 +46,7 @@ Epic #682「作戦（ミッション）と敵小隊のロール」の Sub-Issue 
 JSON 列は Pydantic モデルで読む（`Mission.objective_config()` / `enemy_unit_configs()` / `ally_unit_configs()` / `layout_config()`）。
 
 * `MissionObjectiveConfig`: `type`（既定 `ANNIHILATION`）と `params`（種類ごとの引数）。種類から作戦目標を作るのは `build_objective()`（`backend/app/engine/objectives.py`）。今ある種類は `ANNIHILATION` と `RETREAT_SUPPORT`（[retreat-support-mission.md](retreat-support-mission.md)）。無い種類は組み立て時に `ValueError` になる
-* `MissionUnitConfig`: `name` / `max_hp` / `armor` / `mobility` / `position` / `terrain_adaptability` / `weapon`（`id` / `name` / `power` / `range` / `accuracy`）/ `role` / `squad_id`。省略した項目は既存の作戦と同じ既定値になる。`role` は `VALID_UNIT_ROLES` のいずれかで、無い値は組み立て時に `ValueError` になる。撤退支援で足した項目（`current_hp` / `missing_parts` / `max_speed` / `hold_fire` など）は [retreat-support-mission.md](retreat-support-mission.md#作戦マスターの定義の拡張)
+* `MissionUnitConfig`: `name` / `max_hp` / `armor` / `mobility` / `position` / `terrain_adaptability` / `weapon`（`id` / `name` / `power` / `range` / `accuracy`）/ `role` / `squad_id`。省略した項目は既存の作戦と同じ既定値になる。`role` は `VALID_UNIT_ROLES` のいずれかで、無い値は組み立て時に `ValueError` になる。撤退支援で足した項目（`current_hp` / `missing_parts` / `max_speed` / `hold_fire` など）は [retreat-support-mission.md](retreat-support-mission.md#作戦マスターの定義の拡張)。機体マスター・エースの参照（`master_mobile_suit_id` / `ace_id` / `current_hp_ratio`）は [retreat-support-mission.md](retreat-support-mission.md#機体マスターエースの参照issue-719)
 * `MissionLayout`: `field_size`（フィールドの辺長 (m)。null は参加機数から決める）、`spawn_zones`（`SpawnZone` のリスト）と `retreat_points`（`RetreatPoint` のリスト）。`team_id` には `PLAYER`（プレイヤーと友軍）か `ENEMY` を書く。撤退ポイントの `team_id` が null なら全チームが使える。それ以外の値は読み込み時にエラーにする
 
 配置の座標は 0 から `field_size` の内側に置く。`field_size` が null のときはフィールドの最小辺長（`MIN_FIELD_SIZE`）の内側に置く。フィールドの広さが参加機数で変わり、それより外は場外になりうるため。
@@ -157,6 +157,8 @@ JSON 列は Pydantic モデルで読む（`Mission.objective_config()` / `enemy_
 1. ルームの戦域から戦闘の条件を作る（`TheaterService.battle_conditions()`）。戦域の無い開催は `Mission.environment` で戦う
 2. プレイヤー機を組み立てる。作戦ルームに NPC のエントリーは無い
 3. 作戦マスターから友軍と敵機を作る
+   * 機体が参照する機体マスターとエースを `load_mission_masters()`（`backend/app/services/mission_master_loader.py`）で DB から読み、`build_mission_battle(masters=...)` に渡す
+   * 参照先が無い作戦は `ValueError` で組み立てに失敗する。バッチは警告を出して、そのルームを飛ばす（`WAITING` のまま残す）
    * プレイヤー機と友軍は、先頭のプレイヤー機のチームに入る
    * 敵機は全員で1チーム（`mission-{作戦ID}-enemy`）になる
    * `role` / `squad_id` を書いた機体は `UnitAssignment` にする
@@ -171,6 +173,7 @@ JSON 列は Pydantic モデルで読む（`Mission.objective_config()` / `enemy_
 * プレイヤーのチームは、戦闘に渡した機体の `team_id` を使う（作戦ではプレイヤーと友軍が1チームになるため）。バトルロイヤルでは今までの `resolve_team_id()` と同じ値になる
 * 作戦ルームの結果に `mission_id` と作戦の結果を入れる
 * ドロップは作戦ルームなら `DropScope.mission(mission_id)`、バトルロイヤルは今どおり戦域か共通テーブル。作戦のドロップテーブルが無ければドロップしない
+* 作戦ルームでエースを撃破すると、エースの懸賞金（`bounty_exp` / `bounty_credits`）を報酬に足す（`_mission_bounty()`）。バトルロイヤルのエースには払わない（今までどおり）
 
 ---
 

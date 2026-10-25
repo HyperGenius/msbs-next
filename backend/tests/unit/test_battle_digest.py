@@ -6,6 +6,8 @@ from app.engine.battle_digest import (
     TEMPLATE_POOLS,
     build_digest,
     compute_digest_stats,
+    compute_unit_kill_ids,
+    compute_unit_kills,
     determine_tag,
 )
 from app.models.models import BattleLog, MobileSuit, Vector3
@@ -243,3 +245,22 @@ def test_build_digest_avoids_immediate_repeat():
     for _ in range(20):
         _, text = build_digest(stats, avoid_text=avoid_text)
         assert text != avoid_text
+
+
+def test_compute_unit_kill_ids_returns_targets_killed_by_unit() -> None:
+    """自分の攻撃の直後に撃破されたユニットだけを、撃破した順に返す."""
+    me, ally = uuid.uuid4(), uuid.uuid4()
+    first, second, stolen = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    logs = [
+        make_log(me, "ATTACK", target_id=second),
+        make_log(me, "MELEE_COMBO", target_id=first),
+        make_log(first, "DESTROYED"),
+        make_log(ally, "ATTACK", target_id=stolen),
+        make_log(stolen, "DESTROYED"),
+        make_log(me, "ATTACK", target_id=second),
+        make_log(second, "DESTROYED"),
+    ]
+
+    assert compute_unit_kill_ids(logs, me) == [first, second]
+    assert compute_unit_kills(logs, me) == 2
+    assert compute_unit_kill_ids(logs, ally) == [stolen]

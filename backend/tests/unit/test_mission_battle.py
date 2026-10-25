@@ -3,6 +3,7 @@
 import uuid
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.engine.constants import SHRINK_START_STEP
@@ -16,6 +17,7 @@ from app.models.models import (
     MISSION_TEAM_ENEMY,
     MISSION_TEAM_PLAYER,
     BattleField,
+    MasterMobileSuit,
     Mission,
     MissionLayout,
     MissionUnitConfig,
@@ -25,13 +27,23 @@ from app.models.models import (
 )
 from app.services.battle_execution import prepare_battle_units, run_battle
 from app.services.mission_battle import (
+    MissionMasters,
     build_mission_battle,
     build_mission_unit,
     enemy_team_id,
 )
+from app.services.mission_master_loader import load_mission_masters
 from app.services.retreat_support_mission import build_retreat_support_mission
 from app.services.theater_service import BattleConditions
 from main import _build_enemies_from_config
+from scripts.master_data import (
+    FIXTURE_DIR,
+    MasterData,
+    mission_masters_from_data,
+    read_master_dir,
+)
+
+_FIXTURE_MASTERS: MasterData = read_master_dir(FIXTURE_DIR)
 
 # 既存の作戦マスター（scripts/seed/seed_missions.py）と同じ形の敵機
 LEGACY_ENEMY = {
@@ -88,6 +100,18 @@ def _mission(**kwargs) -> Mission:  # type: ignore[no-untyped-def]
     return Mission(**(fields | kwargs))
 
 
+def _masters(mission: Mission) -> MissionMasters:
+    return mission_masters_from_data(_FIXTURE_MASTERS, mission)
+
+
+def _fixture_master(master_id: str) -> dict:
+    return next(m for m in _FIXTURE_MASTERS["mobile_suits"] if m["id"] == master_id)
+
+
+def _fixture_ace(ace_id: str) -> dict:
+    return next(a for a in _FIXTURE_MASTERS["ace_pilots"] if a["id"] == ace_id)
+
+
 def test_legacy_mission_reads_as_annihilation() -> None:
     """作戦目標・友軍・配置の無い既存の作戦は、殲滅・友軍なし・既定の配置として読む."""
     mission = _mission()
@@ -138,6 +162,20 @@ def test_build_enemies_from_config_uses_defaults() -> None:
     assert (enemy.name, enemy.max_hp, enemy.armor) == ("ザクII", 80, 5)
     assert enemy.position == Vector3(x=500, y=0, z=0)
     assert enemy.weapons[0].power == 15
+
+
+def test_build_enemies_from_config_resolves_masters() -> None:
+    """ソロミッションの敵機も機体マスターから作り、参照先が無ければ 500 にする."""
+    mission = _mission(enemy_config={"enemies": [{"master_mobile_suit_id": "gouf"}]})
+
+    [enemy] = _build_enemies_from_config(
+        mission.enemy_config["enemies"], _masters(mission)
+    )
+
+    assert enemy.master_mobile_suit_id == "gouf"
+    with pytest.raises(HTTPException) as excinfo:
+        _build_enemies_from_config([{"master_mobile_suit_id": "no_such_suit"}])
+    assert excinfo.value.status_code == 500
 
 
 def test_mission_units_join_teams_with_roles() -> None:
@@ -352,7 +390,9 @@ def test_retreat_support_mission_master_builds_a_battle() -> None:
     player = _player()
     player.team_id = "player-team"
 
-    setup = build_mission_battle(mission, [player], BattleConditions())
+    setup = build_mission_battle(
+        mission, [player], BattleConditions(), masters=_masters(mission)
+    )
 
     allies = [u for u in setup.mission_units if u.team_id == "player-team"]
     enemies = [u for u in setup.mission_units if u.team_id == enemy_team_id(mission)]
@@ -392,7 +432,9 @@ def test_retreat_support_battle_runs_and_saves_progress() -> None:
     mission = build_retreat_support_mission()
     player = _player()
     player.team_id = "player-team"
-    setup = build_mission_battle(mission, [player], BattleConditions())
+    setup = build_mission_battle(
+        mission, [player], BattleConditions(), masters=_masters(mission)
+    )
 
     outcome = run_battle(
         player,
@@ -419,7 +461,13 @@ def test_unit_id_namespace_fixes_mission_unit_ids() -> None:
     def ids(**kwargs) -> list[str]:  # type: ignore[no-untyped-def]
         player = _player()
         player.team_id = "player-team"
-        setup = build_mission_battle(mission, [player], BattleConditions(), **kwargs)
+        setup = build_mission_battle(
+            mission,
+            [player],
+            BattleConditions(),
+            masters=_masters(mission),
+            **kwargs,
+        )
         assert set(setup.unit_assignments) <= {str(u.id) for u in setup.mission_units}
         return [str(u.id) for u in setup.mission_units]
 
@@ -427,3 +475,213 @@ def test_unit_id_namespace_fixes_mission_unit_ids() -> None:
     assert fixed == ids(unit_id_namespace=namespace)
     assert len(set(fixed)) == len(fixed)
     assert set(ids()).isdisjoint(ids())
+
+
+def test_retreat_support_units_reference_masters() -> None:
+    """撤退支援の友軍・敵機は機体マスターを参照し、直書きの値を持たない."""
+    mission = build_retreat_support_mission()
+
+    configs = [*mission.ally_unit_configs(), *mission.enemy_unit_configs()]
+    assert all(c.master_mobile_suit_id is not None for c in configs)
+    for raw in [*(mission.allies_config or []), *mission.enemy_config["enemies"]]:
+        assert {"max_hp", "armor", "mobility", "weapon"}.isdisjoint(raw)
+
+
+def test_master_unit_uses_master_specs_and_weapons() -> None:
+    """機体マスター ID の機体は、機体マスターの性能・武器・地形適性で出る."""
+    master = _fixture_master("gouf")
+    mission = _mission(enemy_config={"enemies": [{"master_mobile_suit_id": "gouf"}]})
+
+    setup = build_mission_battle(
+        mission, [_player()], BattleConditions(), masters=_masters(mission)
+    )
+
+    [enemy] = setup.mission_units
+    specs = master["specs"]
+    assert enemy.name == master["name"]
+    assert (enemy.max_hp, enemy.current_hp) == (specs["max_hp"], specs["max_hp"])
+    assert (enemy.armor, enemy.mobility) == (specs["armor"], specs["mobility"])
+    assert enemy.sensor_range == specs["sensor_range"]
+    assert enemy.terrain_adaptability == specs["terrain_adaptability"]
+    assert enemy.master_mobile_suit_id == "gouf"
+    assert (
+        enemy.weapon_slot_count
+        == MasterMobileSuit.model_validate(master).weapon_slot_count
+    )
+    assert [(w.id, w.power, w.range) for w in enemy.weapons] == [
+        (w["id"], w["power"], w["range"]) for w in specs["weapons"]
+    ]
+    # 武器マスターにある武器は、武器マスターの ID を持つ。
+    weapon_ids = {w["id"] for w in _FIXTURE_MASTERS["weapons"]}
+    for weapon in enemy.weapons:
+        expected = weapon.id if weapon.id in weapon_ids else None
+        assert weapon.master_weapon_id == expected
+    assert not enemy.is_ace
+
+
+def test_master_unit_overrides_name_hp_ratio_parts_and_role() -> None:
+    """作戦側の表示名・開始時の HP の割合・欠損部位・ロール・小隊が効く."""
+    mission = _mission(
+        allies_config=[
+            {
+                "master_mobile_suit_id": "zaku_ii",
+                "name": "撤退機 #1",
+                "current_hp_ratio": 0.25,
+                "missing_parts": ["LEFT_ARM"],
+                "role": "WITHDRAW",
+                "squad_id": "retreat",
+            }
+        ]
+    )
+    player = _player()
+
+    setup = build_mission_battle(
+        mission, [player], BattleConditions(), masters=_masters(mission)
+    )
+
+    ally = setup.mission_units[0]
+    assert ally.name == "撤退機 #1"
+    assert ally.current_hp == round(ally.max_hp * 0.25)
+    assert ally.max_hp == _fixture_master("zaku_ii")["specs"]["max_hp"]
+    assert "LEFT_ARM" in ally.missing_parts
+    assert "LEFT_ARM" not in ally.parts
+    for part in ally.parts.values():
+        assert part.current_hp < part.max_hp
+    assert ally.team_id == player.team_id
+    assignment = setup.unit_assignments[str(ally.id)]
+    assert (assignment.role, assignment.squad_id) == ("WITHDRAW", "retreat")
+
+
+def test_hp_ratio_must_be_in_range_and_not_combined_with_current_hp() -> None:
+    """開始時の HP の割合は 0 より大きく 1 以下で、current_hp とは併用できない."""
+    for ratio in (0, -0.1, 1.5):
+        with pytest.raises(ValidationError):
+            MissionUnitConfig(current_hp_ratio=ratio)
+    with pytest.raises(ValidationError):
+        MissionUnitConfig(current_hp=10, current_hp_ratio=0.5)
+    assert MissionUnitConfig(current_hp_ratio=1).current_hp_ratio == 1
+
+
+def test_ace_unit_uses_ace_mobile_suit_and_pilot() -> None:
+    """エース ID の敵機は、マッチングのエース機と同じ機体・パイロットで出る."""
+    ace = _fixture_ace("ace_char_aznable")
+    mission = _mission(
+        enemy_config={"enemies": [{"ace_id": "ace_char_aznable", "role": "VANGUARD"}]}
+    )
+
+    setup = build_mission_battle(
+        mission, [_player()], BattleConditions(), masters=_masters(mission)
+    )
+
+    [enemy] = setup.mission_units
+    spec = ace["mobile_suit"]
+    assert enemy.is_ace
+    assert enemy.ace_id == "ace_char_aznable"
+    assert enemy.name == spec["name"]
+    assert enemy.pilot_name == ace["pilot_name"]
+    assert enemy.personality == ace["personality"]
+    assert (enemy.max_hp, enemy.armor) == (spec["max_hp"], spec["armor"])
+    assert [w.id for w in enemy.weapons] == [w["id"] for w in spec["weapons"]]
+    assert (enemy.bounty_exp, enemy.bounty_credits) == (
+        ace["bounty_exp"],
+        ace["bounty_credits"],
+    )
+    assert enemy.team_id == enemy_team_id(mission)
+
+
+def test_ace_units_do_not_share_master_objects() -> None:
+    """同じマスターから作ったエース機どうしで、武器と戦術を共有しない."""
+    mission = _mission(enemy_config={"enemies": [{"ace_id": "ace_char_aznable"}]})
+    masters = _masters(mission)
+    [config] = mission.enemy_unit_configs()
+
+    first = build_mission_unit(config, "ENEMY", masters=masters)
+    second = build_mission_unit(config, "ENEMY", masters=masters)
+
+    master_spec = masters.aces["ace_char_aznable"]["mobile_suit"]
+    assert first.weapons[0] is not second.weapons[0]
+    assert first.weapons[0] is not master_spec["weapons"][0]
+    assert first.tactics is not master_spec["tactics"]
+
+
+def test_ace_with_master_mobile_suit_swaps_only_the_mobile_suit() -> None:
+    """エースに機体マスターを重ねると、機体だけが機体マスターになる."""
+    ace = _fixture_ace("ace_char_aznable")
+    master = _fixture_master("gelgoog")
+    mission = _mission(
+        enemy_config={
+            "enemies": [
+                {"ace_id": "ace_char_aznable", "master_mobile_suit_id": "gelgoog"}
+            ]
+        }
+    )
+
+    [enemy] = build_mission_battle(
+        mission, [_player()], BattleConditions(), masters=_masters(mission)
+    ).mission_units
+
+    assert enemy.name == master["name"]
+    assert enemy.max_hp == enemy.current_hp == master["specs"]["max_hp"]
+    assert [w.id for w in enemy.weapons] == [
+        w["id"] for w in master["specs"]["weapons"]
+    ]
+    assert enemy.master_mobile_suit_id == "gelgoog"
+    assert enemy.is_ace
+    assert enemy.pilot_name == ace["pilot_name"]
+    assert enemy.personality == ace["personality"]
+    assert enemy.tactics == ace["mobile_suit"]["tactics"]
+    assert enemy.bounty_credits == ace["bounty_credits"]
+
+
+def test_ace_cannot_be_an_ally() -> None:
+    """エースは敵機にだけ置ける."""
+    mission = _mission(allies_config=[{"ace_id": "ace_char_aznable"}])
+
+    with pytest.raises(ValueError, match="ace must be an enemy"):
+        build_mission_battle(
+            mission, [_player()], BattleConditions(), masters=_masters(mission)
+        )
+
+
+def test_missing_reference_fails_to_build() -> None:
+    """参照先のマスターが無いと、既定の機体にせず組み立てを失敗させる."""
+    for enemy, message in (
+        ({"master_mobile_suit_id": "no_such_suit"}, "unknown master mobile suit"),
+        ({"ace_id": "no_such_ace"}, "unknown ace"),
+    ):
+        mission = _mission(enemy_config={"enemies": [enemy]})
+        with pytest.raises(ValueError, match=message):
+            build_mission_battle(
+                mission, [_player()], BattleConditions(), masters=_masters(mission)
+            )
+    # マスターを渡さなければ、参照する機体は組み立てられない。
+    with pytest.raises(ValueError, match="unknown master mobile suit"):
+        build_mission_battle(
+            build_retreat_support_mission(), [_player()], BattleConditions()
+        )
+
+
+def test_load_mission_masters_reads_referenced_rows(session) -> None:  # type: ignore[no-untyped-def]
+    """DB から参照先だけを読み、JSON から読んだときと同じ機体を作る."""
+    mission = _mission(
+        enemy_config={
+            "enemies": [
+                {"master_mobile_suit_id": "gouf"},
+                {"master_mobile_suit_id": "gouf"},
+                {"ace_id": "ace_amuro_ray"},
+                {"master_mobile_suit_id": "no_such_suit"},
+            ]
+        }
+    )
+
+    masters = load_mission_masters(session, mission)
+
+    assert set(masters.mobile_suits) == {"gouf"}
+    assert set(masters.aces) == {"ace_amuro_ray"}
+    from_db = build_mission_unit(
+        mission.enemy_unit_configs()[0], "ENEMY", masters=masters
+    )
+    from_json = build_mission_unit(
+        mission.enemy_unit_configs()[0], "ENEMY", masters=_masters(mission)
+    )
+    assert from_db.model_dump(exclude={"id"}) == from_json.model_dump(exclude={"id"})

@@ -355,6 +355,66 @@ def test_build_roster_reads_production_mission(session: Session) -> None:
         )
 
 
+def test_build_roster_saves_masters_referenced_by_mission(session: Session) -> None:
+    """作戦の機体が参照する機体マスターとエースを、ロスターに保存すること."""
+    p1 = _player(session, "user_a")
+    session.add(
+        Mission(
+            id=9,
+            name="エースの追撃",
+            enemy_config={
+                "enemies": [
+                    {"master_mobile_suit_id": "gouf"},
+                    {"ace_id": "ace_char_aznable", "master_mobile_suit_id": "dom"},
+                ]
+            },
+            allies_config=[{"master_mobile_suit_id": "zaku_ii"}],
+        )
+    )
+    session.commit()
+
+    roster = build_roster(
+        session, FetchOptions(pilots=[UnitSpec(str(p1.id))], mission_id=9), "ace"
+    )
+
+    assert [m["id"] for m in roster.master_mobile_suits] == ["zaku_ii", "gouf", "dom"]
+    assert all("created_at" not in m for m in roster.master_mobile_suits)
+    gouf = roster.master_mobile_suits[1]
+    assert all("master_weapon_id" in w for w in gouf["specs"]["weapons"])
+    assert [a["id"] for a in roster.ace_pilots] == ["ace_char_aznable"]
+
+    builder_roster = build_roster(
+        session,
+        FetchOptions(pilots=[UnitSpec(str(p1.id))], mission_builder="retreat_support"),
+        "retreat",
+    )
+    assert {m["id"] for m in builder_roster.master_mobile_suits} == {
+        "gm",
+        "gouf",
+        "gelgoog",
+    }
+
+
+def test_build_roster_rejects_mission_with_missing_master(session: Session) -> None:
+    """作戦の機体の参照先がマスターに無ければ、ロスターを作らないこと."""
+    p1 = _player(session, "user_a")
+    session.add(
+        Mission(
+            id=9,
+            name="壊れた作戦",
+            enemy_config={
+                "enemies": [{"master_mobile_suit_id": "no_such"}, {"ace_id": "nobody"}]
+            },
+        )
+    )
+    session.commit()
+
+    with pytest.raises(ValueError, match="no_such, nobody"):
+        build_roster(
+            session, FetchOptions(pilots=[UnitSpec(str(p1.id))], mission_id=9), "x"
+        )
+
+
 @pytest.mark.parametrize(
     ("options", "message"),
     [

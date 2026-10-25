@@ -173,7 +173,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "name": "solomon_test",
   "fetched_at": "2026-10-05T12:30:00Z",
   "conditions": {
@@ -200,6 +200,7 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
     }
   ],
   "ace_pilots": [ { "id": "ace_char_aznable", "mobile_suit": { "...": "..." }, "skills": { "flanking": 3 } } ],
+  "master_mobile_suits": [],
   "mission": null
 }
 ```
@@ -210,7 +211,8 @@ python -m scripts.simulation.local_sim fetch --pilot user_xxx --npc 9 --theater 
 | `conditions.theater_name` / `environment_name` / `viewer_preset` | 戦域・環境タイプの表示名とビューアの背景プリセット。`run` は DB を読まないため、結果に載せる値を取得時に保存する |
 | `entries[].source.kind` | `mobile_suit` / `pilot` / `npc` / `generated_npc` / `ace` |
 | `entries[].snapshot` | 本番の `BattleEntry.mobile_suit_snapshot` と同じ形式 |
-| `ace_pilots` | 参加エースの `ace_pilots` マスター。エンジンは戦闘中に `get_ace_pilot_by_id()` でエースのスキルを読むため、`run` はこの値を使って DB を読まずに実行する |
+| `ace_pilots` | 参加エースと、作戦に置いたエースの `ace_pilots` マスター。エンジンは戦闘中に `get_ace_pilot_by_id()` でエースのスキルを読むため、`run` はこの値を使って DB を読まずに実行する |
+| `master_mobile_suits` | 作戦の機体が参照する `master_mobile_suits`（`created_at` / `updated_at` を除く）。武器の `master_weapon_id` は書き込み済み。`run` はこの値から作戦の機体を作る。`schema_version` 2 以前のロスターは空として読む |
 | `mission` | 作戦（[作戦の戦闘](#作戦の戦闘)）。`null` なら `entries` の機体だけで戦う。`schema_version` 1 のロスターは作戦なしとして読む |
 
 ### 本番マッチングとの共通化
@@ -395,6 +397,8 @@ python -m scripts.simulation.local_sim report retreat
   プレイヤー機は全員、先頭のプレイヤー機のチームに入る
 * 戦域を指定しないときは、作戦の環境（`missions.environment`）で戦う。戦域を指定したときは戦域の環境（本番と同じ）
 * 作戦はロスターの `mission` に保存する。友軍・敵機の機体は `run` で作戦マスターから組み立てる
+* 作戦の機体が参照する機体マスターとエース（[retreat-support-mission.md](retreat-support-mission.md#機体マスターエースの参照issue-719)）は、
+  `load_mission_masters()` で読んでロスターの `master_mobile_suits` / `ace_pilots` に保存する。参照先が無い作戦はエラーにする
 
 ```json
 "mission": {
@@ -402,8 +406,8 @@ python -m scripts.simulation.local_sim report retreat
   "builder": "retreat_support",
   "master": {
     "id": 4, "name": "撤退支援", "environment": "SPACE",
-    "enemy_config": { "enemies": [ { "name": "追撃格闘機 #1", "role": "VANGUARD", "squad_id": "pursuit-1", "...": "..." } ] },
-    "allies_config": [ { "name": "撤退機 #1", "current_hp": 35, "role": "WITHDRAW", "...": "..." } ],
+    "enemy_config": { "enemies": [ { "master_mobile_suit_id": "gouf", "name": "追撃格闘機 #1", "role": "VANGUARD", "squad_id": "pursuit-1" } ] },
+    "allies_config": [ { "master_mobile_suit_id": "gm", "name": "撤退機 #1", "current_hp_ratio": 0.4, "role": "WITHDRAW", "...": "..." } ],
     "objective": { "type": "RETREAT_SUPPORT", "params": { "required": 2 } },
     "layout": { "spawn_zones": [ "..." ], "retreat_points": [ "..." ] }
   }
@@ -421,7 +425,7 @@ python -m scripts.simulation.local_sim report retreat
 本番バッチの作戦ルーム（`run_batch._process_room()` の `room.mission_id` の分岐）と同じ手順で戦う。
 
 1. `prepare_battle_units()` で判定する機体と他のプレイヤー機を組み立て、他のプレイヤー機の `side` を `PLAYER` にする
-2. `build_mission_battle()` で友軍・敵機・スポーン領域・撤退ポイント・ロールと小隊・作戦目標を組み立てる
+2. `build_mission_battle()` で友軍・敵機・スポーン領域・撤退ポイント・ロールと小隊・作戦目標を組み立てる。参照先の機体マスターとエースは、ロスターの `master_mobile_suits` / `ace_pilots` から渡す（`roster_mission_masters()`）
 3. `run_battle(objective=..., retreat_points=..., unit_assignments=..., suppression=...)` で戦う。射撃の制圧（`battle-engine-feature.md` 40 章）は本番と同じく作戦の係数（`MissionBattleSetup.suppression`）で有効になる
 4. 勝敗は判定する機体のチームから見た作戦の結果（`SUCCESS` / `FAILURE` / `DRAW` → `WIN` / `LOSE` / `DRAW`）。作戦の結果のカラムは本番と同じ `objective_result_fields()` で作る
 
@@ -459,8 +463,8 @@ python -m scripts.simulation.local_sim report retreat
 
 ### 検証（作戦の戦闘）
 
-* `tests/unit/test_local_sim_fetch.py`: 作戦の保存（リポジトリの定義・本番の作戦マスター）、作戦の環境、NPC・エース・チームの指定の拒否、`schema_version` 1 のロスターの読み込み
-* `tests/unit/test_local_sim_run.py`: 作戦の戦闘（友軍・敵機・撤退ポイント・ロール・勝敗の対応）、同じシードでの再現、ロスターの作戦マスターの手での編集、作戦の無いロスター
+* `tests/unit/test_local_sim_fetch.py`: 作戦の保存（リポジトリの定義・本番の作戦マスター）、作戦の環境、NPC・エース・チームの指定の拒否、`schema_version` 1 のロスターの読み込み、参照先の機体マスター・エースの保存、参照先が無い作戦の拒否
+* `tests/unit/test_local_sim_run.py`: 作戦の戦闘（友軍・敵機・撤退ポイント・ロール・勝敗の対応）、同じシードでの再現、ロスターの作戦マスターの手での編集、ロスターに保存した機体マスター・エースから DB なしで作ること、作戦の無いロスター
 * `tests/unit/test_local_sim_analysis.py`: 作戦の成功率・離脱数の集計とテキスト表示、比較の差
 * `tests/unit/test_mission_battle.py`: `unit_id_namespace` による ID の固定
 * `frontend/tests/unit/localSimAnalysis.test.ts`: 比較表の作戦の行、`localSimBattleToResult()` の作戦の結果
@@ -498,7 +502,7 @@ Admin Tool に形式の定義を重ねて書かないため、形式のチェッ
 |---|---|
 | 機体（`entries[].snapshot`） | HP・装甲・機動性・索敵範囲・耐性・EN・適性/補正・戦術・欠損部位・武器スロット数・武装・地形適正。機体の複製・取り外し |
 | 戦域の条件（`conditions`） | 環境（環境タイプの効果の写しも取り替える）・ミノフスキー濃度・障害物の密度 |
-| 作戦（`mission.master`） | 友軍・敵機の機体名・HP・装甲・機動性・ロール・小隊・武器の威力/射程/命中率、機体の複製・取り外し、作戦目標の必要数（`params.required`） |
+| 作戦（`mission.master`） | 友軍・敵機の機体名・HP・装甲・機動性・ロール・小隊・武器の威力/射程/命中率、機体の複製・取り外し、作戦目標の必要数（`params.required`）。機体マスター・エースを参照する機体は、参照先を表示し、表示名・開始時の HP の割合・ロール・小隊を変える（性能は `master_mobile_suits` / `ace_pilots` の JSON を手で直す） |
 
 * 機体の入力欄は NPC 機・エース機の編集と同じ部品（`MobileSuitSpecSection`・`WeaponListSection`・`TerrainAdaptabilityFields`）と同じ検証（武装数はスロット数以下・武器 ID の重複なし）を使う。
   フォームで扱わない項目（位置・`team_id`・武器の `weapon_type` など）は元の値を引き継ぐ（`mergeWeaponSources()` と同じ考え方）。

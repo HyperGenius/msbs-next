@@ -15,12 +15,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from app.core.gamedata import use_static_ace_pilots
+from app.core.gamedata import ace_pilot_to_data, use_static_ace_pilots
 from app.engine.constants import FUZZY_RULES_DIR
 from app.engine.environment import EnvironmentProfile
 from app.engine.result_summary import compute_result_summary_fields
 from app.engine.rng import seed_numpy_rngs
-from app.models.models import BattleField, Mission
+from app.models.models import BattleField, MasterMobileSuit, Mission
 from app.services.battle_execution import (
     DEFAULT_MAX_STEPS,
     build_battlefield_view_fields,
@@ -32,6 +32,7 @@ from app.services.battle_execution import (
 )
 from app.services.mission_battle import (
     WIN_LOSS_BY_OBJECTIVE_STATUS,
+    MissionMasters,
     build_mission_battle,
     objective_result_fields,
 )
@@ -132,6 +133,17 @@ def roster_mission(roster: Roster) -> Mission | None:
     return Mission.model_validate(roster.mission.master)
 
 
+def roster_mission_masters(roster: Roster) -> MissionMasters:
+    """ロスターに保存した機体マスターとエースを、作戦の組み立てに渡す形にする."""
+    return MissionMasters(
+        mobile_suits={
+            raw["id"]: MasterMobileSuit.model_validate(raw)
+            for raw in roster.master_mobile_suits
+        },
+        aces={raw["id"]: ace_pilot_to_data(raw) for raw in roster.ace_pilots},
+    )
+
+
 def player_entry_index(roster: Roster) -> int:
     """勝敗と撃墜数を判定する機体を選ぶ.
 
@@ -151,6 +163,7 @@ def run_one_battle(
     seed: int,
     max_steps: int,
     mission: Mission | None = None,
+    masters: MissionMasters | None = None,
 ) -> BattleRecord:
     """ロスターの機体で1戦を実行する.
 
@@ -180,6 +193,7 @@ def run_one_battle(
             [player_unit, *other_players],
             conditions,
             unit_id_namespace=_MISSION_UNIT_ID_NAMESPACE,
+            masters=masters,
         )
         conditions = setup.conditions
         enemy_units = [*other_players, *setup.mission_units]
@@ -281,6 +295,7 @@ def run_generation(
 
     conditions = roster_to_conditions(roster.conditions)
     mission = roster_mission(roster)
+    masters = roster_mission_masters(roster)
     player_index = player_entry_index(roster)
     writer = GenerationWriter(label, created_at, generations_dir)
     try:
@@ -297,6 +312,7 @@ def run_generation(
                     seed + index - 1,
                     options.max_steps,
                     mission,
+                    masters,
                 )
                 summary = writer.write_battle(record)
                 analyzer.add(record)

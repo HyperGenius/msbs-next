@@ -57,7 +57,12 @@ def _damage_severity(player_survived: bool, min_hp_percent: int) -> str:
 
 
 def compute_unit_kills(logs: list[BattleLog], unit_id: uuid.UUID) -> int:
-    """指定ユニットが自ら撃破した数をログから集計する.
+    """指定ユニットが自ら撃破した数をログから集計する."""
+    return len(compute_unit_kill_ids(logs, unit_id))
+
+
+def compute_unit_kill_ids(logs: list[BattleLog], unit_id: uuid.UUID) -> list[uuid.UUID]:
+    """指定ユニットが自ら撃破したユニットの ID を、撃破した順に返す.
 
     `DESTROYED` ログの `actor_id` は被撃破ユニット自身であり撃破者の情報を
     持たない。`_process_destruction`（combat.py）は撃破に至った
@@ -65,7 +70,7 @@ def compute_unit_kills(logs: list[BattleLog], unit_id: uuid.UUID) -> int:
     直前のログが同じ対象への `ATTACK`/`MELEE_COMBO` であれば、その `actor_id` が
     撃破者とみなせる。
     """
-    kills = 0
+    killed: list[uuid.UUID] = []
     for i, log in enumerate(logs):
         if log.action_type != "DESTROYED" or i == 0:
             continue
@@ -75,8 +80,8 @@ def compute_unit_kills(logs: list[BattleLog], unit_id: uuid.UUID) -> int:
             and prev.target_id == log.actor_id
             and prev.actor_id == unit_id
         ):
-            kills += 1
-    return kills
+            killed.append(log.actor_id)
+    return killed
 
 
 def compute_digest_stats(

@@ -1143,6 +1143,8 @@ MISSION_TEAM_PLAYER = "PLAYER"
 """作戦の配置で、プレイヤーと友軍のチームを表すキー。"""
 MISSION_TEAM_ENEMY = "ENEMY"
 """作戦の配置で、敵機のチームを表すキー。"""
+MISSION_UNIT_DEFAULT_NAME = "ザクII"
+"""機体マスターもエースも参照しない作戦の機体の、表示名の既定値。"""
 
 
 class MissionObjectiveConfig(SQLModel):
@@ -1175,9 +1177,24 @@ class MissionUnitConfig(SQLModel):
     """作戦に登場する1機の定義.
 
     `Mission.enemy_config["enemies"]` と `Mission.allies_config` の要素。
+    `master_mobile_suit_id` か `ace_id` を書いた機体は、参照先のマスターから作る。
+    そのとき `max_hp` / `armor` / `mobility` / `terrain_adaptability` / `weapon` は使わない。
     """
 
-    name: str = "ザクII"
+    master_mobile_suit_id: str | None = Field(
+        default=None, description="機体マスター ID。性能・武器・地形適性をここから作る"
+    )
+    ace_id: str | None = Field(
+        default=None,
+        description=(
+            "エースパイロット ID（敵機だけ）。機体とパイロットをエースから作る。"
+            "master_mobile_suit_id も書くと、機体だけを機体マスターに差し替える"
+        ),
+    )
+    name: str | None = Field(
+        default=None,
+        description="表示名。null は参照先の機体名（参照が無ければ MISSION_UNIT_DEFAULT_NAME）",
+    )
     max_hp: int = 80
     armor: int = 5
     mobility: float = 1.2
@@ -1200,9 +1217,18 @@ class MissionUnitConfig(SQLModel):
     current_hp: int | None = Field(
         default=None, description="開始時の HP。null は max_hp（損傷なし）"
     )
+    current_hp_ratio: float | None = Field(
+        default=None,
+        gt=0,
+        le=1,
+        description="開始時の HP の最大 HP に対する割合。current_hp とは併用できない",
+    )
     missing_parts: list[str] = Field(
         default_factory=list,
-        description="開始時に欠けている部位 (ALL_PART_NAMES のいずれか)",
+        description=(
+            "開始時に欠けている部位 (ALL_PART_NAMES のいずれか)。"
+            "機体マスターで欠けている部位に足す"
+        ),
     )
     max_speed: float | None = Field(
         default=None, gt=0, description="最高速度 (m/s)。null は機体の既定値"
@@ -1210,6 +1236,17 @@ class MissionUnitConfig(SQLModel):
     hold_fire: bool = Field(
         default=False, description="撤退ロールのとき、敵に撃ち返さない"
     )
+
+    @model_validator(mode="after")
+    def _validate_start_hp(self) -> "MissionUnitConfig":
+        if self.current_hp is not None and self.current_hp_ratio is not None:
+            raise ValueError("current_hp and current_hp_ratio cannot both be set")
+        return self
+
+    @property
+    def references_master(self) -> bool:
+        """機体マスターかエースから作る機体か."""
+        return self.master_mobile_suit_id is not None or self.ace_id is not None
 
 
 class MissionLayout(SQLModel):

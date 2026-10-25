@@ -2,8 +2,9 @@
 # backend/scripts/simulation/retreat_support_bench.py
 """撤退支援と殲滅戦で、ビルドごとの成功率と時間切れの割合を比べる（Issue #686）.
 
-DB に繋がない。プレイヤー機は合成したビルド（同程度の戦力）で出す。
-作戦の直書きの機体と同じ大きさの値で、機体マスター（HP 数百〜千）とは揃っていない。
+DB に繋がない。作戦の機体が参照する機体マスターは `--master-dir` の JSON から読む
+（既定はテスト用の固定データ。本番の値は `export_master_data.py` で書き出して渡す）。
+プレイヤー機は合成したビルド（同程度の戦力）で出す。値の大きさは機体マスターに揃える。
 
 * annihilator: 高 HP・高火力・低機動。敵を倒して勝つ「殲滅向け」
 * mobile: 低 HP・高機動・長い索敵。友軍の近くで敵を引きつける「機動・索敵寄り」
@@ -20,6 +21,8 @@ Usage:
     uv run python scripts/simulation/retreat_support_bench.py --rounds 60
     uv run python scripts/simulation/retreat_support_bench.py --suppression off
     uv run python scripts/simulation/retreat_support_bench.py --suppression penalty=0.3,dirs=all
+    uv run python scripts/simulation/retreat_support_bench.py \
+        --master-dir scripts/maintenance/output/master_data
 """
 
 from __future__ import annotations
@@ -31,6 +34,8 @@ import sys
 import uuid
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+from functools import cache
+from pathlib import Path
 
 # プロセスごとに numpy がスレッドを増やすと、並列実行でかえって遅くなる。
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -47,6 +52,7 @@ from app.services.battle_execution import (  # noqa: E402
     seed_battle_rngs,
 )
 from app.services.mission_battle import (  # noqa: E402
+    MissionMasters,
     build_mission_battle,
     build_mission_unit,
 )
@@ -54,6 +60,11 @@ from app.services.retreat_support_mission import (  # noqa: E402
     build_retreat_support_mission,
 )
 from app.services.theater_service import BattleConditions  # noqa: E402
+from scripts.master_data import (  # noqa: E402
+    FIXTURE_DIR,
+    mission_masters_from_data,
+    read_master_dir,
+)
 from scripts.simulation.suppression_args import parse_suppression  # noqa: E402
 
 MAX_STEPS = 3000
@@ -77,12 +88,20 @@ class Build:
 
 
 BUILDS = [
-    Build("annihilator", 160, 10, 0.9, 500, 30, 450, 75),
-    Build("balanced", 120, 7, 1.2, 600, 22, 450, 72),
-    Build("mobile", 90, 5, 1.6, 800, 14, 400, 68),
-    Build("escort", 110, 6, 1.3, 700, 18, 600, 70, 450.0, TACTICS_PRIORITY_PROTECT),
-    Build("absent", 120, 7, 1.2, 600, 22, 450, 72, absent=True),
+    Build("annihilator", 1200, 90, 0.9, 500, 240, 450, 75),
+    Build("balanced", 950, 65, 1.2, 600, 180, 450, 72),
+    Build("mobile", 750, 45, 1.6, 800, 120, 400, 68),
+    Build("escort", 850, 55, 1.3, 700, 150, 600, 70, 450.0, TACTICS_PRIORITY_PROTECT),
+    Build("absent", 950, 65, 1.2, 600, 180, 450, 72, absent=True),
 ]
+
+
+@cache
+def mission_masters(master_dir: Path) -> MissionMasters:
+    """撤退支援の機体が参照するマスターを読む. プロセスごとに 1 回だけ読む."""
+    return mission_masters_from_data(
+        read_master_dir(master_dir), build_retreat_support_mission()
+    )
 
 
 def make_player(build: Build, team_id: str) -> MobileSuit:
@@ -115,7 +134,7 @@ def make_player(build: Build, team_id: str) -> MobileSuit:
 
 
 def run_retreat_support(
-    build: Build, seed: int, suppression: SuppressionConfig | None
+    build: Build, seed: int, suppression: SuppressionConfig | None, master_dir: Path
 ) -> dict:
     """撤退支援を 1 戦する."""
     seed_battle_rngs(seed)
@@ -123,7 +142,9 @@ def run_retreat_support(
     player = make_player(build, "player-team")
     if build.absent:
         player.current_hp = 0
-    setup = build_mission_battle(mission, [player], BattleConditions())
+    setup = build_mission_battle(
+        mission, [player], BattleConditions(), masters=mission_masters(master_dir)
+    )
     outcome = run_battle(
         player,
         setup.mission_units,
@@ -147,20 +168,21 @@ def run_retreat_support(
 
 
 def run_annihilation(
-    build: Build, seed: int, suppression: SuppressionConfig | None
+    build: Build, seed: int, suppression: SuppressionConfig | None, master_dir: Path
 ) -> dict:
     """同じ友軍・敵小隊との殲滅戦を 1 戦する（撤退ポイントなし、友軍は戦う）."""
     seed_battle_rngs(seed)
     mission = build_retreat_support_mission()
+    masters = mission_masters(master_dir)
     player = make_player(build, "player-team")
     allies = []
     for config in mission.ally_unit_configs():
-        ally = build_mission_unit(config, "PLAYER")
+        ally = build_mission_unit(config, "PLAYER", masters=masters)
         ally.team_id = "player-team"
         allies.append(ally)
     enemies = []
     for config in mission.enemy_unit_configs():
-        enemy = build_mission_unit(config, "ENEMY")
+        enemy = build_mission_unit(config, "ENEMY", masters=masters)
         enemy.team_id = "enemy-team"
         enemies.append(enemy)
     outcome = run_battle(
@@ -202,13 +224,21 @@ def main() -> None:
         default="on",
         help="射撃の制圧。off / on / 係数の上書き（例: penalty=0.3,dirs=all）",
     )
+    parser.add_argument(
+        "--master-dir",
+        type=Path,
+        default=FIXTURE_DIR,
+        help="機体マスター・エースを読む JSON ディレクトリ（既定: テスト用の固定データ）",
+    )
     args = parser.parse_args()
     try:
         suppression = parse_suppression(args.suppression)
     except ValueError as e:
         sys.exit(str(e))
 
-    print(f"rounds={args.rounds} suppression={suppression}")
+    print(
+        f"rounds={args.rounds} suppression={suppression} master_dir={args.master_dir}"
+    )
     print(
         f"{'mode':<16}{'build':<13}{'success (95% CI)':>20}{'timeout':>9}"
         f"{'avg_escaped':>13}{'avg_lost':>10}{'player_alive':>14}{'avg_sec':>9}"
@@ -220,7 +250,7 @@ def main() -> None:
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         futures = {
             (mode, build.label): [
-                pool.submit(runner, build, seed, suppression)
+                pool.submit(runner, build, seed, suppression, args.master_dir)
                 for seed in range(1, args.rounds + 1)
             ]
             for mode, runner in runners

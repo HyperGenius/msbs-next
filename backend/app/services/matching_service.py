@@ -508,23 +508,26 @@ class MatchingService:
         return self.build_ace_mobile_suit(random.choice(aces))
 
     @staticmethod
-    def build_ace_mobile_suit(ace_data: dict[str, Any]) -> MobileSuit:
+    def build_ace_mobile_suit(
+        ace_data: dict[str, Any], position: Vector3 | None = None
+    ) -> MobileSuit:
         """エースパイロットのマスターデータから出撃するモビルスーツを作る.
 
         Args:
             ace_data: `get_ace_pilots()` が返す1件
+            position: 初期位置。省略すると 1000m x 1000m x 500m の空間からランダムに決める
 
         Returns:
-            初期位置をランダムに決めたモビルスーツ。DBには保存しない
+            DBには保存しないモビルスーツ
         """
         ms_data = cast(dict[str, Any], ace_data["mobile_suit"])
 
-        # ランダムな初期位置（1000m x 1000m x 500m の空間）
-        position = Vector3(
-            x=random.uniform(-500, 500),
-            y=random.uniform(-500, 500),
-            z=random.uniform(0, 500),
-        )
+        if position is None:
+            position = Vector3(
+                x=random.uniform(-500, 500),
+                y=random.uniform(-500, 500),
+                z=random.uniform(0, 500),
+            )
 
         # weaponsをWeaponオブジェクトに変換（辞書の場合）
         weapons_list = ms_data["weapons"]

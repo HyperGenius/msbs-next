@@ -20,7 +20,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from sqlmodel import Session, select
 
 from app.db import engine
-from app.engine.battle_digest import compute_unit_kills
+from app.engine.battle_digest import compute_unit_kill_ids
 from app.engine.replay_log import to_replay_logs
 from app.engine.simulation import BattleSimulator
 from app.models.models import (
@@ -51,6 +51,7 @@ from app.services.mission_battle import (
     build_mission_battle,
     objective_result_fields,
 )
+from app.services.mission_master_loader import load_mission_masters
 from app.services.pilot_service import PilotService
 from app.services.ranking_service import RankingService
 from app.services.theater_service import BattleConditions, TheaterService
@@ -120,6 +121,24 @@ def run_simulation_phase(session: Session) -> None:
             traceback.print_exc()
             # エラーが発生してもルームの処理を継続
             continue
+
+
+def _mission_bounty(
+    room: BattleRoom,
+    kill_ids: list[uuid.UUID],
+    live_units_by_id: dict[str, MobileSuit],
+) -> tuple[int, int]:
+    """作戦ルームで撃破したエースの懸賞金 (経験値, クレジット) を返す.
+
+    バトルロイヤルのエースには払わない。バトルロイヤルの報酬を変えないため。
+    """
+    if room.mission_id is None:
+        return 0, 0
+    return PilotService.calculate_bounty(
+        live_units_by_id[str(unit_id)]
+        for unit_id in kill_ids
+        if str(unit_id) in live_units_by_id
+    )
 
 
 def _save_battle_results(
@@ -199,7 +218,8 @@ def _save_battle_results(
         # 揃える）。敗北時に0へ丸めると、LOSE時のダイジェストタグ判定
         # （kills>=1 なら「力戦及ばず」）が常に「完敗」にしかならず、報酬の
         # 撃墜ボーナスも失われてしまう（Copilotレビュー指摘、PR #472）。
-        individual_kills = compute_unit_kills(simulator.logs, entry_unit.id)
+        kill_ids = compute_unit_kill_ids(simulator.logs, entry_unit.id)
+        individual_kills = len(kill_ids)
 
         # 報酬の計算と付与（BattleResult作成前にlevel_beforeを確定）
         exp_gained = 0
@@ -222,6 +242,11 @@ def _save_battle_results(
                     kills=individual_kills,
                     objective_result=objective_result,
                 )
+                bounty_exp, bounty_credits = _mission_bounty(
+                    room, kill_ids, live_units_by_id
+                )
+                exp_gained += bounty_exp
+                credits_gained += bounty_credits
 
                 pilot, reward_logs = pilot_service.add_rewards(
                     pilot, exp_gained, credits_gained
@@ -381,7 +406,16 @@ def _process_room(session: Session, room: BattleRoom) -> None:
         )
         for unit in other_players:
             unit.side = "PLAYER"
-        setup = build_mission_battle(mission, [player_unit, *other_players], conditions)
+        try:
+            setup = build_mission_battle(
+                mission,
+                [player_unit, *other_players],
+                conditions,
+                masters=load_mission_masters(session, mission),
+            )
+        except ValueError as e:
+            print(f"  警告: 作戦 {mission.id} を組み立てられません: {e}")
+            return
         conditions = setup.conditions
         enemy_units = [*other_players, *setup.mission_units]
         outcome = run_battle(

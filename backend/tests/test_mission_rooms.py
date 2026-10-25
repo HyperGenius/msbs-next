@@ -22,6 +22,7 @@ from app.models.models import (
 from app.services.battle_room_service import BattleRoomService
 from app.services.drop_service import DropScope, DropService
 from app.services.matching_service import MatchingService
+from app.services.pilot_service import PilotService
 from main import app
 from scripts import run_batch
 
@@ -390,6 +391,123 @@ def test_batch_runs_mission_and_battle_royale_rooms(
     assert by_room[open_room.id].mission_id is None
     # バトルロイヤルにも殲滅の結果を保存する
     assert by_room[open_room.id].objective_status in ("SUCCESS", "FAILURE")
+
+
+def _make_master_mission(session: Session, enemies: list[dict]) -> None:
+    session.add(
+        Mission(
+            id=MISSION_ID,
+            name="マスター参照の作戦",
+            environment="GROUND",
+            enemy_config={"enemies": enemies},
+            allies_config=[
+                {
+                    "master_mobile_suit_id": "zaku_ii",
+                    "name": "撤退機 #1",
+                    "current_hp_ratio": 0.5,
+                    "role": "WITHDRAW",
+                }
+            ],
+            is_active=True,
+        )
+    )
+    session.commit()
+
+
+def _waiting_mission_room(session: Session) -> BattleRoom:
+    room = _make_mission_room(session, datetime.now(UTC))
+    room.status = "WAITING"
+    session.add(room)
+    session.commit()
+    return room
+
+
+def test_process_mission_room_builds_units_from_masters(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """作戦の機体を機体マスター・エースから作って戦う."""
+    _make_master_mission(
+        session,
+        [{"master_mobile_suit_id": "gouf"}, {"ace_id": "ace_char_aznable"}],
+    )
+    room = _waiting_mission_room(session)
+    monkeypatch.setattr(DropService, "roll", lambda *a, **k: [])
+    monkeypatch.setattr(run_batch, "_MAX_SIMULATION_STEPS", 5)
+
+    run_batch._process_room(session, room)
+
+    result = session.exec(
+        select(BattleResult).where(BattleResult.room_id == room.id)
+    ).one()
+    assert result.enemies_info is not None
+    units = {u["name"]: u for u in result.enemies_info}
+    assert set(units) == {"撤退機 #1", "Gouf", "High Mobility Zaku II (Red)"}
+    assert units["Gouf"]["max_hp"] == 850
+    assert units["High Mobility Zaku II (Red)"]["is_ace"] is True
+
+
+def test_process_mission_room_skips_missing_master(
+    session: Session, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """参照先のマスターが無い作戦ルームは、警告を出して飛ばす."""
+    _make_master_mission(session, [{"master_mobile_suit_id": "no_such_suit"}])
+    room = _waiting_mission_room(session)
+
+    run_batch._process_room(session, room)
+
+    assert "no_such_suit" in capsys.readouterr().out
+    assert not session.exec(
+        select(BattleResult).where(BattleResult.room_id == room.id)
+    ).all()
+    session.refresh(room)
+    assert room.status == "WAITING"
+
+
+def test_mission_room_pays_bounty_for_killed_ace(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """作戦のエースを撃破すると、懸賞金を報酬に足す."""
+    _make_master_mission(session, [{"ace_id": "ace_char_aznable"}])
+    room = _waiting_mission_room(session)
+    monkeypatch.setattr(DropService, "roll", lambda *a, **k: [])
+    monkeypatch.setattr(run_batch, "_MAX_SIMULATION_STEPS", 5)
+    aces: list[MobileSuit] = []
+    real_run_battle = run_batch.run_battle
+
+    def spy_run_battle(player_unit, enemy_units, *args, **kwargs):  # type: ignore[no-untyped-def]
+        aces.extend(u for u in enemy_units if u.is_ace)
+        return real_run_battle(player_unit, enemy_units, *args, **kwargs)
+
+    # 撃破の成否は乱数で決まるため、エースを撃破したことにする。
+    monkeypatch.setattr(run_batch, "run_battle", spy_run_battle)
+    monkeypatch.setattr(
+        run_batch, "compute_unit_kill_ids", lambda logs, unit_id: [aces[0].id]
+    )
+
+    run_batch._process_room(session, room)
+
+    result = session.exec(
+        select(BattleResult).where(BattleResult.room_id == room.id)
+    ).one()
+    [ace] = aces
+    base_exp, base_credits = PilotService(session).calculate_battle_rewards(
+        win=result.win_loss == "WIN", kills=1
+    )
+    assert (ace.bounty_exp, ace.bounty_credits) == (500, 1000)
+    assert result.exp_gained == base_exp + ace.bounty_exp
+    assert result.credits_gained == base_credits + ace.bounty_credits
+
+
+def test_battle_royale_does_not_pay_bounty() -> None:
+    """バトルロイヤルのエースには懸賞金を払わない."""
+    ace = MobileSuit(name="Ace", max_hp=1, is_ace=True, bounty_exp=5, bounty_credits=9)
+    units = {str(ace.id): ace}
+
+    royale = BattleRoom(scheduled_at=datetime.now(UTC))
+    mission = BattleRoom(scheduled_at=datetime.now(UTC), mission_id=MISSION_ID)
+
+    assert run_batch._mission_bounty(royale, [ace.id], units) == (0, 0)
+    assert run_batch._mission_bounty(mission, [ace.id], units) == (5, 9)
 
 
 # --- 作戦の一覧 ---
