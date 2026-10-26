@@ -391,7 +391,7 @@ def test_build_roster_saves_masters_referenced_by_mission(session: Session) -> N
     assert {m["id"] for m in builder_roster.master_mobile_suits} == {
         "gm",
         "gouf",
-        "gelgoog",
+        "zaku_ii",
     }
 
 

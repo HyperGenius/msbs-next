@@ -291,10 +291,10 @@ def test_mission_roster_uses_masters_saved_in_roster(
 ) -> None:
     """作戦の機体は、DB ではなくロスターに保存した機体マスターとエースから作ること."""
     data = json.loads(mission_roster_path.read_text(encoding="utf-8"))
-    gouf = next(m for m in data["master_mobile_suits"] if m["id"] == "gouf")
-    gouf["specs"]["max_hp"] = 4321
+    zaku = next(m for m in data["master_mobile_suits"] if m["id"] == "zaku_ii")
+    zaku["specs"]["max_hp"] = 4321
     data["mission"]["master"]["enemy_config"]["enemies"] = [
-        {"master_mobile_suit_id": "gouf", "name": "改造グフ"},
+        {"master_mobile_suit_id": "zaku_ii", "name": "改造ザク"},
         {"ace_id": "ace_char_aznable"},
     ]
     ace = next(
@@ -308,7 +308,7 @@ def test_mission_roster_uses_masters_saved_in_roster(
     result = _run(mission_roster_path, generations_dir, seed=611, max_steps=1)
 
     units = {u["name"]: u for u in _battle(result.path, 1).enemies_info}
-    assert units["改造グフ"]["max_hp"] == 4321
+    assert units["改造ザク"]["max_hp"] == 4321
     ace_unit = units[ace["mobile_suit"]["name"]]
     assert ace_unit["is_ace"] is True
     assert ace_unit["pilot_name"] == ace["pilot_name"]

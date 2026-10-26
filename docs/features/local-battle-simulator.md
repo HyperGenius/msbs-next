@@ -406,7 +406,7 @@ python -m scripts.simulation.local_sim report retreat
   "builder": "retreat_support",
   "master": {
     "id": 4, "name": "撤退支援", "environment": "SPACE",
-    "enemy_config": { "enemies": [ { "master_mobile_suit_id": "gouf", "name": "追撃格闘機 #1", "role": "VANGUARD", "squad_id": "pursuit-1" } ] },
+    "enemy_config": { "enemies": [ { "master_mobile_suit_id": "zaku_ii", "name": "追撃前衛機 #1", "role": "VANGUARD", "squad_id": "pursuit-1" } ] },
     "allies_config": [ { "master_mobile_suit_id": "gm", "name": "撤退機 #1", "current_hp_ratio": 0.4, "role": "WITHDRAW", "...": "..." } ],
     "objective": { "type": "RETREAT_SUPPORT", "params": { "required": 2 } },
     "layout": { "spawn_zones": [ "..." ], "retreat_points": [ "..." ] }
